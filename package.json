@@ -1,0 +1,58 @@
+{
+  "name": "server",
+  "version": "0.0.12",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "ts-node ./src/index.ts",
+    "dev": "nodemon --exec ts-node ./src/index.ts",
+    "build": "npm run generate-routes-map && npm run build:routes && webpack --mode production",
+    "build:routes": "node build-routes.js",
+    "build:dev": "webpack --mode development",
+    "generate-routes-map": "node generate-routes-map.js",
+    "serve": "node dist/bundle.js"
+  },
+  "author": "rkdmf0000@gmail.com",
+  "license": "ISC",
+  "dependencies": {
+    "body-parser": "^1.20.3",
+    "cookie-parser": "^1.4.6",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "ejs": "^3.1.10",
+    "express": "^4.18.3",
+    "helmet": "^8.0.0",
+    "html-to-image": "^1.11.11",
+    "http-proxy-middleware": "^2.0.6",
+    "module-alias": "^2.2.3",
+    "multer": "^1.4.5-lts.1",
+    "winston": "^3.12.0",
+    "winston-daily-rotate-file": "^5.0.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.27.1",
+    "@babel/preset-env": "^7.27.2",
+    "@types/cookie-parser": "^1.4.7",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/multer": "^1.4.12",
+    "@types/node": "^20.11.28",
+    "babel-loader": "^10.0.0",
+    "copy-webpack-plugin": "^12.0.2",
+    "nodemon": "^3.1.0",
+    "ts-loader": "^9.5.2",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.3",
+    "webpack": "^5.99.9",
+    "webpack-cli": "^5.1.4",
+    "webpack-node-externals": "^3.0.0"
+  },
+  "_moduleAliases": {
+    "@": "./",
+    "@app": "./app",
+    "@lib": "./core/lib",
+    "@ext": "./core/external",
+    "@model": "./app/sequelize"
+  },
+  "packageManager": "pnpm@9.7.0+sha512.dc09430156b427f5ecfc79888899e1c39d2d690f004be70e05230b72cb173d96839587545d09429b55ac3c429c801b4dc3c0e002f653830a420fa2dd4e3cf9cf"
+}

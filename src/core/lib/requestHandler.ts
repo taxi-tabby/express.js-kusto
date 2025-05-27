@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { Validator, Schema, ValidationResult } from './validator';
+import { log } from '../external/winston';
 
 export interface RequestConfig {
     body?: Schema;
@@ -71,10 +72,10 @@ export class RequestHandler {
                 } else {
                     validatedData.params = paramsResult.data;
                 }
-            }
-
-            // 검증 실패 시 에러 응답
+            }            // 검증 실패 시 에러 응답
             if (errors.length > 0) {
+                // 개발자를 위한 자세한 로깅
+                log.Debug(`Validation errors for ${req.method} ${req.originalUrl}`, { errors });
                 return this.sendError(res, 400, 'Validation failed', errors);
             }
 
@@ -105,11 +106,13 @@ export class RequestHandler {
         let filteredData = data;
 
         // 응답 스키마가 있으면 데이터 필터링
-        if (responseSchema && data) {
-            try {
+        if (responseSchema && data) {            try {
                 filteredData = this.validateAndFilterResponse(data, responseSchema);
             } catch (error) {
-                console.error('Response validation error:', error);
+                log.Error('Response validation error:', { 
+                    error: error instanceof Error ? error.message : 'Unknown error',
+                    stack: error instanceof Error ? error.stack : undefined
+                });
                 return this.sendError(res, 500, 'Internal server error - response validation failed');
             }
         }
@@ -121,17 +124,18 @@ export class RequestHandler {
         };
 
         res.status(statusCode).json(response);
-    }
-
-    /**
+    }    /**
      * 에러 응답 전송
      */
     static sendError(res: Response, statusCode: number = 500, message: string = 'Internal server error', details?: any): void {
+        const isDevelopment = process.env.NODE_ENV !== 'production';
+        
         const response: ApiResponse = {
             success: false,
             error: {
                 message,
-                details
+                // 개발 모드에서만 상세 정보 제공
+                ...(isDevelopment && details ? { details } : {})
             },
             timestamp: new Date().toISOString()
         };
@@ -168,9 +172,13 @@ export class RequestHandler {
                     const statusCode = res.statusCode || 200;
                     const responseSchema = config.response?.[statusCode];
                     this.sendSuccess(res, result, statusCode, responseSchema);
-                }
-            } catch (error) {
-                console.error('Handler error:', error);
+                }            } catch (error) {
+                log.Error('Handler error:', { 
+                    path: req.originalUrl, 
+                    method: req.method,
+                    error: error instanceof Error ? error.message : 'Unknown error',
+                    stack: error instanceof Error ? error.stack : undefined
+                });
                 
                 if (!res.headersSent) {
                     if (error instanceof Error) {

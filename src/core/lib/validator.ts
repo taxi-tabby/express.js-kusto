@@ -1,3 +1,5 @@
+import { log } from '../external/winston';
+
 export interface ValidationError {
     field: string;
     message: string;
@@ -239,14 +241,15 @@ export class Validator {
                     validatedData[fieldName] = data[fieldName];
                 }
             }
-        }
-
-        // 스키마에 없는 추가 필드들 체크 (필터링)
+        }        // 스키마에 없는 추가 필드들 체크 (필터링)
         const allowedFields = Object.keys(schema);
         const extraFields = Object.keys(data || {}).filter(key => !allowedFields.includes(key));
         
         if (extraFields.length > 0) {
-            console.warn(`Extra fields ignored: ${extraFields.join(', ')}`);
+            // 개발 환경에서만 로그 출력
+            if (process.env.NODE_ENV !== 'production') {
+                log.Debug(`Extra fields ignored: ${extraFields.join(', ')}`);
+            }
         }
 
         return {

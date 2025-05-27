@@ -2,21 +2,39 @@
   "name": "server",
   "version": "0.0.12",
   "description": "",
-  "main": "index.js",
-  "scripts": {
+  "main": "index.js",  "scripts": {
     "start": "ts-node ./src/index.ts",
     "dev": "nodemon --exec ts-node ./src/index.ts",
     "build": "npm run generate-routes-map && npm run build:routes && webpack --mode production && npm run clean:tmp",
     "build:routes": "node src/core/scripts/build-routes.js",
     "build:dev": "webpack --mode development",
     "generate-routes-map": "node src/core/scripts/generate-routes-map.js",
-    "clean:tmp": "node -e \"const fs = require('fs'); const path = require('path'); const tmpDir = path.join(__dirname, 'src', 'core', 'tmp'); if (fs.existsSync(tmpDir)) { fs.rmSync(tmpDir, { recursive: true, force: true }); console.log('🧹 Cleaned tmp directory'); }\"",
-    "serve": "node dist/bundle.js"
+    "clean:tmp": "node -e \"const fs = require('fs'); const path = require('path'); const tmpDir = path.join(__dirname, 'src', 'core', 'tmp'); if (fs.existsSync(tmpDir)) { fs.rmSync(tmpDir, { recursive: true, force: true }); console.log('🧹 Cleaned tmp directory'); }\"",    "serve": "node dist/bundle.js",
+    "db": "ts-node src/core/scripts/db-cli.ts",
+    "db:migrate": "npm run db migrate run",
+    "db:migrate:create": "npm run db migrate create",
+    "db:migrate:status": "npm run db migrate status",
+    "db:migrate:reset": "npm run db migrate reset",
+    "db:generate": "npm run db generate",
+    "db:push": "npm run db push",
+    "db:seed": "npm run db seed",
+    "db:studio": "npm run db studio",
+    "db:health": "npm run db health",
+    "db:setup": "npm run db setup",    "prisma:generate": "prisma generate --schema=src/app/db/schema.prisma",
+    "prisma:migrate": "prisma migrate dev --schema=src/app/db/schema.prisma",
+    "prisma:studio": "prisma studio --schema=src/app/db/schema.prisma",
+    "prisma:reset": "prisma migrate reset --schema=src/app/db/schema.prisma",
+    "prisma:push": "prisma db push --schema=src/app/db/schema.prisma"
+  },
+  "prisma": {
+    "seed": "ts-node src/core/db/seed.ts"
   },
   "author": "rkdmf0000@gmail.com",
   "license": "ISC",
   "dependencies": {
+    "@prisma/client": "^6.8.2",
     "body-parser": "^1.20.3",
+    "commander": "^14.0.0",
     "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
@@ -48,13 +66,13 @@
     "webpack": "^5.99.9",
     "webpack-cli": "^5.1.4",
     "webpack-node-externals": "^3.0.0"
-  },
-  "_moduleAliases": {
+  },  "_moduleAliases": {
     "@": "./",
-    "@app": "./app",
-    "@lib": "./core/lib",
-    "@ext": "./core/external",
-    "@db": "./app/db"
+    "@app": "./src/app",
+    "@core": "./src/core",
+    "@lib": "./src/core/lib",
+    "@ext": "./src/core/external",
+    "@db": "./src/app/db"
   },
   "packageManager": "pnpm@9.7.0+sha512.dc09430156b427f5ecfc79888899e1c39d2d690f004be70e05230b72cb173d96839587545d09429b55ac3c429c801b4dc3c0e002f653830a420fa2dd4e3cf9cf"
 }

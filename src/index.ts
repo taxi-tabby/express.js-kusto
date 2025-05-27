@@ -1,3 +1,6 @@
+// Module alias 등록 (다른 import보다 먼저 실행되어야 함)
+import 'module-alias/register';
+
 import { config } from 'dotenv';
 import { existsSync } from 'fs';
 import { resolve } from 'path';

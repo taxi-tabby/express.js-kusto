@@ -10,6 +10,9 @@
 			"@app/*": [
 				"src/app/*"
 			],
+			"@core/*": [
+				"src/core/*"
+			],
 			"@lib/*": [
 				"src/core/lib/*"
 			],

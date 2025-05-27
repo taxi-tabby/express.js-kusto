@@ -2,7 +2,8 @@
   "name": "server",
   "version": "0.0.12",
   "description": "",
-  "main": "index.js",  "scripts": {
+  "main": "index.js",
+  "scripts": {
     "start": "ts-node ./src/index.ts",
     "dev": "nodemon --exec ts-node ./src/index.ts",
     "build": "npm run generate-routes-map && npm run build:routes && webpack --mode production && npm run clean:tmp",
@@ -40,6 +41,7 @@
     "babel-loader": "^10.0.0",
     "copy-webpack-plugin": "^12.0.2",
     "nodemon": "^3.1.0",
+    "prisma": "^6.8.2",
     "ts-loader": "^9.5.2",
     "ts-node": "^10.9.2",
     "typescript": "^5.8.3",

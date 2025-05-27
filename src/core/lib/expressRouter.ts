@@ -8,13 +8,11 @@ type HandlerFunction = (req: Request, res: Response) => void;
 export class ExpressRouter {
     public router = Router();
 
-
     private convertSlugsToPath(slugs: string[]): string {
         const pathSegments = slugs.map(slug => slug === "*" ? "*" : `/:${slug}`);
         const path = pathSegments.join('');
         return path;
     }
-    
 
     /**
      * # GET
@@ -72,8 +70,6 @@ export class ExpressRouter {
         this.router.post(this.convertSlugsToPath(slug), handler);
         return this; // 메소드 체인을 위해 인스턴스 반환
     }
-
-
 
 
     /**
@@ -159,13 +155,6 @@ export class ExpressRouter {
         this.router.post('/', accpetFileType, handler);
         return this;
     }
-
-
-
-
-
-
-
 
 
     /**
@@ -364,6 +353,11 @@ export class ExpressRouter {
     // public STATIC(folderPath: string) {
     //     this.router.use("/", static_(path.join(__dirname, `public/${folderPath}`)))
     // }
+
+
+
+
+
 
 
     build(): Router {

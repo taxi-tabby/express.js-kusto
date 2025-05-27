@@ -9,6 +9,21 @@ export { ExpressRouter } from './lib/expressRouter';
 export { log, logger } from './external/winston';
 export * from './external/util';
 
+// Validation system
+export { Validator, ValidationResult, ValidationError, Schema, FieldSchema } from './lib/validator';
+export { 
+    RequestHandler, 
+    RequestConfig, 
+    ResponseConfig, 
+    ValidatedRequest,
+    createValidatedHandler,
+    withValidation,
+    withFullValidation,
+    sendSuccess,
+    sendError
+} from './lib/requestHandler';
+export { CommonSchemas, SchemaHelpers, ResponseSchemas } from './types';
+
 // Legacy singleton for backward compatibility
 export { default as expressApp } from './lib/expressAppSingleton';
 

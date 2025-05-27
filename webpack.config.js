@@ -38,7 +38,7 @@ module.exports = {
             '@app': path.resolve(__dirname, 'src/app'),
             '@lib': path.resolve(__dirname, 'src/core/lib'),
             '@ext': path.resolve(__dirname, 'src/core/external'),
-            '@model': path.resolve(__dirname, 'src/app/sequelize')
+            '@db': path.resolve(__dirname, 'src/app/db')
         }
     },plugins: [
         new webpack.DefinePlugin({

@@ -16,8 +16,8 @@
 			"@ext/*": [
 				"src/core/external/*"
 			],
-			"@model/*": [
-				"src/app/sequelize/*"
+			"@db/*": [
+				"src/app/db/*"
 			]
 		},
 		

@@ -10,7 +10,7 @@ router.GET((req, res) => {
 });
 
 router.NOTFOUND((req, res)=>{
-    res.status(404).send("Not found [root]");
+    res.status(404).send("Not found");
 })
 
 

@@ -5,8 +5,6 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser'
 import helmet from 'helmet';
 import bodyParser from 'body-parser';
-// import bodyParser from 'body-parser';
-// import multer from 'multer';
 
 const whitelist = [
     'http://127.0.0.1:3000',
@@ -29,7 +27,6 @@ const corsOptions: cors.CorsOptions = {
     credentials: true,
 };
 
-// const forms = multer();
 
 export default [
     /**

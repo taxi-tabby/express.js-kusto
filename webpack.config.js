@@ -14,9 +14,9 @@ module.exports = {
     output: {
         path: path.resolve(__dirname, "dist"),
         filename: "bundle.js",
-    },
-    module: {
-        rules: [            {
+    },    module: {
+        rules: [
+            {
                 test: /\.ts$/,
                 use: {
                     loader: "ts-loader",
@@ -27,7 +27,11 @@ module.exports = {
                 exclude: /node_modules/,
             },
         ],
-    },    resolve: {
+    },
+    ignoreWarnings: [
+        /Critical dependency: the request of a dependency is an expression/,
+        /require function is used in a way in which dependencies cannot be statically extracted/
+    ],resolve: {
         extensions: [".ts", ".js"], // .ts 파일을 인식할 수 있도록 확장자 추가
         alias: {
             '@': path.resolve(__dirname, '.'),

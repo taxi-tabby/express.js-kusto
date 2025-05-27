@@ -10,11 +10,10 @@ let middlewaresMap: Record<string, any[]> = {};
 let directoryStructure: Record<string, string[]> = {};
 
 // 빌드 환경에서는 자동 생성된 라우트 맵 사용
-if (process.env.WEBPACK_BUILD === 'true') {
-    try {
+if (process.env.WEBPACK_BUILD === 'true') {    try {
         console.log(`🔄 Loading dynamic route map in webpack build...`);
         // 빌드 타임에 생성된 routes-map.ts 파일에서 데이터 가져오기
-        const routeMapModule = require('./routes-map');
+        const routeMapModule = require('../tmp/routes-map');
         routesMap = routeMapModule.routesMap;
         middlewaresMap = routeMapModule.middlewaresMap;
         directoryStructure = routeMapModule.directoryStructure;

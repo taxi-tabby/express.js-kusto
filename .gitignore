@@ -5,6 +5,9 @@
 dist/
 build/
 
+# Temporary build files
+src/core/tmp/
+
 ### Linux ###
 *~
 

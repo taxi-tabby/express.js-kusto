@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { log } from '../external/winston';
 import { normalizeSlash, getElapsedTimeInString } from '../external/util';
+import { DocumentationGenerator } from './documentationGenerator';
 
 // Webpack 빌드 환경에서 자동 생성된 라우트 맵 가져오기 (빌드 타임에 생성된 파일)
 let routesMap: Record<string, Router> = {};
@@ -566,16 +567,31 @@ function loadRoutes(app: Express, dir?: string): void {
             
             // 경로 길이가 같으면 깊이로 정렬
             return a.depth - b.depth;
-        });
-        
-        for (const dirInfo of sortedRoutes) {
+        });          for (const dirInfo of sortedRoutes) {
             const route = routeModules.get(dirInfo.path);
-            const middlewares = middlewareCollections.get(dirInfo.path);
-            
-            if (route && middlewares) {
+            const middlewares = middlewareCollections.get(dirInfo.path);            if (route && middlewares) {
                 const routePath = normalizeSlash("/" + dirInfo.parentRoute);
 
+                // 라우트에 basePath 설정 (ExpressRouter의 setBasePath 메서드 호출)
+                if (route && 'setBasePath' in route && typeof (route as any).setBasePath === 'function') {
+                    (route as any).setBasePath(routePath);
+                }
+
+                // 문서화 경로 업데이트를 위해 라우트 로드 전후의 등록된 라우트 수 추적
+                const routeCountBefore = DocumentationGenerator.getRouteCount();
+                
                 app.use(routePath, ...middlewares, route);
+                
+                const routeCountAfter = DocumentationGenerator.getRouteCount();
+                
+                // 새로 등록된 라우트들의 경로를 업데이트
+                if (routeCountAfter > routeCountBefore && routePath !== '/') {
+                    const newRouteIndices = Array.from(
+                        { length: routeCountAfter - routeCountBefore }, 
+                        (_, i) => routeCountBefore + i
+                    );
+                    DocumentationGenerator.updateRoutePaths(routePath, newRouteIndices);
+                }
                 
                 log.Route(`🔗 ${routePath} (${middlewares.length} middlewares)`);
             }

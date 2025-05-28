@@ -5,6 +5,7 @@ import { log } from './external/winston';
 import { getElapsedTimeInString } from './external/util';
 import loadRoutes from './lib/loadRoutes_V6_Clean';
 import expressApp from './lib/expressAppSingleton';
+import { DocumentationGenerator } from './lib/documentationGenerator';
 
 export interface CoreConfig {
     basePath?: string;
@@ -63,9 +64,8 @@ export class Core {
         // Merge custom config with defaults
         if (customConfig) {
             this._config = { ...this._config, ...customConfig };
-        }
-
-        this.setupExpress();
+        }          this.setupExpress();
+        this.setupDocumentationRoutes(); // 문서화 라우트를 먼저 등록
         this.loadRoutes();
         this.setupViews();
 
@@ -93,9 +93,7 @@ export class Core {
             log.Error('Failed to load routes', { error, routesPath: this._config.routesPath });
             throw error;
         }
-    }
-
-    private setupViews(): void {
+    }    private setupViews(): void {
         this._app.set('view engine', this._config.viewEngine);
         this._app.set('views', this._config.viewsPath);
         
@@ -103,6 +101,54 @@ export class Core {
             engine: this._config.viewEngine, 
             path: this._config.viewsPath 
         });
+    }
+
+    private setupDocumentationRoutes(): void {
+        // 환경 변수 체크: development 모드이고 AUTO_DOCS가 true일 때만 활성화
+        const isDevelopment = process.env.NODE_ENV !== 'production';
+        const autoDocsEnabled = process.env.AUTO_DOCS === 'true';
+        
+        if (!isDevelopment || !autoDocsEnabled) {
+            log.Debug('Documentation routes disabled', { 
+                isDevelopment, 
+                autoDocsEnabled 
+            });
+            return;
+        }        
+        
+        
+        // HTML 문서 페이지
+        this._app.get('/docs', (req, res) => {
+            try {
+                const html = DocumentationGenerator.generateHTMLDocumentation();
+                res.type('html').send(html);
+            } catch (error) {
+                log.Error('Failed to generate documentation HTML', { error });
+                res.status(500).json({ error: 'Failed to generate documentation' });
+            }
+        });
+
+        // OpenAPI JSON 스펙
+        this._app.get('/docs/openapi.json', (req, res) => {
+            try {
+                const spec = DocumentationGenerator.generateOpenAPISpec();
+                res.json(spec);
+            } catch (error) {
+                log.Error('Failed to generate OpenAPI spec', { error });
+                res.status(500).json({ error: 'Failed to generate OpenAPI specification' });
+            }
+        });        // 개발 정보 페이지
+        this._app.get('/docs/dev', (req, res) => {
+            try {
+                const devInfo = DocumentationGenerator.generateDevInfoPage();
+                res.type('html').send(devInfo);
+            } catch (error) {
+                log.Error('Failed to generate dev info', { error });
+                res.status(500).json({ error: 'Failed to generate development info' });
+            }
+        });
+
+        log.Info('📚 Documentation routes enabled at /docs');
     }
 
     /**

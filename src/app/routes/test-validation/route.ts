@@ -3,7 +3,7 @@ import { ExpressRouter } from '@/src/core/lib/expressRouter';
 const router = new ExpressRouter();
 
 
-// 간단한 테스트 라우트
+// 간단한 테스트 라우트 - 수정된 버전
 router.GET_VALIDATED(
     {
         query: {

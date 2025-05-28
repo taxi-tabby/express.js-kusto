@@ -69,25 +69,25 @@ router.POST_VALIDATED(
 );
 
 // 에러 테스트 라우트
-router.GET_WITH_VALIDATION(
-    {
-        query: {
-            throwError: { type: 'boolean', required: false }
-        }
-    },
-    async (req, res) => {
-        const { throwError } = req.validatedData?.query || {};
+// router.GET_WITH_VALIDATION(
+//     {
+//         query: {
+//             throwError: { type: 'boolean', required: false }
+//         }
+//     },
+//     async (req, res) => {
+//         const { throwError } = req.validatedData?.query || {};
         
-        if (throwError) {
-            throw new Error('Test error thrown intentionally');
-        }
+//         if (throwError) {
+//             throw new Error('Test error thrown intentionally');
+//         }
         
-        return {
-            message: 'No error thrown',
-            success: true
-        };
-    }
-);
+//         return {
+//             message: 'No error thrown',
+//             success: true
+//         };
+//     }
+// );
 
 // 파라미터 테스트 라우트
 router.GET_SLUG_VALIDATED(

@@ -77,9 +77,7 @@ export class ExpressRouter {
         const path = pathSegments.join('');
         // 끝에 추가 경로가 오는 것을 방지하기 위해 '(?=/|$)' 사용
         return path + '(?=/|$)';
-    }
-
-    /**
+    }    /**
      * # GET
      * @param handler 
      * @param options 
@@ -87,10 +85,27 @@ export class ExpressRouter {
      */
     public GET(handler: HandlerFunction, options?: object): ExpressRouter {
         this.router.get('/', handler);
+        
+        // 문서화 등록을 지연시켜 setBasePath 호출 후 올바른 경로로 등록되도록 함
+        if (this.basePath) {
+            // basePath가 이미 설정된 경우 즉시 등록
+            DocumentationGenerator.registerRoute({
+                method: 'GET',
+                path: this.getFullPath('/'),
+                parameters: {},
+                responses: { 200: { data: { type: 'object' as const, required: false } } }
+            });
+        } else {
+            // basePath가 아직 설정되지 않은 경우 지연 등록
+            this.pendingDocumentation.push({
+                method: 'GET',
+                path: '/',
+                responseConfig: { 200: { data: { type: 'object', required: false } } }
+            });
+        }
+        
         return this; // 메소드 체인을 위해 인스턴스 반환
-    }
-
-    /**
+    }    /**
      * # GET_SLUG
      * @param slug 
      * @param handler 
@@ -106,12 +121,29 @@ export class ExpressRouter {
      * ```
      */
     public GET_SLUG(slug: string[], handler: HandlerFunction, options?: object): ExpressRouter {
-        const slugs = this.convertSlugsToPath(slug);
-        this.router.get(slugs, handler);
+        const slugPath = this.convertSlugsToPath(slug);
+        this.router.get(slugPath, handler);
+        
+        // 문서화 등록을 지연시켜 setBasePath 호출 후 올바른 경로로 등록되도록 함
+        if (this.basePath) {
+            // basePath가 이미 설정된 경우 즉시 등록
+            DocumentationGenerator.registerRoute({
+                method: 'GET',
+                path: this.getFullPath(slugPath),
+                parameters: {},
+                responses: { 200: { data: { type: 'object' as const, required: false } } }
+            });
+        } else {
+            // basePath가 아직 설정되지 않은 경우 지연 등록
+            this.pendingDocumentation.push({
+                method: 'GET',
+                path: slugPath,
+                responseConfig: { 200: { data: { type: 'object', required: false } } }
+            });
+        }
+        
         return this; // 메소드 체인을 위해 인스턴스 반환
-    }
-
-    /**
+    }    /**
      * # POST
      * @param handler 
      * @param options 
@@ -119,10 +151,27 @@ export class ExpressRouter {
      */
     public POST(handler: HandlerFunction, options?: object): ExpressRouter {
         this.router.post('/', handler);
+        
+        // 문서화 등록을 지연시켜 setBasePath 호출 후 올바른 경로로 등록되도록 함
+        if (this.basePath) {
+            // basePath가 이미 설정된 경우 즉시 등록
+            DocumentationGenerator.registerRoute({
+                method: 'POST',
+                path: this.getFullPath('/'),
+                parameters: {},
+                responses: { 200: { data: { type: 'object' as const, required: false } } }
+            });
+        } else {
+            // basePath가 아직 설정되지 않은 경우 지연 등록
+            this.pendingDocumentation.push({
+                method: 'POST',
+                path: '/',
+                responseConfig: { 200: { data: { type: 'object', required: false } } }
+            });
+        }
+        
         return this; // 메소드 체인을 위해 인스턴스 반환
-    }
-
-    /**
+    }    /**
      * # POST_SLUG
      * @param slug 
      * @param handler 
@@ -132,11 +181,29 @@ export class ExpressRouter {
      * - 라우터로 선언된 slug 직접 주워 담아야 합니다. 
      */
     public POST_SLUG(slug: string[], handler: HandlerFunction, options?: object): ExpressRouter {
-        this.router.post(this.convertSlugsToPath(slug), handler);
+        const slugPath = this.convertSlugsToPath(slug);
+        this.router.post(slugPath, handler);
+        
+        // 문서화 등록을 지연시켜 setBasePath 호출 후 올바른 경로로 등록되도록 함
+        if (this.basePath) {
+            // basePath가 이미 설정된 경우 즉시 등록
+            DocumentationGenerator.registerRoute({
+                method: 'POST',
+                path: this.getFullPath(slugPath),
+                parameters: {},
+                responses: { 200: { data: { type: 'object' as const, required: false } } }
+            });
+        } else {
+            // basePath가 아직 설정되지 않은 경우 지연 등록
+            this.pendingDocumentation.push({
+                method: 'POST',
+                path: slugPath,
+                responseConfig: { 200: { data: { type: 'object', required: false } } }
+            });
+        }
+        
         return this; // 메소드 체인을 위해 인스턴스 반환
     }
-
-
     /**
      * ```
      * - multer 라이브러리
@@ -155,10 +222,28 @@ export class ExpressRouter {
         const upload = multer({ storage: multerStorageEngine, limits: { fileSize: fileSize }, });
         const accpetFileType = upload.single(keyName);
         this.router.post('/', accpetFileType, handler);
+        
+        // 문서화 등록을 지연시켜 setBasePath 호출 후 올바른 경로로 등록되도록 함
+        if (this.basePath) {
+            // basePath가 이미 설정된 경우 즉시 등록
+            DocumentationGenerator.registerRoute({
+                method: 'POST',
+                path: this.getFullPath('/'),
+                summary: `File upload: ${keyName}`,
+                parameters: {},
+                responses: { 200: { data: { type: 'object' as const, required: false } } }
+            });
+        } else {
+            // basePath가 아직 설정되지 않은 경우 지연 등록
+            this.pendingDocumentation.push({
+                method: 'POST',
+                path: '/',
+                responseConfig: { 200: { data: { type: 'object', required: false } } }
+            });
+        }
+        
         return this;
-    }
-
-    /**
+    }    /**
      * ```
      * - multer 라이브러리
      * 파일 업로드를 위한 라우터 기능
@@ -176,10 +261,28 @@ export class ExpressRouter {
         const upload = multer({ storage: multerStorageEngine, limits: { fileSize: fileSize } });
         const accpetFileType = upload.array(keyName, maxFileCount);
         this.router.post('/', accpetFileType, handler);
+        
+        // 문서화 등록을 지연시켜 setBasePath 호출 후 올바른 경로로 등록되도록 함
+        if (this.basePath) {
+            // basePath가 이미 설정된 경우 즉시 등록
+            DocumentationGenerator.registerRoute({
+                method: 'POST',
+                path: this.getFullPath('/'),
+                summary: `Multiple file upload: ${keyName}${maxFileCount ? ` (max: ${maxFileCount})` : ''}`,
+                parameters: {},
+                responses: { 200: { data: { type: 'object' as const, required: false } } }
+            });
+        } else {
+            // basePath가 아직 설정되지 않은 경우 지연 등록
+            this.pendingDocumentation.push({
+                method: 'POST',
+                path: '/',
+                responseConfig: { 200: { data: { type: 'object', required: false } } }
+            });
+        }
+        
         return this;
-    }
-
-    /**
+    }    /**
      * ```
      * - multer 라이브러리
      * 파일 업로드를 위한 라우터 기능
@@ -197,6 +300,26 @@ export class ExpressRouter {
         const upload = multer({ storage: multerStorageEngine, limits: { fileSize: fileSize } });
         const accpetFileType = upload.fields(fields);
         this.router.post('/', accpetFileType, handler);
+        
+        // 문서화 등록을 지연시켜 setBasePath 호출 후 올바른 경로로 등록되도록 함
+        if (this.basePath) {
+            // basePath가 이미 설정된 경우 즉시 등록
+            DocumentationGenerator.registerRoute({
+                method: 'POST',
+                path: this.getFullPath('/'),
+                summary: `Multiple fields file upload`,
+                parameters: {},
+                responses: { 200: { data: { type: 'object' as const, required: false } } }
+            });
+        } else {
+            // basePath가 아직 설정되지 않은 경우 지연 등록
+            this.pendingDocumentation.push({
+                method: 'POST',
+                path: '/',
+                responseConfig: { 200: { data: { type: 'object', required: false } } }
+            });
+        }
+        
         return this;
     }
 
@@ -220,8 +343,6 @@ export class ExpressRouter {
         this.router.post('/', accpetFileType, handler);
         return this;
     }
-
-
     /**
      * # PUT
      * @param handler 
@@ -230,6 +351,25 @@ export class ExpressRouter {
      */
     public PUT(handler: HandlerFunction, options?: object): ExpressRouter {
         this.router.put('/', handler);
+        
+        // 문서화 등록을 지연시켜 setBasePath 호출 후 올바른 경로로 등록되도록 함
+        if (this.basePath) {
+            // basePath가 이미 설정된 경우 즉시 등록
+            DocumentationGenerator.registerRoute({
+                method: 'PUT',
+                path: this.getFullPath('/'),
+                parameters: {},
+                responses: { 200: { data: { type: 'object' as const, required: false } } }
+            });
+        } else {
+            // basePath가 아직 설정되지 않은 경우 지연 등록
+            this.pendingDocumentation.push({
+                method: 'PUT',
+                path: '/',
+                responseConfig: { 200: { data: { type: 'object', required: false } } }
+            });
+        }
+        
         return this;
     }
 
@@ -316,8 +456,6 @@ export class ExpressRouter {
         this.router.put('/', accpetFileType, handler);
         return this;
     }
-
-
     /**
      * # PUT_SLUG
      * @param slug 
@@ -328,11 +466,29 @@ export class ExpressRouter {
      * - 라우터로 선언된 slug 직접 주워 담아야 합니다. 
      */
     public PUT_SLUG(slug: string[], handler: HandlerFunction, options?: object): ExpressRouter {
-        this.router.put(this.convertSlugsToPath(slug), handler);
+        const slugPath = this.convertSlugsToPath(slug);
+        this.router.put(slugPath, handler);
+        
+        // 문서화 등록을 지연시켜 setBasePath 호출 후 올바른 경로로 등록되도록 함
+        if (this.basePath) {
+            // basePath가 이미 설정된 경우 즉시 등록
+            DocumentationGenerator.registerRoute({
+                method: 'PUT',
+                path: this.getFullPath(slugPath),
+                parameters: {},
+                responses: { 200: { data: { type: 'object' as const, required: false } } }
+            });
+        } else {
+            // basePath가 아직 설정되지 않은 경우 지연 등록
+            this.pendingDocumentation.push({
+                method: 'PUT',
+                path: slugPath,
+                responseConfig: { 200: { data: { type: 'object', required: false } } }
+            });
+        }
+        
         return this;
-    }
-
-    /**
+    }    /**
      * # DELETE
      * @param handler 
      * @param options 
@@ -341,10 +497,27 @@ export class ExpressRouter {
      */
     public DELETE(handler: HandlerFunction, options?: object): ExpressRouter {
         this.router.delete('/', handler);
+        
+        // 문서화 등록을 지연시켜 setBasePath 호출 후 올바른 경로로 등록되도록 함
+        if (this.basePath) {
+            // basePath가 이미 설정된 경우 즉시 등록
+            DocumentationGenerator.registerRoute({
+                method: 'DELETE',
+                path: this.getFullPath('/'),
+                parameters: {},
+                responses: { 200: { data: { type: 'object' as const, required: false } } }
+            });
+        } else {
+            // basePath가 아직 설정되지 않은 경우 지연 등록
+            this.pendingDocumentation.push({
+                method: 'DELETE',
+                path: '/',
+                responseConfig: { 200: { data: { type: 'object', required: false } } }
+            });
+        }
+        
         return this;
-    }
-
-    /**
+    }    /**
      * # DELETE_SLUG
      * @param slug 
      * @param handler 
@@ -354,11 +527,29 @@ export class ExpressRouter {
      * - 라우터로 선언된 slug 직접 주워 담아야 합니다. 
      */
     public DELETE_SLUG(slug: string[], handler: HandlerFunction, options?: object): ExpressRouter {
-        this.router.delete(this.convertSlugsToPath(slug), handler);
+        const slugPath = this.convertSlugsToPath(slug);
+        this.router.delete(slugPath, handler);
+        
+        // 문서화 등록을 지연시켜 setBasePath 호출 후 올바른 경로로 등록되도록 함
+        if (this.basePath) {
+            // basePath가 이미 설정된 경우 즉시 등록
+            DocumentationGenerator.registerRoute({
+                method: 'DELETE',
+                path: this.getFullPath(slugPath),
+                parameters: {},
+                responses: { 200: { data: { type: 'object' as const, required: false } } }
+            });
+        } else {
+            // basePath가 아직 설정되지 않은 경우 지연 등록
+            this.pendingDocumentation.push({
+                method: 'DELETE',
+                path: slugPath,
+                responseConfig: { 200: { data: { type: 'object', required: false } } }
+            });
+        }
+        
         return this;
     }
-
-
     /**
      * # PATCH
      * @param handler 
@@ -367,10 +558,27 @@ export class ExpressRouter {
      */
     public PATCH(handler: HandlerFunction, options?: object): ExpressRouter {
         this.router.patch('/', handler);
+        
+        // 문서화 등록을 지연시켜 setBasePath 호출 후 올바른 경로로 등록되도록 함
+        if (this.basePath) {
+            // basePath가 이미 설정된 경우 즉시 등록
+            DocumentationGenerator.registerRoute({
+                method: 'PATCH',
+                path: this.getFullPath('/'),
+                parameters: {},
+                responses: { 200: { data: { type: 'object' as const, required: false } } }
+            });
+        } else {
+            // basePath가 아직 설정되지 않은 경우 지연 등록
+            this.pendingDocumentation.push({
+                method: 'PATCH',
+                path: '/',
+                responseConfig: { 200: { data: { type: 'object', required: false } } }
+            });
+        }
+        
         return this;
-    }
-
-    /**
+    }    /**
      * # PATCH_SLUG
      * @param slug 
      * @param handler 
@@ -380,7 +588,27 @@ export class ExpressRouter {
      * - 라우터로 선언된 slug 직접 주워 담아야 합니다. 
      */
     public PATCH_SLUG(slug: string[], handler: HandlerFunction, options?: object): ExpressRouter {
-        this.router.patch(this.convertSlugsToPath(slug), handler);
+        const slugPath = this.convertSlugsToPath(slug);
+        this.router.patch(slugPath, handler);
+        
+        // 문서화 등록을 지연시켜 setBasePath 호출 후 올바른 경로로 등록되도록 함
+        if (this.basePath) {
+            // basePath가 이미 설정된 경우 즉시 등록
+            DocumentationGenerator.registerRoute({
+                method: 'PATCH',
+                path: this.getFullPath(slugPath),
+                parameters: {},
+                responses: { 200: { data: { type: 'object' as const, required: false } } }
+            });
+        } else {
+            // basePath가 아직 설정되지 않은 경우 지연 등록
+            this.pendingDocumentation.push({
+                method: 'PATCH',
+                path: slugPath,
+                responseConfig: { 200: { data: { type: 'object', required: false } } }
+            });
+        }
+        
         return this;
     }
 
@@ -593,19 +821,30 @@ export class ExpressRouter {
             { request: requestConfig, response: responseConfig },
             handler
         );
+          const slugPath = this.convertSlugsToPath(slug);
         
-        const slugPath = this.convertSlugsToPath(slug);
-          // 문서화 등록
-        DocumentationGenerator.registerRoute({
-            method: 'POST',
-            path: this.getFullPath(slugPath),
-            parameters: {
-                query: requestConfig.query,
-                params: requestConfig.params,
-                body: requestConfig.body
-            },
-            responses: responseConfig
-        });
+        // 문서화 등록을 지연시켜 setBasePath 호출 후 올바른 경로로 등록되도록 함
+        if (this.basePath) {
+            // basePath가 이미 설정된 경우 즉시 등록
+            DocumentationGenerator.registerRoute({
+                method: 'POST',
+                path: this.getFullPath(slugPath),
+                parameters: {
+                    query: requestConfig.query,
+                    params: requestConfig.params,
+                    body: requestConfig.body
+                },
+                responses: responseConfig
+            });
+        } else {
+            // basePath가 아직 설정되지 않은 경우 지연 등록
+            this.pendingDocumentation.push({
+                method: 'POST',
+                path: slugPath,
+                requestConfig,
+                responseConfig
+            });
+        }
         
         if (options?.exact) {
             const exactMiddleware = (req: any, res: any, next: any) => {
@@ -637,10 +876,13 @@ export class ExpressRouter {
         responseConfig: ResponseConfig,
         handler: ValidatedHandlerFunction
     ): ExpressRouter {
+
         const middlewares = CustomRequestHandler.createHandler(
             { request: requestConfig, response: responseConfig },
             handler
-        );        this.router.put('/', ...middlewares);
+        );        
+        
+        this.router.put('/', ...middlewares);
         
         // 문서화 등록을 지연시켜 setBasePath 호출 후 올바른 경로로 등록되도록 함
         if (this.basePath) {
@@ -682,19 +924,30 @@ export class ExpressRouter {
         const middlewares = CustomRequestHandler.createHandler(
             { request: requestConfig, response: responseConfig },
             handler
-        );
-        this.router.delete('/', ...middlewares);
-          // 문서화 등록
-        DocumentationGenerator.registerRoute({
-            method: 'DELETE',
-            path: this.getFullPath('/'),
-            parameters: {
-                query: requestConfig.query,
-                params: requestConfig.params,
-                body: requestConfig.body
-            },
-            responses: responseConfig
-        });
+        );        this.router.delete('/', ...middlewares);
+        
+        // 문서화 등록을 지연시켜 setBasePath 호출 후 올바른 경로로 등록되도록 함
+        if (this.basePath) {
+            // basePath가 이미 설정된 경우 즉시 등록
+            DocumentationGenerator.registerRoute({
+                method: 'DELETE',
+                path: this.getFullPath('/'),
+                parameters: {
+                    query: requestConfig.query,
+                    params: requestConfig.params,
+                    body: requestConfig.body
+                },
+                responses: responseConfig
+            });
+        } else {
+            // basePath가 아직 설정되지 않은 경우 지연 등록
+            this.pendingDocumentation.push({
+                method: 'DELETE',
+                path: '/',
+                requestConfig,
+                responseConfig
+            });
+        }
         
         return this;
     }    /**
@@ -709,19 +962,30 @@ export class ExpressRouter {
         const middlewares = CustomRequestHandler.createHandler(
             { request: requestConfig, response: responseConfig },
             handler
-        );
-        this.router.patch('/', ...middlewares);
-          // 문서화 등록
-        DocumentationGenerator.registerRoute({
-            method: 'PATCH',
-            path: this.getFullPath('/'),
-            parameters: {
-                query: requestConfig.query,
-                params: requestConfig.params,
-                body: requestConfig.body
-            },
-            responses: responseConfig
-        });
+        );        this.router.patch('/', ...middlewares);
+        
+        // 문서화 등록을 지연시켜 setBasePath 호출 후 올바른 경로로 등록되도록 함
+        if (this.basePath) {
+            // basePath가 이미 설정된 경우 즉시 등록
+            DocumentationGenerator.registerRoute({
+                method: 'PATCH',
+                path: this.getFullPath('/'),
+                parameters: {
+                    query: requestConfig.query,
+                    params: requestConfig.params,
+                    body: requestConfig.body
+                },
+                responses: responseConfig
+            });
+        } else {
+            // basePath가 아직 설정되지 않은 경우 지연 등록
+            this.pendingDocumentation.push({
+                method: 'PATCH',
+                path: '/',
+                requestConfig,
+                responseConfig
+            });
+        }
         
         return this;
     }
@@ -736,18 +1000,30 @@ export class ExpressRouter {
         requestConfig: RequestConfig,
         handler: ValidatedHandlerFunction
     ): ExpressRouter {
-        const middlewares = CustomRequestHandler.withValidation(requestConfig, handler);
-        this.router.get('/', ...middlewares);        // 문서화 등록
-        DocumentationGenerator.registerRoute({
-            method: 'GET',
-            path: this.getFullPath('/'),
-            parameters: {
-                query: requestConfig.query,
-                params: requestConfig.params,
-                body: requestConfig.body
-            },
-            responses: { 200: { data: { type: 'object' as const, required: false } } }
-        });
+        const middlewares = CustomRequestHandler.withValidation(requestConfig, handler);        this.router.get('/', ...middlewares);
+        
+        // 문서화 등록을 지연시켜 setBasePath 호출 후 올바른 경로로 등록되도록 함
+        if (this.basePath) {
+            // basePath가 이미 설정된 경우 즉시 등록
+            DocumentationGenerator.registerRoute({
+                method: 'GET',
+                path: this.getFullPath('/'),
+                parameters: {
+                    query: requestConfig.query,
+                    params: requestConfig.params,
+                    body: requestConfig.body
+                },
+                responses: { 200: { data: { type: 'object' as const, required: false } } }
+            });
+        } else {
+            // basePath가 아직 설정되지 않은 경우 지연 등록
+            this.pendingDocumentation.push({
+                method: 'GET',
+                path: '/',
+                requestConfig,
+                responseConfig: { 200: { data: { type: 'object', required: false } } }
+            });
+        }
         
         return this;
     }    /**
@@ -758,18 +1034,30 @@ export class ExpressRouter {
         requestConfig: RequestConfig,
         handler: ValidatedHandlerFunction
     ): ExpressRouter {
-        const middlewares = CustomRequestHandler.withValidation(requestConfig, handler);
-        this.router.post('/', ...middlewares);        // 문서화 등록
-        DocumentationGenerator.registerRoute({
-            method: 'POST',
-            path: this.getFullPath('/'),
-            parameters: {
-                query: requestConfig.query,
-                params: requestConfig.params,
-                body: requestConfig.body
-            },
-            responses: { 200: { data: { type: 'object' as const, required: false } } }
-        });
+        const middlewares = CustomRequestHandler.withValidation(requestConfig, handler);        this.router.post('/', ...middlewares);
+        
+        // 문서화 등록을 지연시켜 setBasePath 호출 후 올바른 경로로 등록되도록 함
+        if (this.basePath) {
+            // basePath가 이미 설정된 경우 즉시 등록
+            DocumentationGenerator.registerRoute({
+                method: 'POST',
+                path: this.getFullPath('/'),
+                parameters: {
+                    query: requestConfig.query,
+                    params: requestConfig.params,
+                    body: requestConfig.body
+                },
+                responses: { 200: { data: { type: 'object' as const, required: false } } }
+            });
+        } else {
+            // basePath가 아직 설정되지 않은 경우 지연 등록
+            this.pendingDocumentation.push({
+                method: 'POST',
+                path: '/',
+                requestConfig,
+                responseConfig: { 200: { data: { type: 'object', required: false } } }
+            });
+        }
         
         return this;
     }    /**
@@ -786,21 +1074,32 @@ export class ExpressRouter {
         const middlewares = CustomRequestHandler.createHandler(
             { request: requestConfig, response: responseConfig },
             handler
-        );
-        // 정확한 경로 매칭을 위해 '$' 앵커 사용하는 대신 정규식 패턴으로 처리
+        );        // 정확한 경로 매칭을 위해 '$' 앵커 사용하는 대신 정규식 패턴으로 처리
         const exactPath = this.convertSlugsToPath(slug);
         this.router.get(new RegExp(`^${exactPath.replace(/:\w+/g, '([^/]+)')}$`), ...middlewares);
-          // 문서화 등록
-        DocumentationGenerator.registerRoute({
-            method: 'GET',
-            path: this.getFullPath(exactPath),
-            parameters: {
-                query: requestConfig.query,
-                params: requestConfig.params,
-                body: requestConfig.body
-            },
-            responses: responseConfig
-        });
+        
+        // 문서화 등록을 지연시켜 setBasePath 호출 후 올바른 경로로 등록되도록 함
+        if (this.basePath) {
+            // basePath가 이미 설정된 경우 즉시 등록
+            DocumentationGenerator.registerRoute({
+                method: 'GET',
+                path: this.getFullPath(exactPath),
+                parameters: {
+                    query: requestConfig.query,
+                    params: requestConfig.params,
+                    body: requestConfig.body
+                },
+                responses: responseConfig
+            });
+        } else {
+            // basePath가 아직 설정되지 않은 경우 지연 등록
+            this.pendingDocumentation.push({
+                method: 'GET',
+                path: exactPath,
+                requestConfig,
+                responseConfig
+            });
+        }
         
         return this;
     }    /**
@@ -816,20 +1115,31 @@ export class ExpressRouter {
         const middlewares = CustomRequestHandler.createHandler(
             { request: requestConfig, response: responseConfig },
             handler
-        );
-        const exactPath = this.convertSlugsToPath(slug);
+        );        const exactPath = this.convertSlugsToPath(slug);
         this.router.post(new RegExp(`^${exactPath.replace(/:\w+/g, '([^/]+)')}$`), ...middlewares);
-          // 문서화 등록
-        DocumentationGenerator.registerRoute({
-            method: 'POST',
-            path: this.getFullPath(exactPath),
-            parameters: {
-                query: requestConfig.query,
-                params: requestConfig.params,
-                body: requestConfig.body
-            },
-            responses: responseConfig
-        });
+        
+        // 문서화 등록을 지연시켜 setBasePath 호출 후 올바른 경로로 등록되도록 함
+        if (this.basePath) {
+            // basePath가 이미 설정된 경우 즉시 등록
+            DocumentationGenerator.registerRoute({
+                method: 'POST',
+                path: this.getFullPath(exactPath),
+                parameters: {
+                    query: requestConfig.query,
+                    params: requestConfig.params,
+                    body: requestConfig.body
+                },
+                responses: responseConfig
+            });
+        } else {
+            // basePath가 아직 설정되지 않은 경우 지연 등록
+            this.pendingDocumentation.push({
+                method: 'POST',
+                path: exactPath,
+                requestConfig,
+                responseConfig
+            });
+        }
         
         return this;
     }    /**
@@ -845,20 +1155,31 @@ export class ExpressRouter {
         const middlewares = CustomRequestHandler.createHandler(
             { request: requestConfig, response: responseConfig },
             handler
-        );
-        const exactPath = this.convertSlugsToPath(slug);
+        );        const exactPath = this.convertSlugsToPath(slug);
         this.router.put(new RegExp(`^${exactPath.replace(/:\w+/g, '([^/]+)')}$`), ...middlewares);
-          // 문서화 등록
-        DocumentationGenerator.registerRoute({
-            method: 'PUT',
-            path: this.getFullPath(exactPath),
-            parameters: {
-                query: requestConfig.query,
-                params: requestConfig.params,
-                body: requestConfig.body
-            },
-            responses: responseConfig
-        });
+        
+        // 문서화 등록을 지연시켜 setBasePath 호출 후 올바른 경로로 등록되도록 함
+        if (this.basePath) {
+            // basePath가 이미 설정된 경우 즉시 등록
+            DocumentationGenerator.registerRoute({
+                method: 'PUT',
+                path: this.getFullPath(exactPath),
+                parameters: {
+                    query: requestConfig.query,
+                    params: requestConfig.params,
+                    body: requestConfig.body
+                },
+                responses: responseConfig
+            });
+        } else {
+            // basePath가 아직 설정되지 않은 경우 지연 등록
+            this.pendingDocumentation.push({
+                method: 'PUT',
+                path: exactPath,
+                requestConfig,
+                responseConfig
+            });
+        }
         
         return this;
     }    /**
@@ -874,21 +1195,31 @@ export class ExpressRouter {
         const middlewares = CustomRequestHandler.createHandler(
             { request: requestConfig, response: responseConfig },
             handler
-        );
-        const exactPath = this.convertSlugsToPath(slug);
+        );        const exactPath = this.convertSlugsToPath(slug);
         this.router.delete(new RegExp(`^${exactPath.replace(/:\w+/g, '([^/]+)')}$`), ...middlewares);
         
-        // 문서화 등록
-        DocumentationGenerator.registerRoute({
-            method: 'DELETE',
-            path: exactPath,
-            parameters: {
-                query: requestConfig.query,
-                params: requestConfig.params,
-                body: requestConfig.body
-            },
-            responses: responseConfig
-        });
+        // 문서화 등록을 지연시켜 setBasePath 호출 후 올바른 경로로 등록되도록 함
+        if (this.basePath) {
+            // basePath가 이미 설정된 경우 즉시 등록
+            DocumentationGenerator.registerRoute({
+                method: 'DELETE',
+                path: this.getFullPath(exactPath),
+                parameters: {
+                    query: requestConfig.query,
+                    params: requestConfig.params,
+                    body: requestConfig.body
+                },
+                responses: responseConfig
+            });
+        } else {
+            // basePath가 아직 설정되지 않은 경우 지연 등록
+            this.pendingDocumentation.push({
+                method: 'DELETE',
+                path: exactPath,
+                requestConfig,
+                responseConfig
+            });
+        }
         
         return this;
     }

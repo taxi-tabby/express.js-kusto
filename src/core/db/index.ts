@@ -10,6 +10,9 @@ interface BasePrismaClient {
   $transaction<T>(fn: (client: any) => Promise<T>): Promise<T>;
 }
 
+// 클라이언트 매니저 import
+import { PrismaClientManager, clientManager } from './clientManager';
+
 // 생성된 Prisma Client가 있으면 사용하고, 없으면 동적으로 로딩 시도
 let PrismaClient: any;
 let generatedTypes: any = {};
@@ -369,6 +372,68 @@ export const getClient = (dbName: string): PrismaClientType => {
 
 export const disconnectAll = (): Promise<void> => {
   return prismaManager.disconnectAll();
+};
+
+// 자동 클라이언트 관리 함수들 내보내기
+export { 
+  PrismaClientManager, 
+  clientManager, 
+  scanAndRegisterClients, 
+  getAutoDetectedClient, 
+  printClientReport 
+} from './clientManager';
+export type { AutoDetectedClient } from './clientManager';
+
+/**
+ * 모든 클라이언트 (기존 + 자동 탐지) 연결 해제
+ */
+export const disconnectAllClients = async (): Promise<void> => {
+  await Promise.all([
+    prismaManager.disconnectAll(),
+    clientManager.disconnectAll()
+  ]);
+};
+
+/**
+ * 통합 클라이언트 초기화 함수
+ * 기존 등록된 클라이언트 + 자동 탐지된 클라이언트 모두 초기화
+ */
+export const initializeAllClients = async (): Promise<void> => {
+  console.log('🚀 Initializing all Prisma clients...');
+  
+  // 1. 자동 탐지 및 등록
+  await clientManager.autoRegisterClients();
+  
+  // 2. 클라이언트 상태 리포트 출력
+  clientManager.printClientReport();
+  
+  console.log('✅ All clients initialized successfully!');
+};
+
+/**
+ * 통합 클라이언트 가져오기 함수
+ * 먼저 PrismaManager에서 찾고, 없으면 자동 탐지된 클라이언트에서 찾기
+ */
+export const getAnyClient = async (clientName: string): Promise<PrismaClientType> => {
+  try {
+    // 먼저 기존 PrismaManager에서 시도
+    return prismaManager.getClient(clientName);
+  } catch (error) {
+    // 없으면 자동 탐지된 클라이언트에서 시도
+    console.log(`🔄 Fallback to auto-detected client: ${clientName}`);
+    return await clientManager.getClientInstance(clientName);
+  }
+};
+
+/**
+ * 사용 가능한 모든 클라이언트 이름 반환
+ */
+export const getAllClientNames = (): string[] => {
+  const registeredClients = prismaManager.getDatabaseNames();
+  const autoDetectedClients = clientManager.getValidClients().map(c => c.name);
+  
+  // 중복 제거하여 반환
+  return [...new Set([...registeredClients, ...autoDetectedClients])];
 };
 
 // 타입 재내보내기

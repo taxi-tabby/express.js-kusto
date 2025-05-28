@@ -20,11 +20,7 @@
     "db:seed": "npm run db seed",
     "db:studio": "npm run db studio",
     "db:health": "npm run db health",
-    "db:setup": "npm run db setup",    "prisma:generate": "prisma generate --schema=src/app/db/schema.prisma",
-    "prisma:migrate": "prisma migrate dev --schema=src/app/db/schema.prisma",
-    "prisma:studio": "prisma studio --schema=src/app/db/schema.prisma",
-    "prisma:reset": "prisma migrate reset --schema=src/app/db/schema.prisma",
-    "prisma:push": "prisma db push --schema=src/app/db/schema.prisma"
+    "db:setup": "npm run db setup"
   },
   "prisma": {
     "seed": "ts-node src/core/db/seed.ts"

@@ -18,7 +18,7 @@ program
 
 // Helper function to get database name
 async function getDatabaseName(options: any): Promise<string> {
-	if (options && options.database) {
+	if (options.database) {
 		return options.database;
 	}
 	
@@ -44,7 +44,7 @@ migrate
 	.description('Create a new migration')
 	.action(async (name: string, cmd: any) => {
 		try {
-			const dbName = await getDatabaseName(program.opts());
+			const dbName = await getDatabaseName(cmd.parent.opts());
 			await migrationManager.createMigration(dbName, name);
 		} catch (error) {
 			console.error('Error creating migration:', error);
@@ -57,7 +57,7 @@ migrate
 	.description('Run migrations')
 	.action(async (name: string | undefined, cmd: any) => {
 		try {
-			const dbName = await getDatabaseName(program.opts());
+			const dbName = await getDatabaseName(cmd.parent.opts());
 			await migrationManager.runMigrations(dbName, name);
 		} catch (error) {
 			console.error('Error running migrations:', error);
@@ -70,7 +70,7 @@ migrate
 	.description('Check migration status')
 	.action(async (cmd: any) => {
 		try {
-			const dbName = await getDatabaseName(program.opts());
+			const dbName = await getDatabaseName(cmd.parent.opts());
 			await migrationManager.getStatus(dbName);
 		} catch (error) {
 			console.error('Error checking migration status:', error);
@@ -83,7 +83,7 @@ migrate
 	.description('Reset database')
 	.action(async (cmd: any) => {
 		try {
-			const dbName = await getDatabaseName(program.opts());
+			const dbName = await getDatabaseName(cmd.parent.opts());
 			await migrationManager.resetDatabase(dbName);
 		} catch (error) {
 			console.error('Error resetting database:', error);
@@ -118,6 +118,19 @@ program
 			process.exit(1);
 		}
 	});
+
+// 시드 실행
+// program
+//   .command('seed')
+//   .description('Run database seed')
+//   .action(async () => {
+//     try {
+//       await databaseService.runSeed();
+//     } catch (error) {
+//       console.error('Error running seed:', error);
+//       process.exit(1);
+//     }
+//   });
 
 // Prisma Studio
 program

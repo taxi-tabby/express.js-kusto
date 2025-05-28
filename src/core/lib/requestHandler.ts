@@ -72,7 +72,9 @@ export class RequestHandler {
                 } else {
                     validatedData.params = paramsResult.data;
                 }
-            }            // 검증 실패 시 에러 응답
+            }            
+            
+            // 검증 실패 시 에러 응답
             if (errors.length > 0) {
                 // 개발자를 위한 자세한 로깅
                 log.Debug(`Validation errors for ${req.method} ${req.originalUrl}`, { errors });
@@ -106,7 +108,8 @@ export class RequestHandler {
         let filteredData = data;
 
         // 응답 스키마가 있으면 데이터 필터링
-        if (responseSchema && data) {            try {
+        if (responseSchema && data) {            
+            try {
                 filteredData = this.validateAndFilterResponse(data, responseSchema);
             } catch (error) {
                 log.Error('Response validation error:', { 
@@ -172,7 +175,10 @@ export class RequestHandler {
                     const statusCode = res.statusCode || 200;
                     const responseSchema = config.response?.[statusCode];
                     this.sendSuccess(res, result, statusCode, responseSchema);
-                }            } catch (error) {
+                }         
+
+            } catch (error) {
+
                 log.Error('Handler error:', { 
                     path: req.originalUrl, 
                     method: req.method,
@@ -187,6 +193,7 @@ export class RequestHandler {
                         this.sendError(res, 500, 'Internal server error');
                     }
                 }
+                
             }
         });
 

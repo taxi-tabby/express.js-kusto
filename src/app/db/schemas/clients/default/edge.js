@@ -86,6 +86,9 @@ Prisma.NullTypes = {
  * Enums
  */
 exports.Prisma.TransactionIsolationLevel = makeStrictEnum({
+  ReadUncommitted: 'ReadUncommitted',
+  ReadCommitted: 'ReadCommitted',
+  RepeatableRead: 'RepeatableRead',
   Serializable: 'Serializable'
 });
 
@@ -112,6 +115,11 @@ exports.Prisma.SortOrder = {
   desc: 'desc'
 };
 
+exports.Prisma.QueryMode = {
+  default: 'default',
+  insensitive: 'insensitive'
+};
+
 exports.Prisma.NullsOrder = {
   first: 'first',
   last: 'last'
@@ -133,7 +141,7 @@ const config = {
       "value": "prisma-client-js"
     },
     "output": {
-      "value": "R:\\project\\express.js-kusto\\src\\core\\db\\generated",
+      "value": "R:\\project\\express.js-kusto\\src\\app\\db\\schemas\\client\\default",
       "fromEnvVar": null
     },
     "config": {
@@ -147,20 +155,21 @@ const config = {
       }
     ],
     "previewFeatures": [],
-    "sourceFilePath": "R:\\project\\express.js-kusto\\src\\app\\db\\schema.prisma",
+    "sourceFilePath": "R:\\project\\express.js-kusto\\src\\app\\db\\schemas\\postgresql.prisma",
     "isCustomOutput": true
   },
   "relativeEnvPaths": {
-    "rootEnvPath": null,
-    "schemaEnvPath": "../../../../.env"
+    "rootEnvPath": "../../../../../../.env",
+    "schemaEnvPath": "../../../../../../.env"
   },
-  "relativePath": "../../../app/db",
+  "relativePath": "../..",
   "clientVersion": "6.8.2",
   "engineVersion": "2060c79ba17c6bb9f5823312b6f6b7f4a845738e",
   "datasourceNames": [
     "db"
   ],
-  "activeProvider": "sqlite",
+  "activeProvider": "postgresql",
+  "postinstall": false,
   "inlineDatasources": {
     "db": {
       "url": {
@@ -169,8 +178,8 @@ const config = {
       }
     }
   },
-  "inlineSchema": "// This is your Prisma schema file,\n// learn more about it in the docs: https://pris.ly/d/prisma-schema\n\ngenerator client {\n  provider = \"prisma-client-js\"\n  output   = \"../../core/db/generated\"\n}\n\ndatasource db {\n  provider = \"sqlite\"\n  url      = env(\"DATABASE_URL\")\n}\n\n// Example models - you can modify these as needed\nmodel User {\n  id        Int      @id @default(autoincrement())\n  email     String   @unique\n  name      String?\n  createdAt DateTime @default(now())\n  updatedAt DateTime @updatedAt\n  posts     Post[]\n}\n\nmodel Post {\n  id        Int      @id @default(autoincrement())\n  title     String\n  content   String?\n  published Boolean  @default(false)\n  authorId  Int\n  author    User     @relation(fields: [authorId], references: [id])\n  createdAt DateTime @default(now())\n  updatedAt DateTime @updatedAt\n}\n",
-  "inlineSchemaHash": "6174118154b3fd5d9f7ca4b3cb0a6d9e01fdfed4250b29c3d9f4fbde343f76d9",
+  "inlineSchema": "// PostgreSQL용 스키마 파일\n// 사용법: npx prisma generate --schema=src/app/db/schemas/postgresql.prisma\n\ngenerator client {\n  provider = \"prisma-client-js\"\n  output   = \"client/default\"\n}\n\ndatasource db {\n  provider = \"postgresql\"\n  url      = env(\"DATABASE_URL\")\n}\n\n// Example models - you can modify these as needed\nmodel User {\n  id        Int      @id @default(autoincrement())\n  email     String   @unique\n  name      String?\n  createdAt DateTime @default(now())\n  updatedAt DateTime @updatedAt\n  posts     Post[]\n}\n\nmodel Post {\n  id        Int      @id @default(autoincrement())\n  title     String\n  content   String?\n  published Boolean  @default(false)\n  authorId  Int\n  author    User     @relation(fields: [authorId], references: [id])\n  createdAt DateTime @default(now())\n  updatedAt DateTime @updatedAt\n}\n",
+  "inlineSchemaHash": "7efcd750146661a84a84935da59bda2bce3d342be5cefc4f597a5d3a151f9df4",
   "copyEngine": true
 }
 config.dirname = '/'

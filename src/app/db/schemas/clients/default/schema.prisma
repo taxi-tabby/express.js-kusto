@@ -1,13 +1,13 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
+// PostgreSQL용 스키마 파일
+// 사용법: npx prisma generate --schema=src/app/db/schemas/postgresql.prisma
 
 generator client {
   provider = "prisma-client-js"
-  output   = "../../core/db/generated"
+  output   = "client/default"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 

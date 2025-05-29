@@ -40,11 +40,7 @@
     "db:client:report": "npm run prisma client report",
     
     "db:env": "npm run prisma env",
-    "db:debug": "npm run prisma debug",
-    
-    "db:legacy": "ts-node src/core/scripts/db-cli.ts",
-    "db:multi": "ts-node src/core/scripts/db-cli-multi.ts",
-    "db:auto": "ts-node src/core/scripts/auto-client-cli.ts"
+    "db:debug": "npm run prisma debug"
 
 
   },

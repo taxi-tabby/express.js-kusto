@@ -20,84 +20,37 @@ import { DatabaseConfig } from '../../core/db';
  * - 필요한 경우 여러 데이터베이스 연결을 추가할 수 있습니다.
  */
 const initDb = async () => {
-	console.log('🚀 Starting database initialization...');
 
-	// 1. 자동 클라이언트 탐지 및 등록
-	console.log('\n📡 Auto-detecting Prisma clients...');
+	const env = process.env;
+
 	await scanAndRegisterClients();
 
-	// 2. 기본 PostgreSQL 데이터베이스 설정 (기존 방식)
-	console.log('\n⚙️ Setting up manual database configurations...');
+	
 	const defaultDbConfig: DatabaseConfig = {
 		name: 'default',
 		provider: 'postgresql',
 		connection: {
-			host: process.env.PG_HOST || 'localhost',
-			port: parseInt(process.env.PG_PORT || '5432'),
-			username: process.env.PG_USER || 'postgres',
-			password: process.env.PG_PASSWORD || 'postgres',
-			database: process.env.PG_DB || 'myapp',
-			ssl: process.env.PG_SSL === 'true'
+			host: env.RDS_DEFAULT_HOST || 'localhost',
+			port: parseInt(env.RDS_DEFAULT_PORT || '5432'),
+			username: env.RDS_DEFAULT_USER || 'postgres',
+			password: env.RDS_DEFAULT_PASSWORD || 'postgres',
+			database: env.RDS_DEFAULT_DB || 'default1',
+			ssl: env.RDS_DEFAULT_SSL === 'true'
 		},
-		logging: process.env.NODE_ENV === 'development' ? ['query', 'error'] : ['error']
+		logging: env.NODE_ENV === 'development' ? ['query', 'error'] : ['error']
 	};
 	addDatabase(defaultDbConfig);
 	migrationManager.addDatabaseFromConfig(defaultDbConfig);
 
-	// 예시: 추가 MySQL 데이터베이스
-	if (process.env.MYSQL_HOST) {
-		const mysqlDbConfig: DatabaseConfig = {
-			name: 'mysql_analytics',
-			provider: 'mysql',
-			connection: {
-				host: process.env.MYSQL_HOST,
-				port: parseInt(process.env.MYSQL_PORT || '3306'),
-				username: process.env.MYSQL_USER || 'root',
-				password: process.env.MYSQL_PASSWORD || '',
-				database: process.env.MYSQL_DB || 'analytics',
-			},
-			logging: process.env.NODE_ENV === 'development' ? ['query', 'error'] : ['error']
-		};
-		addDatabase(mysqlDbConfig);
-		migrationManager.addDatabaseFromConfig(mysqlDbConfig);
-	}
 
-	// 예시: SQLite 로컬 캐시 데이터베이스
-	const cacheDbConfig: DatabaseConfig = {
-		name: 'cache',
-		provider: 'sqlite',
-		connection: {
-			database: process.env.SQLITE_PATH || './dev.db'
-		},
-		logging: process.env.NODE_ENV === 'development' ? ['query', 'error'] : ['error']
-	};
-	addDatabase(cacheDbConfig);
-	migrationManager.addDatabaseFromConfig(cacheDbConfig);
+	console.log(process.env.RDS_DEFAULT_HOST);
+	console.log(process.env.RDS_DEFAULT_HOST);
+	console.log(process.env.RDS_DEFAULT_HOST);
+	console.log(process.env.RDS_DEFAULT_HOST);
+	console.log(process.env.RDS_DEFAULT_HOST);
 
-	// 예시: SQL Server 레거시 시스템
-	if (process.env.SQLSERVER_HOST) {
-		const legacyDbConfig: DatabaseConfig = {
-			name: 'legacy',
-			provider: 'sqlserver',
-			connection: {
-				host: process.env.SQLSERVER_HOST,
-				port: parseInt(process.env.SQLSERVER_PORT || '1433'),
-				username: process.env.SQLSERVER_USER || 'sa',
-				password: process.env.SQLSERVER_PASSWORD || '',
-				database: process.env.SQLSERVER_DB || 'legacy_system',
-				ssl: process.env.SQLSERVER_SSL === 'true'
-			},
-			logging: ['error']
-		};
-		addDatabase(legacyDbConfig);
-		migrationManager.addDatabaseFromConfig(legacyDbConfig);
-	}
 
-	// 3. 모든 클라이언트 초기화
-	console.log('\n🔄 Initializing all clients...');
 	await initializeAllClients();
-
-	console.log('✅ Database initialization completed.');
 };
 
 // 즉시 실행

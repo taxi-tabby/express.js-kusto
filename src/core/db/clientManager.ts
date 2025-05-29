@@ -117,17 +117,24 @@ export class PrismaClientManager {
 
     return clientInfo;
   }
-
   /**
-   * 스키마 파일에서 provider 추출
+   * 스키마 파일에서 datasource provider 추출
    */
   private async extractProviderFromSchema(schemaPath: string): Promise<DatabaseProvider | undefined> {
     try {
       const schemaContent = fs.readFileSync(schemaPath, 'utf-8');
-      const providerMatch = schemaContent.match(/provider\s*=\s*"([^"]+)"/);
-      if (providerMatch && providerMatch[1]) {
-        return providerMatch[1] as DatabaseProvider;
+      
+      // datasource 블록을 찾고 그 안의 provider 추출
+      const datasourceBlockMatch = schemaContent.match(/datasource\s+\w+\s*{([^}]*)}/s);
+      if (datasourceBlockMatch) {
+        const datasourceContent = datasourceBlockMatch[1];
+        const providerMatch = datasourceContent.match(/provider\s*=\s*"([^"]+)"/);
+        if (providerMatch && providerMatch[1]) {
+          return providerMatch[1] as DatabaseProvider;
+        }
       }
+      
+      console.warn(`No datasource provider found in schema: ${schemaPath}`);
     } catch (error) {
       console.warn(`Failed to read schema: ${schemaPath}`);
     }

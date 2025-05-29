@@ -5,7 +5,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  url      = env("RDS_DEFAULT_URL")
 }
 
 // Example models - you can modify these as needed

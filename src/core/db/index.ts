@@ -362,14 +362,27 @@ export const getDefaultClient = (): PrismaClientType => {
   return prismaManager.getClient('default');
 };
 
+/**
+ * 데이터베이스 추가 함수
+ * @param config - 데이터베이스 설정
+ */
 export const addDatabase = (config: DatabaseConfig): void => {
   prismaManager.addDatabase(config);
 };
 
+/**
+ * 특정 데이터베이스 클라이언트 가져오기
+ * @param dbName - 데이터베이스 이름
+ * @returns PrismaClientType
+ */
 export const getClient = (dbName: string): PrismaClientType => {
   return prismaManager.getClient(dbName);
 };
 
+/**
+ * 모든 데이터베이스 연결 해제
+ * @returns Promise<void>
+ */
 export const disconnectAll = (): Promise<void> => {
   return prismaManager.disconnectAll();
 };

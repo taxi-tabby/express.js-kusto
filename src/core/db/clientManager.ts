@@ -33,7 +33,6 @@ export class PrismaClientManager {
     }
     return PrismaClientManager.instance;
   }
-
   /**
    * clients 폴더를 스캔하여 모든 Prisma 클라이언트를 자동 탐지
    */
@@ -58,7 +57,7 @@ export class PrismaClientManager {
     }
 
     const results = Array.from(this.detectedClients.values());
-    console.log(`✅ Detected ${results.filter(c => c.isValid).length}/${results.length} valid clients`);
+    console.log(`✅ Detected ${results.filter(c => c.isValid).length}/${results.length} valid clients\n`);
     
     return results;
   }
@@ -165,12 +164,16 @@ export class PrismaClientManager {
 
     return matchingSchemas;
   }
-
   /**
    * 탐지된 클라이언트를 PrismaManager에 자동 등록
    */
   public async autoRegisterClients(): Promise<void> {
-    const clients = await this.scanClients();
+    // 이미 스캔된 결과가 있으면 재사용, 없으면 스캔 수행
+    let clients = this.getDetectedClients();
+    if (clients.length === 0) {
+      clients = await this.scanClients();
+    }
+    
     const prismaManager = PrismaManager.getInstance();
 
     for (const client of clients) {

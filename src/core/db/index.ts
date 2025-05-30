@@ -22,24 +22,21 @@ try {
   PrismaClient = generated.PrismaClient;
   generatedTypes = generated;
 } catch (error) {
-  console.warn('Prisma Client not generated yet. Run `npx prisma generate` first.');
+  console.warn('Prisma Client not generated yet. Run `npm run db-cli generate` first.');
   // 임시 클래스로 대체
   PrismaClient = class DummyPrismaClient implements BasePrismaClient {
     constructor(options?: any) {
       console.warn('Using dummy Prisma Client. Database operations will fail.');
     }
     async $connect() { return Promise.resolve(); }
-    async $disconnect() { return Promise.resolve(); }
-    async $queryRaw<T = any>(query: TemplateStringsArray | string, ...values: any[]): Promise<T> { 
-      throw new Error('Prisma Client not initialized. Run `npx prisma generate` first.');
-    }
-    async $executeRaw(query: TemplateStringsArray | string, ...values: any[]): Promise<any> { 
-      throw new Error('Prisma Client not initialized. Run `npx prisma generate` first.');
-    }    
-    async $transaction<P extends Promise<any>[]>(arg: [...P]): Promise<any>;
+    async $disconnect() { return Promise.resolve(); }    async $queryRaw<T = any>(query: TemplateStringsArray | string, ...values: any[]): Promise<T> { 
+      throw new Error('Prisma Client not initialized. Run `npm run db-cli generate` first.');
+    }    async $executeRaw(query: TemplateStringsArray | string, ...values: any[]): Promise<any> { 
+      throw new Error('Prisma Client not initialized. Run `npm run db-cli generate` first.');
+    }    async $transaction<P extends Promise<any>[]>(arg: [...P]): Promise<any>;
     async $transaction<T>(fn: (client: any) => Promise<T>): Promise<T>;
     async $transaction(arg: any): Promise<any> {
-      throw new Error('Prisma Client not initialized. Run `npx prisma generate` first.');
+      throw new Error('Prisma Client not initialized. Run `npm run db-cli generate` first.');
     }
   };
 }
@@ -454,21 +451,21 @@ export { PrismaClient };
 export type { PrismaClientType };
 
 // 생성된 타입이 있으면 재내보내기
-if (generatedTypes.Prisma) {
-  Object.defineProperty(exports, 'Prisma', {
-    get: () => generatedTypes.Prisma
-  });
-}
-if (generatedTypes.User) {
-  Object.defineProperty(exports, 'User', {
-    get: () => generatedTypes.User
-  });
-}
-if (generatedTypes.Post) {
-  Object.defineProperty(exports, 'Post', {
-    get: () => generatedTypes.Post
-  });
-}
+// if (generatedTypes.Prisma) {
+//   Object.defineProperty(exports, 'Prisma', {
+//     get: () => generatedTypes.Prisma
+//   });
+// }
+// if (generatedTypes.User) {
+//   Object.defineProperty(exports, 'User', {
+//     get: () => generatedTypes.User
+//   });
+// }
+// if (generatedTypes.Post) {
+//   Object.defineProperty(exports, 'Post', {
+//     get: () => generatedTypes.Post
+//   });
+// }
 
 // 기본 내보내기
 export default prismaManager;

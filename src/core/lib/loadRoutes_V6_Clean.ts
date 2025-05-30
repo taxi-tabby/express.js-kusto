@@ -536,41 +536,58 @@ function loadRoutes(app: Express, dir?: string): void {
         // 2. 모든 라우트 모듈 사전 로드
         const routeModules = new Map<string, Router>();
         const middlewareCollections = new Map<string, any[]>();
-        
-
-
-        // 라우트별로 모듈과 미들웨어 준비
+              // 라우트별로 모듈과 미들웨어 준비
         for (const dirInfo of routeDirectories) {
             const fileExt = getFileExtension();
             const routeFilePath = path.join(dirInfo.path, `route${fileExt}`);
             
             try {
                 const route = loadRoute(routeFilePath);
-                const middlewares = collectMiddlewares(dirInfo.path, directories);
+                // 각 라우트에는 해당 경로의 미들웨어만 수집 (상위 경로 미들웨어 제외)
+                const middlewares = loadMiddleware(dirInfo.path);
                 
                 routeModules.set(dirInfo.path, route);
                 middlewareCollections.set(dirInfo.path, middlewares);
                 
                 if (process.env.NODE_ENV === 'development') {
-                    log.Route(`📦 Loaded: ${routeFilePath} (${middlewares.length} middlewares)`);
+                    log.Route(`📦 Loaded: ${routeFilePath} (${middlewares.length} direct middlewares)`);
                 }
             } catch (error) {
                 console.error(`❌ Failed to load route: ${routeFilePath}`, error);
             }
         }
         
-        // 3. Express에 라우트 등록 (구체적인 경로 우선)
-        const sortedRoutes = routeDirectories.sort((a, b) => {
-            // 경로 길이로 먼저 정렬 (긴 경로가 먼저)
-            const pathLengthDiff = b.parentRoute.length - a.parentRoute.length;
-            if (pathLengthDiff !== 0) return pathLengthDiff;
-            
-            // 경로 길이가 같으면 깊이로 정렬
-            return a.depth - b.depth;
-        });          for (const dirInfo of sortedRoutes) {
+        // 루트 미들웨어를 전역으로 먼저 등록
+        const rootDir = routeDirectories.find(d => d.depth === 0);
+        if (rootDir) {
+            const rootMiddlewares = middlewareCollections.get(rootDir.path) || [];
+            if (rootMiddlewares.length > 0) {
+                console.log(`🌍 Registering global middlewares: ${rootMiddlewares.length}`);
+                app.use(...rootMiddlewares);
+                log.Route(`🌍 Global middlewares registered (${rootMiddlewares.length})`);
+            }
+        }        
+        // 3. Express에 라우트 등록 (루트 제외, 얕은 경로부터 깊은 경로 순서)
+        const sortedRoutes = routeDirectories
+            .filter(d => d.depth > 0) // 루트 제외
+            .sort((a, b) => {
+                // 깊이로 먼저 정렬 (얕은 경로가 먼저)
+                const depthDiff = a.depth - b.depth;
+                if (depthDiff !== 0) return depthDiff;
+                
+                // 깊이가 같으면 경로 길이로 정렬 (짧은 경로가 먼저)
+                return a.parentRoute.length - b.parentRoute.length;
+            });
+        
+        for (const dirInfo of sortedRoutes) {
             const route = routeModules.get(dirInfo.path);
-            const middlewares = middlewareCollections.get(dirInfo.path);            if (route && middlewares) {
+            const middlewares = middlewareCollections.get(dirInfo.path);
+            
+            if (route && middlewares) {
                 const routePath = normalizeSlash("/" + dirInfo.parentRoute);
+
+                console.log(`🔗 Registering route: ${routePath}`);
+                console.log(`   📋 Route-specific middlewares: ${middlewares.length}`);
 
                 // 라우트에 basePath 설정 (ExpressRouter의 setBasePath 메서드 호출)
                 if (route && 'setBasePath' in route && typeof (route as any).setBasePath === 'function') {
@@ -580,6 +597,7 @@ function loadRoutes(app: Express, dir?: string): void {
                 // 문서화 경로 업데이트를 위해 라우트 로드 전후의 등록된 라우트 수 추적
                 const routeCountBefore = DocumentationGenerator.getRouteCount();
                 
+                // 해당 경로의 미들웨어만 등록 (글로벌 미들웨어는 이미 등록됨)
                 app.use(routePath, ...middlewares, route);
                 
                 const routeCountAfter = DocumentationGenerator.getRouteCount();
@@ -593,7 +611,24 @@ function loadRoutes(app: Express, dir?: string): void {
                     DocumentationGenerator.updateRoutePaths(routePath, newRouteIndices);
                 }
                 
-                log.Route(`🔗 ${routePath} (${middlewares.length} middlewares)`);
+                log.Route(`🔗 ${routePath} (${middlewares.length} route middlewares)`);
+            }
+        }
+        
+        // 루트 라우트는 마지막에 등록 (글로벌 미들웨어는 이미 등록되어 있음)
+        if (rootDir) {
+            const rootRoute = routeModules.get(rootDir.path);
+            if (rootRoute) {
+                console.log(`🏠 Registering root route: /`);
+                
+                // 문서화 경로 업데이트를 위해 라우트 로드 전후의 등록된 라우트 수 추적
+                const routeCountBefore = DocumentationGenerator.getRouteCount();
+                
+                app.use('/', rootRoute);
+                
+                const routeCountAfter = DocumentationGenerator.getRouteCount();
+                
+                log.Route(`🏠 / (root route registered)`);
             }
         }
         

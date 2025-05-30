@@ -34,7 +34,6 @@ router.GET_VALIDATED(
 
 
 
-
 // POST 테스트 라우트
 router.POST_VALIDATED(
     {
@@ -65,65 +64,6 @@ router.POST_VALIDATED(
             age: userData.age, // 응답 스키마에 없으므로 제거될 예정
             createdAt: new Date().toISOString()
         };
-    }
-);
-
-// 에러 테스트 라우트
-// router.GET_WITH_VALIDATION(
-//     {
-//         query: {
-//             throwError: { type: 'boolean', required: false }
-//         }
-//     },
-//     async (req, res) => {
-//         const { throwError } = req.validatedData?.query || {};
-        
-//         if (throwError) {
-//             throw new Error('Test error thrown intentionally');
-//         }
-        
-//         return {
-//             message: 'No error thrown',
-//             success: true
-//         };
-//     }
-// );
-
-// 파라미터 테스트 라우트
-router.GET_SLUG_VALIDATED(
-    ['id'],
-    {
-        params: {
-            id: { type: 'number', required: true, min: 1 }
-        },
-        query: {
-            details: { type: 'boolean', required: false }
-        }
-    },
-    {
-        200: {
-            id: { type: 'number', required: true },
-            name: { type: 'string', required: true },
-            details: { type: 'object', required: false }
-        }
-    },
-    async (req, res) => {
-        const { id } = req.validatedData?.params || {};
-        const { details } = req.validatedData?.query || {};
-        
-        const result: any = {
-            id,
-            name: `Item ${id}`
-        };
-        
-        if (details) {
-            result.details = {
-                description: `Detailed information for item ${id}`,
-                lastUpdated: new Date().toISOString()
-            };
-        }
-        
-        return result;
     }
 );
 

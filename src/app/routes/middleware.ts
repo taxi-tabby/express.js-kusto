@@ -30,6 +30,9 @@ const corsOptions: cors.CorsOptions = {
 
 
 export default [
+
+
+
     /**
      * 보안 헤더 설정
      */
@@ -47,6 +50,8 @@ export default [
     bodyParser.json(),
     bodyParser.urlencoded({ extended: true, limit: '50mb' }),
 
+
+
     /**
      * 연결 footwalk 출력 미들웨어
      */
@@ -57,6 +62,8 @@ export default [
         const ips = (req.ips ? req.ips.join(",") : "");
 
         log.Footwalk(`[${method}] i[${ip || ips}] ${url}`, {});
+
+        console.log("-=----------------------------- 0 -----------------------------=-");
         next();
     },
     
@@ -68,5 +75,5 @@ export default [
             message: "서버 내부 오류입니다.",
             error: err.message
         });
-    },
+    }
 ];

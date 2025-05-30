@@ -64,7 +64,9 @@ export class Core {
         // Merge custom config with defaults
         if (customConfig) {
             this._config = { ...this._config, ...customConfig };
-        }          this.setupExpress();
+        }          
+        
+        this.setupExpress();
         this.setupDocumentationRoutes(); // 문서화 라우트를 먼저 등록
         this.loadRoutes();
         this.setupViews();
@@ -93,7 +95,9 @@ export class Core {
             log.Error('Failed to load routes', { error, routesPath: this._config.routesPath });
             throw error;
         }
-    }    private setupViews(): void {
+    }    
+    
+    private setupViews(): void {
         this._app.set('view engine', this._config.viewEngine);
         this._app.set('views', this._config.viewsPath);
         

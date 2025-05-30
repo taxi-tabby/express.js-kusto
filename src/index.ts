@@ -5,8 +5,6 @@ import { config } from 'dotenv';
 import { existsSync } from 'fs';
 import { resolve } from 'path';
 import { Application, log } from './core';
-import AppDBInit from '@app/db/init';
-
 
 
 // 환경 변수 파일 로딩 함수 (개발 모드에서만 실행)
@@ -58,10 +56,6 @@ function loadEnvironmentConfig() {
 
 // 환경 변수 로딩 실행
 loadEnvironmentConfig();
-
-// 사용자 db 등록
-AppDBInit();
-
 
 // 애플리케이션 생성 및 설정
 const app = new Application({

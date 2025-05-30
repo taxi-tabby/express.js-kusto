@@ -32,9 +32,8 @@ let directoryStructure: Record<string, string[]> = {};
 // 빌드 환경에서는 자동 생성된 라우트 맵 사용
 if (process.env.WEBPACK_BUILD === 'true') {    
     try {
-        console.log(`🔄 Loading dynamic route map in webpack build...`);
-        // 빌드 타임에 생성된 routes-map.ts 파일에서 데이터 가져오기
-        const routeMapModule = require('../tmp/routes-map');
+        console.log(`🔄 Loading dynamic route map in webpack build...`);        // 빌드 타임에 생성된 routes-map.ts 파일에서 데이터 가져오기
+        const routeMapModule = smartRequire('../tmp/routes-map');
         routesMap = routeMapModule.routesMap;
         middlewaresMap = routeMapModule.middlewaresMap;
         directoryStructure = routeMapModule.directoryStructure;
@@ -335,7 +334,7 @@ function loadMiddleware(dir: string): any[] {
             delete require.cache[path.resolve(middlewarePath)];
         }
         
-        const middlewares = require(path.resolve(middlewarePath));
+        const middlewares = smartRequire(middlewarePath);
         const result = middlewares && middlewares.default 
             ? (Array.isArray(middlewares.default) ? middlewares.default : [middlewares.default])
             : [];
@@ -416,7 +415,7 @@ function loadRoute(filePath: string): Router {
     }
     
     try {
-        const route = require(path.resolve(filePath)).default as unknown as Router;
+        const route = smartRequire(filePath).default as unknown as Router;
         routeCache.set(filePath, route);
         return route;
     } catch (error) {
@@ -511,53 +510,6 @@ function scanDirectories(rootDir: string): DirectoryInfo[] {
     return directories;
 }
 
-
-
-
-
-/**
- * 경로의 모든 미들웨어 수집 (깊은 곳에서 낮은 곳으로 역방향)
- */
-function collectMiddlewares(targetPath: string, allDirectories: DirectoryInfo[]): any[] {
-    const middlewares: any[] = [];
-    
-    if (process.env.WEBPACK_BUILD === 'true') {
-        // 빌드 환경에서는 가상 경로 기반으로 미들웨어 수집
-        const virtualPath = convertToVirtualPath(targetPath);
-        const pathParts = virtualPath.split('/').filter(Boolean);
-        
-        // 깊은 경로부터 상위 경로로 역방향 미들웨어 수집
-        let currentPath = '/';
-        if (virtualFS.middlewares[currentPath]) {
-            middlewares.push(...virtualFS.middlewares[currentPath]);
-        }
-        
-        for (let i = 0; i < pathParts.length; i++) {
-            currentPath = currentPath === '/' ? `/${pathParts[i]}` : `${currentPath}/${pathParts[i]}`;
-            if (virtualFS.middlewares[currentPath]) {
-                middlewares.push(...virtualFS.middlewares[currentPath]);
-            }
-        }
-        
-        return middlewares;
-    }
-    
-    // 개발 환경에서는 실제 파일 경로 기반으로 미들웨어 수집
-    const pathParts = targetPath.split(path.sep);
-    
-    // 깊은 경로부터 상위 경로로 역방향 미들웨어 수집
-    for (let i = pathParts.length - 1; i >= 0; i--) {
-        const partialPath = pathParts.slice(0, i + 1).join(path.sep);
-        const dirInfo = allDirectories.find(d => normalizeSlash(d.path) === normalizeSlash(partialPath));
-        
-        if (dirInfo?.hasMiddleware) {
-            const dirMiddlewares = loadMiddleware(dirInfo.path);
-            middlewares.push(...dirMiddlewares);
-        }
-    }
-    
-    return middlewares;
-}
 
 
 

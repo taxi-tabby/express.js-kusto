@@ -6,9 +6,7 @@ export default [
 
     (req: Request, res: Response, next: NextFunction) => {
 
-        console.log("-=----------------------------- 3 -----------------------------=-");
-
-        
+ 
         next();
     }
 ]

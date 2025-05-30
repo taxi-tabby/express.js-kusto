@@ -30,15 +30,40 @@ const resolveExternalIP = async (): Promise<string> => {
             }
         } catch (dnsError) {
             console.warn('DNS TXT record resolution failed:', dnsError);
-        }
-
-        // 2. HTTP 서비스를 통한 IP 확인 (fallback)
+        }        // 2. HTTP 서비스를 통한 IP 확인 (fallback)
         const ipServices = [
             'https://api.ipify.org',
             'https://checkip.amazonaws.com',
-            'https://ipv4.icanhazip.com'
+            'https://ipv4.icanhazip.com',
+            'https://ifconfig.me/ip',
+            'https://api.myip.com',
+            'https://ip.seeip.org',
+            'https://ipinfo.io/ip',
+            'https://api.ipaddress.com/myip',
+            'https://ip.42.pl/raw',
+            'https://bot.whatismyipaddress.com',
+            'https://ipecho.net/plain',
+            'https://ident.me',
+            'https://wtfismyip.com/text',
+            'https://ip-api.com/line/?fields=query',
+            'https://ipv4.wtfismyip.com/text',
+            'https://myexternalip.com/raw',
         ];
-        for (const service of ipServices) {
+
+        // Fisher-Yates 알고리즘을 사용한 배열 무작위 섞기
+        const shuffleArray = <T>(array: T[]): T[] => {
+            const shuffled = [...array];
+            for (let i = shuffled.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+            }
+            return shuffled;
+        };
+
+        const shuffledServices = shuffleArray(ipServices);
+        console.log(`Trying IP services in random order: ${shuffledServices.slice(0, 3).join(', ')}...`);
+
+        for (const service of shuffledServices) {
             try {
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 3000);
@@ -194,11 +219,13 @@ export default [
 
         const ip = getClientIP(req);
         const ips = (req.ips ? req.ips.join(",") : "");
+        
         req.app.set('ip', ip);
+        if (!req.app.get('ipex')) {
+            req.app.set('ipex', cachedExternalIP);
+        }
 
         log.Footwalk(`[${method}] i[${ip || ips}] ${url}`, {});
-
-        console.log("-=----------------------------- 0 -----------------------------=-");
         next();
     },
 

@@ -1,0 +1,25 @@
+{
+  "prisma.fileWatcher": true,
+  "prisma.showPrismaDataPlatformNotification": false,
+  "files.associations": {
+    "*.prisma": "prisma"
+  },
+  "files.exclude": {
+    "**/node_modules": true,
+    "**/.git": true,
+    "**/dist": true,
+    "**/logs": true,
+    // Exclude client directories from file watching to prevent schema conflicts
+    "**/client/**/*.prisma": true,
+    "src/app/db/*/client/schema.prisma": true
+  },
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/dist": true,
+    "**/logs": true,
+    // Exclude client schema files from search
+    "**/client/**/*.prisma": true,
+    "src/app/db/*/client/schema.prisma": true
+  },
+  "prisma.schemaPath": "src/app/db/**/*.prisma"
+}

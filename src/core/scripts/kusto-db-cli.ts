@@ -6,8 +6,53 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { exec } from 'child_process';
 import * as util from 'util';
+import * as dotenv from 'dotenv';
 
 const execPromise = util.promisify(exec);
+
+/**
+ * Load environment variables with NODE_ENV support
+ * Similar to how the main application loads environment variables
+ */
+function loadEnvironmentConfig() {
+    // 기본 .env 파일 경로
+    const defaultEnvPath = path.resolve(process.cwd(), '.env');
+    
+    // 기본 .env 파일이 존재하는지 확인
+    if (!fs.existsSync(defaultEnvPath)) {
+        console.error('❌ .env file not found! Application requires environment configuration.');
+        console.error('   Please create .env file in the project root.');
+        return;
+    }
+    
+    // 1. 기본 .env 파일 먼저 로드
+    console.log(`🔧 Loading base environment config from: ${defaultEnvPath}`);
+    dotenv.config({ path: defaultEnvPath });
+    
+    // 2. NODE_ENV 기반 환경별 파일로 덮어쓰기
+    const nodeEnv = process.env.NODE_ENV;
+    let envSpecificPath: string | null = null;
+    
+    if (nodeEnv === 'development') {
+        envSpecificPath = path.resolve(process.cwd(), '.env.dev');
+    } else if (nodeEnv === 'production') {
+        envSpecificPath = path.resolve(process.cwd(), '.env.prod');
+    }
+    
+    // 환경별 파일이 존재하면 덮어쓰기
+    if (envSpecificPath && fs.existsSync(envSpecificPath)) {
+        console.log(`🔧 Overriding with environment-specific config from: ${envSpecificPath}`);
+        dotenv.config({ path: envSpecificPath, override: true });
+    } else if (nodeEnv) {
+        console.log(`⚠️ Environment-specific file (.env.${nodeEnv}) not found, using base .env only`);
+    }
+    
+    // 최종 환경 정보 출력
+    console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+}
+
+// Load environment before defining any commands
+loadEnvironmentConfig();
 
 // Define the program
 const program = new Command();

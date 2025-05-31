@@ -14,7 +14,7 @@ const program = new Command();
 
 // Setup basic program info
 program
-  .name('kusto-db-cli')
+  .name('kusto-db')
   .description('CLI tool for managing Prisma databases in express.js-kusto project')
   .version('1.0.0');
 

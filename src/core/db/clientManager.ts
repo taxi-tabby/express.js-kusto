@@ -21,10 +21,9 @@ export class PrismaClientManager {
   private schemasPath: string;
   private detectedClients: Map<string, AutoDetectedClient> = new Map();
   private loadedClients: Map<string, any> = new Map();
-
   private constructor() {
-    this.clientsPath = path.resolve(process.cwd(), 'src/app/db/schemas/clients');
-    this.schemasPath = path.resolve(process.cwd(), 'src/app/db/schemas');
+    this.clientsPath = path.resolve(process.cwd(), 'src/app/db');
+    this.schemasPath = path.resolve(process.cwd(), 'src/app/db');
   }
 
   public static getInstance(): PrismaClientManager {
@@ -32,26 +31,29 @@ export class PrismaClientManager {
       PrismaClientManager.instance = new PrismaClientManager();
     }
     return PrismaClientManager.instance;
-  }
-  /**
-   * clients 폴더를 스캔하여 모든 Prisma 클라이언트를 자동 탐지
+  }  /**
+   * db 폴더를 스캔하여 모든 Prisma 클라이언트를 자동 탐지
    */
   public async scanClients(): Promise<AutoDetectedClient[]> {
     console.log('🔍 Scanning Prisma clients...');
     this.detectedClients.clear();
 
     if (!fs.existsSync(this.clientsPath)) {
-      console.warn(`⚠️ Clients directory not found: ${this.clientsPath}`);
+      console.warn(`⚠️ Database directory not found: ${this.clientsPath}`);
       return [];
     }
 
-    const clientFolders = fs.readdirSync(this.clientsPath, { withFileTypes: true })
+    // src/app/db 폴더에서 각 데이터베이스 폴더를 찾기
+    const dbFolders = fs.readdirSync(this.clientsPath, { withFileTypes: true })
       .filter(dirent => dirent.isDirectory())
-      .map(dirent => dirent.name);
+      .filter(dirent => {
+        // client 폴더가 있는 데이터베이스 폴더만 선택
+        const clientDir = path.join(this.clientsPath, dirent.name, 'client');
+        return fs.existsSync(clientDir);
+      })
+      .map(dirent => dirent.name);    console.log(`📁 Found ${dbFolders.length} database folders with clients:`, dbFolders);
 
-    console.log(`📁 Found ${clientFolders.length} client folders:`, clientFolders);
-
-    for (const folderName of clientFolders) {
+    for (const folderName of dbFolders) {
       const clientInfo = await this.analyzeClient(folderName);
       this.detectedClients.set(folderName, clientInfo);
     }
@@ -61,14 +63,13 @@ export class PrismaClientManager {
     
     return results;
   }
-
   /**
    * 개별 클라이언트 폴더 분석
    */
-  private async analyzeClient(clientName: string): Promise<AutoDetectedClient> {
-    const clientPath = path.join(this.clientsPath, clientName);
+  private async analyzeClient(dbName: string): Promise<AutoDetectedClient> {
+    const clientPath = path.join(this.clientsPath, dbName, 'client');
     const clientInfo: AutoDetectedClient = {
-      name: clientName,
+      name: dbName,
       path: clientPath,
       isValid: false
     };
@@ -76,25 +77,22 @@ export class PrismaClientManager {
     try {
       // 1. 필수 파일 존재 확인
       const indexPath = path.join(clientPath, 'index.js');
-      const packagePath = path.join(clientPath, 'package.json');
       
       if (!fs.existsSync(indexPath)) {
         clientInfo.error = 'index.js not found';
         return clientInfo;
       }
 
-      // 2. 스키마 파일 찾기
-      const schemaPath = path.join(clientPath, 'schema.prisma');
-      if (fs.existsSync(schemaPath)) {
-        clientInfo.schemaPath = schemaPath;
-        clientInfo.provider = await this.extractProviderFromSchema(schemaPath);
-      } else {
-        // schemas 폴더에서 해당하는 스키마 파일 찾기
-        const possibleSchemas = this.findMatchingSchema(clientName);
-        if (possibleSchemas.length > 0) {
-          clientInfo.schemaPath = possibleSchemas[0];
-          clientInfo.provider = await this.extractProviderFromSchema(possibleSchemas[0]);
-        }
+      // 2. 스키마 파일 찾기 (client 폴더 내부와 상위 폴더에서)
+      const clientSchemaPath = path.join(clientPath, 'schema.prisma');
+      const dbSchemaPath = path.join(this.clientsPath, dbName, 'schema.prisma');
+      
+      if (fs.existsSync(clientSchemaPath)) {
+        clientInfo.schemaPath = clientSchemaPath;
+        clientInfo.provider = await this.extractProviderFromSchema(clientSchemaPath);
+      } else if (fs.existsSync(dbSchemaPath)) {
+        clientInfo.schemaPath = dbSchemaPath;
+        clientInfo.provider = await this.extractProviderFromSchema(dbSchemaPath);
       }
 
       // 3. 클라이언트 모듈 로드 시도
@@ -273,6 +271,55 @@ export class PrismaClientManager {
   }
 
   /**
+   * 클라이언트의 타입 정보를 동적으로 가져오기
+   */
+  public getClientTypes(clientName: string): any {
+    const clientInfo = this.detectedClients.get(clientName);
+    if (!clientInfo || !clientInfo.isValid || !clientInfo.clientModule) {
+      throw new Error(`Client ${clientName} not found or invalid`);
+    }
+
+    // Prisma 네임스페이스와 모든 모델 타입들을 반환
+    return {
+      PrismaClient: clientInfo.clientModule.PrismaClient,
+      Prisma: clientInfo.clientModule.Prisma,
+      ...clientInfo.clientModule // 모든 모델 타입들 (Customer, Order, etc.)
+    };
+  }
+
+  /**
+   * 모든 클라이언트의 타입 정보를 객체로 반환
+   */
+  public getAllClientTypes(): Record<string, any> {
+    const types: Record<string, any> = {};
+    
+    for (const [clientName, clientInfo] of this.detectedClients) {
+      if (clientInfo.isValid && clientInfo.clientModule) {
+        types[clientName] = this.getClientTypes(clientName);
+      }
+    }
+    
+    return types;
+  }
+
+  /**
+   * 특정 클라이언트의 모델 타입만 가져오기
+   */
+  public getModelTypes(clientName: string): Record<string, any> {
+    const clientTypes = this.getClientTypes(clientName);
+    const modelTypes: Record<string, any> = {};
+    
+    // PrismaClient와 Prisma를 제외한 나머지가 모델 타입들
+    Object.keys(clientTypes).forEach(key => {
+      if (key !== 'PrismaClient' && key !== 'Prisma') {
+        modelTypes[key] = clientTypes[key];
+      }
+    });
+    
+    return modelTypes;
+  }
+
+  /**
    * 모든 탐지된 클라이언트 정보 반환
    */
   public getDetectedClients(): AutoDetectedClient[] {
@@ -336,6 +383,18 @@ export const scanAndRegisterClients = async (): Promise<void> => {
 
 export const getAutoDetectedClient = async (clientName: string): Promise<any> => {
   return await clientManager.getClientInstance(clientName);
+};
+
+export const getClientTypes = (clientName: string): any => {
+  return clientManager.getClientTypes(clientName);
+};
+
+export const getAllClientTypes = (): Record<string, any> => {
+  return clientManager.getAllClientTypes();
+};
+
+export const getModelTypes = (clientName: string): Record<string, any> => {
+  return clientManager.getModelTypes(clientName);
 };
 
 export const printClientReport = (): void => {

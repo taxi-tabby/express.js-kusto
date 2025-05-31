@@ -28,7 +28,6 @@ router.GET(async (req: Request, res: Response) => {
 
 
         const db1 = prismaManager.getClient('testdb1');
-
         
         
         const users = await db1.user.findMany({

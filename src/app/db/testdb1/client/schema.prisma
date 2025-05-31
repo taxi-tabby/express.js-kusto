@@ -8,23 +8,37 @@ datasource db {
   url      = env("RDS1_DEFAULT_URL")
 }
 
-// Example models - you can modify these as needed
-model User {
-  id        Int      @id @default(autoincrement())
+// Example models with different data structure using both IDs and UUIDs
+model Customer {
+  id        BigInt   @id @default(autoincrement())
+  uuid      String   @unique @default(uuid())
   email     String   @unique
-  name      String?
+  name      String
+  phone     String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  posts     Post[]
+  orders    Order[]
 }
 
-model Post {
-  id        Int      @id @default(autoincrement())
-  title     String
-  content   String?
-  published Boolean  @default(false)
-  authorId  Int
-  author    User     @relation(fields: [authorId], references: [id])
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+model Order {
+  id          BigInt      @id @default(autoincrement())
+  orderUuid   String      @unique @default(uuid())
+  orderNumber String      @unique
+  totalAmount Float
+  status      String      @default("pending")
+  customerId  BigInt
+  customer    Customer    @relation(fields: [customerId], references: [id])
+  items       OrderItem[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+}
+
+model OrderItem {
+  id          BigInt @id @default(autoincrement())
+  itemUuid    String @unique @default(uuid())
+  productName String
+  quantity    Int
+  price       Float
+  orderId     BigInt
+  order       Order  @relation(fields: [orderId], references: [id])
 }

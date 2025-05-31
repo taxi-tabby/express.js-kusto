@@ -220,7 +220,7 @@ export class PrismaManager {
    */
   public async disconnectAll(): Promise<void> {
     const disconnectPromises = Array.from(this.databases.values()).map(client => 
-      client.$disconnect().catch(error => 
+      client.$disconnect().catch((error: any) => 
         console.error('Error disconnecting Prisma client:', error)
       )
     );
@@ -253,20 +253,6 @@ export class PrismaManager {
   }
 
 
-  // /**
-  //  * Convenience method to get a specific database client with type safety
-  //  */
-  // public testdb1(): PrismaClient {
-  //   return this.getClient('testdb1');
-  // }
-
-  // /**
-  //  * Convenience method to get a specific database client with type safety
-  //  */
-  // public testdb2(): PrismaClient {
-  //   return this.getClient('testdb2');
-  // }
-
   /**
    * Execute a transaction across multiple databases
    * Note: This is for separate transactions, not distributed transactions
@@ -281,7 +267,7 @@ export class PrismaManager {
     
     for (const { database, operation } of operations) {
       const client = this.getClient(database);
-      const result = await client.$transaction(async (tx) => {
+      const result = await client.$transaction(async (tx: any) => {
         return operation(tx as PrismaClient);
       });
       results.push(result);

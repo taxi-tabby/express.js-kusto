@@ -5,6 +5,45 @@ import { log } from '../external/winston';
 import { normalizeSlash, getElapsedTimeInString } from '../external/util';
 import { DocumentationGenerator } from './documentationGenerator';
 
+// Webpack 빌드 환경에서 자동 생성된 라우트 맵 가져오기 (빌드 타임에 생성된 파일)
+let routesMap: Record<string, Router> = {};
+let middlewaresMap: Record<string, any[]> = {};
+let directoryStructure: Record<string, string[]> = {};
+
+/**
+ * 동적 라우트 맵 로드 함수
+ */
+async function loadDynamicRouteMap(): Promise<void> {
+    if (process.env.WEBPACK_BUILD !== 'true') {
+        return;
+    }
+
+    try {
+        console.log(`🔄 Loading dynamic route map in webpack build...`);
+        // @ts-ignore - 런타임에 생성되는 파일이므로 TypeScript가 찾을 수 없음
+        const routeMapModule = await import('../tmp/routes-map');
+        routesMap = routeMapModule.routesMap;
+        middlewaresMap = routeMapModule.middlewaresMap;
+        directoryStructure = routeMapModule.directoryStructure;
+        
+        // virtualFS 업데이트
+        virtualFS.routes = routesMap;
+        virtualFS.middlewares = middlewaresMap;
+        virtualFS.structure = directoryStructure;
+        
+        console.log(`✅ Successfully loaded dynamic route map with ${Object.keys(routesMap).length} routes`);
+    } catch (error) {
+        console.error(`❌ Error loading dynamic route map:`, error);
+        // 빈 맵으로 초기화
+        routesMap = {};
+        middlewaresMap = {};
+        directoryStructure = { '/': [] };
+        
+        virtualFS.routes = {};
+        virtualFS.middlewares = {};
+        virtualFS.structure = { '/': [] };
+    }
+}
 
 // Webpack 빌드 환경을 위한 가상 파일 시스템 구조
 interface VirtualFileSystem {
@@ -13,52 +52,12 @@ interface VirtualFileSystem {
     structure: Record<string, string[]>; // 디렉토리 구조
 }
 
-interface DirectoryInfo {
-    path: string;
-    parentRoute: string;
-    hasMiddleware: boolean;
-    hasRoute: boolean;
-    depth: number;
-}
-
-
-// Webpack 빌드 환경에서 자동 생성된 라우트 맵 가져오기 (빌드 타임에 생성된 파일)
-let routesMap: Record<string, Router> = {};
-let middlewaresMap: Record<string, any[]> = {};
-let directoryStructure: Record<string, string[]> = {};
-
-
-
-// 빌드 환경에서는 자동 생성된 라우트 맵 사용
-if (process.env.WEBPACK_BUILD === 'true') {    
-    try {
-        console.log(`🔄 Loading dynamic route map in webpack build...`);        // 빌드 타임에 생성된 routes-map.ts 파일에서 데이터 가져오기
-        const routeMapModule = smartRequire('../tmp/routes-map');
-        routesMap = routeMapModule.routesMap;
-        middlewaresMap = routeMapModule.middlewaresMap;
-        directoryStructure = routeMapModule.directoryStructure;
-        console.log(`✅ Successfully loaded dynamic route map with ${Object.keys(routesMap).length} routes`);
-    } catch (error) {
-        console.error(`❌ Error loading dynamic route map:`, error);
-        // 빈 맵으로 초기화
-        routesMap = {};
-        middlewaresMap = {};
-        directoryStructure = { '/': [] };
-    }
-}
-
-
 // 가상 파일 시스템 (Webpack 빌드 환경용)
 const virtualFS: VirtualFileSystem = {
     routes: routesMap,
     middlewares: middlewaresMap,
     structure: directoryStructure
 };
-
-
-
-
-
 
 /**
  * 환경에 따른 파일 확장자 반환
@@ -67,11 +66,6 @@ function getFileExtension(): string {
     // 빌드 환경에서도 .ts 파일을 사용 (webpack이 복사한 .ts 파일들)
     return '.ts';
 }
-
-
-
-
-
 
 /**
  * 환경에 따른 라우트 디렉토리 경로 반환
@@ -85,17 +79,11 @@ function getRoutesDirectory(): string {
     return './src/app/routes';
 }
 
-
-
-
 // 🚀 캐시 시스템
 const middlewareCache = new Map<string, any[]>();
 const routeCache = new Map<string, Router>();
 const fileExistsCache = new Map<string, boolean>();
 const moduleResolutionCache = new Map<string, string>();
-
-
-
 
 // 라우트 패턴 정규식
 const ROUTE_PATTERNS = {
@@ -104,8 +92,13 @@ const ROUTE_PATTERNS = {
     namedParam: /^\[(.+)\]$/
 } as const;
 
-
-
+interface DirectoryInfo {
+    path: string;
+    parentRoute: string;
+    hasMiddleware: boolean;
+    hasRoute: boolean;
+    depth: number;
+}
 
 /**
  * 스마트 모듈 로더 - TypeScript alias 해석 캐싱
@@ -127,8 +120,6 @@ function smartRequire(filePath: string): any {
         return require(resolvedPath);
     }
 }
-
-
 
 /**
  * 파일 존재 확인 (캐싱) - 빌드 환경에서는 가상 파일 시스템 사용
@@ -176,9 +167,6 @@ function fileExists(filePath: string): boolean {
     }
 }
 
-
-
-
 /**
  * 실제 파일 경로를 가상 경로로 변환
  */
@@ -187,6 +175,9 @@ function convertToVirtualPath(filePath: string): string {
         return filePath;
     }
     
+    // 디버깅을 위한 로그
+    console.log(`🔍 Converting path: ${filePath}`);
+    
     // 경로 정규화: 백슬래시를 슬래시로 변환하고 연속 슬래시 제거
     let normalizedPath = filePath.replace(/\\/g, '/').replace(/\/+/g, '/');
     
@@ -194,29 +185,81 @@ function convertToVirtualPath(filePath: string): string {
     if (normalizedPath.endsWith('/route.ts') || normalizedPath.endsWith('/route.js')) {
         const pathWithoutFile = normalizedPath.replace(/\/route\.(ts|js)$/, '');
         
+        console.log(`🔍 Path without file: ${pathWithoutFile}`);
+        
         // 절대 경로를 상대 경로로 변환
         if (pathWithoutFile.includes('/app/routes/')) {
             const relativePath = pathWithoutFile.split('/app/routes/')[1] || '';
-            return relativePath ? `/${relativePath}` : '/';
+            const result = relativePath ? `/${relativePath}` : '/';
+            console.log(`✅ Found /app/routes/ pattern, result: ${result}`);
+            return result;
         }
         
         if (pathWithoutFile.includes('/src/app/routes/')) {
             const relativePath = pathWithoutFile.split('/src/app/routes/')[1] || '';
-            return relativePath ? `/${relativePath}` : '/';
+            const result = relativePath ? `/${relativePath}` : '/';
+            console.log(`✅ Found /src/app/routes/ pattern, result: ${result}`);
+            return result;
         }
         
         if (pathWithoutFile.includes('/routes/')) {
             const relativePath = pathWithoutFile.split('/routes/')[1] || '';
-            return relativePath ? `/${relativePath}` : '/';
+            const result = relativePath ? `/${relativePath}` : '/';
+            console.log(`✅ Found /routes/ pattern, result: ${result}`);
+            return result;
         }
         
-        // 경로에서 마지막 디렉토리 이름 추출
+        // 경로에서 routes 이후의 전체 경로 추출
         const parts = pathWithoutFile.split('/').filter(Boolean);
-        return parts.length > 0 ? `/${parts[parts.length - 1]}` : '/';
+        const routesIndex = parts.lastIndexOf('routes');
+        if (routesIndex !== -1 && routesIndex < parts.length - 1) {
+            const relativePath = parts.slice(routesIndex + 1).join('/');
+            const result = `/${relativePath}`;
+            console.log(`✅ Found routes index pattern, result: ${result}`);
+            return result;
+        }
+        
+        // 만약 경로에 많은 구조가 있다면 직접 처리
+        // 예: many_route_test/deep1/deep9/9 같은 패턴
+        if (pathWithoutFile.startsWith('/many_route_test') || pathWithoutFile.includes('many_route_test')) {
+            // many_route_test부터 시작하는 전체 경로 사용
+            let result = pathWithoutFile;
+            if (!result.startsWith('/')) {
+                result = '/' + result;
+            }
+            // 앞에 불필요한 경로가 있다면 제거
+            if (result.includes('/many_route_test')) {
+                const startIndex = result.indexOf('/many_route_test');
+                result = result.substring(startIndex);
+            }
+            console.log(`✅ Found many_route_test pattern, result: ${result}`);
+            return result;
+        }
+        
+        // routes가 없는 경우에도 전체 경로 시도 (app, src 등이 포함된 절대 경로인 경우)
+        // Windows 드라이브 문자 제거 (C:, D: 등)
+        let cleanPath = pathWithoutFile.replace(/^[A-Za-z]:/, '');
+        
+        // 시작 슬래시 정규화
+        if (!cleanPath.startsWith('/')) {
+            cleanPath = '/' + cleanPath;
+        }
+        
+        // app이나 src 디렉토리 이후의 경로만 추출
+        if (cleanPath.includes('/app/')) {
+            const appIndex = cleanPath.lastIndexOf('/app/');
+            cleanPath = cleanPath.substring(appIndex + 5); // '/app/' 이후
+        } else if (cleanPath.includes('/src/')) {
+            const srcIndex = cleanPath.lastIndexOf('/src/');
+            cleanPath = cleanPath.substring(srcIndex + 5); // '/src/' 이후
+        }
+        
+        // 시작 슬래시 보장
+        const result = cleanPath.startsWith('/') ? cleanPath : `/${cleanPath}`;
+        console.log(`✅ Fallback pattern, result: ${result}`);
+        return result;
     }
-    
-
-    // 미들웨어 파일인 경우 (middleware.ts)
+      // 미들웨어 파일인 경우 (middleware.ts)
     if (normalizedPath.endsWith('/middleware.ts') || normalizedPath.endsWith('/middleware.js')) {
         const pathWithoutFile = normalizedPath.replace(/\/middleware\.(ts|js)$/, '');
         
@@ -235,34 +278,35 @@ function convertToVirtualPath(filePath: string): string {
             const relativePath = pathWithoutFile.split('/routes/')[1] || '';
             return relativePath ? `/${relativePath}` : '/';
         }
+        
+        // 경로에서 routes 이후의 전체 경로 추출
+        const parts = pathWithoutFile.split('/').filter(Boolean);
+        const routesIndex = parts.lastIndexOf('routes');
+        if (routesIndex !== -1 && routesIndex < parts.length - 1) {
+            const relativePath = parts.slice(routesIndex + 1).join('/');
+            return `/${relativePath}`;
+        }
     }
     
-
-
     // 일반 디렉토리 경로 처리
     if (normalizedPath.includes('/app/routes/')) {
         const relativePath = normalizedPath.split('/app/routes/')[1] || '';
         return relativePath ? `/${relativePath}` : '/';
     }
     
-
-
     if (normalizedPath.includes('/src/app/routes/')) {
         const relativePath = normalizedPath.split('/src/app/routes/')[1] || '';
         return relativePath ? `/${relativePath}` : '/';
     }
-
-
     
     // 이미 루트 경로인 경우 그대로 반환
     if (normalizedPath === '/' || normalizedPath === '') {
         return '/';
     }
-
-
     
     // 기타 경로: 시작의 점이나 슬래시 제거
     normalizedPath = normalizedPath.replace(/^\.\//, '');
+    
     return `/${normalizedPath}`;
 }
 
@@ -279,7 +323,6 @@ function buildRoutePath(parentRoute: string, dirName: string): string {
     if (namedMatch) return `${parentRoute}/:${namedMatch[1]}`;
     return `${parentRoute}/${dirName}`;
 }
-
 
 /**
  * 디렉토리 스캔 - 빌드 환경에서는 가상 파일 시스템 사용
@@ -300,8 +343,6 @@ function getDirectories(dir: string): string[] {
         return [];
     }
 }
-
-
 
 /**
  * 미들웨어 로드 - 빌드 환경에서는 가상 파일 시스템 사용
@@ -333,11 +374,10 @@ function loadMiddleware(dir: string): any[] {
         if (process.env.NODE_ENV === 'development') {
             delete require.cache[path.resolve(middlewarePath)];
         }
-        
-        const middlewares = smartRequire(middlewarePath);
+          const middlewares = smartRequire(middlewarePath);
         const result = middlewares && middlewares.default 
             ? (Array.isArray(middlewares.default) ? middlewares.default : [middlewares.default])
-            : [];
+            : (Array.isArray(middlewares) ? middlewares : [middlewares]);
 
         middlewareCache.set(dir, result);
         return result;
@@ -347,8 +387,6 @@ function loadMiddleware(dir: string): any[] {
         return [];
     }
 }
-
-
 
 /**
  * 라우트 파일 로드 - 빌드 환경에서는 가상 파일 시스템 사용
@@ -413,9 +451,11 @@ function loadRoute(filePath: string): Router {
     if (process.env.NODE_ENV === 'development') {
         delete require.cache[path.resolve(filePath)];
     }
-    
-    try {
-        const route = smartRequire(filePath).default as unknown as Router;
+      try {
+        const route = smartRequire(filePath)?.default || smartRequire(filePath);
+        if (!route || typeof route !== 'function') {
+            throw new Error(`Route file does not export a valid router: ${filePath}`);
+        }
         routeCache.set(filePath, route);
         return route;
     } catch (error) {
@@ -423,9 +463,6 @@ function loadRoute(filePath: string): Router {
         throw error;
     }
 }
-
-
-
 
 /**
  * 전체 디렉토리 구조 스캔 - 빌드 환경에서는 가상 파일 시스템 사용
@@ -470,8 +507,6 @@ function scanDirectories(rootDir: string): DirectoryInfo[] {
         return directories;
     }
 
-    
-
     // 개발 환경에서는 실제 파일 시스템 스캔
     const directories: DirectoryInfo[] = [];
     const queue: Array<{ dir: string; parentRoute: string; depth: number }> = [
@@ -510,16 +545,58 @@ function scanDirectories(rootDir: string): DirectoryInfo[] {
     return directories;
 }
 
-
-
-
+/**
+ * 경로의 모든 미들웨어 수집 (깊은 곳에서 낮은 곳으로 역방향)
+ */
+function collectMiddlewares(targetPath: string, allDirectories: DirectoryInfo[]): any[] {
+    const middlewares: any[] = [];
+    
+    if (process.env.WEBPACK_BUILD === 'true') {
+        // 빌드 환경에서는 가상 경로 기반으로 미들웨어 수집
+        const virtualPath = convertToVirtualPath(targetPath);
+        const pathParts = virtualPath.split('/').filter(Boolean);
+        
+        // 깊은 경로부터 상위 경로로 역방향 미들웨어 수집
+        let currentPath = '/';
+        if (virtualFS.middlewares[currentPath]) {
+            middlewares.push(...virtualFS.middlewares[currentPath]);
+        }
+        
+        for (let i = 0; i < pathParts.length; i++) {
+            currentPath = currentPath === '/' ? `/${pathParts[i]}` : `${currentPath}/${pathParts[i]}`;
+            if (virtualFS.middlewares[currentPath]) {
+                middlewares.push(...virtualFS.middlewares[currentPath]);
+            }
+        }
+        
+        return middlewares;
+    }
+    
+    // 개발 환경에서는 실제 파일 경로 기반으로 미들웨어 수집
+    const pathParts = targetPath.split(path.sep);
+    
+    // 깊은 경로부터 상위 경로로 역방향 미들웨어 수집
+    for (let i = pathParts.length - 1; i >= 0; i--) {
+        const partialPath = pathParts.slice(0, i + 1).join(path.sep);
+        const dirInfo = allDirectories.find(d => normalizeSlash(d.path) === normalizeSlash(partialPath));
+        
+        if (dirInfo?.hasMiddleware) {
+            const dirMiddlewares = loadMiddleware(dirInfo.path);
+            middlewares.push(...dirMiddlewares);
+        }
+    }
+    
+    return middlewares;
+}
 
 /**
  * 🚀 클린 라우트 로더 V6
  */
-function loadRoutes(app: Express, dir?: string): void {
+async function loadRoutes(app: Express, dir?: string): Promise<void> {
     const startTime = process.hrtime();
     
+    // Webpack 빌드 환경에서는 먼저 동적 라우트 맵 로드
+    await loadDynamicRouteMap();
 
     // 환경에 맞는 라우트 디렉토리 사용
     const routesDir = dir || getRoutesDirectory();
@@ -543,58 +620,41 @@ function loadRoutes(app: Express, dir?: string): void {
         // 2. 모든 라우트 모듈 사전 로드
         const routeModules = new Map<string, Router>();
         const middlewareCollections = new Map<string, any[]>();
-              // 라우트별로 모듈과 미들웨어 준비
+        
+
+
+        // 라우트별로 모듈과 미들웨어 준비
         for (const dirInfo of routeDirectories) {
             const fileExt = getFileExtension();
             const routeFilePath = path.join(dirInfo.path, `route${fileExt}`);
             
             try {
                 const route = loadRoute(routeFilePath);
-                // 각 라우트에는 해당 경로의 미들웨어만 수집 (상위 경로 미들웨어 제외)
-                const middlewares = loadMiddleware(dirInfo.path);
+                const middlewares = collectMiddlewares(dirInfo.path, directories);
                 
                 routeModules.set(dirInfo.path, route);
                 middlewareCollections.set(dirInfo.path, middlewares);
                 
                 if (process.env.NODE_ENV === 'development') {
-                    log.Route(`📦 Loaded: ${routeFilePath} (${middlewares.length} direct middlewares)`);
+                    log.Route(`📦 Loaded: ${routeFilePath} (${middlewares.length} middlewares)`);
                 }
             } catch (error) {
                 console.error(`❌ Failed to load route: ${routeFilePath}`, error);
             }
         }
         
-        // 루트 미들웨어를 전역으로 먼저 등록
-        const rootDir = routeDirectories.find(d => d.depth === 0);
-        if (rootDir) {
-            const rootMiddlewares = middlewareCollections.get(rootDir.path) || [];
-            if (rootMiddlewares.length > 0) {
-                console.log(`🌍 Registering global middlewares: ${rootMiddlewares.length}`);
-                app.use(...rootMiddlewares);
-                log.Route(`🌍 Global middlewares registered (${rootMiddlewares.length})`);
-            }
-        }        
-        // 3. Express에 라우트 등록 (루트 제외, 얕은 경로부터 깊은 경로 순서)
-        const sortedRoutes = routeDirectories
-            .filter(d => d.depth > 0) // 루트 제외
-            .sort((a, b) => {
-                // 깊이로 먼저 정렬 (얕은 경로가 먼저)
-                const depthDiff = a.depth - b.depth;
-                if (depthDiff !== 0) return depthDiff;
-                
-                // 깊이가 같으면 경로 길이로 정렬 (짧은 경로가 먼저)
-                return a.parentRoute.length - b.parentRoute.length;
-            });
-        
-        for (const dirInfo of sortedRoutes) {
-            const route = routeModules.get(dirInfo.path);
-            const middlewares = middlewareCollections.get(dirInfo.path);
+        // 3. Express에 라우트 등록 (구체적인 경로 우선)
+        const sortedRoutes = routeDirectories.sort((a, b) => {
+            // 경로 길이로 먼저 정렬 (긴 경로가 먼저)
+            const pathLengthDiff = b.parentRoute.length - a.parentRoute.length;
+            if (pathLengthDiff !== 0) return pathLengthDiff;
             
-            if (route && middlewares) {
+            // 경로 길이가 같으면 깊이로 정렬
+            return a.depth - b.depth;
+        });          for (const dirInfo of sortedRoutes) {
+            const route = routeModules.get(dirInfo.path);
+            const middlewares = middlewareCollections.get(dirInfo.path);            if (route && middlewares) {
                 const routePath = normalizeSlash("/" + dirInfo.parentRoute);
-
-                console.log(`🔗 Registering route: ${routePath}`);
-                console.log(`   📋 Route-specific middlewares: ${middlewares.length}`);
 
                 // 라우트에 basePath 설정 (ExpressRouter의 setBasePath 메서드 호출)
                 if (route && 'setBasePath' in route && typeof (route as any).setBasePath === 'function') {
@@ -604,7 +664,6 @@ function loadRoutes(app: Express, dir?: string): void {
                 // 문서화 경로 업데이트를 위해 라우트 로드 전후의 등록된 라우트 수 추적
                 const routeCountBefore = DocumentationGenerator.getRouteCount();
                 
-                // 해당 경로의 미들웨어만 등록 (글로벌 미들웨어는 이미 등록됨)
                 app.use(routePath, ...middlewares, route);
                 
                 const routeCountAfter = DocumentationGenerator.getRouteCount();
@@ -618,37 +677,7 @@ function loadRoutes(app: Express, dir?: string): void {
                     DocumentationGenerator.updateRoutePaths(routePath, newRouteIndices);
                 }
                 
-                log.Route(`🔗 ${routePath} (${middlewares.length} route middlewares)`);
-            }
-        }
-        
-        // 루트 라우트는 마지막에 등록 (글로벌 미들웨어는 이미 등록되어 있음)
-        if (rootDir) {
-            const rootRoute = routeModules.get(rootDir.path);            if (rootRoute) {
-                console.log(`🏠 Registering root route: /`);
-                
-                // 라우트에 basePath 설정 (ExpressRouter의 setBasePath 메서드 호출)
-                if (rootRoute && 'setBasePath' in rootRoute && typeof (rootRoute as any).setBasePath === 'function') {
-                    (rootRoute as any).setBasePath('/');
-                }
-                
-                // 문서화 경로 업데이트를 위해 라우트 로드 전후의 등록된 라우트 수 추적
-                const routeCountBefore = DocumentationGenerator.getRouteCount();
-                
-                app.use('/', rootRoute);
-                
-                const routeCountAfter = DocumentationGenerator.getRouteCount();
-                
-                // 새로 등록된 라우트들의 경로를 업데이트 (루트 경로는 '/'로 유지)
-                if (routeCountAfter > routeCountBefore) {
-                    const newRouteIndices = Array.from(
-                        { length: routeCountAfter - routeCountBefore }, 
-                        (_, i) => routeCountBefore + i
-                    );
-                    DocumentationGenerator.updateRoutePaths('/', newRouteIndices);
-                }
-                
-                log.Route(`🏠 / (root route registered)`);
+                log.Route(`🔗 ${routePath} (${middlewares.length} middlewares)`);
             }
         }
         

@@ -356,8 +356,11 @@ function loadMiddleware(dir: string): any[] {
     if (process.env.WEBPACK_BUILD === 'true') {
         const virtualPath = convertToVirtualPath(dir);
         const middlewares = virtualFS.middlewares[virtualPath] || [];
-        middlewareCache.set(dir, middlewares);
-        return middlewares;
+        
+        // 빌드 환경에서는 이미 로드된 미들웨어 배열이므로 배열의 길이를 정확히 측정
+        const result = Array.isArray(middlewares) ? middlewares : (middlewares ? [middlewares] : []);
+        middlewareCache.set(dir, result);
+        return result;
     }
 
     // 개발 환경에서는 실제 파일 시스템 사용
@@ -547,8 +550,9 @@ function scanDirectories(rootDir: string): DirectoryInfo[] {
 
 /**
  * 경로의 모든 미들웨어 수집 (깊은 곳에서 낮은 곳으로 역방향)
+ * excludeGlobal이 true이면 최상위(전역) 미들웨어는 제외
  */
-function collectMiddlewares(targetPath: string, allDirectories: DirectoryInfo[]): any[] {
+function collectMiddlewares(targetPath: string, allDirectories: DirectoryInfo[], excludeGlobal: boolean = false): any[] {
     const middlewares: any[] = [];
     
     if (process.env.WEBPACK_BUILD === 'true') {
@@ -558,7 +562,7 @@ function collectMiddlewares(targetPath: string, allDirectories: DirectoryInfo[])
         
         // 깊은 경로부터 상위 경로로 역방향 미들웨어 수집
         let currentPath = '/';
-        if (virtualFS.middlewares[currentPath]) {
+        if (!excludeGlobal && virtualFS.middlewares[currentPath]) {
             middlewares.push(...virtualFS.middlewares[currentPath]);
         }
         
@@ -571,16 +575,20 @@ function collectMiddlewares(targetPath: string, allDirectories: DirectoryInfo[])
         
         return middlewares;
     }
-    
-    // 개발 환경에서는 실제 파일 경로 기반으로 미들웨어 수집
+      // 개발 환경에서는 실제 파일 경로 기반으로 미들웨어 수집
     const pathParts = targetPath.split(path.sep);
     
-    // 깊은 경로부터 상위 경로로 역방향 미들웨어 수집
-    for (let i = pathParts.length - 1; i >= 0; i--) {
+    // 상위 경로부터 깊은 경로로 정방향 미들웨어 수집 (올바른 실행 순서)
+    for (let i = 0; i < pathParts.length; i++) {
         const partialPath = pathParts.slice(0, i + 1).join(path.sep);
         const dirInfo = allDirectories.find(d => normalizeSlash(d.path) === normalizeSlash(partialPath));
         
         if (dirInfo?.hasMiddleware) {
+            // 전역 미들웨어 제외 옵션이 활성화되고, 현재 디렉토리가 루트인 경우 건너뛰기
+            if (excludeGlobal && (dirInfo.parentRoute === '' || dirInfo.parentRoute === '/')) {
+                continue;
+            }
+            
             const dirMiddlewares = loadMiddleware(dirInfo.path);
             middlewares.push(...dirMiddlewares);
         }
@@ -604,8 +612,7 @@ async function loadRoutes(app: Express, dir?: string): Promise<void> {
     log.Route(`🚀 Starting Clean V6 route loader: ${routesDir}`);
     log.Route(`📍 Environment: ${process.env.WEBPACK_BUILD === 'true' ? 'Build (Production)' : 'Development'}`);
     log.Route(`📁 File extension: ${getFileExtension()}`);
-    
-    try {
+      try {
         // 1. 디렉토리 구조 스캔
         const directories = scanDirectories(routesDir);
         const routeDirectories = directories.filter(d => d.hasRoute);
@@ -615,6 +622,16 @@ async function loadRoutes(app: Express, dir?: string): Promise<void> {
         if (routeDirectories.length === 0) {
             log.Route(`⚠️ No routes found in ${routesDir}`);
             return;
+        }
+        
+        // 1.5. 전역 미들웨어 먼저 등록 (최상위 middleware.ts)
+        const rootDirectory = directories.find(d => d.parentRoute === '' || d.parentRoute === '/');
+        if (rootDirectory && rootDirectory.hasMiddleware) {
+            const globalMiddlewares = loadMiddleware(rootDirectory.path);
+            if (globalMiddlewares && globalMiddlewares.length > 0) {
+                app.use(...globalMiddlewares);
+                log.Route(`🌍 Global middlewares registered: ${globalMiddlewares.length} middlewares from ${rootDirectory.path}`);
+            }
         }
         
         // 2. 모든 라우트 모듈 사전 로드
@@ -627,10 +644,9 @@ async function loadRoutes(app: Express, dir?: string): Promise<void> {
         for (const dirInfo of routeDirectories) {
             const fileExt = getFileExtension();
             const routeFilePath = path.join(dirInfo.path, `route${fileExt}`);
-            
-            try {
+              try {
                 const route = loadRoute(routeFilePath);
-                const middlewares = collectMiddlewares(dirInfo.path, directories);
+                const middlewares = collectMiddlewares(dirInfo.path, directories, true); // 전역 미들웨어 제외
                 
                 routeModules.set(dirInfo.path, route);
                 middlewareCollections.set(dirInfo.path, middlewares);
@@ -680,10 +696,23 @@ async function loadRoutes(app: Express, dir?: string): Promise<void> {
                 log.Route(`🔗 ${routePath} (${middlewares.length} middlewares)`);
             }
         }
-        
-        // 4. 완료 통계
+          // 4. 완료 통계
         const endTime = process.hrtime(startTime);
         const stats = getCacheStats();
+        
+        // 빌드 환경에서 추가 디버깅 정보
+        if (process.env.WEBPACK_BUILD === 'true') {
+            const virtualMiddlewareKeys = Object.keys(virtualFS.middlewares);
+            const actualMiddlewareFiles = virtualMiddlewareKeys.filter(key => {
+                const middlewares = virtualFS.middlewares[key];
+                return Array.isArray(middlewares) && middlewares.length > 0;
+            });
+            
+            log.Route(`🔍 Debug - VirtualFS middleware keys: ${virtualMiddlewareKeys.length}`);
+            log.Route(`🔍 Debug - Actual middleware files: ${actualMiddlewareFiles.length}`);
+            log.Route(`🔍 Debug - MiddlewareCache size: ${middlewareCache.size}`);
+            log.Route(`🔍 Debug - Middleware files with content: ${actualMiddlewareFiles.join(', ')}`);
+        }
         
         log.Route(`✅ Clean V6 completed: ${getElapsedTimeInString(endTime)}`);
         log.Route(`   Routes: ${stats.routes}, Middlewares: ${stats.middlewares}`);
@@ -698,9 +727,20 @@ async function loadRoutes(app: Express, dir?: string): Promise<void> {
  * 캐시 통계
  */
 function getCacheStats() {
+    // 빌드 환경에서는 실제 virtualFS에서 미들웨어 수를 계산
+    let actualMiddlewareCount = middlewareCache.size;
+    
+    if (process.env.WEBPACK_BUILD === 'true') {
+        // 빌드 환경에서는 virtualFS.middlewares에서 실제 미들웨어 수 계산
+        actualMiddlewareCount = Object.keys(virtualFS.middlewares).filter(key => {
+            const middlewares = virtualFS.middlewares[key];
+            return Array.isArray(middlewares) && middlewares.length > 0;
+        }).length;
+    }
+    
     return {
         routes: routeCache.size,
-        middlewares: middlewareCache.size,
+        middlewares: actualMiddlewareCount,
         fileStats: fileExistsCache.size,
         moduleResolutions: moduleResolutionCache.size
     };

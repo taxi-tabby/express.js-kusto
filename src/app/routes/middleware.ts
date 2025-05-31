@@ -225,6 +225,7 @@ export default [
             req.app.set('ipex', cachedExternalIP);
         }
 
+        console.log('----------- global middleware -------------');
         log.Footwalk(`[${method}] i[${ip || ips}] ${url}`, {});
         next();
     },

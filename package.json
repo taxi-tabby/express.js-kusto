@@ -1,21 +1,21 @@
 {
-  "name": "server",
+  "name": "kusto-server",
   "version": "0.0.12",
-  "description": "",
+  "description": "Express based custom server for simple backend service",
   "main": "index.js",  "scripts": {
 
     "start": "ts-node ./src/index.ts",
     "dev": "nodemon --exec ts-node ./src/index.ts",
+    "dev:serve": "nodemon --watch src --ignore src/core/tmp/ --ext ts,js,json --exec \"npm run build:dev && npm run serve\"",
 
     "build": "npm run generate-routes-map && npm run build:routes && webpack --mode production && npm run clean:tmp",
+    "build:dev": "npm run generate-routes-map && npm run build:routes && webpack --mode development && npm run clean:tmp",
+
     "build:routes": "node src/core/scripts/build-routes.js",
-    "build:dev": "webpack --mode development",
     "generate-routes-map": "node src/core/scripts/generate-routes-map.js",
     "clean:tmp": "node -e \"const fs = require('fs'); const path = require('path'); const tmpDir = path.join(__dirname, 'src', 'core', 'tmp'); if (fs.existsSync(tmpDir)) { fs.rmSync(tmpDir, { recursive: true, force: true }); console.log('🧹 Cleaned tmp directory'); }\"",
+    
     "serve": "node dist/server.js"
-  },
-  "prisma": {
-    "seed": "ts-node src/core/db/seed.ts"
   },
   "author": "rkdmf0000@gmail.com",
   "license": "ISC",

@@ -3,11 +3,14 @@ const webpack = require("webpack");
 const CopyWebpackPlugin = require("copy-webpack-plugin");
 const nodeExternals = require("webpack-node-externals");
 
-const isProduction = process.env.NODE_ENV === "production";
 const envVariables = {}; // 필요 시 여기에 환경 변수 추가
 
-module.exports = {
-    mode: "production",
+module.exports = (env, argv) => {
+    const mode = argv.mode || 'production';
+    const isProduction = mode === 'production';
+    
+    return {
+        mode: mode,
     entry: {
         bundle: path.resolve(__dirname, "./src/index.ts"),
     },
@@ -41,9 +44,9 @@ module.exports = {
             '@ext': path.resolve(__dirname, 'src/core/external'),
             '@db': path.resolve(__dirname, 'src/app/db')
         }
-    },plugins: [
+    },plugins: [        
         new webpack.DefinePlugin({
-            'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'production'),
+            'process.env.NODE_ENV': JSON.stringify(mode),
             'process.env.WEBPACK_BUILD': JSON.stringify('true'),
             ...envVariables
         }),
@@ -61,6 +64,6 @@ module.exports = {
     target: "node",
     externalsPresets: {
         node: true,
-    },
-    externals: [nodeExternals()],
+    },    externals: [nodeExternals()],
+    };
 };

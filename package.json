@@ -2,24 +2,22 @@
   "name": "kusto-server",
   "version": "0.0.12",
   "description": "Express based custom server for simple backend service",
-  "main": "index.js",  "scripts": {
-
+  "main": "index.js",
+  "scripts": {
     "start": "ts-node ./src/index.ts",
-
     "dev": "nodemon --watch src --ext ts,js,json --ignore src/core/lib/types/generated-db-types.ts --exec \"npm run generate-db-types && ts-node ./src/index.ts\"",
-    "dev:serve": "nodemon --watch src --ignore src/core/tmp/ --ignore src/core/lib/types/generated-db-types.ts --ext ts,js,json --exec \"npm run generate-db-types && npm run build:dev && npm run serve\"",    
-    
+    "dev:serve": "nodemon --watch src --ignore src/core/tmp/ --ignore src/core/lib/types/generated-db-types.ts --ext ts,js,json --exec \"npm run generate-db-types && npm run build:dev && npm run serve\"",
     "build": "npm run generate-db-types && npm run generate-routes-map && npm run build:routes && webpack --mode production && npm run clean:tmp",
     "build:dev": "npm run generate-db-types && npm run generate-routes-map && npm run build:routes && webpack --mode development && npm run clean:tmp",
-
     "build:routes": "node src/core/scripts/build-routes.js",
     "generate-routes-map": "node src/core/scripts/generate-routes-map.js",
     "generate-db-types": "node src/core/scripts/generate-db-types.js",
     "clean:tmp": "node -e \"const fs = require('fs'); const path = require('path'); const tmpDir = path.join(__dirname, 'src', 'core', 'tmp'); if (fs.existsSync(tmpDir)) { fs.rmSync(tmpDir, { recursive: true, force: true }); console.log('🧹 Cleaned tmp directory'); }\"",
-    
     "serve": "node dist/server.js",
-    
-    "db": "ts-node ./src/core/scripts/kusto-db-cli.ts"
+    "db": "ts-node ./src/core/scripts/kusto-db-cli.ts",
+    "build-cli": "tsc -p src/core/scripts/tsconfig.cli.json",
+    "install-cli": "npm run build-cli && npm install -g .",
+    "postinstall": "node -e \"const fs = require('fs'); const os = require('os'); if (os.platform() === 'win32') { /* Already handled by Windows */ } else { const sh = './kusto-db'; if (fs.existsSync(sh)) { fs.chmodSync(sh, '755'); console.log('Made kusto-db script executable'); } }\""
   },
   "author": "rkdmf0000@gmail.com",
   "license": "ISC",
@@ -58,7 +56,8 @@
     "webpack": "^5.99.9",
     "webpack-cli": "^5.1.4",
     "webpack-node-externals": "^3.0.0"
-  },  "_moduleAliases": {
+  },
+  "_moduleAliases": {
     "@": "./",
     "@app": "./src/app",
     "@core": "./src/core",
@@ -68,6 +67,6 @@
   },
   "packageManager": "pnpm@9.7.0+sha512.dc09430156b427f5ecfc79888899e1c39d2d690f004be70e05230b72cb173d96839587545d09429b55ac3c429c801b4dc3c0e002f653830a420fa2dd4e3cf9cf",
   "bin": {
-    "kusto-db": "./dist/core/scripts/kusto-db-cli.js"
+    "kusto-db": "./kusto-db-global.js"
   }
 }

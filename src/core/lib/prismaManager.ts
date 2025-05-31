@@ -3,6 +3,13 @@
 import { PrismaClient } from '@prisma/client';
 import * as fs from 'fs';
 import * as path from 'path';
+import { 
+  DatabaseClientMap, 
+  DatabaseClientType, 
+  DatabaseName,
+  PrismaManagerWrapOverloads,
+  PrismaManagerClientOverloads
+} from './types/generated-db-types';
 
 /**
  * Database connection configuration interface
@@ -17,10 +24,11 @@ export interface DatabaseConfig {
  * Prisma Manager Singleton Class
  * Manages multiple Prisma clients for different databases
  */
-export class PrismaManager {
+export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerClientOverloads {
   private static instance: PrismaManager;
-  private databases: Map<string, PrismaClient> = new Map();
+  private databases: Map<string, any> = new Map(); // Store actual client instances
   private configs: Map<string, DatabaseConfig> = new Map();
+  private clientTypes: Map<string, any> = new Map(); // Store client type constructors
   private initialized: boolean = false;
 
   /**
@@ -68,9 +76,7 @@ export class PrismaManager {
 
     this.initialized = true;
     console.log('PrismaManager initialized successfully');
-  }
-
-  /**
+  }  /**
    * Process a single database folder
    */
   private async processDatabaseFolder(folderName: string, dbPath: string): Promise<void> {
@@ -97,8 +103,16 @@ export class PrismaManager {
     }
 
     try {
-      // Create Prisma client instance
-      const prismaClient = new PrismaClient({
+      // Dynamically import the generated Prisma client
+      const clientPath = path.join(folderPath, 'client');
+      const clientModule = await import(clientPath);
+      const DatabasePrismaClient = clientModule.PrismaClient;
+      
+      // Store the client type constructor for type information
+      this.clientTypes.set(folderName, DatabasePrismaClient);
+      
+      // Create Prisma client instance with database URL
+      const prismaClient = new DatabasePrismaClient({
         datasources: {
           db: {
             url: this.getDatabaseUrl(folderName)
@@ -107,14 +121,19 @@ export class PrismaManager {
       });
 
       // Test the connection
-      await prismaClient.$connect();
-      
+      await prismaClient.$connect();      // Store the client instance with its original prototype and type information
       this.databases.set(folderName, prismaClient);
       this.configs.set(folderName, {
         name: folderName,
         schemaPath,
         isGenerated: true
       });
+
+      // Dynamically extend the DatabaseClientMap interface with the actual client type
+      this.extendDatabaseClientMap(folderName, DatabasePrismaClient);
+
+      // Dynamically create getter methods for this database
+      this.createDynamicMethods(folderName);
 
       console.log(`✅ Connected to database: ${folderName}`);
     } catch (error) {
@@ -168,12 +187,11 @@ export class PrismaManager {
     }
     
     return url;
-  }
-
-  /**
-   * Get a Prisma client instance by database name
+  }  /**
+   * Get a Prisma client instance by database name with proper typing
+   * Returns the actual client with full type information preserved from dynamic import
    */
-  public getClient(databaseName: string): PrismaClient {
+  public getClient<T = any>(databaseName: string): T {
     if (!this.initialized) {
       throw new Error('PrismaManager not initialized. Call initialize() first.');
     }
@@ -184,7 +202,87 @@ export class PrismaManager {
       throw new Error(`Database '${databaseName}' not found. Available databases: ${availableDbs.join(', ')}`);
     }
 
+    // Return the client with its original type preserved from dynamic import
+    return client as T;
+  }  /**
+   * Get a wrapped client with enhanced type information and runtime type checking
+   * This method provides the best TypeScript intellisense by preserving the original client type
+   */
+  public getWrap(databaseName: string): any {
+    const client = this.getClient(databaseName);
+    const clientType = this.clientTypes.get(databaseName);
+    
+    if (!clientType) {
+      return client;
+    }
+
+    // Create a proxy that preserves the original client prototype and type information
+    const wrappedClient = new Proxy(client, {
+      get(target, prop, receiver) {
+        const value = Reflect.get(target, prop, receiver);
+        
+        // If it's a function, bind it to the original target
+        if (typeof value === 'function') {
+          return value.bind(target);
+        }
+        
+        return value;
+      },
+      
+      getPrototypeOf() {
+        return clientType.prototype;
+      },
+      
+      has(target, prop) {
+        return prop in target || prop in clientType.prototype;
+      },
+
+      getOwnPropertyDescriptor(target, prop) {
+        const desc = Reflect.getOwnPropertyDescriptor(target, prop);
+        if (desc) return desc;
+        return Reflect.getOwnPropertyDescriptor(clientType.prototype, prop);
+      }
+    });
+
+    return wrappedClient;
+  }/**
+   * Get a client with runtime type checking and enhanced type information
+   */
+  public getTypedClient(databaseName: string) {
+    const client = this.getClient(databaseName);
+    const clientType = this.clientTypes.get(databaseName);
+    
+    // Add runtime type information
+    Object.defineProperty(client, '__databaseName', {
+      value: databaseName,
+      writable: false,
+      enumerable: false
+    });
+
+    Object.defineProperty(client, '__clientType', {
+      value: clientType,
+      writable: false,
+      enumerable: false
+    });
+    
     return client;
+  }
+  /**
+   * Dynamically create a typed getter method for any database
+   * This preserves the original client type from dynamic import
+   */
+  public createTypedGetter(databaseName: string) {
+    const client = this.databases.get(databaseName);
+    const clientType = this.clientTypes.get(databaseName);
+    
+    if (!client || !clientType) {
+      throw new Error(`Database '${databaseName}' not found or not properly initialized`);
+    }
+
+    // Return a function that provides the typed client
+    return () => {
+      return this.getWrap(databaseName);
+    };
   }
 
   /**
@@ -251,8 +349,6 @@ export class PrismaManager {
       }))
     };
   }
-
-
   /**
    * Execute a transaction across multiple databases
    * Note: This is for separate transactions, not distributed transactions
@@ -260,15 +356,14 @@ export class PrismaManager {
   public async executeTransactions<T>(
     operations: Array<{
       database: string;
-      operation: (client: PrismaClient) => Promise<T>;
+      operation: (client: any) => Promise<T>;
     }>
   ): Promise<T[]> {
     const results: T[] = [];
-    
-    for (const { database, operation } of operations) {
+      for (const { database, operation } of operations) {
       const client = this.getClient(database);
       const result = await client.$transaction(async (tx: any) => {
-        return operation(tx as PrismaClient);
+        return operation(tx);
       });
       results.push(result);
     }
@@ -278,7 +373,7 @@ export class PrismaManager {
 
   /**
    * Get raw database connection for custom queries
-   */
+   */  
   public async executeRawQuery<T = any>(
     database: string, 
     query: string, 
@@ -301,8 +396,7 @@ export class PrismaManager {
     }>;
   }> {
     const results = [];
-    let healthyCount = 0;
-    
+    let healthyCount = 0;      
     for (const dbName of this.getAvailableDatabases()) {
       const start = Date.now();
       try {
@@ -350,6 +444,31 @@ export class PrismaManager {
       overall,
       databases: results
     };
+  }
+  /**
+   * Dynamically create typed getter methods for each database
+   */
+  private createDynamicMethods(databaseName: string): void {
+    const methodName = `get${databaseName.charAt(0).toUpperCase() + databaseName.slice(1)}Client`;
+    
+    // Only create the method if it doesn't already exist
+    if (!(this as any)[methodName]) {
+      (this as any)[methodName] = () => {
+        return this.getWrap(databaseName);
+      };
+    }
+  }  /**
+   * Dynamically extend the DatabaseClientMap interface with the actual client type
+   */
+  private extendDatabaseClientMap(databaseName: string, ClientType: any): void {
+    // Store the client type for runtime access and type information
+    this.clientTypes.set(databaseName, ClientType);
+    
+    // Create a runtime type registry for better type inference
+    if (!(globalThis as any).__prismaClientTypes) {
+      (globalThis as any).__prismaClientTypes = {};
+    }
+    (globalThis as any).__prismaClientTypes[databaseName] = ClientType;
   }
 }
 

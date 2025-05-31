@@ -6,6 +6,7 @@ import fs from 'fs';
 
 // 로그 레벨과 색상을 체계적으로 정의
 const LOG_SETTINGS = {
+	error: { level: 0, color: '\x1b[31m', emoji: '❌' },     // 빨강
 	Error: { level: 0, color: '\x1b[31m', emoji: '❌' },     // 빨강
 	Warn: { level: 1, color: '\x1b[33m', emoji: '⚠️' },      // 노랑
 	Info: { level: 2, color: '\x1b[36m', emoji: '💡' },      // 청록색
@@ -130,6 +131,17 @@ export const log: CustomLevels = createLogger({
 		// 에러 로그 파일 (별도)
 		new DailyRotateFile({
 			level: 'Error',
+			filename: './logs/error-%DATE%.log',
+			datePattern: 'YYYY-MM-DD',
+			zippedArchive: true,
+			maxSize: '20m',
+			maxFiles: '30d',
+			handleExceptions: true,
+			handleRejections: true
+		}),
+
+		new DailyRotateFile({
+			level: 'error',
 			filename: './logs/error-%DATE%.log',
 			datePattern: 'YYYY-MM-DD',
 			zippedArchive: true,

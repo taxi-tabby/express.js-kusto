@@ -624,9 +624,13 @@ function loadRoutes(app: Express, dir?: string): void {
         
         // 루트 라우트는 마지막에 등록 (글로벌 미들웨어는 이미 등록되어 있음)
         if (rootDir) {
-            const rootRoute = routeModules.get(rootDir.path);
-            if (rootRoute) {
+            const rootRoute = routeModules.get(rootDir.path);            if (rootRoute) {
                 console.log(`🏠 Registering root route: /`);
+                
+                // 라우트에 basePath 설정 (ExpressRouter의 setBasePath 메서드 호출)
+                if (rootRoute && 'setBasePath' in rootRoute && typeof (rootRoute as any).setBasePath === 'function') {
+                    (rootRoute as any).setBasePath('/');
+                }
                 
                 // 문서화 경로 업데이트를 위해 라우트 로드 전후의 등록된 라우트 수 추적
                 const routeCountBefore = DocumentationGenerator.getRouteCount();
@@ -634,6 +638,15 @@ function loadRoutes(app: Express, dir?: string): void {
                 app.use('/', rootRoute);
                 
                 const routeCountAfter = DocumentationGenerator.getRouteCount();
+                
+                // 새로 등록된 라우트들의 경로를 업데이트 (루트 경로는 '/'로 유지)
+                if (routeCountAfter > routeCountBefore) {
+                    const newRouteIndices = Array.from(
+                        { length: routeCountAfter - routeCountBefore }, 
+                        (_, i) => routeCountBefore + i
+                    );
+                    DocumentationGenerator.updateRoutePaths('/', newRouteIndices);
+                }
                 
                 log.Route(`🏠 / (root route registered)`);
             }

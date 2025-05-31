@@ -5,8 +5,9 @@
   "main": "index.js",  "scripts": {
 
     "start": "ts-node ./src/index.ts",
-    "dev": "nodemon --exec ts-node ./src/index.ts",
-    "dev:serve": "nodemon --watch src --ignore src/core/tmp/ --ext ts,js,json --exec \"npm run build:dev && npm run serve\"",    "build": "npm run generate-db-types && npm run generate-routes-map && npm run build:routes && webpack --mode production && npm run clean:tmp",
+    "dev": "nodemon --watch src --ignore src/core/lib/types/generated-db-types.ts --exec \"npm run generate-db-types && ts-node ./src/index.ts\"",
+    "dev:serve": "nodemon --watch src --ignore src/core/tmp/ --ignore src/core/lib/types/generated-db-types.ts --ext ts,js,json --exec \"npm run generate-db-types && npm run build:dev && npm run serve\"",    
+    "build": "npm run generate-db-types && npm run generate-routes-map && npm run build:routes && webpack --mode production && npm run clean:tmp",
     "build:dev": "npm run generate-db-types && npm run generate-routes-map && npm run build:routes && webpack --mode development && npm run clean:tmp",
 
     "build:routes": "node src/core/scripts/build-routes.js",

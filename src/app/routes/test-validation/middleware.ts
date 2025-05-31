@@ -6,7 +6,7 @@ export default [
 
     (req: Request, res: Response, next: NextFunction) => {
         
-        console.log('Deep middleware executed 0');
+        // console.log('Deep middleware executed 0');
 
         next();
     }

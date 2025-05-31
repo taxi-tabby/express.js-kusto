@@ -190,7 +190,6 @@ const corsOptions: cors.CorsOptions = {
 export default [
 
 
-
     /**
      * 보안 헤더 설정
      */
@@ -225,7 +224,7 @@ export default [
             req.app.set('ipex', cachedExternalIP);
         }
 
-        console.log('----------- global middleware -------------');
+        // console.log('----------- global middleware -------------');
         log.Footwalk(`[${method}] i[${ip || ips}] ${url}`, {});
         next();
     },

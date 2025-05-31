@@ -6,6 +6,7 @@ import { getElapsedTimeInString } from './external/util';
 import loadRoutes from './lib/loadRoutes_V6_Clean';
 import expressApp from './lib/expressAppSingleton';
 import { DocumentationGenerator } from './lib/documentationGenerator';
+import { prismaManager } from './lib/prismaManager';
 
 export interface CoreConfig {
     basePath?: string;
@@ -50,12 +51,10 @@ export class Core {
             host: process.env.HOST || '0.0.0.0',
             trustProxy: process.env.TRUST_PROXY === 'true' || true
         };
-    }
-
-    /**
+    }    /**
      * Initialize the core with custom configuration
      */
-    public initialize(customConfig?: Partial<CoreConfig>): Core {
+    public async initialize(customConfig?: Partial<CoreConfig>): Promise<Core> {
         if (this._isInitialized) {
             log.Warn('Core is already initialized');
             return this;
@@ -65,6 +64,9 @@ export class Core {
         if (customConfig) {
             this._config = { ...this._config, ...customConfig };
         }          
+        
+        // Initialize PrismaManager before setting up routes
+        await this.initializePrismaManager();
         
         this.setupExpress();
         this.setupDocumentationRoutes(); // 문서화 라우트를 먼저 등록
@@ -187,17 +189,24 @@ export class Core {
                 reject(error);
             });
         });
-    }
-
-    /**
+    }    /**
      * Stop the server gracefully
      */
-    public stop(): Promise<void> {
-        return new Promise((resolve) => {
+    public async stop(): Promise<void> {
+        return new Promise(async (resolve) => {
             if (!this._server) {
                 log.Info('Server is not running');
                 resolve();
                 return;
+            }
+
+            // Disconnect all Prisma clients first
+            try {
+                log.Info('🗄️ Disconnecting Prisma Manager...');
+                await prismaManager.disconnectAll();
+                log.Info('Prisma Manager disconnected successfully');
+            } catch (error) {
+                log.Error('Error disconnecting Prisma Manager', { error });
             }
 
             this._server.close(() => {
@@ -249,6 +258,40 @@ export class Core {
      */
     public get isRunning(): boolean {
         return !!this._server;
+    }
+
+    /**
+     * Initialize PrismaManager to handle multiple database connections
+     */
+    private async initializePrismaManager(): Promise<void> {
+        try {
+            log.Info('🗄️ Initializing Prisma Manager...');
+            await prismaManager.initialize();
+            
+            const status = prismaManager.getStatus();
+            log.Info('Prisma Manager initialization complete', {
+                initialized: status.initialized,
+                connectedDatabases: status.connectedDatabases,
+                totalDatabases: status.totalDatabases,
+                databases: status.databases
+            });
+
+            // Log each database connection status
+            status.databases.forEach(db => {
+                if (db.connected) {
+                    log.Info(`✅ Database '${db.name}' connected successfully`);
+                } else if (!db.generated) {
+                    log.Warn(`⚠️ Database '${db.name}' skipped - Prisma client not generated`);
+                } else {
+                    log.Error(`❌ Database '${db.name}' failed to connect`);
+                }
+            });
+
+        } catch (error) {
+            log.Error('Failed to initialize Prisma Manager', { error });
+            // Don't throw error here to allow application to continue without database
+            log.Warn('Application will continue without database connections');
+        }
     }
 }
 

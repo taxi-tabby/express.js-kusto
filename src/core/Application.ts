@@ -32,8 +32,8 @@ export class Application {
         try {
             log.Info('🚀 Starting application...');
             
-            // Initialize core with configuration
-            this.core.initialize(this.config);
+            // Initialize core with configuration (now async)
+            await this.core.initialize(this.config);
             
             // Start server
             const server = await this.core.start(this.config.port, this.config.host);

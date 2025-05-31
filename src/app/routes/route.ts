@@ -1,4 +1,4 @@
-import { ExpressRouter } from '@/src/core/lib/expressRouter'
+import { ExpressRouter } from '@core/lib/expressRouter'
 
 const router = new ExpressRouter();
 

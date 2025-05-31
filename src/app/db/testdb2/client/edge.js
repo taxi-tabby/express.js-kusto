@@ -135,7 +135,7 @@ exports.Prisma.ModelName = {
  */
 const config = {
   "generator": {
-    "name": "client",
+    "name": "testdb2_client",
     "provider": {
       "fromEnvVar": null,
       "value": "prisma-client-js"
@@ -166,20 +166,20 @@ const config = {
   "clientVersion": "6.8.2",
   "engineVersion": "2060c79ba17c6bb9f5823312b6f6b7f4a845738e",
   "datasourceNames": [
-    "db"
+    "testdb2_db"
   ],
   "activeProvider": "postgresql",
   "postinstall": false,
   "inlineDatasources": {
-    "db": {
+    "testdb2_db": {
       "url": {
         "fromEnvVar": "RDS2_DEFAULT_URL",
         "value": null
       }
     }
   },
-  "inlineSchema": "generator client {\n  provider = \"prisma-client-js\"\n  output   = \"client\"\n}\n\ndatasource db {\n  provider = \"postgresql\"\n  url      = env(\"RDS2_DEFAULT_URL\")\n}\n\n// Example models - you can modify these as needed\nmodel User {\n  id        Int      @id @default(autoincrement())\n  email     String   @unique\n  name      String?\n  createdAt DateTime @default(now())\n  updatedAt DateTime @updatedAt\n  posts     Post[]\n}\n\nmodel Post {\n  id        Int      @id @default(autoincrement())\n  title     String\n  content   String?\n  published Boolean  @default(false)\n  authorId  Int\n  author    User     @relation(fields: [authorId], references: [id])\n  createdAt DateTime @default(now())\n  updatedAt DateTime @updatedAt\n}\n",
-  "inlineSchemaHash": "757174bb2738b07aad8ba69b65238d41ca21bf5f3166956c6efaea94b17f27e4",
+  "inlineSchema": "generator testdb2_client {\n  provider = \"prisma-client-js\"\n  output   = \"client\"\n}\n\ndatasource testdb2_db {\n  provider = \"postgresql\"\n  url      = env(\"RDS2_DEFAULT_URL\")\n}\n\n// Example models - you can modify these as needed\nmodel User {\n  id        Int      @id @default(autoincrement())\n  email     String   @unique\n  name      String?\n  createdAt DateTime @default(now())\n  updatedAt DateTime @updatedAt\n  posts     Post[]\n}\n\nmodel Post {\n  id        Int      @id @default(autoincrement())\n  title     String\n  content   String?\n  published Boolean  @default(false)\n  authorId  Int\n  author    User     @relation(fields: [authorId], references: [id])\n  createdAt DateTime @default(now())\n  updatedAt DateTime @updatedAt\n}\n",
+  "inlineSchemaHash": "ed5174ec3c215eb02d8e90477d808213571106b8cd3eed5b314bd3e6e310b9ab",
   "copyEngine": true
 }
 config.dirname = '/'

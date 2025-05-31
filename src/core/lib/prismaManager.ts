@@ -101,33 +101,31 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 			});
 			return;
 		}
-
 		try {
 			// Dynamically import the generated Prisma client
-
-			
-
 			const clientPath = path.join(folderPath, 'client');
 			const clientModule = await import(clientPath);
 			const DatabasePrismaClient = clientModule.PrismaClient;
-
-
 
 			// Store the client type constructor for type information
 			this.clientTypes.set(folderName, DatabasePrismaClient);
 
 			// Create Prisma client instance with database URL
 			const connectionUrl = this.getDatabaseUrl(folderName);
+			const datasourceName = this.getDatasourceName(folderName);
+
 			const prismaClient = new DatabasePrismaClient({
 				datasources: {
-					db: {
+					[datasourceName]: {
 						url: connectionUrl
 					}
 				}
 			});
 
 			// Test the connection
-			await prismaClient.$connect();      // Store the client instance with its original prototype and type information
+			await prismaClient.$connect();
+
+			// Store the client instance with its original prototype and type information
 			this.databases.set(folderName, prismaClient);
 			this.configs.set(folderName, {
 				name: folderName,
@@ -147,19 +145,13 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 		}
 	}
 
+
 	/**
 	 * Check if Prisma client is generated for a database
 	 */
 	private async checkIfGenerated(folderName: string): Promise<boolean> {
 		try {
-			// Check if node_modules/.prisma/client exists
-			const nodeModulesPath = path.join(process.cwd(), 'node_modules', '.prisma', 'client');
-			if (!fs.existsSync(nodeModulesPath)) {
-				return false;
-			}
-
-			// Also check if the specific database schema is generated
-			// by trying to import the client dynamically
+			// Check if the specific database schema exists
 			const schemaPath = path.join(process.cwd(), 'src', 'app', 'db', folderName, 'schema.prisma');
 			if (!fs.existsSync(schemaPath)) {
 				return false;
@@ -167,11 +159,34 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 
 			// Read schema file to check if it has valid content
 			const schemaContent = fs.readFileSync(schemaPath, 'utf-8');
-			return schemaContent.includes('generator client') && schemaContent.includes('datasource db');
+
+			// Check for generator block (any name, not just "client")
+			const hasGenerator = /generator\s+\w+\s*{[\s\S]*?provider\s*=\s*["']prisma-client-js["'][\s\S]*?}/m.test(schemaContent);
+
+			// Check for datasource block (any name, not just "db")
+			const hasDatasource = /datasource\s+\w+\s*{[\s\S]*?provider\s*=[\s\S]*?url\s*=[\s\S]*?}/m.test(schemaContent);
+
+			if (!hasGenerator || !hasDatasource) {
+				return false;
+			}
+
+			// Check if the generated client directory exists and has the expected files
+			const clientPath = path.join(process.cwd(), 'src', 'app', 'db', folderName, 'client');
+			if (!fs.existsSync(clientPath)) {
+				return false;
+			}
+
+			// Check if essential client files exist
+			const indexJsPath = path.join(clientPath, 'index.js');
+			const packageJsonPath = path.join(clientPath, 'package.json');
+
+			return fs.existsSync(indexJsPath) && fs.existsSync(packageJsonPath);
 		} catch (error) {
 			return false;
 		}
 	}
+
+
 	/**
 	 * Get database URL by parsing schema.prisma file to extract environment variable
 	 */
@@ -179,25 +194,47 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 		try {
 			const schemaPath = path.join(process.cwd(), 'src', 'app', 'db', folderName, 'schema.prisma');
 			const schemaContent = fs.readFileSync(schemaPath, 'utf-8');
-			
+
 			// Parse the schema to extract the env variable name
 			const urlMatch = schemaContent.match(/url\s*=\s*env\("([^"]+)"\)/);
-			
+
 			if (!urlMatch || !urlMatch[1]) {
 				throw new Error(`Could not parse database URL from schema for ${folderName}`);
 			}
-			
+
 			const envVarName = urlMatch[1];
 			const url = process.env[envVarName];
-			
+
 			if (!url) {
 				throw new Error(`Environment variable ${envVarName} not found for database ${folderName}`);
 			}
-			
+
 			return url;
 		} catch (error) {
 			console.error(`Failed to get database URL for ${folderName}:`, error);
 			throw new Error(`Failed to get database URL for ${folderName}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+		}
+	}
+
+	/**
+	 * Get datasource name from schema.prisma file
+	 */
+	private getDatasourceName(folderName: string): string {
+		try {
+			const schemaPath = path.join(process.cwd(), 'src', 'app', 'db', folderName, 'schema.prisma');
+			const schemaContent = fs.readFileSync(schemaPath, 'utf-8');
+
+			// Parse the schema to extract the datasource name
+			const datasourceMatch = schemaContent.match(/datasource\s+(\w+)\s*{/);
+
+			if (!datasourceMatch || !datasourceMatch[1]) {
+				throw new Error(`Could not parse datasource name from schema for ${folderName}`);
+			}
+
+			return datasourceMatch[1];
+		} catch (error) {
+			console.error(`Failed to get datasource name for ${folderName}:`, error);
+			throw new Error(`Failed to get datasource name for ${folderName}: ${error instanceof Error ? error.message : 'Unknown error'}`);
 		}
 	}
 
@@ -230,7 +267,7 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 			throw new Error(`데이터베이스 클라이언트 획득 중 오류가 발생했습니다: ${error}`);
 		}
 	}
-	
+
 	/**
 	 * Get a wrapped client with enhanced type information and runtime type checking
 	 * This method provides the best TypeScript intellisense by preserving the original client type
@@ -280,7 +317,7 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 			});
 
 			return wrappedClient;
-			
+
 		} catch (error) {
 			if (error instanceof Error) {
 				throw error; // getClient에서 이미 처리된 오류는 그대로 전달
@@ -288,7 +325,7 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 			throw new Error(`데이터베이스 래핑된 클라이언트 획득 중 오류가 발생했습니다: ${error}`);
 		}
 	}
-	
+
 	/**
    * Get a client with runtime type checking and enhanced type information
    */

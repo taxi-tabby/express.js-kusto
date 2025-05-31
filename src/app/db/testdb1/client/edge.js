@@ -148,7 +148,7 @@ exports.Prisma.ModelName = {
  */
 const config = {
   "generator": {
-    "name": "client",
+    "name": "testdb1_client",
     "provider": {
       "fromEnvVar": null,
       "value": "prisma-client-js"
@@ -179,20 +179,20 @@ const config = {
   "clientVersion": "6.8.2",
   "engineVersion": "2060c79ba17c6bb9f5823312b6f6b7f4a845738e",
   "datasourceNames": [
-    "db"
+    "testdb1_db"
   ],
   "activeProvider": "postgresql",
   "postinstall": false,
   "inlineDatasources": {
-    "db": {
+    "testdb1_db": {
       "url": {
         "fromEnvVar": "RDS1_DEFAULT_URL",
         "value": null
       }
     }
   },
-  "inlineSchema": "generator client {\n  provider = \"prisma-client-js\"\n  output   = \"client\"\n}\n\ndatasource db {\n  provider = \"postgresql\"\n  url      = env(\"RDS1_DEFAULT_URL\")\n}\n\n// Example models with different data structure using both IDs and UUIDs\nmodel Customer {\n  id        BigInt   @id @default(autoincrement())\n  uuid      String   @unique @default(uuid())\n  email     String   @unique\n  name      String\n  phone     String?\n  createdAt DateTime @default(now())\n  updatedAt DateTime @updatedAt\n  orders    Order[]\n}\n\nmodel Order {\n  id          BigInt      @id @default(autoincrement())\n  orderUuid   String      @unique @default(uuid())\n  orderNumber String      @unique\n  totalAmount Float\n  status      String      @default(\"pending\")\n  customerId  BigInt\n  customer    Customer    @relation(fields: [customerId], references: [id])\n  items       OrderItem[]\n  createdAt   DateTime    @default(now())\n  updatedAt   DateTime    @updatedAt\n}\n\nmodel OrderItem {\n  id          BigInt @id @default(autoincrement())\n  itemUuid    String @unique @default(uuid())\n  productName String\n  quantity    Int\n  price       Float\n  orderId     BigInt\n  order       Order  @relation(fields: [orderId], references: [id])\n}\n",
-  "inlineSchemaHash": "76822e96a4fdb66b7c4716b13abe679f776940d14ba4795dbce22151f26c1be4",
+  "inlineSchema": "generator testdb1_client {\n  provider = \"prisma-client-js\"\n  output   = \"client\"\n}\n\ndatasource testdb1_db {\n  provider = \"postgresql\"\n  url      = env(\"RDS1_DEFAULT_URL\")\n}\n\n// Example models with different data structure using both IDs and UUIDs\nmodel Customer {\n  id        BigInt   @id @default(autoincrement())\n  uuid      String   @unique @default(uuid())\n  email     String   @unique\n  name      String\n  phone     String?\n  createdAt DateTime @default(now())\n  updatedAt DateTime @updatedAt\n  orders    Order[]\n}\n\nmodel Order {\n  id          BigInt      @id @default(autoincrement())\n  orderUuid   String      @unique @default(uuid())\n  orderNumber String      @unique\n  totalAmount Float\n  status      String      @default(\"pending\")\n  customerId  BigInt\n  customer    Customer    @relation(fields: [customerId], references: [id])\n  items       OrderItem[]\n  createdAt   DateTime    @default(now())\n  updatedAt   DateTime    @updatedAt\n}\n\nmodel OrderItem {\n  id          BigInt @id @default(autoincrement())\n  itemUuid    String @unique @default(uuid())\n  productName String\n  quantity    Int\n  price       Float\n  orderId     BigInt\n  order       Order  @relation(fields: [orderId], references: [id])\n}\n",
+  "inlineSchemaHash": "74001ea0f7f2dc9f9aeea0dfa48e146b483e01f526dfd81546dd93e5853f1ea0",
   "copyEngine": true
 }
 config.dirname = '/'

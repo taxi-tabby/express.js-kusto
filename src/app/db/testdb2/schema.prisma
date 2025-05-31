@@ -1,9 +1,9 @@
-generator client {
+generator testdb2_client {
   provider = "prisma-client-js"
   output   = "client"
 }
 
-datasource db {
+datasource testdb2_db {
   provider = "postgresql"
   url      = env("RDS2_DEFAULT_URL")
 }

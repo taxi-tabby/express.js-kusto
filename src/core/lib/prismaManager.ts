@@ -187,64 +187,90 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
     }
     
     return url;
-  }  /**
+  }  
+    /**
    * Get a Prisma client instance by database name with proper typing
    * Returns the actual client with full type information preserved from dynamic import
    */
   public getClient<T = any>(databaseName: string): T {
-    if (!this.initialized) {
-      throw new Error('PrismaManager not initialized. Call initialize() first.');
-    }
+    try {
+      if (!this.initialized) {
+        console.error('❌ PrismaManager not initialized. Call initialize() first.');
+        throw new Error('데이터베이스 관리자가 초기화되지 않았습니다. 애플리케이션 시작 시 initialize()를 호출했는지 확인하세요.');
+      }
 
-    const client = this.databases.get(databaseName);
-    if (!client) {
-      const availableDbs = Array.from(this.databases.keys());
-      throw new Error(`Database '${databaseName}' not found. Available databases: ${availableDbs.join(', ')}`);
-    }
+      const client = this.databases.get(databaseName);
+      if (!client) {
+        const availableDbs = Array.from(this.databases.keys());
+        const dbList = availableDbs.length > 0 ? availableDbs.join(', ') : '없음';
+        console.error(`❌ Database '${databaseName}' not found. Available: ${dbList}`);
+        throw new Error(`데이터베이스 '${databaseName}'를 찾을 수 없습니다. 사용 가능한 데이터베이스: ${dbList}`);
+      }
 
-    // Return the client with its original type preserved from dynamic import
-    return client as T;
-  }  /**
+      // Return the client with its original type preserved from dynamic import
+      return client as T;
+    } catch (error) {
+      if (error instanceof Error) {
+        throw error; // 이미 처리된 오류는 그대로 전달
+      }
+      throw new Error(`데이터베이스 클라이언트 획득 중 오류가 발생했습니다: ${error}`);
+    }
+  }
+    /**
    * Get a wrapped client with enhanced type information and runtime type checking
    * This method provides the best TypeScript intellisense by preserving the original client type
    */
   public getWrap(databaseName: string): any {
-    const client = this.getClient(databaseName);
-    const clientType = this.clientTypes.get(databaseName);
-    
-    if (!clientType) {
-      return client;
-    }
-
-    // Create a proxy that preserves the original client prototype and type information
-    const wrappedClient = new Proxy(client, {
-      get(target, prop, receiver) {
-        const value = Reflect.get(target, prop, receiver);
-        
-        // If it's a function, bind it to the original target
-        if (typeof value === 'function') {
-          return value.bind(target);
-        }
-        
-        return value;
-      },
+    try {
+      // getClient 내부에서 이미 예외 처리를 하므로 여기서 추가로 할 필요는 없음
+      const client = this.getClient(databaseName);
+      const clientType = this.clientTypes.get(databaseName);
       
-      getPrototypeOf() {
-        return clientType.prototype;
-      },
-      
-      has(target, prop) {
-        return prop in target || prop in clientType.prototype;
-      },
-
-      getOwnPropertyDescriptor(target, prop) {
-        const desc = Reflect.getOwnPropertyDescriptor(target, prop);
-        if (desc) return desc;
-        return Reflect.getOwnPropertyDescriptor(clientType.prototype, prop);
+      if (!clientType) {
+        console.warn(`⚠️ Database '${databaseName}' client type not found, returning basic client.`);
+        return client;
       }
-    });
 
-    return wrappedClient;
+      // Create a proxy that preserves the original client prototype and type information
+      const wrappedClient = new Proxy(client, {
+        get(target, prop, receiver) {
+          try {
+            const value = Reflect.get(target, prop, receiver);
+            
+            // If it's a function, bind it to the original target
+            if (typeof value === 'function') {
+              return value.bind(target);
+            }
+            
+            return value;
+          } catch (error) {
+            console.error(`❌ Error accessing property '${String(prop)}' on database client: ${error}`);
+            throw new Error(`데이터베이스 클라이언트 속성 '${String(prop)}' 접근 중 오류: ${error}`);
+          }
+        },
+        
+        getPrototypeOf() {
+          return clientType.prototype;
+        },
+        
+        has(target, prop) {
+          return prop in target || prop in clientType.prototype;
+        },
+
+        getOwnPropertyDescriptor(target, prop) {
+          const desc = Reflect.getOwnPropertyDescriptor(target, prop);
+          if (desc) return desc;
+          return Reflect.getOwnPropertyDescriptor(clientType.prototype, prop);
+        }
+      });
+
+      return wrappedClient;
+    } catch (error) {
+      if (error instanceof Error) {
+        throw error; // getClient에서 이미 처리된 오류는 그대로 전달
+      }
+      throw new Error(`데이터베이스 래핑된 클라이언트 획득 중 오류가 발생했습니다: ${error}`);
+    }
   }/**
    * Get a client with runtime type checking and enhanced type information
    */

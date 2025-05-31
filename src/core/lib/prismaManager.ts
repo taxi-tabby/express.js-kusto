@@ -104,9 +104,9 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 
 		try {
 			// Dynamically import the generated Prisma client
-			console.log('----------------------------------------------------', folderName);
-			const connectionUrl = this.getDatabaseUrl(folderName);
-			console.log('---------------------- connectionUrl: ', connectionUrl);
+
+			
+
 			const clientPath = path.join(folderPath, 'client');
 			const clientModule = await import(clientPath);
 			const DatabasePrismaClient = clientModule.PrismaClient;
@@ -117,7 +117,7 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 			this.clientTypes.set(folderName, DatabasePrismaClient);
 
 			// Create Prisma client instance with database URL
-
+			const connectionUrl = this.getDatabaseUrl(folderName);
 			const prismaClient = new DatabasePrismaClient({
 				datasources: {
 					db: {
@@ -172,27 +172,33 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 			return false;
 		}
 	}
-
 	/**
-	 * Get database URL based on folder name
+	 * Get database URL by parsing schema.prisma file to extract environment variable
 	 */
 	private getDatabaseUrl(folderName: string): string {
-		// Convert folder name to environment variable format
-		// testdb1 -> RDS1_DEFAULT_URL, testdb2 -> RDS2_DEFAULT_URL
-		const envVarName = folderName.toUpperCase().replace(/testdb(\d+)/, 'RDS$1_DEFAULT_URL');
-		let url = process.env[envVarName];
-
-		// Fallback: try direct folder name transformation
-		if (!url) {
-			const fallbackEnvName = `${folderName.toUpperCase().replace(/[^A-Z0-9]/g, '_')}_DEFAULT_URL`;
-			url = process.env[fallbackEnvName];
+		try {
+			const schemaPath = path.join(process.cwd(), 'src', 'app', 'db', folderName, 'schema.prisma');
+			const schemaContent = fs.readFileSync(schemaPath, 'utf-8');
+			
+			// Parse the schema to extract the env variable name
+			const urlMatch = schemaContent.match(/url\s*=\s*env\("([^"]+)"\)/);
+			
+			if (!urlMatch || !urlMatch[1]) {
+				throw new Error(`Could not parse database URL from schema for ${folderName}`);
+			}
+			
+			const envVarName = urlMatch[1];
+			const url = process.env[envVarName];
+			
+			if (!url) {
+				throw new Error(`Environment variable ${envVarName} not found for database ${folderName}`);
+			}
+			
+			return url;
+		} catch (error) {
+			console.error(`Failed to get database URL for ${folderName}:`, error);
+			throw new Error(`Failed to get database URL for ${folderName}: ${error instanceof Error ? error.message : 'Unknown error'}`);
 		}
-
-		if (!url) {
-			throw new Error(`Environment variable ${envVarName} not found for database ${folderName}`);
-		}
-
-		return url;
 	}
 
 
@@ -224,10 +230,11 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 			throw new Error(`데이터베이스 클라이언트 획득 중 오류가 발생했습니다: ${error}`);
 		}
 	}
+	
 	/**
-   * Get a wrapped client with enhanced type information and runtime type checking
-   * This method provides the best TypeScript intellisense by preserving the original client type
-   */
+	 * Get a wrapped client with enhanced type information and runtime type checking
+	 * This method provides the best TypeScript intellisense by preserving the original client type
+	 */
 	public getWrap(databaseName: string): any {
 		try {
 			// getClient 내부에서 이미 예외 처리를 하므로 여기서 추가로 할 필요는 없음
@@ -279,7 +286,9 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 			}
 			throw new Error(`데이터베이스 래핑된 클라이언트 획득 중 오류가 발생했습니다: ${error}`);
 		}
-	}/**
+	}
+	
+	/**
    * Get a client with runtime type checking and enhanced type information
    */
 	public getTypedClient(databaseName: string) {

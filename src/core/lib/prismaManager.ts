@@ -280,6 +280,7 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 			});
 
 			return wrappedClient;
+			
 		} catch (error) {
 			if (error instanceof Error) {
 				throw error; // getClient에서 이미 처리된 오류는 그대로 전달

@@ -17,6 +17,8 @@ router.GET(async (req, res) => {
         // // 향상된 타입 정보를 가진 클라이언트 
         const typedClient = prismaManager.getWrap('testdb1'); // 향샹된 타입 (기본 인터페이스는 같으나 자원을 더 소모하여 안정적임)
 
+        
+
         // // 그런거 없으면
         // const emptyConnectionInterface = prismaManager.getWrap('testdb1x');
 

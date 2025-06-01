@@ -1,4 +1,0 @@
-#!/bin/bash
-# filepath: r:\project\express.js-kusto\kusto-db
-DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-ts-node "$DIR/src/core/scripts/kusto-db-cli.ts" "$@"

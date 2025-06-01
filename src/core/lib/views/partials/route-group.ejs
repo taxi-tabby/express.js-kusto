@@ -11,7 +11,7 @@
         </div>
     </div>
     
-    <div class="route-group-content" id="group-<%= group.id %>">
+    <div class="route-group-content" id="<%= group.id %>">
         <% group.routes.forEach(function(testSuite) { %>
             <%- include('test-suite', { testSuite: testSuite }) %>
         <% }); %>

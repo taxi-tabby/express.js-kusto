@@ -321,6 +321,11 @@ body {
     background: #fffbeb;
 }
 
+.test-case.security {
+    border-left: 4px solid #ef4444;
+    background: #fff1f2;
+}
+
 .test-info {
     flex: 1;
 }

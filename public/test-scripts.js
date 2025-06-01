@@ -72,6 +72,7 @@ function matchesSearch(testCase, searchTerm) {
 
 function matchesFilter(testCase) {
     if (currentFilter === 'all') return true;
+    if (currentFilter === 'security') return testCase.classList.contains('security');
     return testCase.dataset.type === currentFilter;
 }
 
@@ -96,6 +97,48 @@ function toggleTestData(dataId) {
         dataContent.style.display = isVisible ? 'none' : 'block';
         if (expandIcon) {
             expandIcon.textContent = isVisible ? '▼' : '▲';
+        }
+    }
+}
+
+// Toggle route group visibility
+function toggleGroup(groupId) {
+    const groupContent = document.getElementById(groupId);
+    const groupHeader = document.querySelector(`[onclick*="${groupId}"]`);
+    const collapseIcon = groupHeader ? groupHeader.querySelector('.collapse-icon') : null;
+    
+    if (groupContent) {
+        const isVisible = groupContent.style.display !== 'none';
+        groupContent.style.display = isVisible ? 'none' : 'block';
+        if (collapseIcon) {
+            collapseIcon.textContent = isVisible ? '▶' : '▼';
+        }
+        
+        // Toggle collapsed class on parent group
+        const routeGroup = groupContent.closest('.route-group');
+        if (routeGroup) {
+            routeGroup.classList.toggle('collapsed', isVisible);
+        }
+    }
+}
+
+// Toggle test suite visibility
+function toggleSuite(suiteId) {
+    const suiteContent = document.getElementById('suite-' + suiteId);
+    const suiteHeader = document.querySelector(`[onclick*="${suiteId}"]`);
+    const collapseIcon = suiteHeader ? suiteHeader.querySelector('.collapse-icon') : null;
+    
+    if (suiteContent) {
+        const isVisible = suiteContent.style.display !== 'none';
+        suiteContent.style.display = isVisible ? 'none' : 'block';
+        if (collapseIcon) {
+            collapseIcon.textContent = isVisible ? '▶' : '▼';
+        }
+        
+        // Toggle collapsed class on parent suite
+        const testSuite = suiteContent.closest('.test-suite');
+        if (testSuite) {
+            testSuite.classList.toggle('collapsed', isVisible);
         }
     }
 }
@@ -276,15 +319,37 @@ async function runAllTests() {
 }
 
 // Copy test data to clipboard
-function copyTestData(dataStr) {
-    const cleanData = dataStr.replace(/&quot;/g, '"').replace(/&#39;/g, "'");
-    
-    navigator.clipboard.writeText(cleanData).then(() => {
-        showNotification('Test data copied to clipboard!', 'success');
-    }).catch(err => {
-        console.error('Failed to copy text:', err);
-        showNotification('Failed to copy to clipboard', 'error');
-    });
+function copyTestData(testDataStr) {
+    try {
+        // Parse and format the test data
+        const data = JSON.parse(testDataStr.replace(/&quot;/g, '"').replace(/&#39;/g, "'"));
+        const formattedData = JSON.stringify(data, null, 2);
+        
+        // Copy to clipboard
+        navigator.clipboard.writeText(formattedData).then(() => {
+            // Show success feedback
+            const copyBtn = event.target;
+            const originalText = copyBtn.textContent;
+            copyBtn.textContent = 'Copied!';
+            copyBtn.style.background = '#10b981';
+            
+            setTimeout(() => {
+                copyBtn.textContent = originalText;
+                copyBtn.style.background = '';
+            }, 2000);
+        }).catch(err => {
+            console.error('Failed to copy to clipboard:', err);
+            // Fallback for older browsers
+            const textArea = document.createElement('textarea');
+            textArea.value = formattedData;
+            document.body.appendChild(textArea);
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+        });
+    } catch (error) {
+        console.error('Failed to copy test data:', error);
+    }
 }
 
 // Show notification

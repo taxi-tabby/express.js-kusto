@@ -20,6 +20,7 @@ export interface TestCase {
     expectedStatus: number;
     expectedErrors?: string[];
     validationErrors?: string[];
+    securityTestType?: string; // SQL injection, XSS, etc.
 }
 
 export interface RouteTestSuite {
@@ -39,6 +40,7 @@ export interface TestReportStats {
     totalTests: number;
     successTests: number;
     failureTests: number;
+    securityTests: number;
 }
 
 export class TestGenerator {
@@ -154,9 +156,258 @@ export class TestGenerator {
 
             // 범위 검증 실패 테스트
             cases.push(...this.generateRangeValidationCases(route, location, fieldName, fieldSchema));
+            
+            // 보안 공격 테스트 케이스 생성
+            cases.push(...this.generateSecurityTestCases(route, location, fieldName, fieldSchema));
         }
 
         return cases;
+    }
+
+    /**
+     * 보안 공격 테스트 케이스 생성 (SQL 인젝션, 특수문자)
+     */
+    private static generateSecurityTestCases(
+        route: RouteDocumentation, 
+        location: string, 
+        fieldName: string, 
+        fieldSchema: FieldSchema
+    ): TestCase[] {
+        const cases: TestCase[] = [];
+        const invalidData = this.generateValidData(route.parameters);
+        
+        if (!invalidData[location]) return cases;
+        
+        // 필드 타입에 따라 다른 공격 패턴 적용
+        const attackPatterns = this.getSecurityAttackPatterns(fieldSchema.type);
+        
+        for (const pattern of attackPatterns) {
+            const attackData = JSON.parse(JSON.stringify(invalidData)); // 깊은 복사
+            attackData[location][fieldName] = pattern.value;
+              cases.push({
+                name: `${route.method} ${route.path} - Security Attack: ${pattern.type} for ${location}.${fieldName}`,
+                description: `${pattern.description} in ${location} parameter: ${fieldName}`,
+                type: 'failure',
+                endpoint: route.path,
+                method: route.method,
+                data: attackData,
+                expectedStatus: 400,
+                validationErrors: [`${fieldName} contains potentially malicious content`],
+                securityTestType: pattern.type
+            });
+        }
+        
+        return cases;
+    }
+    
+    /**
+     * 필드 타입별 보안 공격 패턴 생성
+     */
+    private static getSecurityAttackPatterns(fieldType: string): Array<{type: string, value: any, description: string}> {
+        const patterns: Array<{type: string, value: any, description: string}> = [];
+        
+        // 공통 SQL Injection 패턴
+        const sqlInjectionPatterns = [
+            { 
+                type: 'SQLi-Basic', 
+                value: "' OR '1'='1", 
+                description: 'Basic SQL injection attack' 
+            },
+            { 
+                type: 'SQLi-Comment', 
+                value: "'; --", 
+                description: 'SQL injection with comment' 
+            },
+            { 
+                type: 'SQLi-Union', 
+                value: "' UNION SELECT username,password FROM users; --", 
+                description: 'UNION-based SQL injection attack' 
+            },
+            { 
+                type: 'SQLi-Batch', 
+                value: "'; DROP TABLE users; --", 
+                description: 'Batch SQL injection attack' 
+            }
+        ];
+        
+        // 타입별 특수 공격 패턴
+        switch (fieldType) {
+            case 'string':
+                // 문자열 타입에 대한 공격
+                patterns.push(...sqlInjectionPatterns);
+                patterns.push(
+                    { 
+                        type: 'XSS-Basic', 
+                        value: "<script>alert('XSS')</script>", 
+                        description: 'Basic XSS attack' 
+                    },
+                    { 
+                        type: 'XSS-Attribute', 
+                        value: "\" onmouseover=\"alert('XSS')\" ", 
+                        description: 'Event-based XSS attack' 
+                    },
+                    { 
+                        type: 'Command-Injection', 
+                        value: "$(cat /etc/passwd)", 
+                        description: 'Command injection attack' 
+                    },
+                    { 
+                        type: 'Special-Chars', 
+                        value: "!@#$%^&*()_+{}[]|\\:;\"'<>,.?/~`", 
+                        description: 'Special character injection' 
+                    }
+                );
+                break;
+                
+            case 'email':
+                // 이메일 타입에 대한 공격
+                patterns.push(
+                    { 
+                        type: 'Email-SQLi', 
+                        value: "user@example.com' OR '1'='1", 
+                        description: 'SQL injection in email field' 
+                    },
+                    { 
+                        type: 'Email-XSS', 
+                        value: "user@<script>alert('XSS')</script>.com", 
+                        description: 'XSS in email field' 
+                    },
+                    { 
+                        type: 'Email-Special', 
+                        value: "user+bypass@example.com';--", 
+                        description: 'Email with special characters and SQL injection' 
+                    }
+                );
+                break;
+                
+            case 'url':
+                // URL 타입에 대한 공격
+                patterns.push(
+                    { 
+                        type: 'URL-SQLi', 
+                        value: "https://example.com?id=' OR '1'='1", 
+                        description: 'SQL injection in URL field' 
+                    },
+                    { 
+                        type: 'URL-XSS', 
+                        value: "javascript:alert('XSS')", 
+                        description: 'JavaScript URL XSS attack' 
+                    },
+                    { 
+                        type: 'URL-SSRF', 
+                        value: "http://localhost:3000/admin", 
+                        description: 'Server Side Request Forgery attempt' 
+                    },
+                    { 
+                        type: 'URL-PathTraversal', 
+                        value: "https://example.com/../../../etc/passwd", 
+                        description: 'Path traversal attack in URL' 
+                    }
+                );
+                break;
+                
+            case 'number':
+                // 숫자 타입에 대한 공격
+                patterns.push(
+                    { 
+                        type: 'Number-SQLi', 
+                        value: "1 OR 1=1", 
+                        description: 'SQL injection in numeric field' 
+                    },
+                    { 
+                        type: 'Number-Overflow', 
+                        value: Number.MAX_SAFE_INTEGER + 1, 
+                        description: 'Integer overflow attack' 
+                    },
+                    { 
+                        type: 'Number-Negative', 
+                        value: -1, 
+                        description: 'Negative number attack' 
+                    },
+                    { 
+                        type: 'Number-Zero', 
+                        value: 0, 
+                        description: 'Zero value attack' 
+                    }
+                );
+                break;
+                
+            case 'boolean':
+                // 불리언 타입에 대한 공격
+                patterns.push(
+                    { 
+                        type: 'Boolean-SQLi', 
+                        value: "true OR 1=1", 
+                        description: 'SQL injection in boolean field' 
+                    },
+                    { 
+                        type: 'Boolean-String', 
+                        value: "true; DROP TABLE users;", 
+                        description: 'SQL injection with string in boolean field' 
+                    }
+                );
+                break;
+                
+            case 'array':
+                // 배열 타입에 대한 공격
+                patterns.push(
+                    { 
+                        type: 'Array-SQLi', 
+                        value: ["normal", "'; DROP TABLE users; --"], 
+                        description: 'SQL injection in array item' 
+                    },
+                    { 
+                        type: 'Array-XSS', 
+                        value: ["normal", "<script>alert('XSS')</script>"], 
+                        description: 'XSS in array item' 
+                    },
+                    { 
+                        type: 'Array-Overflow', 
+                        value: Array(1000).fill("x"), 
+                        description: 'Array overflow attack with excessive items' 
+                    }
+                );
+                break;
+                
+            case 'object':
+                // 객체 타입에 대한 공격
+                patterns.push(
+                    { 
+                        type: 'Object-Pollution', 
+                        value: { "__proto__": { "polluted": true } }, 
+                        description: 'Prototype pollution attack' 
+                    },
+                    { 
+                        type: 'Object-SQLi', 
+                        value: { "key": "value", "injection": "' OR '1'='1" }, 
+                        description: 'SQL injection in object property' 
+                    },
+                    { 
+                        type: 'Object-XSS', 
+                        value: { "key": "<script>alert('XSS')</script>" }, 
+                        description: 'XSS in object property' 
+                    },
+                    { 
+                        type: 'Object-DoS', 
+                        value: JSON.parse('{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{}}}}}}}}}}}'), 
+                        description: 'Deeply nested object DoS attack' 
+                    }
+                );
+                break;
+                
+            default:
+                // 기본 공격 패턴
+                patterns.push(...sqlInjectionPatterns);
+                patterns.push(
+                    { 
+                        type: 'XSS-Basic', 
+                        value: "<script>alert('XSS')</script>", 
+                        description: 'Basic XSS attack' 
+                    }
+                );
+        }
+        
+        return patterns;
     }
 
     /**
@@ -415,9 +666,7 @@ export class TestGenerator {
             routes,
             totalTests: routes.reduce((sum, route) => sum + route.testCases.length, 0)
         }));
-    }
-
-    /**
+    }    /**
      * 통계 정보 생성
      */
     private static generateStats(testSuites: RouteTestSuite[]): TestReportStats {
@@ -427,7 +676,10 @@ export class TestGenerator {
             successTests: testSuites.reduce((sum, suite) => 
                 sum + suite.testCases.filter(tc => tc.type === 'success').length, 0),
             failureTests: testSuites.reduce((sum, suite) => 
-                sum + suite.testCases.filter(tc => tc.type === 'failure').length, 0)
+                sum + suite.testCases.filter(tc => tc.type === 'failure').length, 0),
+            securityTests: testSuites.reduce((sum, suite) => 
+                sum + suite.testCases.filter(tc => 
+                    tc.name.includes('Security Attack')).length, 0)
         };
     }
 
@@ -504,10 +756,12 @@ export class TestGenerator {
                 <div class="stat-card">
                     <div class="stat-number success">${stats.successTests}</div>
                     <div class="stat-label">Success Cases</div>
-                </div>
-                <div class="stat-card">
+                </div>                <div class="stat-card">
                     <div class="stat-number failure">${stats.failureTests}</div>
                     <div class="stat-label">Failure Cases</div>
+                </div>                <div class="stat-card">
+                    <div class="stat-number security" style="color: #FF5722;">${stats.securityTests}</div>
+                    <div class="stat-label">Security Tests</div>
                 </div>
             </div>
         </div>
@@ -515,11 +769,11 @@ export class TestGenerator {
         <div class="controls">
             <div class="search-container">
                 <input type="text" class="search-input" id="searchInput" placeholder="🔍 Search test cases...">
-            </div>
-            <div class="filter-container">
+            </div>            <div class="filter-container">
                 <button class="filter-btn active" data-filter="all">All</button>
                 <button class="filter-btn" data-filter="success">Success</button>
                 <button class="filter-btn" data-filter="failure">Failure</button>
+                <button class="filter-btn" data-filter="security">Security</button>
             </div>
         </div>
         
@@ -606,11 +860,11 @@ export class TestGenerator {
         const testDataJson = testCase.data ? JSON.stringify(testCase.data, null, 2) : '';
         const testDataStr = JSON.stringify(testCase.data || {}).replace(/'/g, '&#39;').replace(/"/g, '&quot;');
         
-        return `
-            <div class="test-case ${testCase.type}" 
+        return `            <div class="test-case ${testCase.type} ${testCase.securityTestType ? 'security' : ''}" 
                  data-type="${testCase.type}" 
                  data-method="${testCase.method}" 
-                 data-endpoint="${testCase.endpoint}">
+                 data-endpoint="${testCase.endpoint}"
+                 ${testCase.securityTestType ? `data-security-type="${testCase.securityTestType}"` : ''}>
                 
                 <div class="test-info">
                     <div class="test-name">${testCase.name}</div>
@@ -668,12 +922,12 @@ export class TestGenerator {
             const stats = this.generateStats(testSuites);
 
             return {
-                metadata: {
-                    generatedAt: new Date().toISOString(),
+                metadata: {                    generatedAt: new Date().toISOString(),
                     totalRoutes: stats.totalRoutes,
                     totalTests: stats.totalTests,
                     successTests: stats.successTests,
-                    failureTests: stats.failureTests
+                    failureTests: stats.failureTests,
+                    securityTests: stats.securityTests
                 },
                 testSuites: testSuites.map(suite => ({
                     route: {
@@ -767,27 +1021,41 @@ export class TestGenerator {
                                 }
                             }
                         };
+                    }                    // Add test script with additional test for security cases
+                    const execScript = [
+                        `// ${testCase.description}`,
+                        `pm.test("Status code is ${testCase.expectedStatus}", function () {`,
+                        `    pm.response.to.have.status(${testCase.expectedStatus});`,
+                        `});`,
+                        '',
+                        'pm.test("Response time is less than 2000ms", function () {',
+                        '    pm.expect(pm.response.responseTime).to.be.below(2000);',
+                        '});',
+                        '',
+                        'pm.test("Response has JSON body", function () {',
+                        '    pm.response.to.be.json;',
+                        '});'
+                    ];
+                    
+                    // Add additional tests for security test cases
+                    if (testCase.securityTestType) {
+                        execScript.push(
+                            '',
+                            `// Additional security test: ${testCase.securityTestType}`,
+                            'pm.test("Response should contain security validation error", function () {',
+                            '    const jsonData = pm.response.json();',
+                            '    pm.expect(jsonData.errors).to.exist;',
+                            '    const errorsExist = Array.isArray(jsonData.errors) && jsonData.errors.length > 0;',
+                            '    pm.expect(errorsExist).to.be.true;',
+                            '});'
+                        );
                     }
-
-                    // Add test script
+                    
                     request.event = [{
                         listen: 'test',
                         script: {
                             type: 'text/javascript',
-                            exec: [
-                                `// ${testCase.description}`,
-                                `pm.test("Status code is ${testCase.expectedStatus}", function () {`,
-                                `    pm.response.to.have.status(${testCase.expectedStatus});`,
-                                `});`,
-                                '',
-                                'pm.test("Response time is less than 2000ms", function () {',
-                                '    pm.expect(pm.response.responseTime).to.be.below(2000);',
-                                '});',
-                                '',
-                                'pm.test("Response has JSON body", function () {',
-                                '    pm.response.to.be.json;',
-                                '});'
-                            ]
+                            exec: execScript
                         }
                     }];
 

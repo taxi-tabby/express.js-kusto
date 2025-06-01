@@ -1,6 +1,8 @@
 import { Express } from 'express';
+import express from 'express';
 import { Server } from 'http';
 import { config } from 'dotenv';
+import path from 'path';
 import { log } from './external/winston';
 import { getElapsedTimeInString } from './external/util';
 import loadRoutes from './lib/loadRoutes_V6_Clean';
@@ -77,13 +79,18 @@ export class Core {
         log.Info('Core initialized successfully', { config: this._config });
         
         return this;
-    }
-
-    private setupExpress(): void {
+    }    private setupExpress(): void {
         // Set trust proxy
         this._app.set('trust proxy', this._config.trustProxy ? 1 : 0);
         
-        log.Debug('Express app configured');
+        // Serve static files from public directory
+        const publicPath = path.join(process.cwd(), 'public');
+        this._app.use(express.static(publicPath));
+        
+        log.Debug('Express app configured', { 
+            trustProxy: this._config.trustProxy,
+            staticPath: publicPath
+        });
     }
 
     private loadRoutes(): void {
@@ -151,6 +158,37 @@ export class Core {
             } catch (error) {
                 log.Error('Failed to generate dev info', { error });
                 res.status(500).json({ error: 'Failed to generate development info' });
+            }
+        });        // 테스트 리포트 HTML 페이지
+        this._app.get('/docs/test-report', async (req, res) => {
+            try {
+                const testReport = await DocumentationGenerator.generateTestReport();
+                res.type('html').send(testReport);
+            } catch (error) {
+                log.Error('Failed to generate test report', { error });
+                res.status(500).json({ error: 'Failed to generate test report' });
+            }
+        });
+
+        // 테스트 케이스 JSON
+        this._app.get('/docs/test-cases.json', (req, res) => {
+            try {
+                const testCases = DocumentationGenerator.generateTestCasesJSON();
+                res.json(testCases);
+            } catch (error) {
+                log.Error('Failed to generate test cases JSON', { error });
+                res.status(500).json({ error: 'Failed to generate test cases' });
+            }
+        });
+
+        // Postman Collection JSON
+        this._app.get('/docs/postman-collection.json', (req, res) => {
+            try {
+                const postmanCollection = DocumentationGenerator.generatePostmanCollection();
+                res.json(postmanCollection);
+            } catch (error) {
+                log.Error('Failed to generate Postman collection', { error });
+                res.status(500).json({ error: 'Failed to generate Postman collection' });
             }
         });
 

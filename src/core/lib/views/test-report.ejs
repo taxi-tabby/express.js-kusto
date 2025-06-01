@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Test Report</title>
+    <link rel="stylesheet" href="/test-styles.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header Section -->
+        <div class="header">
+            <h1>🧪 API Test Report</h1>
+            <p>Automated test cases for API routes</p>
+            
+            <div class="stats">
+                <div class="stat-card">
+                    <div class="stat-number routes"><%= stats.totalRoutes %></div>
+                    <div class="stat-label">Routes</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number total"><%= stats.totalTests %></div>
+                    <div class="stat-label">Total Tests</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number success"><%= stats.successTests %></div>
+                    <div class="stat-label">Success Cases</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number failure"><%= stats.failureTests %></div>
+                    <div class="stat-label">Failure Cases</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Search and Filter Controls -->
+        <div class="controls">
+            <div class="search-container">
+                <input type="text" class="search-input" id="searchInput" placeholder="🔍 Search test cases...">
+            </div>
+            <div class="filter-container">
+                <button class="filter-btn active" data-filter="all">All</button>
+                <button class="filter-btn" data-filter="success">Success</button>
+                <button class="filter-btn" data-filter="failure">Failure</button>
+            </div>
+        </div>
+        
+        <!-- Bulk Actions -->
+        <div class="bulk-actions">
+            <button class="bulk-btn expand-all" onclick="expandAll()">Expand All</button>
+            <button class="bulk-btn collapse-all" onclick="collapseAll()">Collapse All</button>
+            <button class="bulk-btn run-all" onclick="runAllTests()">Run All Tests</button>
+        </div>
+        
+        <!-- Test Results -->
+        <div id="testResults">
+            <% routeGroups.forEach(function(group) { %>
+                <%- include('partials/route-group', { group: group }) %>
+            <% }); %>
+        </div>
+        
+        <!-- No Results Message -->
+        <div id="noResults" class="no-results" style="display: none;">
+            <h3>No test cases found</h3>
+            <p>Try adjusting your search or filter criteria</p>
+        </div>
+    </div>
+    
+    <script src="/test-scripts.js"></script>
+</body>
+</html>

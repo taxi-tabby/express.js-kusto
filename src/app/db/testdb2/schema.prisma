@@ -8,7 +8,6 @@ datasource testdb2_db {
   url      = env("RDS2_DEFAULT_URL")
 }
 
-// Example models - you can modify these as needed
 model User {
   id        Int      @id @default(autoincrement())
   email     String   @unique
@@ -24,8 +23,7 @@ model Post {
   content   String?
   published Boolean  @default(false)
   authorId  Int
-  author    User     @relation(fields: [authorId], references: [id])
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  author    User     @relation(fields: [authorId], references: [id])
 }
-

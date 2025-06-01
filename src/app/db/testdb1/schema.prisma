@@ -7,37 +7,37 @@ datasource testdb1_db {
   provider = "postgresql"
   url      = env("RDS1_DEFAULT_URL")
 }
-// Example models with different data structure using both IDs and UUIDs
+
 model Customer {
-  id        BigInt    @id @default(autoincrement())
-  uuid      String    @unique @default(uuid())
-  email     String    @unique
+  id        BigInt   @id @default(autoincrement())
+  uuid      String   @unique @default(uuid())
+  email     String   @unique
   name      String
   phone     String?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
   orders    Order[]
 }
 
 model Order {
-  id          BigInt    @id @default(autoincrement())
-  orderUuid   String    @unique @default(uuid())
-  orderNumber String    @unique
+  id          BigInt      @id @default(autoincrement())
+  orderUuid   String      @unique @default(uuid())
+  orderNumber String      @unique
   totalAmount Float
-  status      String    @default("pending")
+  status      String      @default("pending")
   customerId  BigInt
-  customer    Customer  @relation(fields: [customerId], references: [id])
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  customer    Customer    @relation(fields: [customerId], references: [id])
   items       OrderItem[]
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
 }
 
 model OrderItem {
-  id          BigInt   @id @default(autoincrement())
-  itemUuid    String   @unique @default(uuid())
+  id          BigInt @id @default(autoincrement())
+  itemUuid    String @unique @default(uuid())
   productName String
   quantity    Int
   price       Float
   orderId     BigInt
-  order       Order    @relation(fields: [orderId], references: [id])
+  order       Order  @relation(fields: [orderId], references: [id])
 }

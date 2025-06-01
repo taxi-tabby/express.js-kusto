@@ -1,0 +1,112 @@
+/* Test Summary Styles */
+.results-summary {
+  background: white;
+  border-radius: 12px;
+  padding: 25px;
+  margin-top: 30px;
+  margin-bottom: 30px;
+  box-shadow: 0 2px 15px rgba(0,0,0,0.1);
+  border-left: 4px solid #6c5ce7;
+  display: none;
+}
+
+.results-summary.show {
+  display: block;
+  animation: fadeIn 0.5s ease;
+}
+
+.results-summary h3 {
+  margin: 0 0 20px 0;
+  color: #333;
+  font-size: 1.5em;
+}
+
+.summary-grid {
+  display: grid !important;
+  grid-template-columns: repeat(3, 1fr) !important;
+  gap: 20px !important;
+  margin-bottom: 20px !important;
+  width: 100% !important;
+  max-width: 900px !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+.summary-item {
+  text-align: center;
+  padding: 20px;
+  border-radius: 10px;
+}
+
+.summary-item.passed {
+  background: #ebfbee;
+  border: 1px solid #d1fadf;
+}
+
+.summary-item.failed {
+  background: #fff5f5;
+  border: 1px solid #fed7d7;
+}
+
+.summary-item.accuracy {
+  background: #ebf8ff;
+  border: 1px solid #bee3f8;
+}
+
+.summary-number {
+  font-size: 32px;
+  font-weight: bold;
+  margin-bottom: 5px;
+}
+
+.summary-item.passed .summary-number {
+  color: #28a745;
+}
+
+.summary-item.failed .summary-number {
+  color: #dc3545;
+}
+
+.summary-item.accuracy .summary-number {
+  color: #007bff;
+}
+
+.summary-label {
+  font-size: 14px;
+  color: #6c757d;
+}
+
+.failed-tests-toggle {
+  display: block;
+  width: 100%;
+  padding: 12px;
+  margin-top: 10px;
+  background: #e9ecef;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.failed-tests-toggle:hover {
+  background: #dee2e6;
+}
+
+.failed-tests-toggle.active {
+  background: #dc3545;
+  color: white;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

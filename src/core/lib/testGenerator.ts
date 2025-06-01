@@ -732,11 +732,14 @@ export class TestGenerator {
         return `
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
+<head>    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>API Test Report</title>
     <link rel="stylesheet" href="/test-styles.css">
+    <link rel="stylesheet" href="/summary-styles.css">
+    <script src="/test-scripts.js"></script>
+    <script src="/test-fixes.js"></script>
+    <script src="/progress-fix.js"></script>
 </head>
 <body>
     <div class="container">
@@ -790,10 +793,7 @@ export class TestGenerator {
         <div id="noResults" class="no-results" style="display: none;">
             <h3>No test cases found</h3>
             <p>Try adjusting your search or filter criteria</p>
-        </div>
-    </div>
-    
-    <script src="/test-scripts.js"></script>
+        </div>    </div>
 </body>
 </html>`;
     }

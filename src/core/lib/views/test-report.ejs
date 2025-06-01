@@ -1,10 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
+<head>    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>API Test Report</title>
     <link rel="stylesheet" href="/test-styles.css">
+    <link rel="stylesheet" href="/summary-styles.css">
+    <script src="/test-scripts.js"></script>
+    <script src="/test-fixes.js"></script>
+    <script src="/progress-fix.js"></script>
 </head>
 <body>
     <div class="container">
@@ -25,10 +28,13 @@
                 <div class="stat-card">
                     <div class="stat-number success"><%= stats.successTests %></div>
                     <div class="stat-label">Success Cases</div>
-                </div>
-                <div class="stat-card">
+                </div>                <div class="stat-card">
                     <div class="stat-number failure"><%= stats.failureTests %></div>
                     <div class="stat-label">Failure Cases</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number security"><%= stats.securityTests %></div>
+                    <div class="stat-label">Security Tests</div>
                 </div>
             </div>
         </div>
@@ -42,6 +48,7 @@
                 <button class="filter-btn active" data-filter="all">All</button>
                 <button class="filter-btn" data-filter="success">Success</button>
                 <button class="filter-btn" data-filter="failure">Failure</button>
+                <button class="filter-btn" data-filter="security">🔒 Security</button>
             </div>
         </div>
         
@@ -63,9 +70,7 @@
         <div id="noResults" class="no-results" style="display: none;">
             <h3>No test cases found</h3>
             <p>Try adjusting your search or filter criteria</p>
-        </div>
     </div>
-    
-    <script src="/test-scripts.js"></script>
+    </div>
 </body>
 </html>

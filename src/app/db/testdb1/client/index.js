@@ -183,7 +183,6 @@ const config = {
     "testdb1_db"
   ],
   "activeProvider": "postgresql",
-  "postinstall": false,
   "inlineDatasources": {
     "testdb1_db": {
       "url": {

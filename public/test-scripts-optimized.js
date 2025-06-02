@@ -26,6 +26,7 @@ document.addEventListener('DOMContentLoaded', () => {
     );
     document.addEventListener('keydown', handleShortcuts);
     initProgress();
+    updateFilterCounts(); // Initialize filter counts
 });
 
 // --- Progress UI ---
@@ -117,18 +118,23 @@ async function runTest(button) {
         
         const res = await fetch(endpoint, options);
         const status = res.status;
-        const data = await (res.headers.get('content-type')?.includes('json') ? res.json() : res.text());
-        const success = (status >= 200 && status < 300) || status === expectedStatus;
+        const data = await (res.headers.get('content-type')?.includes('json') ? res.json() : res.text());        const success = (status >= 200 && status < 300) || status === expectedStatus;
+        
+        // Store test result in data attribute for filtering
+        testCase.dataset.testResult = success ? 'passed' : 'failed';
+        
         updateTestResult(testCase, success, { status, data });
-        if (success) testStats.passed++; else testStats.failed++;
-    } catch (e) {
+        if (success) testStats.passed++; else testStats.failed++;    } catch (e) {
+        // Store test result as failed for errors
+        testCase.dataset.testResult = 'failed';
+        
         updateTestResult(testCase, false, { error: e.message });
-        testStats.failed++;
-    } finally {
+        testStats.failed++;    } finally {
         button.disabled = false;
         button.textContent = 'Run Test';
         button.classList.remove('running');
         updateProgress();
+        updateFilterCounts(); // Update filter counts after test completion
     }
 }
 function runTestFromButton(btn) { runTest(btn); }
@@ -143,6 +149,7 @@ async function runAllTests() {
         await new Promise(r => setTimeout(r, REQUEST_DELAY));
     }
     showTestSummary();
+    updateFilterCounts(); // Update filter counts after all tests complete
 }
 
 // --- Test Data ---
@@ -269,30 +276,160 @@ function collapseAll() {
     });
 }
 
+// --- Toggle Functions for Template Compatibility ---
+function toggleGroup(groupId) {
+    const content = document.getElementById(groupId);
+    const header = content?.previousElementSibling;
+    const icon = header?.querySelector('.collapse-icon');
+    
+    if (content && icon) {
+        const isVisible = content.style.display !== 'none';
+        content.style.display = isVisible ? 'none' : 'block';
+        icon.textContent = isVisible ? '▶' : '▼';
+        
+        // Update group container class for styling
+        const group = content.closest('.route-group');
+        if (group) {
+            group.classList.toggle('collapsed', isVisible);
+        }
+    }
+}
+
+function toggleSuite(suiteId) {
+    const content = document.getElementById(`suite-${suiteId}`);
+    const header = content?.previousElementSibling;
+    const icon = header?.querySelector('.collapse-icon');
+    
+    if (content && icon) {
+        const isVisible = content.style.display !== 'none';
+        content.style.display = isVisible ? 'none' : 'block';
+        icon.textContent = isVisible ? '▶' : '▼';
+    }
+}
+
 // --- Search/Filter ---
 function debounce(fn, wait) {
     let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), wait); };
 }
 function performSearch() {
-    const v = document.getElementById('searchInput')?.value.toLowerCase() || '';
+    const searchTerm = document.getElementById('searchInput')?.value.toLowerCase() || '';
+    let visibleCount = 0;
+    
     document.querySelectorAll('.test-case').forEach(tc => {
-        tc.style.display = tc.textContent.toLowerCase().includes(v) ? 'block' : 'none';
+        const textContent = tc.textContent.toLowerCase();
+        const matchesSearch = !searchTerm || textContent.includes(searchTerm);
+        
+        // Apply both search and filter criteria
+        let shouldShow = matchesSearch;
+        if (shouldShow && currentFilter !== 'all') {
+            const testType = tc.dataset.type?.toLowerCase();
+            const testResult = tc.dataset.testResult?.toLowerCase();
+            
+            if (currentFilter === 'success') {
+                shouldShow = testType === 'success' || testResult === 'passed';            } else if (currentFilter === 'failure') {
+                shouldShow = testType === 'failure' || testResult === 'failed';
+            } else {
+                shouldShow = testType === currentFilter;
+            }
+        }
+        
+        tc.style.display = shouldShow ? 'block' : 'none';
+        if (shouldShow) visibleCount++;
     });
+    
+    // Show/hide "no results" message
+    const noResults = document.getElementById('noResults');
+    if (noResults) {
+        noResults.style.display = visibleCount === 0 ? 'block' : 'none';
+    }
 }
 function setActiveFilter(filter) {
     currentFilter = filter;
     document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.filter === filter));
-    filterTestCases();
+    
+    // Reapply search with new filter
+    const searchInput = document.getElementById('searchInput');
+    if (searchInput && searchInput.value.trim()) {
+        performSearch(); // This will apply both search and filter
+    } else {
+        filterTestCases(); // Just apply filter
+    }
 }
 function filterTestCases() {
+    let visibleCount = 0;
+    
     document.querySelectorAll('.test-case').forEach(tc => {
-        const method = tc.querySelector('.method')?.textContent.toLowerCase();
-        tc.style.display = currentFilter === 'all' || method === currentFilter ? 'block' : 'none';
+        if (currentFilter === 'all') {
+            tc.style.display = 'block';
+            visibleCount++;
+        } else {
+            let shouldShow = false;
+            
+            // Filter by test type (success, failure, security) OR by test result (passed, failed)
+            const testType = tc.dataset.type?.toLowerCase();
+            const testResult = tc.dataset.testResult?.toLowerCase();
+            
+            if (currentFilter === 'success') {
+                // Show success tests OR tests that have passed
+                shouldShow = testType === 'success' || testResult === 'passed';            } else if (currentFilter === 'failure') {
+                // Show failure tests OR tests that have failed
+                shouldShow = testType === 'failure' || testResult === 'failed';
+            } else {
+                // Direct test type match
+                shouldShow = testType === currentFilter;
+            }
+            
+            tc.style.display = shouldShow ? 'block' : 'none';
+            if (shouldShow) visibleCount++;
+        }
     });
+    
+    // Show/hide "no results" message
+    const noResults = document.getElementById('noResults');
+    if (noResults) {
+        noResults.style.display = visibleCount === 0 ? 'block' : 'none';
+    }
+    
+    console.log(`🏷️ Filter applied: ${currentFilter} (${visibleCount} tests visible)`);
 }
 function handleShortcuts(e) {
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); runAllTests(); }
     if ((e.ctrlKey || e.metaKey) && e.key === 'f') { e.preventDefault(); document.getElementById('searchInput')?.focus(); }
+}
+
+// Add real-time filter counts update
+function updateFilterCounts() {
+    const testCases = document.querySelectorAll('.test-case');    const counts = {
+        all: testCases.length,
+        success: 0,
+        failure: 0,
+        passed: 0,
+        failed: 0
+    };
+    
+    testCases.forEach(tc => {
+        const testType = tc.dataset.type?.toLowerCase();
+        const testResult = tc.dataset.testResult?.toLowerCase();
+          if (testType === 'success') counts.success++;
+        if (testType === 'failure') counts.failure++;
+        if (testResult === 'passed') counts.passed++;
+        if (testResult === 'failed') counts.failed++;
+    });
+    
+    // Update filter button labels with counts
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+        const filter = btn.dataset.filter;
+        const originalText = btn.textContent.split(' (')[0]; // Remove existing count
+        
+        if (filter === 'all') {
+            btn.textContent = `${originalText} (${counts.all})`;
+        } else if (filter === 'success') {
+            const total = counts.success + counts.passed;
+            btn.textContent = `${originalText} (${total})`;        } else if (filter === 'failure') {
+            const total = counts.failure + counts.failed;
+            btn.textContent = `${originalText} (${total})`;
+        }
+    });
 }
 
 console.log('Test scripts optimized version loaded.');

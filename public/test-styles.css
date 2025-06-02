@@ -111,7 +111,7 @@ body {
 }
 
 .filter-btn {
-    padding: 10px 20px;
+    padding: 10px 16px;
     border: 2px solid #3498db;
     background: white;
     color: #3498db;
@@ -119,6 +119,30 @@ body {
     cursor: pointer;
     transition: all 0.3s;
     font-weight: 500;
+    font-size: 13px;
+    white-space: nowrap;
+}
+
+.filter-btn[data-filter="success"] {
+    border-color: #28a745;
+    color: #28a745;
+}
+
+.filter-btn[data-filter="success"].active,
+.filter-btn[data-filter="success"]:hover {
+    background: #28a745;
+    color: white;
+}
+
+.filter-btn[data-filter="failure"] {
+    border-color: #dc3545;
+    color: #dc3545;
+}
+
+.filter-btn[data-filter="failure"].active,
+.filter-btn[data-filter="failure"]:hover {
+    background: #dc3545;
+    color: white;
 }
 
 .filter-btn[data-filter="security"] {
@@ -804,4 +828,45 @@ body {
     .stats {
         grid-template-columns: 1fr;
     }
+}
+
+/* Test Execution Result Indicators */
+.test-case[data-test-result="passed"] {
+    position: relative;
+}
+
+.test-case[data-test-result="passed"]::before {
+    content: "✅";
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    font-size: 16px;
+    background: white;
+    padding: 2px;
+    border-radius: 50%;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.test-case[data-test-result="failed"] {
+    position: relative;
+}
+
+.test-case[data-test-result="failed"]::before {
+    content: "❌";
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    font-size: 16px;
+    background: white;
+    padding: 2px;
+    border-radius: 50%;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.test-case[data-test-result="passed"] .test-name {
+    color: #059669;
+}
+
+.test-case[data-test-result="failed"] .test-name {
+    color: #dc2626;
 }

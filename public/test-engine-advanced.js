@@ -65,13 +65,13 @@ class TestEngine {
     /**
      * Main setup method
      */
-    setup() {
-        try {
+    setup() {        try {
             this.setupEventListeners();
             this.initializeProgressTracking();
             this.setupKeyboardShortcuts();
             this.createControlsInterface();
             this.optimizePerformance();
+            this.updateFilterCounts(); // Initialize filter counts
             
             console.info('🚀 Advanced Test Engine initialized successfully');
         } catch (error) {
@@ -477,9 +477,11 @@ class TestEngine {
                 responseTime,
                 data: result,
                 expectedStatus: testData.expectedStatus
-            };
-
-            const success = this.isTestSuccessful(testResult);
+            };            const success = this.isTestSuccessful(testResult);
+            
+            // Store test result in data attribute for filtering
+            testCase.dataset.testResult = success ? 'passed' : 'failed';
+            
             this.updateTestResult(testCase, success, testResult);
             
             // Update stats
@@ -493,21 +495,22 @@ class TestEngine {
 
         } catch (error) {
             console.error('❌ Test execution failed:', error);
-            
-            const errorResult = {
+              const errorResult = {
                 error: error.message,
                 responseTime: Math.round(performance.now() - startTime),
                 status: 0
             };
             
+            // Store test result as failed for errors
+            testCase.dataset.testResult = 'failed';
+            
             this.updateTestResult(testCase, false, errorResult);
             this.state.stats.failed++;
             
-            return false;
-
-        } finally {
+            return false;        } finally {
             this.setButtonState(button, 'idle');
             this.updateProgressDisplay();
+            this.updateFilterCounts(); // Update filter counts after test completion
         }
     }
 
@@ -887,9 +890,7 @@ class TestEngine {
         });
         
         this.filterTestCases(); // Reapply current filter
-    }
-
-    /**
+    }    /**
      * Perform search with optimized DOM queries
      */
     performSearch() {
@@ -900,30 +901,44 @@ class TestEngine {
         const testCases = document.querySelectorAll('.test-case');
         let visibleCount = 0;
         
-        testCases.forEach(testCase => {
-            if (!searchTerm) {
-                testCase.style.display = 'block';
-                visibleCount++;
-                return;
-            }
-            
-            const searchableText = [
+        testCases.forEach(testCase => {            const searchableText = [
                 testCase.querySelector('.test-name')?.textContent,
                 testCase.querySelector('.test-description')?.textContent,
                 testCase.dataset.method,
                 testCase.dataset.endpoint
             ].filter(Boolean).join(' ').toLowerCase();
             
-            const shouldShow = searchableText.includes(searchTerm);
-            testCase.style.display = shouldShow ? 'block' : 'none';
+            const matchesSearch = !searchTerm || searchableText.includes(searchTerm);
             
+            // Apply both search and filter criteria
+            let shouldShow = matchesSearch;
+            if (shouldShow && this.state.currentFilter !== 'all') {
+                const testType = testCase.dataset.type?.toLowerCase();
+                const testResult = testCase.dataset.testResult?.toLowerCase();
+                
+                if (this.state.currentFilter === 'success') {
+                    shouldShow = testType === 'success' || testResult === 'passed';
+                } else if (this.state.currentFilter === 'failure') {
+                    shouldShow = testType === 'failure' || testResult === 'failed';
+                } else if (this.state.currentFilter === 'security') {
+                    shouldShow = testType === 'security';
+                } else {
+                    shouldShow = testType === this.state.currentFilter;
+                }
+            }
+            
+            testCase.style.display = shouldShow ? 'block' : 'none';
             if (shouldShow) visibleCount++;
         });
         
+        // Show/hide "no results" message
+        const noResults = document.getElementById('noResults');
+        if (noResults) {
+            noResults.style.display = visibleCount === 0 ? 'block' : 'none';
+        }
+        
         console.log(`🔍 Search found ${visibleCount} matching tests`);
-    }
-
-    /**
+    }    /**
      * Set active filter with smooth transitions
      */
     setActiveFilter(filter) {
@@ -934,23 +949,55 @@ class TestEngine {
             btn.classList.toggle('active', btn.dataset.filter === filter);
         });
         
-        this.filterTestCases();
-    }
-
-    /**
-     * Filter test cases by method
+        // Reapply search with new filter
+        const searchInput = document.getElementById('searchInput');
+        if (searchInput && searchInput.value.trim()) {
+            this.performSearch(); // This will apply both search and filter
+        } else {
+            this.filterTestCases(); // Just apply filter
+        }
+    }    /**
+     * Filter test cases by test type (not method)
      */
     filterTestCases() {
         const testCases = document.querySelectorAll('.test-case');
         let visibleCount = 0;
         
         testCases.forEach(testCase => {
-            const method = testCase.dataset.method?.toLowerCase();
-            const shouldShow = this.state.currentFilter === 'all' || method === this.state.currentFilter;
-            
-            testCase.style.display = shouldShow ? 'block' : 'none';
-            if (shouldShow) visibleCount++;
+            if (this.state.currentFilter === 'all') {
+                testCase.style.display = 'block';
+                visibleCount++;
+            } else {
+                let shouldShow = false;
+                
+                // Filter by test type (success, failure, security) OR by test result (passed, failed)
+                const testType = testCase.dataset.type?.toLowerCase();
+                const testResult = testCase.dataset.testResult?.toLowerCase();
+                
+                if (this.state.currentFilter === 'success') {
+                    // Show success tests OR tests that have passed
+                    shouldShow = testType === 'success' || testResult === 'passed';
+                } else if (this.state.currentFilter === 'failure') {
+                    // Show failure tests OR tests that have failed
+                    shouldShow = testType === 'failure' || testResult === 'failed';
+                } else if (this.state.currentFilter === 'security') {
+                    // Show security tests
+                    shouldShow = testType === 'security';
+                } else {
+                    // Direct test type match
+                    shouldShow = testType === this.state.currentFilter;
+                }
+                
+                testCase.style.display = shouldShow ? 'block' : 'none';
+                if (shouldShow) visibleCount++;
+            }
         });
+        
+        // Show/hide "no results" message
+        const noResults = document.getElementById('noResults');
+        if (noResults) {
+            noResults.style.display = visibleCount === 0 ? 'block' : 'none';
+        }
         
         console.log(`🏷️ Filter applied: ${this.state.currentFilter} (${visibleCount} tests visible)`);
     }
@@ -1080,6 +1127,50 @@ class TestEngine {
         this.activeRequests.clear();
         
         console.log('🧹 Test Engine cleanup completed');
+    }
+
+    /**
+     * Update filter button counts in real-time
+     */
+    updateFilterCounts() {
+        const testCases = document.querySelectorAll('.test-case');
+        const counts = {
+            all: testCases.length,
+            success: 0,
+            failure: 0,
+            security: 0,
+            passed: 0,
+            failed: 0
+        };
+        
+        testCases.forEach(tc => {
+            const testType = tc.dataset.type?.toLowerCase();
+            const testResult = tc.dataset.testResult?.toLowerCase();
+            
+            if (testType === 'success') counts.success++;
+            if (testType === 'failure') counts.failure++;
+            if (testType === 'security') counts.security++;
+            if (testResult === 'passed') counts.passed++;
+            if (testResult === 'failed') counts.failed++;
+        });
+        
+        // Update filter button labels with counts
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            const filter = btn.dataset.filter;
+            const originalText = btn.textContent.split(' (')[0]; // Remove existing count
+            
+            if (filter === 'all') {
+                btn.textContent = `${originalText} (${counts.all})`;
+            } else if (filter === 'success') {
+                const total = counts.success + counts.passed;
+                btn.textContent = `${originalText} (${total})`;
+            } else if (filter === 'failure') {
+                const total = counts.failure + counts.failed;
+                btn.textContent = `${originalText} (${total})`;
+            } else if (filter === 'security') {
+                btn.textContent = `${originalText} (${counts.security})`;
+            }
+        });
     }
 }
 

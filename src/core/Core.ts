@@ -84,13 +84,15 @@ export class Core {
         
         return this;
     }    
-    
       private setupExpress(): void {
         // Set trust proxy
         this._app.set('trust proxy', this._config.trustProxy ? 1 : 0);
         
         // Serve static files from public directory
-        const publicPath = path.join(process.cwd(), 'public');
+        // In webpack build environment, use dist/public, otherwise use public
+        const publicPath = process.env.WEBPACK_BUILD === 'true' 
+            ? path.join(__dirname, 'public')  // dist/public in build environment
+            : path.join(process.cwd(), 'public');  // public in development
         this._app.use(express.static(publicPath));
         
         // Serve development static files when AUTO_DOCS=true

@@ -57,10 +57,17 @@ module.exports = (env, argv) => {
                 {
                     from: 'src/app/views',
                     to: 'views'
-                },
-                {
+                },                {
                     from: 'src/core/lib/views',
                     to: 'views'
+                },
+                {
+                    from: 'public',
+                    to: 'public',
+                },
+                {
+                    from: 'src/core/lib/static',
+                    to: 'public',
                 }
             ]
         })

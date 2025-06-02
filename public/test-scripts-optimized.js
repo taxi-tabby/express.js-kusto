@@ -192,8 +192,7 @@ function extractTestData(testCase) {
                             queryParams.append(key, String(value));
                         });
                         endpoint += (endpoint.includes('?') ? '&' : '?') + queryParams.toString();
-                    }
-                } else {
+                    }                } else {
                     // POST/PUT/PATCH 등의 경우 body로 처리
                     if (parsed.query) {
                         // query 객체가 있으면 query 파라미터로, 나머지는 body로
@@ -209,7 +208,11 @@ function extractTestData(testCase) {
                         if (Object.keys(bodyData).length > 0) {
                             body = JSON.stringify(bodyData);
                         }
+                    } else if (parsed.body) {
+                        // body 객체가 있는 경우 - body 안의 데이터를 HTTP body로 전송
+                        body = JSON.stringify(parsed.body);
                     } else {
+                        // 직접 body로 전송
                         body = JSON.stringify(parsed);
                     }
                 }

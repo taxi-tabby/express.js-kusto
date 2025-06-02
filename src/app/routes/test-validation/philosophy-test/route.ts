@@ -3,13 +3,13 @@ import { ExpressRouter } from '@core/lib/expressRouter'
 const router = new ExpressRouter();
 
 // ✅ 수정됨: 소문자 사용, 복수형 리소스명
-router.GET_SLUG(['users', ':id'], (req, res) => {
+router.GET_SLUG(['users', 'id'], (req, res) => {
     const { id } = req.params;
     res.json({ message: `Get user by ID: ${id}` });
 });
 
 // ✅ 수정됨: PUT 사용하여 특정 리소스 업데이트
-router.PUT_SLUG(['users', ':id'], (req, res) => {
+router.PUT_SLUG(['users', 'id'], (req, res) => {
     const { id } = req.params;
     res.json({ message: `Update user: ${id}` });
 });
@@ -41,7 +41,7 @@ router.POST_SLUG(['users'], (req, res) => {
 });
 
 // ✅ 철학 준수: 적절한 DELETE 요청 (개별 삭제)
-router.DELETE_SLUG(['users', ':id'], (req, res) => {
+router.DELETE_SLUG(['users', 'id'], (req, res) => {
     const { id } = req.params;
     res.status(204).send();
 });

@@ -1629,9 +1629,7 @@ export class TestGenerator {
         }
         
         return Math.max(0, score);
-    }
-
-    /**
+    }    /**
      * 개발 철학 검증 테스트 케이스 생성
      */
     private static generatePhilosophyTestCases(route: RouteDocumentation): TestCase[] {
@@ -1641,25 +1639,44 @@ export class TestGenerator {
         const philosophyResult = this.validateSingleRoutePhilosophy(route);
         
         if (philosophyResult.violations.length > 0) {
-            // 철학 위반 사항을 테스트 케이스로 생성
-            for (const violation of philosophyResult.violations) {
+            // 위반 타입별로 그룹화하여 더 구체적인 테스트 케이스 생성
+            const violationsByType = this.groupViolationsByType(philosophyResult.violations);
+            
+            for (const [type, violations] of Object.entries(violationsByType)) {
+                const severityLevel = violations.some(v => v.severity === 'error') ? 'error' : 'warning';
+                const failureReasons = violations.map(v => `${v.message}${v.suggestion ? ` (제안: ${v.suggestion})` : ''}`);
+                
                 testCases.push({
-                    name: `${route.method} ${route.path} - Philosophy Violation: ${violation.type}`,
-                    description: `개발 철학 위반: ${violation.message}`,
+                    name: `${route.method} ${route.path} - Philosophy Violation: ${type}`,
+                    description: this.generatePhilosophyFailureDescription(type, violations),
                     type: 'failure',
                     endpoint: route.path,
                     method: route.method,
                     data: undefined,
-                    expectedStatus: violation.severity === 'error' ? 500 : 200, // 에러는 실패, 경고는 성공하지만 개선 필요
-                    validationErrors: [violation.message],
-                    securityTestType: 'philosophy-violation'
+                    expectedStatus: severityLevel === 'error' ? 500 : 400,
+                    validationErrors: failureReasons,
+                    expectedErrors: failureReasons,
+                    securityTestType: `philosophy-${type}`
                 });
             }
+            
+            // 전체 철학 준수 점수를 표시하는 종합 테스트 케이스
+            testCases.push({
+                name: `${route.method} ${route.path} - Philosophy Score`,
+                description: `철학 준수 점수: ${philosophyResult.score}/100 (${philosophyResult.violations.length}개 위반사항)`,
+                type: philosophyResult.score >= 80 ? 'success' : 'failure',
+                endpoint: route.path,
+                method: route.method,
+                data: undefined,
+                expectedStatus: philosophyResult.score >= 80 ? 200 : 400,
+                validationErrors: [`Philosophy Score: ${philosophyResult.score}/100`],
+                securityTestType: 'philosophy-score'
+            });
         } else {
             // 철학을 완벽히 준수하는 경우 긍정적인 테스트 케이스 생성
             testCases.push({
                 name: `${route.method} ${route.path} - Philosophy Compliance`,
-                description: `개발 철학을 완벽히 준수하는 라우트입니다`,
+                description: `🎉 개발 철학을 완벽히 준수하는 라우트입니다 (점수: ${philosophyResult.score}/100)`,
                 type: 'success',
                 endpoint: route.path,
                 method: route.method,
@@ -1670,6 +1687,53 @@ export class TestGenerator {
         }
         
         return testCases;
+    }
+
+    /**
+     * 위반사항을 타입별로 그룹화
+     */
+    private static groupViolationsByType(violations: PhilosophyViolation[]): {[key: string]: PhilosophyViolation[]} {
+        return violations.reduce((acc, violation) => {
+            if (!acc[violation.type]) {
+                acc[violation.type] = [];
+            }
+            acc[violation.type].push(violation);
+            return acc;
+        }, {} as {[key: string]: PhilosophyViolation[]});
+    }
+
+    /**
+     * 철학 위반 타입별 실패 설명 생성
+     */
+    private static generatePhilosophyFailureDescription(type: string, violations: PhilosophyViolation[]): string {
+        const errorCount = violations.filter(v => v.severity === 'error').length;
+        const warningCount = violations.filter(v => v.severity === 'warning').length;
+        
+        const typeDescription = {
+            'naming': '네이밍 규칙',
+            'restful': 'RESTful API 스펙',
+            'http-spec': 'HTTP 스펙',
+            'structure': '구조적 규칙'
+        }[type] || type;
+        
+        let description = `❌ ${typeDescription} 위반 (`;
+        if (errorCount > 0) description += `${errorCount}개 오류`;
+        if (warningCount > 0) {
+            if (errorCount > 0) description += ', ';
+            description += `${warningCount}개 경고`;
+        }
+        description += ')';
+        
+        // 첫 번째 위반사항의 메시지와 제안 추가
+        if (violations.length > 0) {
+            const firstViolation = violations[0];
+            description += `\n\n주요 문제: ${firstViolation.message}`;
+            if (firstViolation.suggestion) {
+                description += `\n💡 해결방법: ${firstViolation.suggestion}`;
+            }
+        }
+        
+        return description;
     }
 
     /**

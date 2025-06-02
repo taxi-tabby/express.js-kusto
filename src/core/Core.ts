@@ -53,7 +53,10 @@ export class Core {
             host: process.env.HOST || '0.0.0.0',
             trustProxy: process.env.TRUST_PROXY === 'true' || true
         };
-    }    /**
+    }    
+    
+    
+    /**
      * Initialize the core with custom configuration
      */
     public async initialize(customConfig?: Partial<CoreConfig>): Promise<Core> {
@@ -79,7 +82,10 @@ export class Core {
         log.Info('Core initialized successfully', { config: this._config });
         
         return this;
-    }    private setupExpress(): void {
+    }    
+    
+    
+    private setupExpress(): void {
         // Set trust proxy
         this._app.set('trust proxy', this._config.trustProxy ? 1 : 0);
         
@@ -150,7 +156,9 @@ export class Core {
                 log.Error('Failed to generate OpenAPI spec', { error });
                 res.status(500).json({ error: 'Failed to generate OpenAPI specification' });
             }
-        });        // 개발 정보 페이지
+        });        
+        
+        // 개발 정보 페이지
         this._app.get('/docs/dev', (req, res) => {
             try {
                 const devInfo = DocumentationGenerator.generateDevInfoPage();
@@ -159,7 +167,10 @@ export class Core {
                 log.Error('Failed to generate dev info', { error });
                 res.status(500).json({ error: 'Failed to generate development info' });
             }
-        });        // 테스트 리포트 HTML 페이지
+        });        
+        
+        
+        // 테스트 리포트 HTML 페이지
         this._app.get('/docs/test-report', async (req, res) => {
             try {
                 const testReport = await DocumentationGenerator.generateTestReport();

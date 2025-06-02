@@ -420,24 +420,22 @@ function handleShortcuts(e) {
 
 // Add real-time filter counts update
 function updateFilterCounts() {
-    const testCases = document.querySelectorAll('.test-case');    const counts = {
+    const testCases = document.querySelectorAll('.test-case');
+    const counts = {
         all: testCases.length,
         success: 0,
         failure: 0,
-        passed: 0,
-        failed: 0
+        security: 0
     };
     
     testCases.forEach(tc => {
         const testType = tc.dataset.type?.toLowerCase();
-        const testResult = tc.dataset.testResult?.toLowerCase();
-          if (testType === 'success') counts.success++;
+        if (testType === 'success') counts.success++;
         if (testType === 'failure') counts.failure++;
-        if (testResult === 'passed') counts.passed++;
-        if (testResult === 'failed') counts.failed++;
+        if (testType === 'security') counts.security++;
     });
     
-    // Update filter button labels with counts
+    // Update filter button labels with counts (showing only original test case counts)
     document.querySelectorAll('.filter-btn').forEach(btn => {
         const filter = btn.dataset.filter;
         const originalText = btn.textContent.split(' (')[0]; // Remove existing count
@@ -445,11 +443,11 @@ function updateFilterCounts() {
         if (filter === 'all') {
             btn.textContent = `${originalText} (${counts.all})`;
         } else if (filter === 'success') {
-            const total = counts.success + counts.passed;
-            btn.textContent = `${originalText} (${total})`;        
+            btn.textContent = `${originalText} (${counts.success})`;        
         } else if (filter === 'failure') {
-            const total = counts.failure + counts.failed;
-            btn.textContent = `${originalText} (${total})`;
+            btn.textContent = `${originalText} (${counts.failure})`;
+        } else if (filter === 'security') {
+            btn.textContent = `${originalText} (${counts.security})`;
         }
     });
 }

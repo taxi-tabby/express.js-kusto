@@ -542,24 +542,136 @@ class TestEngine {
         if (config.className) {
             button.classList.add(config.className);
         }
-    }
-
-    /**
+    }    /**
      * Determine if test was successful
      */
     isTestSuccessful(result) {
-        const { status, expectedStatus } = result;
+        const { status, expectedStatus, data, expectedData } = result;
         
-        // If expected status is specified, match exactly
+        // First check HTTP status
+        let statusSuccess = false;
         if (expectedStatus && expectedStatus !== 200) {
-            return status === expectedStatus;
+            statusSuccess = status === expectedStatus;
+        } else {
+            statusSuccess = status >= 200 && status < 300;
         }
         
-        // Otherwise, any 2xx status is success
-        return status >= 200 && status < 300;
+        // If status check fails, test fails
+        if (!statusSuccess) {
+            return false;
+        }
+        
+        // If no expected data is specified, just check status
+        if (!expectedData) {
+            return true;
+        }
+        
+        // Validate response data
+        return this.validateResponseData(data, expectedData);
     }
 
     /**
+     * Validate response data against expected data
+     */
+    validateResponseData(actualData, expectedData) {
+        try {
+            // Handle different validation modes
+            if (expectedData.mode === 'exact') {
+                return JSON.stringify(actualData) === JSON.stringify(expectedData.value);
+            } else if (expectedData.mode === 'partial') {
+                return this.isPartialMatch(actualData, expectedData.value);
+            } else if (expectedData.mode === 'schema') {
+                return this.validateSchema(actualData, expectedData.schema);
+            } else if (expectedData.mode === 'contains') {
+                return this.containsValues(actualData, expectedData.value);
+            } else {
+                // Default: exact match for backward compatibility
+                return JSON.stringify(actualData) === JSON.stringify(expectedData);
+            }
+        } catch (error) {
+            console.error('Data validation error:', error);
+            return false;
+        }
+    }
+
+    /**
+     * Check if actual data contains all expected partial values
+     */
+    isPartialMatch(actual, expected) {
+        if (typeof expected !== 'object' || expected === null) {
+            return actual === expected;
+        }
+        
+        if (typeof actual !== 'object' || actual === null) {
+            return false;
+        }
+        
+        for (const [key, value] of Object.entries(expected)) {
+            if (!(key in actual)) {
+                return false;
+            }
+            if (typeof value === 'object' && value !== null) {
+                if (!this.isPartialMatch(actual[key], value)) {
+                    return false;
+                }
+            } else if (actual[key] !== value) {
+                return false;
+            }
+        }
+        
+        return true;
+    }
+
+    /**
+     * Check if data contains specific values (for arrays and objects)
+     */
+    containsValues(actual, expected) {
+        if (Array.isArray(actual) && Array.isArray(expected)) {
+            return expected.every(expectedItem => 
+                actual.some(actualItem => 
+                    JSON.stringify(actualItem) === JSON.stringify(expectedItem)
+                )
+            );
+        }
+        
+        if (typeof actual === 'object' && typeof expected === 'object') {
+            return this.isPartialMatch(actual, expected);
+        }
+        
+        return String(actual).includes(String(expected));
+    }
+
+    /**
+     * Basic schema validation
+     */
+    validateSchema(actual, schema) {
+        if (typeof schema !== 'object' || schema === null) {
+            return false;
+        }
+        
+        for (const [key, expectedType] of Object.entries(schema)) {
+            if (!(key in actual)) {
+                return false;
+            }
+            
+            const actualValue = actual[key];
+            const actualType = Array.isArray(actualValue) ? 'array' : typeof actualValue;
+            
+            if (expectedType === 'number' && actualType !== 'number') {
+                return false;
+            } else if (expectedType === 'string' && actualType !== 'string') {
+                return false;
+            } else if (expectedType === 'boolean' && actualType !== 'boolean') {
+                return false;
+            } else if (expectedType === 'array' && !Array.isArray(actualValue)) {
+                return false;
+            } else if (expectedType === 'object' && (actualType !== 'object' || Array.isArray(actualValue))) {
+                return false;
+            }
+        }
+        
+        return true;
+    }    /**
      * Extract test data from DOM element
      */
     extractTestData(testCase) {
@@ -570,40 +682,91 @@ class TestEngine {
             }
 
             const method = button.dataset.method;
-            const endpoint = button.dataset.endpoint;
+            let endpoint = button.dataset.endpoint;
             const testDataAttr = button.dataset.testData;
             const expectedStatus = parseInt(button.dataset.expectedStatus) || 200;
+            const expectedDataAttr = button.dataset.expectedData;
 
             if (!method || !endpoint) {
                 throw new Error('Missing required test data attributes');
             }
 
             let body = null;
+            let expectedData = null;
             
-            // Only process body for non-GET/HEAD requests
-            if (method.toUpperCase() !== 'GET' && method.toUpperCase() !== 'HEAD') {
-                if (testDataAttr && testDataAttr !== 'null') {
-                    try {
-                        const decodedData = decodeURIComponent(testDataAttr);
-                        const parsedData = JSON.parse(decodedData);
-                        if (Object.keys(parsedData).length > 0) {
-                            body = parsedData;
+            // Parse expected response data if provided
+            if (expectedDataAttr && expectedDataAttr !== 'null') {
+                try {
+                    const decodedExpectedData = decodeURIComponent(expectedDataAttr);
+                    expectedData = JSON.parse(decodedExpectedData);
+                } catch (parseError) {
+                    console.warn('Failed to parse expected data:', parseError);
+                }
+            }
+            
+            // Process test data based on HTTP method
+            if (testDataAttr && testDataAttr !== 'null' && testDataAttr !== '{}') {
+                try {
+                    const decodedData = decodeURIComponent(testDataAttr);
+                    const parsedData = JSON.parse(decodedData);
+                    
+                    if (Object.keys(parsedData).length > 0) {
+                        const methodUpper = method.toUpperCase();
+                        
+                        // GET/HEAD 요청의 경우 query 파라미터로 처리
+                        if (['GET', 'HEAD'].includes(methodUpper)) {
+                            if (parsedData.query) {
+                                // query 객체가 있는 경우
+                                const queryParams = new URLSearchParams();
+                                Object.entries(parsedData.query).forEach(([key, value]) => {
+                                    queryParams.append(key, String(value));
+                                });
+                                endpoint += (endpoint.includes('?') ? '&' : '?') + queryParams.toString();
+                            } else {
+                                // 직접 query 파라미터로 변환
+                                const queryParams = new URLSearchParams();
+                                Object.entries(parsedData).forEach(([key, value]) => {
+                                    queryParams.append(key, String(value));
+                                });
+                                endpoint += (endpoint.includes('?') ? '&' : '?') + queryParams.toString();
+                            }
+                        } else {
+                            // POST/PUT/PATCH 등의 경우 body로 처리
+                            if (parsedData.query) {
+                                // query 객체가 있으면 query 파라미터로, 나머지는 body로
+                                const queryParams = new URLSearchParams();
+                                Object.entries(parsedData.query).forEach(([key, value]) => {
+                                    queryParams.append(key, String(value));
+                                });
+                                endpoint += (endpoint.includes('?') ? '&' : '?') + queryParams.toString();
+                                
+                                // body 데이터가 있으면 body로 설정
+                                const bodyData = { ...parsedData };
+                                delete bodyData.query;
+                                if (Object.keys(bodyData).length > 0) {
+                                    body = bodyData;
+                                }
+                            } else if (parsedData.body) {
+                                // body 객체가 있는 경우 - body 안의 데이터를 HTTP body로 전송
+                                body = parsedData.body;
+                            } else {
+                                // 직접 body로 전송
+                                body = parsedData;
+                            }
                         }
-                    } catch (parseError) {
-                        console.warn('Failed to parse test data:', parseError);
                     }
+                } catch (parseError) {
+                    console.warn('Failed to parse test data:', parseError);
                 }
             }
 
-            return { method, endpoint, body, expectedStatus };
+            return { method, endpoint, body, expectedStatus, expectedData };
 
         } catch (error) {
             console.error('Error extracting test data:', error);
             return null;
         }
-    }
-
-    /**
+    }/**
      * Update test result display with enhanced UI
      */
     updateTestResult(testCase, success, result) {
@@ -620,6 +783,33 @@ class TestEngine {
         const responseTime = result.responseTime || 0;
         const statusCode = result.status || 'N/A';
 
+        // Build validation details for expected data
+        let validationDetails = '';
+        if (result.expectedData) {
+            const dataValidationSuccess = this.validateResponseData(result.data, result.expectedData);
+            const dataIcon = dataValidationSuccess ? '✅' : '❌';
+            const dataStatus = dataValidationSuccess ? 'PASS' : 'FAIL';
+            
+            validationDetails = `
+                <div class="validation-section">
+                    <div class="validation-header">
+                        <span class="validation-icon">${dataIcon}</span>
+                        <span class="validation-text">Data Validation: ${dataStatus}</span>
+                    </div>
+                    <div class="data-comparison">
+                        <div class="expected-data">
+                            <strong>Expected:</strong>
+                            <pre class="data-content">${this.escapeHtml(JSON.stringify(result.expectedData, null, 2))}</pre>
+                        </div>
+                        <div class="actual-data">
+                            <strong>Actual:</strong>
+                            <pre class="data-content">${this.escapeHtml(JSON.stringify(result.data, null, 2))}</pre>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
         resultContainer.innerHTML = `
             <div class="result-header ${statusClass}">
                 <span class="status-icon">${statusIcon}</span>
@@ -634,7 +824,9 @@ class TestEngine {
                 </div>
             ` : ''}
             
-            ${result.data && typeof result.data === 'object' ? `
+            ${validationDetails}
+            
+            ${result.data && typeof result.data === 'object' && !result.expectedData ? `
                 <div class="response-data">
                     <button class="toggle-data-btn" onclick="this.nextElementSibling.classList.toggle('hidden')">
                         📋 View Response Data
@@ -1132,9 +1324,7 @@ class TestEngine {
         this.activeRequests.clear();
         
         console.log('🧹 Test Engine cleanup completed');
-    }
-
-    /**
+    }    /**
      * Update filter button counts in real-time
      */
     updateFilterCounts() {
@@ -1142,20 +1332,18 @@ class TestEngine {
             all: testCases.length,
             success: 0,
             failure: 0,
-            passed: 0,
-            failed: 0
+            security: 0
         };
         
         testCases.forEach(tc => {
             const testType = tc.dataset.type?.toLowerCase();
-            const testResult = tc.dataset.testResult?.toLowerCase();
+            const securityType = tc.dataset.securityType?.toLowerCase();
               if (testType === 'success') counts.success++;
             if (testType === 'failure') counts.failure++;
-            if (testResult === 'passed') counts.passed++;
-            if (testResult === 'failed') counts.failed++;
+            if (securityType || tc.classList.contains('security')) counts.security++;
         });
         
-        // Update filter button labels with counts
+        // Update filter button labels with counts (show original test case counts, not execution results)
         document.querySelectorAll('.filter-btn').forEach(btn => {
             const filter = btn.dataset.filter;
             const originalText = btn.textContent.split(' (')[0]; // Remove existing count
@@ -1163,10 +1351,11 @@ class TestEngine {
             if (filter === 'all') {
                 btn.textContent = `${originalText} (${counts.all})`;
             } else if (filter === 'success') {
-                const total = counts.success + counts.passed;
-                btn.textContent = `${originalText} (${total})`;            } else if (filter === 'failure') {
-                const total = counts.failure + counts.failed;
-                btn.textContent = `${originalText} (${total})`;
+                btn.textContent = `${originalText} (${counts.success})`;
+            } else if (filter === 'failure') {
+                btn.textContent = `${originalText} (${counts.failure})`;
+            } else if (filter === 'security') {
+                btn.textContent = `${originalText} (${counts.security})`;
             }
         });
     }
@@ -1527,14 +1716,138 @@ const advancedStyles = `
     @keyframes highlightResult {
         0% { background-color: #fff3cd; }
         100% { background-color: transparent; }
-    }
-
-    @keyframes pulse {
+    }    @keyframes pulse {
         0%, 100% { opacity: 1; }
         50% { opacity: 0.5; }
     }
 
-    @media (max-width: 768px) {
+    /* Data Validation Styles */
+    .validation-section {
+        margin-top: 15px;
+        padding: 15px;
+        background: #f8f9fa;
+        border-radius: 8px;
+        border-left: 4px solid #007bff;
+    }
+
+    .validation-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 12px;
+        font-weight: 600;
+    }
+
+    .validation-icon {
+        font-size: 1.2em;
+    }
+
+    .validation-text {
+        color: #495057;
+    }
+
+    .data-comparison {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 15px;
+        margin-top: 10px;
+    }
+
+    .expected-data,
+    .actual-data {
+        background: white;
+        border-radius: 6px;
+        padding: 12px;
+        border: 1px solid #dee2e6;
+    }
+
+    .expected-data strong,
+    .actual-data strong {
+        display: block;
+        margin-bottom: 8px;
+        font-size: 0.9em;
+        color: #6c757d;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .data-content {
+        background: #f8f9fa;
+        border-radius: 4px;
+        padding: 8px;
+        font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+        font-size: 0.85em;
+        line-height: 1.4;
+        color: #495057;
+        overflow-x: auto;
+        max-height: 200px;
+        overflow-y: auto;
+        white-space: pre-wrap;
+        word-break: break-word;
+    }
+
+    .expected-data {
+        border-left: 3px solid #28a745;
+    }
+
+    .expected-data .data-content {
+        background: #f8fff9;
+        border: 1px solid #d1f2d8;
+    }
+
+    .actual-data {
+        border-left: 3px solid #dc3545;
+    }
+
+    .actual-data .data-content {
+        background: #fff8f8;
+        border: 1px solid #f5d0d0;
+    }
+
+    .validation-section.success {
+        border-left-color: #28a745;
+        background: #f8fff9;
+    }
+
+    .validation-section.error {
+        border-left-color: #dc3545;
+        background: #fff8f8;
+    }
+
+    .toggle-data-btn {
+        background: #007bff;
+        color: white;
+        border: none;
+        padding: 8px 12px;
+        border-radius: 4px;
+        font-size: 0.9em;
+        cursor: pointer;
+        margin-bottom: 10px;
+        transition: background-color 0.2s ease;
+    }
+
+    .toggle-data-btn:hover {
+        background: #0056b3;
+    }
+
+    .response-content {
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+        padding: 12px;
+        font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+        font-size: 0.85em;
+        line-height: 1.4;
+        overflow-x: auto;
+        white-space: pre-wrap;
+        word-break: break-word;
+        max-height: 300px;
+        overflow-y: auto;
+    }
+
+    .hidden {
+        display: none;
+    }    @media (max-width: 768px) {
         .progress-header {
             flex-direction: column;
             align-items: stretch;
@@ -1556,6 +1869,15 @@ const advancedStyles = `
             left: 20px;
             right: 20px;
             min-width: auto;
+        }
+
+        .data-comparison {
+            grid-template-columns: 1fr;
+            gap: 10px;
+        }
+
+        .validation-section {
+            padding: 10px;
         }
     }
 `;

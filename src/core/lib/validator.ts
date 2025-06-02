@@ -28,7 +28,81 @@ export interface Schema {
     [key: string]: FieldSchema;
 }
 
-export class Validator {
+export class Validator {    // Security patterns to detect malicious input
+    private static securityPatterns = {
+        sqlInjection: [
+            /('|(\\')|(;)|(\-\-)|(\|)|(\*)|(%))/i,
+            /((\%3D)|(=))[^\n]*((\%27)|(\')|(\-\-)|(%3B)|(;))/i,
+            /\w*((\%27)|(\'))((\%6F)|o|(\%4F))((\%72)|r|(\%52))/i,
+            /((\%27)|(\'))union/i,
+            /exec(\s|\+)+(s|x)p\w+/i,
+            /(union[\s\w\(\)]*select)/i,
+            /(drop|delete|insert|update|create|alter|exec|execute)[\s]*(table|database|schema|index|view|procedure|function|trigger)/i,
+            /(\bor\b|\band\b)[\s]*(\w*[\s]*=[\s]*\w*|\w*[\s]*like[\s]*\w*)/i
+        ],
+        xss: [
+            /<script[\s\S]*?>[\s\S]*?<\/script>/gi,
+            /<iframe[\s\S]*?>[\s\S]*?<\/iframe>/gi,
+            /<object[\s\S]*?>[\s\S]*?<\/object>/gi,
+            /<embed[\s\S]*?>[\s\S]*?<\/embed>/gi,
+            /<link[\s\S]*?>/gi,
+            /<meta[\s\S]*?>/gi,
+            /javascript:/gi,
+            /vbscript:/gi,
+            /on\w+[\s]*=/gi,
+            /expression[\s]*\(/gi
+        ],
+        commandInjection: [
+            /(\||&|;|\$\(|\`|<|>)/,
+            /(cat|ls|pwd|whoami|id|uname|ps|netstat|ifconfig|ping|wget|curl|nc|ncat|nmap)[\s]/i
+        ]
+    };
+
+    // Check if value contains malicious patterns
+    private static detectSecurityThreats(value: any, fieldName: string): ValidationError[] {
+        const errors: ValidationError[] = [];
+        
+        if (typeof value !== 'string') return errors;
+        
+        // Check for SQL injection
+        for (const pattern of this.securityPatterns.sqlInjection) {
+            if (pattern.test(value)) {
+                errors.push({
+                    field: fieldName,
+                    message: `${fieldName} contains potentially malicious SQL injection patterns`,
+                    value
+                });
+                break;
+            }
+        }
+        
+        // Check for XSS
+        for (const pattern of this.securityPatterns.xss) {
+            if (pattern.test(value)) {
+                errors.push({
+                    field: fieldName,
+                    message: `${fieldName} contains potentially malicious XSS patterns`,
+                    value
+                });
+                break;
+            }
+        }
+        
+        // Check for command injection
+        for (const pattern of this.securityPatterns.commandInjection) {
+            if (pattern.test(value)) {
+                errors.push({
+                    field: fieldName,
+                    message: `${fieldName} contains potentially malicious command injection patterns`,
+                    value
+                });
+                break;
+            }
+        }
+        
+        return errors;
+    }
+
     private static validateField(value: any, fieldName: string, schema: FieldSchema): ValidationError[] {
         const errors: ValidationError[] = [];
 
@@ -208,6 +282,10 @@ export class Validator {
                 });
             }
         }
+
+        // 보안 검증
+        const securityErrors = this.detectSecurityThreats(value, fieldName);
+        errors.push(...securityErrors);
 
         return errors;
     }

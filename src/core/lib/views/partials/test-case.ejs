@@ -28,12 +28,16 @@
         <% } %>
     </div>
       <div class="test-actions">
-        <span class="test-badge <%= testCase.type %>"><%= testCase.type %></span>
-        <button class="run-test-btn" 
+        <span class="test-badge <%= testCase.type %>"><%= testCase.type %></span>        <button class="run-test-btn" 
                 data-method="<%= testCase.method %>" 
                 data-endpoint="<%= testCase.endpoint %>" 
                 data-test-data="<%- encodeURIComponent(JSON.stringify(testCase.data || {})) %>" 
                 data-expected-status="<%= testCase.expectedStatus %>" 
+                <% if (testCase.expectedData) { %>
+                data-expected-data="<%- encodeURIComponent(JSON.stringify(testCase.expectedData)) %>"
+                <% } else { %>
+                data-expected-data="null"
+                <% } %>
                 data-result-id="result-<%= suiteId %>-<%= index %>"
                 onclick="runTestFromButton(this)">
             Run Test

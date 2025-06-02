@@ -18,6 +18,7 @@ export interface TestCase {
         body?: any;
     };
     expectedStatus: number;
+    expectedData?: any; // Expected response data for validation
     expectedErrors?: string[];
     validationErrors?: string[];
     securityTestType?: string; // SQL injection, XSS, etc.
@@ -93,23 +94,48 @@ export class TestGenerator {
         testCases.push(...failureCases);
 
         return testCases;
-    }
-
-    /**
+    }    /**
      * 성공 케이스 생성
      */
     private static generateSuccessCase(route: RouteDocumentation): TestCase | null {
         const validData = this.generateValidData(route.parameters);
         
-        return {
+        // Determine expected status code from response schema
+        let expectedStatus = 200;
+        let expectedData = undefined;
+        
+        if (route.responses) {
+            // Find the success status code (2xx range)
+            const statusCodes = Object.keys(route.responses).map(Number);
+            const successStatusCode = statusCodes.find(code => code >= 200 && code < 300);
+            
+            if (successStatusCode) {
+                expectedStatus = successStatusCode;
+                const responseSchema = route.responses[successStatusCode];
+                
+                // Generate expected response data based on schema
+                if (responseSchema && typeof responseSchema === 'object') {
+                    expectedData = this.generateExpectedResponseData(responseSchema, validData);
+                }
+            }
+        }
+        
+        const testCase: TestCase = {
             name: `${route.method} ${route.path} - Success Case`,
             description: `Valid request with all required fields`,
             type: 'success',
             endpoint: route.path,
             method: route.method,
             data: validData,
-            expectedStatus: 200
+            expectedStatus
         };
+        
+        // Add expected data if available
+        if (expectedData) {
+            testCase.expectedData = expectedData;
+        }
+        
+        return testCase;
     }
 
     /**
@@ -436,9 +462,7 @@ export class TestGenerator {
         }
 
         return [];
-    }
-
-    /**
+    }    /**
      * 타입 검증 실패 케이스 생성
      */
     private static generateTypeValidationCases(
@@ -453,12 +477,29 @@ export class TestGenerator {
         if (!invalidData[location]) return cases;
 
         let invalidValue: any;
+        let shouldGenerateTypeCase = true;
+        
+        // For GET/HEAD requests with query parameters, we can't send non-string types
+        // since HTTP query parameters are always strings. Instead, generate constraint violations.
+        const isQueryParam = location === 'query' && ['GET', 'HEAD'].includes(route.method.toUpperCase());
         
         switch (fieldSchema.type) {
             case 'string':
             case 'email':
             case 'url':
-                invalidValue = 12345; // 숫자를 문자열 대신 사용
+                if (isQueryParam) {
+                    // For query parameters, generate a constraint violation instead
+                    if (fieldSchema.min !== undefined && fieldSchema.min > 0) {
+                        // Generate a string shorter than minimum length
+                        invalidValue = fieldSchema.min === 1 ? '' : 'x'.repeat(fieldSchema.min - 1);
+                        shouldGenerateTypeCase = true;
+                    } else {
+                        // Skip type validation for string query params without constraints
+                        shouldGenerateTypeCase = false;
+                    }
+                } else {
+                    invalidValue = 12345; // 숫자를 문자열 대신 사용
+                }
                 break;
             case 'number':
                 invalidValue = 'not-a-number'; // 문자열을 숫자 대신 사용
@@ -474,18 +515,30 @@ export class TestGenerator {
                 break;
         }
 
-        if (invalidValue !== undefined) {
+        if (invalidValue !== undefined && shouldGenerateTypeCase) {
             invalidData[location][fieldName] = invalidValue;
             
+            const testName = isQueryParam && (fieldSchema.type === 'string' || fieldSchema.type === 'email' || fieldSchema.type === 'url')
+                ? `${route.method} ${route.path} - Below Min Length for ${location}.${fieldName}`
+                : `${route.method} ${route.path} - Invalid Type for ${location}.${fieldName}`;
+                
+            const description = isQueryParam && (fieldSchema.type === 'string' || fieldSchema.type === 'email' || fieldSchema.type === 'url')
+                ? `Request with value below minimum length for ${location} parameter: ${fieldName}`
+                : `Request with invalid type for ${location} parameter: ${fieldName}`;
+                
+            const expectedError = isQueryParam && (fieldSchema.type === 'string' || fieldSchema.type === 'email' || fieldSchema.type === 'url')
+                ? `${fieldName} must be at least ${fieldSchema.min} characters/items`
+                : `${fieldName} must be of type ${fieldSchema.type}`;
+            
             cases.push({
-                name: `${route.method} ${route.path} - Invalid Type for ${location}.${fieldName}`,
-                description: `Request with invalid type for ${location} parameter: ${fieldName}`,
+                name: testName,
+                description: description,
                 type: 'failure',
                 endpoint: route.path,
                 method: route.method,
                 data: invalidData,
                 expectedStatus: 400,
-                validationErrors: [`${fieldName} must be of type ${fieldSchema.type}`]
+                validationErrors: [expectedError]
             });
         }
 
@@ -637,11 +690,60 @@ export class TestGenerator {
                 return Array.from({ length: arrayLength }, (_, i) => `item${i + 1}`);
 
             case 'object':
-                return { key: 'value', timestamp: new Date().toISOString() };
-
-            default:
+                return { key: 'value', timestamp: new Date().toISOString() };            default:
                 return 'test-value';
         }
+    }
+
+    /**
+     * 응답 스키마에 기반한 예상 응답 데이터 생성
+     */
+    private static generateExpectedResponseData(responseSchema: Schema, inputData?: any): any {
+        // For schema validation mode
+        if (Object.keys(responseSchema).every(key => typeof responseSchema[key] === 'string')) {
+            return {
+                mode: 'schema',
+                schema: responseSchema
+            };
+        }
+        
+        // Generate sample response data with partial matching for dynamic fields
+        const expectedData: any = {};
+        
+        for (const [fieldName, fieldSchema] of Object.entries(responseSchema)) {
+            if (fieldSchema.required) {
+                // For required fields, generate expected values
+                if (fieldName === 'id') {
+                    // ID fields should exist but value can vary
+                    expectedData[fieldName] = { type: 'number', required: true };
+                } else if (fieldName === 'createdAt' || fieldName === 'updatedAt' || fieldName === 'timestamp') {
+                    // Timestamp fields should exist but value can vary
+                    expectedData[fieldName] = { type: 'string', required: true, pattern: 'ISO8601' };
+                } else if (fieldName === 'message') {
+                    // Message fields often have predictable content
+                    if (inputData?.query?.name) {
+                        expectedData[fieldName] = `Hello ${inputData.query.name}!`;
+                    } else {
+                        expectedData[fieldName] = { type: 'string', required: true };
+                    }
+                } else if (fieldName === 'name' && inputData?.body?.name) {
+                    // Echo back input data
+                    expectedData[fieldName] = inputData.body.name;
+                } else if (fieldName === 'email' && inputData?.body?.email) {
+                    // Echo back input data
+                    expectedData[fieldName] = inputData.body.email;
+                } else {
+                    // Generate sample value for other required fields
+                    expectedData[fieldName] = this.generateValidFieldValue(fieldSchema);
+                }
+            }
+        }
+        
+        // Return as partial match mode for flexible validation
+        return {
+            mode: 'partial',
+            value: expectedData
+        };
     }
 
     /**

@@ -1,642 +1,198 @@
-// Test Report JavaScript Functions - Optimized Version
+/**
+ * Legacy compatibility layer for Advanced Test Engine
+ * This file now imports and initializes the advanced test engine
+ * while maintaining backward compatibility with existing templates
+ */
 
+// --- Advanced Test Engine Loader ---
+if (!window.testEngine) {
+    const script = document.createElement('script');
+    script.src = '/test-engine-advanced.js';
+    script.onload = () => console.log('✅ Advanced Test Engine loaded');
+    document.head.appendChild(script);
+}
+
+// --- State ---
 let currentFilter = 'all';
+let testStats = { total: 0, passed: 0, failed: 0, accuracy: 0 };
+const REQUEST_DELAY = 50;
 
-// Test execution tracking
-let testExecutionStats = {
-    total: 0,
-    current: 0,
-    passed: 0,
-    failed: 0,
-    accuracy: 0
-};
-
-// Performance optimization
-let requestQueue = [];
-let isProcessingQueue = false;
-const MAX_CONCURRENT_REQUESTS = 5;
-const REQUEST_DELAY = 50; // ms between requests
-
-// Initialize when DOM is loaded
-document.addEventListener('DOMContentLoaded', function() {
+// --- DOM Ready ---
+document.addEventListener('DOMContentLoaded', () => {
     const searchInput = document.getElementById('searchInput');
-    const filterButtons = document.querySelectorAll('.filter-btn');
-    
-    // Search functionality
-    if (searchInput) {
-        searchInput.addEventListener('input', debounce(performSearch, 300));
-    }
-    
-    // Filter buttons
-    filterButtons.forEach(button => {
-        button.addEventListener('click', function() {
-            setActiveFilter(this.dataset.filter);
-        });
-    });
-    
-    // Keyboard shortcuts
-    document.addEventListener('keydown', handleKeyboardShortcuts);
-    
-    // Initialize progress tracking
-    initializeProgressTracking();
-    
-    // Add failed tests filter button if not exists
-    addFailedTestsFilter();
+    if (searchInput) searchInput.addEventListener('input', debounce(performSearch, 300));
+    document.querySelectorAll('.filter-btn').forEach(btn =>
+        btn.addEventListener('click', () => setActiveFilter(btn.dataset.filter))
+    );
+    document.addEventListener('keydown', handleShortcuts);
+    initProgress();
 });
 
-// Initialize progress tracking display - UNIFIED VERSION
-function initializeProgressTracking() {
-    // Count test cases
+// --- Progress UI ---
+function initProgress() {
     const testCases = document.querySelectorAll('.test-case');
-    testExecutionStats.total = testCases.length;
-    testExecutionStats.current = 0;
-    testExecutionStats.passed = 0;
-    testExecutionStats.failed = 0;
-    testExecutionStats.accuracy = 0;
-    
-    // Create progress container if it doesn't exist
-    let progressContainer = document.getElementById('progress-container');
-    if (!progressContainer) {
-        progressContainer = document.createElement('div');
-        progressContainer.id = 'progress-container';
-        progressContainer.className = 'progress-container';
-        progressContainer.style.cssText = `
-            display: block !important;
-            visibility: visible !important;
-            opacity: 1 !important;
-            margin: 20px 0;
-            padding: 20px;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            background: #f8f9fa;
-        `;
-        
-        progressContainer.innerHTML = `
-            <div class="progress-header">
-                <h3>🧪 Test Execution Progress</h3>
-                <button id="toggle-failed-only" class="btn btn-secondary" onclick="toggleFailedTestsOnly()">
-                    Show Failed Tests Only
-                </button>
-            </div>
-            <div class="progress-bar-container" style="position: relative; background: #e9ecef; height: 20px; border-radius: 10px; margin: 15px 0;">
-                <div id="progress-bar" class="progress-bar" style="height: 100%; background: #28a745; border-radius: 10px; width: 0%; transition: width 0.3s ease;"></div>
-                <div id="progress-text" class="progress-text" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-weight: bold; font-size: 12px;">0/0 tests completed</div>
-            </div>
-            <div class="stats-container" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-top: 15px;">
-                <div class="stat-item" style="text-align: center; padding: 10px; border: 1px solid #ddd; border-radius: 5px;">
-                    <span class="stat-label" style="display: block; font-size: 12px; color: #666;">Passed:</span>
-                    <span id="stat-passed" class="stat-value stat-passed" style="display: block; font-size: 18px; font-weight: bold; color: #28a745;">0</span>
-                </div>
-                <div class="stat-item" style="text-align: center; padding: 10px; border: 1px solid #ddd; border-radius: 5px;">
-                    <span class="stat-label" style="display: block; font-size: 12px; color: #666;">Failed:</span>
-                    <span id="stat-failed" class="stat-value stat-failed" style="display: block; font-size: 18px; font-weight: bold; color: #dc3545;">0</span>
-                </div>
-                <div class="stat-item" style="text-align: center; padding: 10px; border: 1px solid #ddd; border-radius: 5px;">
-                    <span class="stat-label" style="display: block; font-size: 12px; color: #666;">Accuracy:</span>
-                    <span id="stat-accuracy" class="stat-value" style="display: block; font-size: 18px; font-weight: bold; color: #007bff;">0%</span>
-                </div>
-            </div>
-            <div id="test-summary" class="test-summary" style="margin-top: 15px; padding: 15px; background: white; border-radius: 5px; display: none;">
-                <h4>📊 Test Results Summary</h4>
-                <div id="summary-details"></div>
-            </div>
-        `;
-        
-        // Insert after filter controls or at the top
-        const filterControls = document.querySelector('.filter-controls');
-        if (filterControls) {
-            filterControls.parentNode.insertBefore(progressContainer, filterControls.nextSibling);
-        } else {
-            const container = document.querySelector('.container') || document.body;
-            const firstChild = container.firstChild;
-            container.insertBefore(progressContainer, firstChild);
-        }
-    }
-    
-    // Force visibility
-    progressContainer.style.display = 'block';
-    progressContainer.style.visibility = 'visible';
-    progressContainer.style.opacity = '1';
-    
-    // Initialize display
-    updateProgressDisplay();
+    testStats.total = testCases.length;
+    testStats.passed = 0;
+    testStats.failed = 0;
+    testStats.accuracy = 0;
+    updateProgress();
 }
-
-// Update progress display - UNIFIED VERSION
-function updateProgressDisplay() {
-    const progressContainer = document.getElementById('progress-container');
-    const progressBar = document.getElementById('progress-bar');
-    const progressText = document.getElementById('progress-text');
+function updateProgress() {
+    const completed = testStats.passed + testStats.failed;
+    testStats.accuracy = completed ? Math.round((testStats.passed / completed) * 100) : 0;
+    const bar = document.getElementById('progress-bar');
+    if (bar) bar.style.width = `${testStats.total ? Math.round((completed / testStats.total) * 100) : 0}%`;
+    const txt = document.getElementById('progress-text');
+    if (txt) txt.textContent = `${completed}/${testStats.total} tests completed`;
     const statPassed = document.getElementById('stat-passed');
+    if (statPassed) statPassed.textContent = testStats.passed;
     const statFailed = document.getElementById('stat-failed');
+    if (statFailed) statFailed.textContent = testStats.failed;
     const statAccuracy = document.getElementById('stat-accuracy');
-    
-    if (!progressContainer) {
-        console.warn('Progress container not found');
-        return;
-    }
-    
-    // Force visibility
-    progressContainer.style.display = 'block';
-    progressContainer.style.visibility = 'visible';
-    progressContainer.style.opacity = '1';
-    
-    const { total, current, passed, failed } = testExecutionStats;
-    const completed = passed + failed;
-    const progressPercent = total > 0 ? Math.round((completed / total) * 100) : 0;
-    const accuracy = completed > 0 ? Math.round((passed / completed) * 100) : 0;
-    
-    // Update testExecutionStats
-    testExecutionStats.current = completed;
-    testExecutionStats.accuracy = accuracy;
-    
-    // Update progress bar
-    if (progressBar) {
-        progressBar.style.width = `${progressPercent}%`;
-        
-        // Color based on accuracy
-        if (accuracy >= 80) {
-            progressBar.style.background = 'linear-gradient(90deg, #28a745 0%, #20c997 100%)';
-        } else if (accuracy >= 60) {
-            progressBar.style.background = 'linear-gradient(90deg, #ffc107 0%, #fd7e14 100%)';
-        } else {
-            progressBar.style.background = 'linear-gradient(90deg, #dc3545 0%, #e83e8c 100%)';
-        }
-    }
-    
-    // Update text
-    if (progressText) {
-        progressText.textContent = `${completed}/${total} tests completed`;
-    }
-    
-    // Update stats
-    if (statPassed) statPassed.textContent = passed;
-    if (statFailed) statFailed.textContent = failed;
-    if (statAccuracy) {
-        statAccuracy.textContent = `${accuracy}%`;
-        const color = accuracy >= 80 ? '#28a745' : accuracy >= 60 ? '#ffc107' : '#dc3545';
-        statAccuracy.style.color = color;
-    }
-    
-    // Show summary when tests are complete
-    if (completed >= total && total > 0) {
-        showTestSummary();
-    }
+    if (statAccuracy) statAccuracy.textContent = `${testStats.accuracy}%`;
 }
 
-// Show test summary
-function showTestSummary() {
-    const testSummary = document.getElementById('test-summary');
-    const summaryDetails = document.getElementById('summary-details');
-    
-    if (testSummary && summaryDetails) {
-        const { total, passed, failed, accuracy } = testExecutionStats;
-        
-        let emoji = accuracy >= 80 ? '🎉' : accuracy >= 60 ? '⚠️' : '❌';
-        let message = accuracy >= 80 ? 'Excellent!' : accuracy >= 60 ? 'Good progress!' : 'Needs attention!';
-        
-        summaryDetails.innerHTML = `
-            <p><strong>${emoji} ${message}</strong></p>
-            <p>Total Tests: <strong>${total}</strong></p>
-            <p>Passed: <strong style="color: #28a745;">${passed}</strong></p>
-            <p>Failed: <strong style="color: #dc3545;">${failed}</strong></p>
-            <p>Success Rate: <strong style="color: ${accuracy >= 80 ? '#28a745' : accuracy >= 60 ? '#ffc107' : '#dc3545'};">${accuracy}%</strong></p>
-        `;
-        
-        testSummary.style.display = 'block';
-        
-        // Show notification
-        showTestCompletionNotification();
-    }
-}
-
-// Show completion notification
-function showTestCompletionNotification() {
-    const { passed, failed, accuracy } = testExecutionStats;
-    const total = passed + failed;
-    
-    let message, bgColor;
-    if (accuracy >= 80) {
-        message = `🎉 Excellent! ${passed}/${total} tests passed (${accuracy}% accuracy)`;
-        bgColor = '#28a745';
-    } else if (accuracy >= 60) {
-        message = `⚠️ Good progress! ${passed}/${total} tests passed (${accuracy}% accuracy)`;
-        bgColor = '#ffc107';
-    } else {
-        message = `❌ Needs attention! ${passed}/${total} tests passed (${accuracy}% accuracy)`;
-        bgColor = '#dc3545';
-    }
-    
-    // Create notification
-    const notification = document.createElement('div');
-    notification.style.cssText = `
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        background: ${bgColor};
-        color: white;
-        padding: 15px 20px;
-        border-radius: 8px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        z-index: 10000;
-        font-weight: bold;
-        max-width: 300px;
-        animation: slideIn 0.3s ease-out;
-    `;
-    
-    notification.textContent = message;
-    document.body.appendChild(notification);
-    
-    // Auto remove after 5 seconds
-    setTimeout(() => {
-        notification.style.animation = 'fadeOut 0.3s ease-out forwards';
-        setTimeout(() => notification.remove(), 300);
-    }, 5000);
-}
-
-// Optimized HTTP request queue system
-function addToRequestQueue(requestFunction) {
-    return new Promise((resolve, reject) => {
-        requestQueue.push({ requestFunction, resolve, reject });
-        processRequestQueue();
-    });
-}
-
-async function processRequestQueue() {
-    if (isProcessingQueue || requestQueue.length === 0) return;
-    
-    isProcessingQueue = true;
-    const activeBatches = [];
-    
-    while (requestQueue.length > 0 || activeBatches.length > 0) {
-        // Start new requests up to the concurrent limit
-        while (activeBatches.length < MAX_CONCURRENT_REQUESTS && requestQueue.length > 0) {
-            const { requestFunction, resolve, reject } = requestQueue.shift();
-            
-            const batchPromise = (async () => {
-                try {
-                    const result = await requestFunction();
-                    resolve(result);
-                    return result;
-                } catch (error) {
-                    reject(error);
-                    throw error;
-                } finally {
-                    // Add delay between requests to prevent overwhelming the server
-                    if (requestQueue.length > 0 || activeBatches.length > 1) {
-                        await new Promise(resolve => setTimeout(resolve, REQUEST_DELAY));
-                    }
-                }
-            })();
-            
-            activeBatches.push(batchPromise);
-        }
-        
-        // Wait for at least one batch to complete
-        if (activeBatches.length > 0) {
-            try {
-                await Promise.race(activeBatches);
-            } catch (error) {
-                console.warn('Request batch error:', error);
-            }
-            
-            // Remove completed batches
-            for (let i = activeBatches.length - 1; i >= 0; i--) {
-                const batch = activeBatches[i];
-                const isCompleted = await Promise.race([
-                    batch.then(() => true, () => true),
-                    new Promise(resolve => setTimeout(() => resolve(false), 0))
-                ]);
-                
-                if (isCompleted) {
-                    activeBatches.splice(i, 1);
-                }
-            }
-        }
-    }
-    
-    isProcessingQueue = false;
-}
-
-// Optimized HTTP request function
-async function makeOptimizedRequest(url, options = {}) {
-    const requestFunction = async () => {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
-        
-        try {
-            const response = await fetch(url, {
-                ...options,
-                signal: controller.signal,
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...options.headers
-                }
-            });
-            
-            clearTimeout(timeoutId);
-            
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
-            
-            return await response.json();
-        } catch (error) {
-            clearTimeout(timeoutId);
-            if (error.name === 'AbortError') {
-                throw new Error('Request timeout');
-            }
-            throw error;
-        }
-    };
-    
-    return addToRequestQueue(requestFunction);
-}
-
-// Enhanced test running functions
+// --- Test Execution ---
 async function runTest(button) {
-    if (!button || typeof button.closest !== 'function') {
-        console.error('Invalid button element provided to runTest');
-        return;
-    }
-    
     const testCase = button.closest('.test-case');
-    if (!testCase) {
-        console.error('Test case container not found');
-        return;
-    }
-    
+    if (!testCase) return;
+    button.disabled = true;
+    button.textContent = 'Running...';
+    button.classList.add('running');
     try {
-        // Update button state
-        button.disabled = true;
-        button.textContent = 'Running...';
-        button.classList.add('running');
-        
-        // Extract test data
-        const testData = extractTestData(testCase);
-        if (!testData) {
-            throw new Error('Failed to extract test data');
-        }
-        
-        // Make request using optimized queue
-        const result = await makeOptimizedRequest(testData.endpoint, {
-            method: testData.method,
-            body: testData.body
-        });
-        
-        // Update test result
-        updateTestResult(testCase, true, result);
-        testExecutionStats.passed++;
-        
-    } catch (error) {
-        console.error('Test execution failed:', error);
-        updateTestResult(testCase, false, { error: error.message });
-        testExecutionStats.failed++;
+        const { method, endpoint, body, expectedStatus } = extractTestData(testCase);
+        const options = { method, headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' } };
+        if (body && !['GET','HEAD'].includes(method.toUpperCase())) options.body = body;
+        const res = await fetch(endpoint, options);
+        const status = res.status;
+        const data = await (res.headers.get('content-type')?.includes('json') ? res.json() : res.text());
+        const success = (status >= 200 && status < 300) || status === expectedStatus;
+        updateTestResult(testCase, success, { status, data });
+        if (success) testStats.passed++; else testStats.failed++;
+    } catch (e) {
+        updateTestResult(testCase, false, { error: e.message });
+        testStats.failed++;
     } finally {
-        // Reset button state
         button.disabled = false;
         button.textContent = 'Run Test';
         button.classList.remove('running');
-        
-        // Update progress
-        updateProgressDisplay();
+        updateProgress();
     }
 }
+function runTestFromButton(btn) { runTest(btn); }
 
-// Extract test data from test case element
-function extractTestData(testCase) {
-    try {
-        const methodElement = testCase.querySelector('.method');
-        const endpointElement = testCase.querySelector('.endpoint');
-        const bodyElement = testCase.querySelector('.request-body');
-        
-        if (!methodElement || !endpointElement) {
-            throw new Error('Missing required test data elements');
-        }
-        
-        const method = methodElement.textContent.trim();
-        const endpoint = endpointElement.textContent.trim();
-        
-        let body = null;
-        if (bodyElement && bodyElement.textContent.trim()) {
-            try {
-                // Handle URL-encoded data
-                const bodyText = decodeURIComponent(bodyElement.textContent.trim());
-                body = bodyText === '{}' ? null : JSON.stringify(JSON.parse(bodyText));
-            } catch (parseError) {
-                console.warn('Failed to parse request body:', parseError);
-                body = bodyElement.textContent.trim();
-            }
-        }
-        
-        return { method, endpoint, body };
-    } catch (error) {
-        console.error('Error extracting test data:', error);
-        return null;
-    }
-}
-
-// Update test result display
-function updateTestResult(testCase, success, result) {
-    const statusElement = testCase.querySelector('.status');
-    const responseElement = testCase.querySelector('.response');
-    
-    if (statusElement) {
-        statusElement.textContent = success ? '✅ PASS' : '❌ FAIL';
-        statusElement.className = `status ${success ? 'pass' : 'fail'}`;
-        statusElement.style.color = success ? '#28a745' : '#dc3545';
-        statusElement.style.fontWeight = 'bold';
-    }
-    
-    if (responseElement) {
-        responseElement.textContent = JSON.stringify(result, null, 2);
-        responseElement.style.color = success ? '#28a745' : '#dc3545';
-    }
-}
-
-// Run all tests with optimized batching
 async function runAllTests() {
-    const runButtons = document.querySelectorAll('.run-test-btn:not([disabled])');
-    
-    if (runButtons.length === 0) {
-        alert('No tests available to run');
-        return;
+    const buttons = Array.from(document.querySelectorAll('.run-test-btn')).filter(btn => btn.closest('.test-case')?.style.display !== 'none');
+    if (!buttons.length) return alert('No tests found.');
+    testStats.passed = 0; testStats.failed = 0; updateProgress();
+    expandAll();
+    for (const btn of buttons) {
+        await runTest(btn);
+        await new Promise(r => setTimeout(r, REQUEST_DELAY));
     }
-    
-    // Reset stats
-    testExecutionStats.passed = 0;
-    testExecutionStats.failed = 0;
-    testExecutionStats.current = 0;
-    
-    // Force progress container to be visible
-    const progressContainer = document.getElementById('progress-container');
-    if (progressContainer) {
-        progressContainer.style.display = 'block';
-        progressContainer.style.visibility = 'visible';
-        progressContainer.style.opacity = '1';
+    showTestSummary();
+}
+
+// --- Test Data ---
+function toggleTestData(testId) {
+    const el = document.getElementById(`data-${testId}`);
+    const icon = el?.parentElement.querySelector('.expand-icon');
+    if (el) {
+        const show = el.style.display !== 'block';
+        el.style.display = show ? 'block' : 'none';
+        if (icon) icon.textContent = show ? '▲' : '▼';
     }
-    
-    updateProgressDisplay();
-    
-    // Convert NodeList to Array and run tests
-    const testPromises = Array.from(runButtons).map(button => runTest(button));
-    
+}
+function copyTestData(encoded) {
     try {
-        await Promise.allSettled(testPromises);
-        console.log('All tests completed');
-    } catch (error) {
-        console.error('Error running tests:', error);
+        const data = decodeURIComponent(encoded);
+        navigator.clipboard.writeText(data).then(() => notify('📋 Test data copied!'));
+    } catch { notify('Failed to copy test data', true); }
+}
+function extractTestData(testCase) {
+    const btn = testCase.querySelector('.run-test-btn');
+    const method = btn.dataset.method;
+    const endpoint = btn.dataset.endpoint;
+    const testDataAttr = btn.dataset.testData;
+    const expectedStatus = parseInt(btn.dataset.expectedStatus) || 200;
+    let body = null;
+    if (!['GET','HEAD'].includes(method.toUpperCase()) && testDataAttr && testDataAttr !== 'null') {
+        try {
+            const parsed = JSON.parse(decodeURIComponent(testDataAttr));
+            if (Object.keys(parsed).length) body = JSON.stringify(parsed);
+        } catch {}
     }
+    return { method, endpoint, body, expectedStatus };
 }
 
-// Utility functions
-function debounce(func, wait) {
-    let timeout;
-    return function executedFunction(...args) {
-        const later = () => {
-            clearTimeout(timeout);
-            func(...args);
-        };
-        clearTimeout(timeout);
-        timeout = setTimeout(later, wait);
-    };
+// --- UI Helpers ---
+function updateTestResult(testCase, success, result) {
+    const btn = testCase.querySelector('.run-test-btn');
+    const resultId = btn.dataset.resultId;
+    const el = document.getElementById(resultId);
+    if (!el) return;
+    el.style.display = 'block';
+    el.innerHTML = `<div style="margin:10px 0;padding:15px;border-left:4px solid ${success ? '#28a745' : '#dc3545'};background:${success ? '#f8fff9' : '#fff8f8'};"><div style="color:${success ? '#28a745' : '#dc3545'};font-weight:bold;margin-bottom:10px;">${success ? '✅ PASS' : '❌ FAIL'}</div>${result.error ? `<div style='color:#dc3545;'><strong>Error:</strong> ${result.error}</div>` : `<div style='margin-bottom:10px;'><strong>Status:</strong> ${result.status || 'N/A'}<br><strong>Response:</strong> <pre style='background:#f8f9fa;padding:10px;border-radius:4px;overflow:auto;max-height:200px;'>${JSON.stringify(result.data, null, 2)}</pre></div>`}</div>`;
+}
+function showTestSummary() {
+    const el = document.getElementById('test-summary');
+    const details = document.getElementById('summary-details');
+    if (!el || !details) return;
+    const { total, passed, failed, accuracy } = testStats;
+    let emoji = accuracy >= 80 ? '🎉' : accuracy >= 60 ? '⚠️' : '❌';
+    let msg = accuracy >= 80 ? 'Excellent!' : accuracy >= 60 ? 'Good progress!' : 'Needs attention!';
+    details.innerHTML = `<p><strong>${emoji} ${msg}</strong></p><p>Total: <strong>${total}</strong></p><p>Passed: <strong style='color:#28a745;'>${passed}</strong></p><p>Failed: <strong style='color:#dc3545;'>${failed}</strong></p><p>Success Rate: <strong style='color:${accuracy >= 80 ? '#28a745' : accuracy >= 60 ? '#ffc107' : '#dc3545'};'>${accuracy}%</strong></p>`;
+    el.style.display = 'block';
+    notify(`${emoji} ${msg} ${passed}/${total} passed (${accuracy}%)`);
+}
+function notify(msg, error) {
+    const n = document.createElement('div');
+    n.style.cssText = `position:fixed;top:20px;right:20px;background:${error ? '#dc3545' : '#28a745'};color:white;padding:10px 15px;border-radius:5px;z-index:10000;font-size:14px;`;
+    n.textContent = msg;
+    document.body.appendChild(n);
+    setTimeout(() => n.remove(), 2000);
 }
 
-function performSearch() {
-    const searchInput = document.getElementById('searchInput');
-    if (!searchInput) return;
-    
-    const searchTerm = searchInput.value.toLowerCase();
-    const testCases = document.querySelectorAll('.test-case');
-    
-    testCases.forEach(testCase => {
-        const text = testCase.textContent.toLowerCase();
-        const shouldShow = text.includes(searchTerm);
-        testCase.style.display = shouldShow ? 'block' : 'none';
+// --- Bulk Actions ---
+function expandAll() {
+    document.querySelectorAll('.route-group-content,.suite-content,.data-content').forEach(el => {
+        el.style.display = 'block';
+        const icon = el.previousElementSibling?.querySelector('.collapse-icon, .expand-icon');
+        if (icon) icon.textContent = icon.classList.contains('expand-icon') ? '▲' : '▼';
+    });
+}
+function collapseAll() {
+    document.querySelectorAll('.route-group-content,.suite-content,.data-content').forEach(el => {
+        el.style.display = 'none';
+        const icon = el.previousElementSibling?.querySelector('.collapse-icon, .expand-icon');
+        if (icon) icon.textContent = icon.classList.contains('expand-icon') ? '▼' : '▶';
     });
 }
 
+// --- Search/Filter ---
+function debounce(fn, wait) {
+    let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), wait); };
+}
+function performSearch() {
+    const v = document.getElementById('searchInput')?.value.toLowerCase() || '';
+    document.querySelectorAll('.test-case').forEach(tc => {
+        tc.style.display = tc.textContent.toLowerCase().includes(v) ? 'block' : 'none';
+    });
+}
 function setActiveFilter(filter) {
     currentFilter = filter;
-    const filterButtons = document.querySelectorAll('.filter-btn');
-    
-    filterButtons.forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.filter === filter);
-    });
-    
+    document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.filter === filter));
     filterTestCases();
 }
-
 function filterTestCases() {
-    const testCases = document.querySelectorAll('.test-case');
-    
-    testCases.forEach(testCase => {
-        const method = testCase.querySelector('.method')?.textContent.toLowerCase();
-        const shouldShow = currentFilter === 'all' || method === currentFilter;
-        testCase.style.display = shouldShow ? 'block' : 'none';
+    document.querySelectorAll('.test-case').forEach(tc => {
+        const method = tc.querySelector('.method')?.textContent.toLowerCase();
+        tc.style.display = currentFilter === 'all' || method === currentFilter ? 'block' : 'none';
     });
 }
-
-function handleKeyboardShortcuts(event) {
-    if (event.ctrlKey || event.metaKey) {
-        switch(event.key) {
-            case 'Enter':
-                event.preventDefault();
-                runAllTests();
-                break;
-            case 'f':
-                event.preventDefault();
-                const searchInput = document.getElementById('searchInput');
-                if (searchInput) searchInput.focus();
-                break;
-        }
-    }
+function handleShortcuts(e) {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); runAllTests(); }
+    if ((e.ctrlKey || e.metaKey) && e.key === 'f') { e.preventDefault(); document.getElementById('searchInput')?.focus(); }
 }
 
-// Failed tests filter functionality
-let showFailedOnly = false;
-function toggleFailedTestsOnly() {
-    showFailedOnly = !showFailedOnly;
-    const toggleBtn = document.getElementById('toggle-failed-only');
-    
-    if (showFailedOnly) {
-        toggleBtn.textContent = 'Show All Tests';
-        toggleBtn.classList.add('active');
-        showOnlyFailedTests();
-    } else {
-        toggleBtn.textContent = 'Show Failed Tests Only';
-        toggleBtn.classList.remove('active');
-        showAllTests();
-    }
-}
-
-function showOnlyFailedTests() {
-    const testCases = document.querySelectorAll('.test-case');
-    testCases.forEach(testCase => {
-        const status = testCase.querySelector('.status');
-        const isFailed = status && status.textContent.includes('FAIL');
-        testCase.style.display = isFailed ? 'block' : 'none';
-    });
-}
-
-function showAllTests() {
-    const testCases = document.querySelectorAll('.test-case');
-    testCases.forEach(testCase => {
-        testCase.style.display = 'block';
-    });
-    filterTestCases(); // Reapply current filter
-}
-
-function addFailedTestsFilter() {
-    const existingBtn = document.getElementById('toggle-failed-only');
-    if (existingBtn) return; // Already exists
-    
-    const progressContainer = document.getElementById('progress-container');
-    if (!progressContainer) return;
-    
-    const button = document.createElement('button');
-    button.id = 'toggle-failed-only';
-    button.className = 'btn btn-secondary';
-    button.textContent = 'Show Failed Tests Only';
-    button.onclick = toggleFailedTestsOnly;
-    
-    const header = progressContainer.querySelector('.progress-header');
-    if (header) {
-        header.appendChild(button);
-    }
-}
-
-// CSS animations
-const style = document.createElement('style');
-style.textContent = `
-    @keyframes slideIn {
-        from { transform: translateX(100%); opacity: 0; }
-        to { transform: translateX(0); opacity: 1; }
-    }
-    
-    @keyframes fadeOut {
-        from { opacity: 1; }
-        to { opacity: 0; }
-    }
-    
-    .progress-container {
-        animation: fadeIn 0.3s ease-in;
-    }
-    
-    @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(-10px); }
-        to { opacity: 1; transform: translateY(0); }
-    }
-    
-    .run-test-btn.running {
-        background: #ffc107 !important;
-        cursor: not-allowed;
-    }
-    
-    .stat-value {
-        transition: color 0.3s ease;
-    }
-`;
-document.head.appendChild(style);
-
-console.log('Test scripts optimized version loaded successfully');
+console.log('Test scripts optimized version loaded.');

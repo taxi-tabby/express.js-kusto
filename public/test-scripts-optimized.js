@@ -345,7 +345,8 @@ function performSearch() {
             const testResult = tc.dataset.testResult?.toLowerCase();
             
             if (currentFilter === 'success') {
-                shouldShow = testType === 'success' || testResult === 'passed';            } else if (currentFilter === 'failure') {
+                shouldShow = testType === 'success' || testResult === 'passed';            
+            } else if (currentFilter === 'failure') {
                 shouldShow = testType === 'failure' || testResult === 'failed';
             } else {
                 shouldShow = testType === currentFilter;
@@ -390,7 +391,8 @@ function filterTestCases() {
             
             if (currentFilter === 'success') {
                 // Show success tests OR tests that have passed
-                shouldShow = testType === 'success' || testResult === 'passed';            } else if (currentFilter === 'failure') {
+                shouldShow = testType === 'success' || testResult === 'passed';            
+            } else if (currentFilter === 'failure') {
                 // Show failure tests OR tests that have failed
                 shouldShow = testType === 'failure' || testResult === 'failed';
             } else {
@@ -444,7 +446,8 @@ function updateFilterCounts() {
             btn.textContent = `${originalText} (${counts.all})`;
         } else if (filter === 'success') {
             const total = counts.success + counts.passed;
-            btn.textContent = `${originalText} (${total})`;        } else if (filter === 'failure') {
+            btn.textContent = `${originalText} (${total})`;        
+        } else if (filter === 'failure') {
             const total = counts.failure + counts.failed;
             btn.textContent = `${originalText} (${total})`;
         }

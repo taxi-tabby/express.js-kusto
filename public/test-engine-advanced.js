@@ -458,6 +458,12 @@ class TestEngine {
         const testData = this.extractTestData(testCase);
         if (!testData) {
             throw new Error('Failed to extract test data');
+        }        // Check if this test was already executed and adjust stats accordingly
+        const previousResult = testCase.dataset.testResult;
+        if (previousResult === 'passed') {
+            this.state.stats.passed = Math.max(0, this.state.stats.passed - 1);
+        } else if (previousResult === 'failed') {
+            this.state.stats.failed = Math.max(0, this.state.stats.failed - 1);
         }
 
         // Update UI state
@@ -669,14 +675,17 @@ class TestEngine {
         if (testButtons.length === 0) {
             this.showNotification('No visible tests found to run', 'warning');
             return;
-        }
-
-        // Reset stats
+        }        // Reset stats
         this.state.stats = {
             ...this.createInitialStats(),
             total: testButtons.length,
             startTime: Date.now()
         };
+
+        // Clear all previous test results
+        document.querySelectorAll('.test-case').forEach(testCase => {
+            delete testCase.dataset.testResult;
+        });
 
         // Expand all for better visibility
         this.expandAll();

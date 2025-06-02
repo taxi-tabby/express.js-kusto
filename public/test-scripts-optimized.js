@@ -102,6 +102,15 @@ async function runTest(button) {
     button.disabled = true;
     button.textContent = 'Running...';
     button.classList.add('running');
+    
+    // Check if this test was already executed and adjust stats accordingly
+    const previousResult = testCase.dataset.testResult;
+    if (previousResult === 'passed') {
+        testStats.passed = Math.max(0, testStats.passed - 1);
+    } else if (previousResult === 'failed') {
+        testStats.failed = Math.max(0, testStats.failed - 1);
+    }
+    
     try {
         const { method, endpoint, body, expectedStatus } = extractTestData(testCase);
         console.log(`테스트 실행:`, { method, endpoint, body, expectedStatus });
@@ -142,7 +151,17 @@ function runTestFromButton(btn) { runTest(btn); }
 async function runAllTests() {
     const buttons = Array.from(document.querySelectorAll('.run-test-btn')).filter(btn => btn.closest('.test-case')?.style.display !== 'none');
     if (!buttons.length) return alert('No tests found.');
-    testStats.passed = 0; testStats.failed = 0; updateProgress();
+    
+    // Reset stats completely for "Run All Tests"
+    testStats.passed = 0; 
+    testStats.failed = 0; 
+    
+    // Clear all previous test results
+    document.querySelectorAll('.test-case').forEach(testCase => {
+        delete testCase.dataset.testResult;
+    });
+    
+    updateProgress();
     expandAll();
     for (const btn of buttons) {
         await runTest(btn);

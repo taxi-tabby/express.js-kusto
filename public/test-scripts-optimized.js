@@ -103,8 +103,18 @@ async function runTest(button) {
     button.classList.add('running');
     try {
         const { method, endpoint, body, expectedStatus } = extractTestData(testCase);
-        const options = { method, headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' } };
-        if (body && !['GET','HEAD'].includes(method.toUpperCase())) options.body = body;
+        console.log(`테스트 실행:`, { method, endpoint, body, expectedStatus });
+        
+        const options = { method };
+        
+        // GET/HEAD 요청은 body와 Content-Type 헤더를 제거
+        if (['GET', 'HEAD'].includes(method.toUpperCase())) {
+            options.headers = { 'Accept': 'application/json' };
+        } else {
+            options.headers = { 'Content-Type': 'application/json', 'Accept': 'application/json' };
+            if (body) options.body = body;
+        }
+        
         const res = await fetch(endpoint, options);
         const status = res.status;
         const data = await (res.headers.get('content-type')?.includes('json') ? res.json() : res.text());
@@ -154,16 +164,61 @@ function copyTestData(encoded) {
 function extractTestData(testCase) {
     const btn = testCase.querySelector('.run-test-btn');
     const method = btn.dataset.method;
-    const endpoint = btn.dataset.endpoint;
+    let endpoint = btn.dataset.endpoint;
     const testDataAttr = btn.dataset.testData;
     const expectedStatus = parseInt(btn.dataset.expectedStatus) || 200;
     let body = null;
-    if (!['GET','HEAD'].includes(method.toUpperCase()) && testDataAttr && testDataAttr !== 'null') {
+    
+    if (testDataAttr && testDataAttr !== 'null' && testDataAttr !== '{}') {
         try {
             const parsed = JSON.parse(decodeURIComponent(testDataAttr));
-            if (Object.keys(parsed).length) body = JSON.stringify(parsed);
-        } catch {}
+            
+            if (Object.keys(parsed).length > 0) {
+                const methodUpper = method.toUpperCase();
+                
+                // GET/HEAD 요청의 경우 query 파라미터로 처리
+                if (['GET', 'HEAD'].includes(methodUpper)) {
+                    if (parsed.query) {
+                        // query 객체가 있는 경우
+                        const queryParams = new URLSearchParams();
+                        Object.entries(parsed.query).forEach(([key, value]) => {
+                            queryParams.append(key, String(value));
+                        });
+                        endpoint += (endpoint.includes('?') ? '&' : '?') + queryParams.toString();
+                    } else {
+                        // 직접 query 파라미터로 변환
+                        const queryParams = new URLSearchParams();
+                        Object.entries(parsed).forEach(([key, value]) => {
+                            queryParams.append(key, String(value));
+                        });
+                        endpoint += (endpoint.includes('?') ? '&' : '?') + queryParams.toString();
+                    }
+                } else {
+                    // POST/PUT/PATCH 등의 경우 body로 처리
+                    if (parsed.query) {
+                        // query 객체가 있으면 query 파라미터로, 나머지는 body로
+                        const queryParams = new URLSearchParams();
+                        Object.entries(parsed.query).forEach(([key, value]) => {
+                            queryParams.append(key, String(value));
+                        });
+                        endpoint += (endpoint.includes('?') ? '&' : '?') + queryParams.toString();
+                        
+                        // body 데이터가 있으면 body로 설정
+                        const bodyData = { ...parsed };
+                        delete bodyData.query;
+                        if (Object.keys(bodyData).length > 0) {
+                            body = JSON.stringify(bodyData);
+                        }
+                    } else {
+                        body = JSON.stringify(parsed);
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('테스트 데이터 파싱 오류:', error);
+        }
     }
+    
     return { method, endpoint, body, expectedStatus };
 }
 

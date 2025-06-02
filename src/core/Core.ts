@@ -8,6 +8,7 @@ import { getElapsedTimeInString } from './external/util';
 import loadRoutes from './lib/loadRoutes_V6_Clean';
 import expressApp from './lib/expressAppSingleton';
 import { DocumentationGenerator } from './lib/documentationGenerator';
+import { StaticFileMiddleware } from './lib/staticFileMiddleware';
 import { prismaManager } from './lib/prismaManager';
 
 export interface CoreConfig {
@@ -84,14 +85,16 @@ export class Core {
         return this;
     }    
     
-    
-    private setupExpress(): void {
+      private setupExpress(): void {
         // Set trust proxy
         this._app.set('trust proxy', this._config.trustProxy ? 1 : 0);
         
         // Serve static files from public directory
         const publicPath = path.join(process.cwd(), 'public');
         this._app.use(express.static(publicPath));
+        
+        // Serve development static files when AUTO_DOCS=true
+        this._app.use(StaticFileMiddleware.serveStaticFiles());
         
         log.Debug('Express app configured', { 
             trustProxy: this._config.trustProxy,

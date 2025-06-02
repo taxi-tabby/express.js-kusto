@@ -870,3 +870,183 @@ body {
 .test-case[data-test-result="failed"] .test-name {
     color: #dc2626;
 }
+
+/* Philosophy Validation Styles */
+.philosophy-violations {
+    background: white;
+    border-radius: 12px;
+    padding: 25px;
+    margin-bottom: 30px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+}
+
+.philosophy-compliance {
+    background: linear-gradient(135deg, #4caf50 0%, #45a049 100%);
+    color: white;
+    border-radius: 12px;
+    padding: 25px;
+    margin-bottom: 30px;
+    box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);
+}
+
+.violations-summary {
+    background: #f8f9fa;
+    border-left: 4px solid #dc3545;
+    padding: 15px 20px;
+    margin-bottom: 25px;
+    border-radius: 0 8px 8px 0;
+}
+
+.violations-summary p {
+    margin: 5px 0;
+}
+
+.score {
+    font-weight: bold;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 1.1em;
+}
+
+.score.good {
+    background: #d4edda;
+    color: #155724;
+}
+
+.score.warning {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.score.poor {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+.violation-group {
+    margin-bottom: 25px;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.violation-type {
+    background: #f8f9fa;
+    padding: 15px 20px;
+    margin: 0;
+    font-size: 1.2em;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.violation-item {
+    padding: 15px 20px;
+    border-bottom: 1px solid #f8f9fa;
+}
+
+.violation-item:last-child {
+    border-bottom: none;
+}
+
+.violation-item.error {
+    border-left: 4px solid #dc3545;
+    background: #fff5f5;
+}
+
+.violation-item.warning {
+    border-left: 4px solid #ffc107;
+    background: #fffdf5;
+}
+
+.violation-header {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 10px;
+}
+
+.severity-badge {
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.8em;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+.severity-badge.error {
+    background: #dc3545;
+    color: white;
+}
+
+.severity-badge.warning {
+    background: #ffc107;
+    color: #212529;
+}
+
+.route-info {
+    font-family: 'Consolas', 'Monaco', monospace;
+    background: #f8f9fa;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.9em;
+}
+
+.violation-message {
+    margin: 0 0 10px 0;
+    font-size: 1em;
+}
+
+.violation-suggestion {
+    background: #e8f5e8;
+    border: 1px solid #c3e6c3;
+    border-radius: 4px;
+    padding: 10px;
+    font-size: 0.9em;
+}
+
+.compliance-message {
+    text-align: center;
+}
+
+.compliance-message p {
+    margin: 10px 0;
+    font-size: 1.1em;
+}
+
+/* Philosophy stat card styles */
+.stat-number.philosophy {
+    color: #9c27b0;
+}
+
+.stat-number.philosophy-score {
+    font-size: 1.8em;
+    font-weight: bold;
+}
+
+.stat-number.philosophy-score.good {
+    color: #4caf50;
+}
+
+.stat-number.philosophy-score.warning {
+    color: #ff9800;
+}
+
+.stat-number.philosophy-score.poor {
+    color: #f44336;
+}
+
+/* Filter button for philosophy */
+.filter-btn[data-filter="philosophy"] {
+    background: linear-gradient(135deg, #9c27b0 0%, #673ab7 100%);
+    color: white;
+}
+
+.filter-btn[data-filter="philosophy"]:hover {
+    background: linear-gradient(135deg, #8e24aa 0%, #5e35b1 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(156, 39, 176, 0.3);
+}
+
+.filter-btn[data-filter="philosophy"].active {
+    background: linear-gradient(135deg, #7b1fa2 0%, #512da8 100%);
+    box-shadow: 0 4px 12px rgba(156, 39, 176, 0.4);
+}

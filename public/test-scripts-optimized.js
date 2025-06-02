@@ -388,13 +388,17 @@ function filterTestCases() {
             // Filter by test type (success, failure, security) OR by test result (passed, failed)
             const testType = tc.dataset.type?.toLowerCase();
             const testResult = tc.dataset.testResult?.toLowerCase();
-            
-            if (currentFilter === 'success') {
+              if (currentFilter === 'success') {
                 // Show success tests OR tests that have passed
                 shouldShow = testType === 'success' || testResult === 'passed';            
             } else if (currentFilter === 'failure') {
                 // Show failure tests OR tests that have failed
                 shouldShow = testType === 'failure' || testResult === 'failed';
+            } else if (currentFilter === 'philosophy') {
+                // Show philosophy validation tests
+                const testName = tc.querySelector('.test-name')?.textContent?.toLowerCase() || '';
+                shouldShow = testName.includes('philosophy') || 
+                           (tc.dataset.securityTestType && tc.dataset.securityTestType.includes('philosophy'));
             } else {
                 // Direct test type match
                 shouldShow = testType === currentFilter;

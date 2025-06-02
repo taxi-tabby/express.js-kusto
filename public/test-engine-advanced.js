@@ -1173,13 +1173,17 @@ class TestEngine {
                 
                 // Filter by test type (success, failure, security) OR by test result (passed, failed)
                 const testType = testCase.dataset.type?.toLowerCase();
-                const testResult = testCase.dataset.testResult?.toLowerCase();
-                  if (this.state.currentFilter === 'success') {
+                const testResult = testCase.dataset.testResult?.toLowerCase();                if (this.state.currentFilter === 'success') {
                     // Show success tests OR tests that have passed
                     shouldShow = testType === 'success' || testResult === 'passed';
                 } else if (this.state.currentFilter === 'failure') {
                     // Show failure tests OR tests that have failed
                     shouldShow = testType === 'failure' || testResult === 'failed';
+                } else if (this.state.currentFilter === 'philosophy') {
+                    // Show philosophy validation tests
+                    const testName = testCase.querySelector('.test-name')?.textContent?.toLowerCase() || '';
+                    shouldShow = testName.includes('philosophy') || 
+                               (testCase.dataset.securityTestType && testCase.dataset.securityTestType.includes('philosophy'));
                 } else {
                     // Direct test type match
                     shouldShow = testType === this.state.currentFilter;

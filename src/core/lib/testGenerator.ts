@@ -42,6 +42,24 @@ export interface TestReportStats {
     successTests: number;
     failureTests: number;
     securityTests: number;
+    philosophyTests: number;
+    philosophyScore: number; // 전체 철학 준수 점수
+    philosophyViolations: PhilosophyViolation[];
+}
+
+export interface PhilosophyViolation {
+    type: 'naming' | 'restful' | 'http-spec' | 'structure';
+    severity: 'error' | 'warning';
+    message: string;
+    suggestion?: string;
+    route: string;
+    method: string;
+}
+
+export interface PhilosophyValidationResult {
+    violations: PhilosophyViolation[];
+    isValid: boolean;
+    score: number; // 0-100, 철학 준수 점수
 }
 
 export class TestGenerator {
@@ -75,13 +93,15 @@ export class TestGenerator {
         }
 
         return testSuites;
-    }
-
-    /**
+    }    /**
      * 특정 라우트의 테스트 케이스 생성
      */
     private static generateTestCasesForRoute(route: RouteDocumentation): TestCase[] {
         const testCases: TestCase[] = [];
+
+        // 0. 개발 철학 검증 케이스 생성
+        const philosophyCases = this.generatePhilosophyTestCases(route);
+        testCases.push(...philosophyCases);
 
         // 1. 성공 케이스 생성
         const successCase = this.generateSuccessCase(route);
@@ -94,7 +114,7 @@ export class TestGenerator {
         testCases.push(...failureCases);
 
         return testCases;
-    }    /**
+    }/**
      * 성공 케이스 생성
      */
     private static generateSuccessCase(route: RouteDocumentation): TestCase | null {
@@ -719,13 +739,9 @@ export class TestGenerator {
                 } else if (fieldName === 'createdAt' || fieldName === 'updatedAt' || fieldName === 'timestamp') {
                     // Timestamp fields should exist but value can vary
                     expectedData[fieldName] = { type: 'string', required: true, pattern: 'ISO8601' };
-                } else if (fieldName === 'message') {
+                } else if (fieldName === 'message' && inputData?.query?.name) {
                     // Message fields often have predictable content
-                    if (inputData?.query?.name) {
-                        expectedData[fieldName] = `Hello ${inputData.query.name}!`;
-                    } else {
-                        expectedData[fieldName] = { type: 'string', required: true };
-                    }
+                    expectedData[fieldName] = `Hello ${inputData.query.name}!`;
                 } else if (fieldName === 'name' && inputData?.body?.name) {
                     // Echo back input data
                     expectedData[fieldName] = inputData.body.name;
@@ -770,8 +786,10 @@ export class TestGenerator {
         }));
     }    /**
      * 통계 정보 생성
-     */
-    private static generateStats(testSuites: RouteTestSuite[]): TestReportStats {
+     */    private static generateStats(testSuites: RouteTestSuite[]): TestReportStats {
+        // 전체 철학 검증 수행
+        const philosophyResult = this.validateDevelopmentPhilosophy();
+        
         return {
             totalRoutes: testSuites.length,
             totalTests: testSuites.reduce((sum, suite) => sum + suite.testCases.length, 0),
@@ -781,7 +799,12 @@ export class TestGenerator {
                 sum + suite.testCases.filter(tc => tc.type === 'failure').length, 0),
             securityTests: testSuites.reduce((sum, suite) => 
                 sum + suite.testCases.filter(tc => 
-                    tc.name.includes('Security Attack')).length, 0)
+                    tc.name.includes('Security Attack')).length, 0),
+            philosophyTests: testSuites.reduce((sum, suite) => 
+                sum + suite.testCases.filter(tc => 
+                    tc.securityTestType && tc.securityTestType.includes('philosophy')).length, 0),
+            philosophyScore: philosophyResult.score,
+            philosophyViolations: philosophyResult.violations
         };
     }
 
@@ -1171,5 +1194,506 @@ export class TestGenerator {
             log.error('Failed to generate Postman collection', { error: error.message });
             return { error: 'Failed to generate Postman collection', details: error.message };
         }
+    }
+
+    /**
+     * CMS 개발 철학 검증
+     */
+    static validateDevelopmentPhilosophy(): PhilosophyValidationResult {
+        if (!this.isTestingEnabled()) {
+            return {
+                violations: [],
+                isValid: true,
+                score: 100
+            };
+        }
+
+        this.routes = DocumentationGenerator.getRoutes();
+        const violations: PhilosophyViolation[] = [];
+
+        for (const route of this.routes) {
+            // 1. 라우트 경로 네이밍 검증
+            violations.push(...this.validateRouteNaming(route));
+            
+            // 2. RESTful API 스펙 검증
+            violations.push(...this.validateRESTfulSpecs(route));
+            
+            // 3. HTTP 스펙 검증
+            violations.push(...this.validateHTTPSpecs(route));
+        }
+
+        const score = this.calculatePhilosophyScore(violations);
+        const isValid = violations.filter(v => v.severity === 'error').length === 0;
+
+        return {
+            violations,
+            isValid,
+            score
+        };
+    }
+
+    /**
+     * 라우트 네이밍 규칙 검증
+     * 1. 대문자 금지
+     * 2. 단일 단어 사용
+     * 3. 공통 기능의 경우 중복 단어를 앞으로
+     */
+    private static validateRouteNaming(route: RouteDocumentation): PhilosophyViolation[] {
+        const violations: PhilosophyViolation[] = [];
+        const pathSegments = route.path.split('/').filter(segment => segment && !segment.startsWith(':'));
+
+        // 1. 대문자 검증
+        for (const segment of pathSegments) {
+            if (/[A-Z]/.test(segment)) {
+                violations.push({
+                    type: 'naming',
+                    severity: 'error',
+                    message: `라우트 경로에 대문자가 포함되어 있습니다: '${segment}'`,
+                    suggestion: `'${segment.toLowerCase()}'로 변경하세요`,
+                    route: route.path,
+                    method: route.method
+                });
+            }
+        }
+
+        // 2. 단일 단어 규칙 검증 (하이픈이나 언더스코어로 연결된 경우 검증)
+        for (const segment of pathSegments) {
+            if (segment.includes('-') || segment.includes('_')) {
+                const words = segment.split(/[-_]/);
+                if (words.length > 2) {
+                    violations.push({
+                        type: 'naming',
+                        severity: 'warning',
+                        message: `라우트 세그먼트가 너무 복잡합니다: '${segment}'`,
+                        suggestion: `더 간단한 단일 단어로 변경하거나 리소스 구조를 재검토하세요`,
+                        route: route.path,
+                        method: route.method
+                    });
+                }
+            }
+        }
+
+        // 3. 공통 기능 네이밍 검증
+        violations.push(...this.validateCommonResourceNaming(route, pathSegments));
+
+        return violations;
+    }
+
+    /**
+     * 공통 리소스 네이밍 규칙 검증
+     */
+    private static validateCommonResourceNaming(route: RouteDocumentation, pathSegments: string[]): PhilosophyViolation[] {
+        const violations: PhilosophyViolation[] = [];
+        
+        // 모든 라우트에서 공통 패턴 찾기
+        const allRoutes = this.routes;
+        const commonPatterns = this.findCommonPatterns(allRoutes);
+        
+        for (const pattern of commonPatterns) {
+            const routeHasPattern = pathSegments.some(segment => 
+                pattern.words.some(word => segment.includes(word))
+            );
+            
+            if (routeHasPattern) {
+                // 공통 단어가 경로의 앞쪽에 있는지 확인
+                const patternWords = pattern.words;
+                const firstSegmentIndex = pathSegments.findIndex(segment =>
+                    patternWords.some(word => segment.includes(word))
+                );
+                
+                if (firstSegmentIndex > 1) { // /api 등의 기본 prefix 제외
+                    violations.push({
+                        type: 'structure',
+                        severity: 'warning',
+                        message: `공통 기능 '${pattern.words.join(', ')}'이 경로 뒤쪽에 위치합니다`,
+                        suggestion: `공통 기능을 경로 앞쪽으로 이동하세요 (예: /${pattern.words[0]}/.../)`,
+                        route: route.path,
+                        method: route.method
+                    });
+                }
+            }
+        }
+        
+        return violations;
+    }
+
+    /**
+     * 공통 패턴 찾기
+     */
+    private static findCommonPatterns(routes: RouteDocumentation[]): Array<{words: string[], count: number}> {
+        const wordCount: Map<string, number> = new Map();
+        const patterns: Array<{words: string[], count: number}> = [];
+        
+        // 모든 라우트에서 단어 추출
+        for (const route of routes) {
+            const segments = route.path.split('/').filter(segment => segment && !segment.startsWith(':'));
+            for (const segment of segments) {
+                const words = segment.split(/[-_]/);
+                for (const word of words) {
+                    if (word.length > 2) { // 짧은 단어 제외
+                        wordCount.set(word, (wordCount.get(word) || 0) + 1);
+                    }
+                }
+            }
+        }
+        
+        // 2개 이상의 라우트에서 사용되는 단어들을 공통 패턴으로 간주
+        for (const [word, count] of wordCount.entries()) {
+            if (count >= 2) {
+                patterns.push({words: [word], count});
+            }
+        }
+        
+        return patterns.sort((a, b) => b.count - a.count);
+    }
+
+    /**
+     * RESTful API 스펙 검증
+     */
+    private static validateRESTfulSpecs(route: RouteDocumentation): PhilosophyViolation[] {
+        const violations: PhilosophyViolation[] = [];
+
+        // HTTP 메서드와 경로 패턴 검증
+        const pathSegments = route.path.split('/').filter(segment => segment);
+        const hasIdParam = pathSegments.some(segment => segment.startsWith(':'));
+        const method = route.method.toUpperCase();
+
+        // 1. GET 요청 검증
+        if (method === 'GET') {
+            // GET /resources/:id 패턴 검증
+            if (hasIdParam && !route.path.endsWith('/:id') && !route.path.includes('/:id/')) {
+                violations.push({
+                    type: 'restful',
+                    severity: 'warning',
+                    message: 'GET 요청에서 ID 파라미터는 일반적으로 /:id 형식을 사용합니다',
+                    suggestion: '리소스 식별자를 /:id 형식으로 변경하세요',
+                    route: route.path,
+                    method: route.method
+                });
+            }
+        }
+
+        // 2. POST 요청 검증
+        if (method === 'POST') {
+            if (hasIdParam) {
+                violations.push({
+                    type: 'restful',
+                    severity: 'error',
+                    message: 'POST 요청은 일반적으로 ID 파라미터를 포함하지 않습니다',
+                    suggestion: 'POST는 컬렉션 경로에 사용하고, 특정 리소스 수정은 PUT/PATCH를 사용하세요',
+                    route: route.path,
+                    method: route.method
+                });
+            }
+        }
+
+        // 3. PUT/PATCH 요청 검증
+        if (method === 'PUT' || method === 'PATCH') {
+            if (!hasIdParam) {
+                violations.push({
+                    type: 'restful',
+                    severity: 'error',
+                    message: `${method} 요청은 특정 리소스를 대상으로 해야 하므로 ID 파라미터가 필요합니다`,
+                    suggestion: '경로에 /:id 파라미터를 추가하세요',
+                    route: route.path,
+                    method: route.method
+                });
+            }
+        }
+
+        // 4. DELETE 요청 검증
+        if (method === 'DELETE') {
+            if (!hasIdParam) {
+                violations.push({
+                    type: 'restful',
+                    severity: 'error',
+                    message: 'DELETE 요청은 특정 리소스를 대상으로 해야 하므로 ID 파라미터가 필요합니다',
+                    suggestion: '경로에 /:id 파라미터를 추가하세요',
+                    route: route.path,
+                    method: route.method
+                });
+            }
+        }
+
+        // 5. 복수형 리소스명 검증
+        const resourceSegment = pathSegments.find(segment => !segment.startsWith(':'));
+        if (resourceSegment) {
+            violations.push(...this.validateResourcePluralization(route, resourceSegment));
+        }
+
+        // 6. 중첩 리소스 깊이 검증
+        const nestingLevel = pathSegments.filter(segment => segment.startsWith(':')).length;
+        if (nestingLevel > 2) {
+            violations.push({
+                type: 'restful',
+                severity: 'warning',
+                message: '중첩 리소스가 너무 깊습니다 (3단계 이상)',
+                suggestion: '리소스 구조를 단순화하거나 쿼리 파라미터를 사용하는 것을 고려하세요',
+                route: route.path,
+                method: route.method
+            });
+        }
+
+        return violations;
+    }
+
+    /**
+     * 리소스 복수형 검증
+     */
+    private static validateResourcePluralization(route: RouteDocumentation, resourceName: string): PhilosophyViolation[] {
+        const violations: PhilosophyViolation[] = [];
+        
+        // 일반적인 복수형 패턴 검증
+        const commonSingulars = ['user', 'post', 'comment', 'file', 'image', 'document', 'category', 'tag'];
+        const singularToPlural: {[key: string]: string} = {
+            'user': 'users',
+            'post': 'posts', 
+            'comment': 'comments',
+            'file': 'files',
+            'image': 'images',
+            'document': 'documents',
+            'category': 'categories',
+            'tag': 'tags'
+        };
+
+        for (const singular of commonSingulars) {
+            if (resourceName === singular) {
+                violations.push({
+                    type: 'restful',
+                    severity: 'warning',
+                    message: `리소스명이 단수형입니다: '${singular}'`,
+                    suggestion: `복수형 '${singularToPlural[singular]}'을 사용하세요`,
+                    route: route.path,
+                    method: route.method
+                });
+                break;
+            }
+        }
+
+        return violations;
+    }
+
+    /**
+     * HTTP 스펙 검증
+     */
+    private static validateHTTPSpecs(route: RouteDocumentation): PhilosophyViolation[] {
+        const violations: PhilosophyViolation[] = [];
+
+        // 1. HTTP 메서드 검증
+        const validMethods = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
+        if (!validMethods.includes(route.method.toUpperCase())) {
+            violations.push({
+                type: 'http-spec',
+                severity: 'error',
+                message: `유효하지 않은 HTTP 메서드: ${route.method}`,
+                suggestion: `표준 HTTP 메서드 중 하나를 사용하세요: ${validMethods.join(', ')}`,
+                route: route.path,
+                method: route.method
+            });
+        }
+
+        // 2. 응답 상태 코드 검증
+        if (route.responses) {
+            for (const statusCode of Object.keys(route.responses)) {
+                const code = parseInt(statusCode);
+                if (isNaN(code) || code < 100 || code > 599) {
+                    violations.push({
+                        type: 'http-spec',
+                        severity: 'error',
+                        message: `유효하지 않은 HTTP 상태 코드: ${statusCode}`,
+                        suggestion: '100-599 범위의 표준 HTTP 상태 코드를 사용하세요',
+                        route: route.path,
+                        method: route.method
+                    });
+                }
+            }
+        }
+
+        // 3. 메서드별 적절한 응답 코드 검증
+        violations.push(...this.validateMethodSpecificResponses(route));
+
+        // 4. 콘텐츠 타입 검증
+        violations.push(...this.validateContentTypes(route));
+
+        return violations;
+    }
+
+    /**
+     * 메서드별 응답 코드 검증
+     */
+    private static validateMethodSpecificResponses(route: RouteDocumentation): PhilosophyViolation[] {
+        const violations: PhilosophyViolation[] = [];
+        
+        if (!route.responses) return violations;
+
+        const method = route.method.toUpperCase();
+        const statusCodes = Object.keys(route.responses).map(Number);
+
+        switch (method) {
+            case 'GET':
+                if (!statusCodes.includes(200) && !statusCodes.includes(404)) {
+                    violations.push({
+                        type: 'http-spec',
+                        severity: 'warning',
+                        message: 'GET 요청은 일반적으로 200 또는 404 응답을 포함해야 합니다',
+                        suggestion: '성공 시 200, 리소스를 찾을 수 없을 때 404 응답을 추가하세요',
+                        route: route.path,
+                        method: route.method
+                    });
+                }
+                break;
+
+            case 'POST':
+                if (!statusCodes.includes(201) && !statusCodes.includes(200)) {
+                    violations.push({
+                        type: 'http-spec',
+                        severity: 'warning',
+                        message: 'POST 요청은 일반적으로 201 (Created) 또는 200 응답을 포함해야 합니다',
+                        suggestion: '리소스 생성 시 201, 처리 완료 시 200 응답을 추가하세요',
+                        route: route.path,
+                        method: route.method
+                    });
+                }
+                break;
+
+            case 'PUT':
+            case 'PATCH':
+                if (!statusCodes.includes(200) && !statusCodes.includes(204)) {
+                    violations.push({
+                        type: 'http-spec',
+                        severity: 'warning',
+                        message: `${method} 요청은 일반적으로 200 또는 204 응답을 포함해야 합니다`,
+                        suggestion: '업데이트 성공 시 200 (응답 본문 포함) 또는 204 (응답 본문 없음)를 추가하세요',
+                        route: route.path,
+                        method: route.method
+                    });
+                }
+                break;
+
+            case 'DELETE':
+                if (!statusCodes.includes(204) && !statusCodes.includes(200)) {
+                    violations.push({
+                        type: 'http-spec',
+                        severity: 'warning',
+                        message: 'DELETE 요청은 일반적으로 204 또는 200 응답을 포함해야 합니다',
+                        suggestion: '삭제 성공 시 204 (응답 본문 없음) 또는 200 (응답 본문 포함)을 추가하세요',
+                        route: route.path,
+                        method: route.method
+                    });
+                }
+                break;
+        }
+
+        return violations;
+    }
+
+    /**
+     * 콘텐츠 타입 검증
+     */
+    private static validateContentTypes(route: RouteDocumentation): PhilosophyViolation[] {
+        const violations: PhilosophyViolation[] = [];
+        
+        // POST, PUT, PATCH 요청에 대한 요청 본문 검증
+        const methodsWithBody = ['POST', 'PUT', 'PATCH'];
+        if (methodsWithBody.includes(route.method.toUpperCase())) {
+            if (!route.parameters?.body) {
+                violations.push({
+                    type: 'http-spec',
+                    severity: 'warning',
+                    message: `${route.method} 요청에 요청 본문 스키마가 정의되지 않았습니다`,
+                    suggestion: '요청 본문 스키마를 정의하여 Content-Type을 명확히 하세요',
+                    route: route.path,
+                    method: route.method
+                });
+            }
+        }
+
+        return violations;
+    }
+
+    /**
+     * 철학 준수 점수 계산
+     */
+    private static calculatePhilosophyScore(violations: PhilosophyViolation[]): number {
+        let score = 100;
+        
+        for (const violation of violations) {
+            switch (violation.severity) {
+                case 'error':
+                    score -= 10;
+                    break;
+                case 'warning':
+                    score -= 5;
+                    break;
+            }
+        }
+        
+        return Math.max(0, score);
+    }
+
+    /**
+     * 개발 철학 검증 테스트 케이스 생성
+     */
+    private static generatePhilosophyTestCases(route: RouteDocumentation): TestCase[] {
+        const testCases: TestCase[] = [];
+        
+        // 개발 철학 검증 실행
+        const philosophyResult = this.validateSingleRoutePhilosophy(route);
+        
+        if (philosophyResult.violations.length > 0) {
+            // 철학 위반 사항을 테스트 케이스로 생성
+            for (const violation of philosophyResult.violations) {
+                testCases.push({
+                    name: `${route.method} ${route.path} - Philosophy Violation: ${violation.type}`,
+                    description: `개발 철학 위반: ${violation.message}`,
+                    type: 'failure',
+                    endpoint: route.path,
+                    method: route.method,
+                    data: undefined,
+                    expectedStatus: violation.severity === 'error' ? 500 : 200, // 에러는 실패, 경고는 성공하지만 개선 필요
+                    validationErrors: [violation.message],
+                    securityTestType: 'philosophy-violation'
+                });
+            }
+        } else {
+            // 철학을 완벽히 준수하는 경우 긍정적인 테스트 케이스 생성
+            testCases.push({
+                name: `${route.method} ${route.path} - Philosophy Compliance`,
+                description: `개발 철학을 완벽히 준수하는 라우트입니다`,
+                type: 'success',
+                endpoint: route.path,
+                method: route.method,
+                data: undefined,
+                expectedStatus: 200,
+                securityTestType: 'philosophy-compliance'
+            });
+        }
+        
+        return testCases;
+    }
+
+    /**
+     * 단일 라우트에 대한 개발 철학 검증
+     */
+    private static validateSingleRoutePhilosophy(route: RouteDocumentation): PhilosophyValidationResult {
+        const violations: PhilosophyViolation[] = [];
+
+        // 1. 라우트 경로 네이밍 검증
+        violations.push(...this.validateRouteNaming(route));
+        
+        // 2. RESTful API 스펙 검증
+        violations.push(...this.validateRESTfulSpecs(route));
+        
+        // 3. HTTP 스펙 검증
+        violations.push(...this.validateHTTPSpecs(route));
+
+        const score = this.calculatePhilosophyScore(violations);
+        const isValid = violations.filter(v => v.severity === 'error').length === 0;
+
+        return {
+            violations,
+            isValid,
+            score
+        };
     }
 }

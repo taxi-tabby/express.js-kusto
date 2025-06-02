@@ -35,7 +35,49 @@ function initProgress() {
     testStats.passed = 0;
     testStats.failed = 0;
     testStats.accuracy = 0;
+    
+    // Create progress container if it doesn't exist
+    createProgressContainer();
     updateProgress();
+}
+
+function createProgressContainer() {
+    let progressContainer = document.getElementById('progress-container');
+    if (!progressContainer) {
+        progressContainer = document.createElement('div');
+        progressContainer.id = 'progress-container';
+        progressContainer.innerHTML = `
+            <div style="margin: 20px 0; padding: 20px; border: 1px solid #ddd; border-radius: 8px; background: #f8f9fa;">
+                <h3 style="margin: 0 0 15px 0;">🧪 Test Execution Progress</h3>
+                <div style="position: relative; background: #e9ecef; height: 20px; border-radius: 10px; margin: 15px 0;">
+                    <div id="progress-bar" style="height: 100%; background: #28a745; border-radius: 10px; width: 0%; transition: width 0.3s ease;"></div>
+                    <div id="progress-text" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-weight: bold; font-size: 12px;">0/0 tests completed</div>
+                </div>
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-top: 15px;">
+                    <div style="text-align: center; padding: 10px; border: 1px solid #ddd; border-radius: 5px;">
+                        <span style="display: block; font-size: 12px; color: #666;">Passed:</span>
+                        <span id="stat-passed" style="display: block; font-size: 18px; font-weight: bold; color: #28a745;">0</span>
+                    </div>
+                    <div style="text-align: center; padding: 10px; border: 1px solid #ddd; border-radius: 5px;">
+                        <span style="display: block; font-size: 12px; color: #666;">Failed:</span>
+                        <span id="stat-failed" style="display: block; font-size: 18px; font-weight: bold; color: #dc3545;">0</span>
+                    </div>
+                    <div style="text-align: center; padding: 10px; border: 1px solid #ddd; border-radius: 5px;">
+                        <span style="display: block; font-size: 12px; color: #666;">Accuracy:</span>
+                        <span id="stat-accuracy" style="display: block; font-size: 18px; font-weight: bold; color: #007bff;">0%</span>
+                    </div>
+                </div>
+                <div id="test-summary" style="margin-top: 15px; padding: 15px; background: white; border-radius: 5px; display: none;">
+                    <h4>📊 Test Results Summary</h4>
+                    <div id="summary-details"></div>
+                </div>
+            </div>
+        `;
+        
+        // Insert at the top of the page
+        const container = document.querySelector('.container') || document.body;
+        container.insertBefore(progressContainer, container.firstChild);
+    }
 }
 function updateProgress() {
     const completed = testStats.passed + testStats.failed;

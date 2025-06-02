@@ -155,7 +155,7 @@ const config = {
       "value": "prisma-client-js"
     },
     "output": {
-      "value": "R:\\project\\express.js-kusto\\src\\app\\db\\testdb1\\client",
+      "value": "C:\\prj\\express.js-kusto\\src\\app\\db\\testdb1\\client",
       "fromEnvVar": null
     },
     "config": {
@@ -169,7 +169,7 @@ const config = {
       }
     ],
     "previewFeatures": [],
-    "sourceFilePath": "R:\\project\\express.js-kusto\\src\\app\\db\\testdb1\\schema.prisma",
+    "sourceFilePath": "C:\\prj\\express.js-kusto\\src\\app\\db\\testdb1\\schema.prisma",
     "isCustomOutput": true
   },
   "relativeEnvPaths": {
@@ -183,6 +183,7 @@ const config = {
     "testdb1_db"
   ],
   "activeProvider": "postgresql",
+  "postinstall": false,
   "inlineDatasources": {
     "testdb1_db": {
       "url": {

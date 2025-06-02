@@ -973,16 +973,12 @@ class TestEngine {
                 // Filter by test type (success, failure, security) OR by test result (passed, failed)
                 const testType = testCase.dataset.type?.toLowerCase();
                 const testResult = testCase.dataset.testResult?.toLowerCase();
-                
-                if (this.state.currentFilter === 'success') {
+                  if (this.state.currentFilter === 'success') {
                     // Show success tests OR tests that have passed
                     shouldShow = testType === 'success' || testResult === 'passed';
                 } else if (this.state.currentFilter === 'failure') {
                     // Show failure tests OR tests that have failed
                     shouldShow = testType === 'failure' || testResult === 'failed';
-                } else if (this.state.currentFilter === 'security') {
-                    // Show security tests
-                    shouldShow = testType === 'security';
                 } else {
                     // Direct test type match
                     shouldShow = testType === this.state.currentFilter;
@@ -1133,12 +1129,10 @@ class TestEngine {
      * Update filter button counts in real-time
      */
     updateFilterCounts() {
-        const testCases = document.querySelectorAll('.test-case');
-        const counts = {
+        const testCases = document.querySelectorAll('.test-case');        const counts = {
             all: testCases.length,
             success: 0,
             failure: 0,
-            security: 0,
             passed: 0,
             failed: 0
         };
@@ -1146,10 +1140,8 @@ class TestEngine {
         testCases.forEach(tc => {
             const testType = tc.dataset.type?.toLowerCase();
             const testResult = tc.dataset.testResult?.toLowerCase();
-            
-            if (testType === 'success') counts.success++;
+              if (testType === 'success') counts.success++;
             if (testType === 'failure') counts.failure++;
-            if (testType === 'security') counts.security++;
             if (testResult === 'passed') counts.passed++;
             if (testResult === 'failed') counts.failed++;
         });
@@ -1163,12 +1155,9 @@ class TestEngine {
                 btn.textContent = `${originalText} (${counts.all})`;
             } else if (filter === 'success') {
                 const total = counts.success + counts.passed;
-                btn.textContent = `${originalText} (${total})`;
-            } else if (filter === 'failure') {
+                btn.textContent = `${originalText} (${total})`;            } else if (filter === 'failure') {
                 const total = counts.failure + counts.failed;
                 btn.textContent = `${originalText} (${total})`;
-            } else if (filter === 'security') {
-                btn.textContent = `${originalText} (${counts.security})`;
             }
         });
     }

@@ -14,12 +14,14 @@ router.GET_VALIDATED(
         200: {
             message: { type: 'string', required: true },
             data: { type: 'object', required: false },
-        }
+        },
+        400: {
+            errorx: { type: 'string', required: true },
+        },
     },
     async (req, res) => {
         const { name, age } = req.validatedData?.query || {};
         
-        res.status(401);
 
         return {
             message: `Hello ${name || 'World'}!`,
@@ -28,6 +30,7 @@ router.GET_VALIDATED(
                 receivedAge: age,
                 timestamp: new Date().toISOString()
             },
+            gay: 'xxxx'
         };
     }
 );

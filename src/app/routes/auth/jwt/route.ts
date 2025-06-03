@@ -14,12 +14,10 @@ router.POST_VALIDATED(
         200: {
             message: { type: 'string', required: true },
             data: { type: 'object', required: false },
-        },
-        400: {
-            error: { type: 'string', required: true },
         }
     }, async (req, res) => {
 
+        return {};
     });
 
 

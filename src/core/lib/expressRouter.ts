@@ -1069,7 +1069,6 @@ export class ExpressRouter {
         return this;
     }
 
-    /**
 
     /**
      * # GET_WITH_VALIDATION
@@ -1362,6 +1361,7 @@ export class ExpressRouter {
         if (options?.exact) {
             // 정확한 매칭: 하위 경로 방지
             const exactPath = this.convertSlugsToPath(slug);
+
             // Express에서 정확한 매칭을 위해 미들웨어에서 경로 체크
             const exactMiddleware = (req: any, res: any, next: any) => {
                 // URL이 정확히 일치하는지 확인
@@ -1383,7 +1383,7 @@ export class ExpressRouter {
         
         return this;
     }
-    
+
 
     build(): Router {
         const router = this.router;

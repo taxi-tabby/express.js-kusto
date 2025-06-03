@@ -267,13 +267,12 @@ class JWTService {
     }
 }
 
-export default {
-    JWTService,
-};
+export default JWTService;
+;
 
-export type {
-    TokenPayload,
-    SignInCredentials,
-    SignInResult,
-    RefreshResult
-}
+// export type {
+//     TokenPayload,
+//     SignInCredentials,
+//     SignInResult,
+//     RefreshResult
+// }

@@ -142,7 +142,7 @@ const config = {
       "value": "prisma-client-js"
     },
     "output": {
-      "value": "C:\\prj\\express.js-kusto\\src\\app\\db\\testdb2\\client",
+      "value": "R:\\project\\express.js-kusto\\src\\app\\db\\testdb2\\client",
       "fromEnvVar": null
     },
     "config": {
@@ -156,7 +156,7 @@ const config = {
       }
     ],
     "previewFeatures": [],
-    "sourceFilePath": "C:\\prj\\express.js-kusto\\src\\app\\db\\testdb2\\schema.prisma",
+    "sourceFilePath": "R:\\project\\express.js-kusto\\src\\app\\db\\testdb2\\schema.prisma",
     "isCustomOutput": true
   },
   "relativeEnvPaths": {

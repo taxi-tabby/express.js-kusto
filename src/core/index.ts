@@ -31,16 +31,3 @@ export { default as expressApp } from './lib/expressAppSingleton';
 export { default as core } from './Core';
 
 
-console.log(process.env.RDS1_DEFAULT_URL)
-console.log(process.env.RDS1_DEFAULT_URL)
-console.log(process.env.RDS1_DEFAULT_URL)
-console.log(process.env.RDS1_DEFAULT_URL)
-console.log(process.env.RDS1_DEFAULT_URL)
-console.log(process.env.RDS1_DEFAULT_URL)
-console.log(process.env.RDS1_DEFAULT_URL)
-console.log(process.env.RDS1_DEFAULT_URL)
-console.log(process.env.RDS1_DEFAULT_URL)
-console.log(process.env.RDS1_DEFAULT_URL)
-console.log(process.env.RDS1_DEFAULT_URL)
-console.log(process.env.RDS1_DEFAULT_URL)
-console.log(process.env.RDS1_DEFAULT_URL)

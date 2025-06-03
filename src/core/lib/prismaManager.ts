@@ -76,9 +76,11 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 
 		this.initialized = true;
 		console.log('PrismaManager initialized successfully');
-	}  /**
-   * Process a single database folder
-   */
+	}
+
+	/**
+	 * Process a single database folder
+	 */
 	private async processDatabaseFolder(folderName: string, dbPath: string): Promise<void> {
 		const folderPath = path.join(dbPath, folderName);
 		const schemaPath = path.join(folderPath, 'schema.prisma');
@@ -88,6 +90,7 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 			console.warn(`No schema.prisma found in ${folderName}, skipping...`);
 			return;
 		}
+
 
 		// Check if Prisma client is generated
 		const isGenerated = await this.checkIfGenerated(folderName);
@@ -101,11 +104,35 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 			});
 			return;
 		}
+
 		try {
 			// Dynamically import the generated Prisma client
-			const clientPath = path.join(folderPath, 'client');
-			const clientModule = await import(clientPath);
-			const DatabasePrismaClient = clientModule.PrismaClient;
+			let clientModule;
+			let DatabasePrismaClient;
+
+
+			if (process.env.WEBPACK_BUILD == 'true') {
+
+				const distClientPath = path.join(process.cwd(), 'dist', 'src', 'app', 'db', folderName, 'client');
+				console.log(`Webpack build: Loading Prisma client from dist path: ${distClientPath}`);
+
+
+				const clientIndexPath = path.join(distClientPath, 'index.js');
+				delete require.cache[clientIndexPath]; 
+
+
+				clientModule = require(clientIndexPath);
+				console.log(`-------------- ✅ Loaded Prisma client for ${clientIndexPath} from dist path`);
+
+				DatabasePrismaClient = clientModule.PrismaClient;
+
+
+			} else {
+				// Development environment - use normal dynamic import
+				const clientPath = path.join(folderPath, 'client');
+				clientModule = await import(clientPath);
+				DatabasePrismaClient = clientModule.PrismaClient;
+			}
 
 			// Store the client type constructor for type information
 			this.clientTypes.set(folderName, DatabasePrismaClient);

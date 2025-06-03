@@ -19,6 +19,34 @@ export class ExpressRouter {
     }> = [];
 
     /**
+     * 스택 트레이스를 이용하여 호출자의 파일 위치 정보를 추출하는 헬퍼 메서드
+     * @returns 파일 경로와 라인 번호 정보가 포함된 객체
+     */
+    private getCallerSourceInfo(): { filePath: string; lineNumber?: number } {
+        const stack = new Error().stack;
+        let filePath = 'Unknown';
+        let lineNumber: number | undefined;
+        
+        // 스택 추적에서 호출자 파일 경로 추출
+        if (stack) {
+            const stackLines = stack.split('\n');
+            // 첫 번째 줄은 현재 함수, 두 번째 줄은 이 함수를 호출한 메서드, 세 번째 줄이 실제 사용자 코드의 호출자
+            const callerLine = stackLines[3] || '';
+            
+            // Windows 경로(드라이브 문자 포함)와 일반 경로 모두 처리할 수 있는 정규식
+            const fileMatch = callerLine.match(/\(([a-zA-Z]:\\[^:]+|\/?[^:]+):(\d+):(\d+)\)/) || 
+                              callerLine.match(/at\s+([a-zA-Z]:\\[^:]+|\/?[^:]+):(\d+):(\d+)/);
+            
+            if (fileMatch) {
+                filePath = fileMatch[1];
+                lineNumber = parseInt(fileMatch[2], 10);
+            }
+        }
+        
+        return { filePath, lineNumber };
+    }
+
+    /**
      * Set the base path context for documentation
      */    
     public setBasePath(path: string): ExpressRouter {
@@ -726,14 +754,22 @@ export class ExpressRouter {
      * @param responseConfig 응답 검증 설정
      * @param handler 핸들러 함수
      * @returns ExpressRouter
-     */    
+     */      
+    
     public GET_VALIDATED(
         requestConfig: RequestConfig,
         responseConfig: ResponseConfig,
         handler: ValidatedHandlerFunction
     ): ExpressRouter {
+        // 현재 위치 정보를 얻기 위해 Error 스택 추적
+        const { filePath, lineNumber } = this.getCallerSourceInfo();
+        
         const middlewares = CustomRequestHandler.createHandler(
-            { request: requestConfig, response: responseConfig },
+            { 
+                request: requestConfig, 
+                response: responseConfig,
+                sourceInfo: { filePath, lineNumber }
+            },
             handler
         );
         this.router.get('/', ...middlewares);
@@ -771,16 +807,22 @@ export class ExpressRouter {
      * # GET_SLUG_VALIDATED
      * 검증된 GET 슬러그 요청 처리
      * @param exact true이면 하위 경로 매칭 방지 (기본값: false)
-     */
-    public GET_SLUG_VALIDATED(
+     */    public GET_SLUG_VALIDATED(
         slug: string[],
         requestConfig: RequestConfig,
         responseConfig: ResponseConfig,
         handler: ValidatedHandlerFunction,
         options?: { exact?: boolean }
     ): ExpressRouter {
+        // 헬퍼 메서드를 통해 호출자 위치 정보 획득
+        const { filePath, lineNumber } = this.getCallerSourceInfo();
+        
         const middlewares = CustomRequestHandler.createHandler(
-            { request: requestConfig, response: responseConfig },
+            { 
+                request: requestConfig, 
+                response: responseConfig,
+                sourceInfo: { filePath, lineNumber }
+            },
             handler
         );
           const slugPath = this.convertSlugsToPath(slug);
@@ -836,16 +878,22 @@ export class ExpressRouter {
     /**
      * # POST_VALIDATED
      * 검증된 POST 요청 처리
-     */
-    public POST_VALIDATED(
+     */    public POST_VALIDATED(
         requestConfig: RequestConfig,
         responseConfig: ResponseConfig,
         handler: ValidatedHandlerFunction
     ): ExpressRouter {
+        // 헬퍼 메서드를 통해 호출자 위치 정보 획득
+        const { filePath, lineNumber } = this.getCallerSourceInfo();
+        
         const middlewares = CustomRequestHandler.createHandler(
-            { request: requestConfig, response: responseConfig },
+            { 
+                request: requestConfig, 
+                response: responseConfig,
+                sourceInfo: { filePath, lineNumber }
+            },
             handler
-        );        this.router.post('/', ...middlewares);
+        );this.router.post('/', ...middlewares);
         
         // 문서화 등록을 지연시켜 setBasePath 호출 후 올바른 경로로 등록되도록 함
         if (this.basePath) {
@@ -879,17 +927,22 @@ export class ExpressRouter {
      * # POST_SLUG_VALIDATED
      * 검증된 POST 슬러그 요청 처리
      * @param exact true이면 하위 경로 매칭 방지 (기본값: false)
-     */
-    public POST_SLUG_VALIDATED(
+     */    public POST_SLUG_VALIDATED(
         slug: string[],
         requestConfig: RequestConfig,
         responseConfig: ResponseConfig,
         handler: ValidatedHandlerFunction,
         options?: { exact?: boolean }
     ): ExpressRouter {
+        // 헬퍼 메서드를 통해 호출자 위치 정보 획득
+        const { filePath, lineNumber } = this.getCallerSourceInfo();
 
         const middlewares = CustomRequestHandler.createHandler(
-            { request: requestConfig, response: responseConfig },
+            { 
+                request: requestConfig, 
+                response: responseConfig,
+                sourceInfo: { filePath, lineNumber }
+            },
             handler
         );
 
@@ -943,17 +996,22 @@ export class ExpressRouter {
     /**
      * # PUT_VALIDATED
      * 검증된 PUT 요청 처리
-     */
-    public PUT_VALIDATED(
+     */    public PUT_VALIDATED(
         requestConfig: RequestConfig,
         responseConfig: ResponseConfig,
         handler: ValidatedHandlerFunction
     ): ExpressRouter {
+        // 헬퍼 메서드를 통해 호출자 위치 정보 획득
+        const { filePath, lineNumber } = this.getCallerSourceInfo();
 
         const middlewares = CustomRequestHandler.createHandler(
-            { request: requestConfig, response: responseConfig },
+            { 
+                request: requestConfig, 
+                response: responseConfig,
+                sourceInfo: { filePath, lineNumber }
+            },
             handler
-        );        
+        );
         
         this.router.put('/', ...middlewares);
         
@@ -988,16 +1046,22 @@ export class ExpressRouter {
     /**
      * # DELETE_VALIDATED
      * 검증된 DELETE 요청 처리
-     */
-    public DELETE_VALIDATED(
+     */    public DELETE_VALIDATED(
         requestConfig: RequestConfig,
         responseConfig: ResponseConfig,
         handler: ValidatedHandlerFunction
     ): ExpressRouter {
+        // 헬퍼 메서드를 통해 호출자 위치 정보 획득
+        const { filePath, lineNumber } = this.getCallerSourceInfo();
+        
         const middlewares = CustomRequestHandler.createHandler(
-            { request: requestConfig, response: responseConfig },
+            { 
+                request: requestConfig, 
+                response: responseConfig,
+                sourceInfo: { filePath, lineNumber }
+            },
             handler
-        );        this.router.delete('/', ...middlewares);
+        );this.router.delete('/', ...middlewares);
         
         // 문서화 등록을 지연시켜 setBasePath 호출 후 올바른 경로로 등록되도록 함
         if (this.basePath) {
@@ -1029,16 +1093,22 @@ export class ExpressRouter {
     /**
      * # PATCH_VALIDATED
      * 검증된 PATCH 요청 처리
-     */
-    public PATCH_VALIDATED(
+     */    public PATCH_VALIDATED(
         requestConfig: RequestConfig,
         responseConfig: ResponseConfig,
         handler: ValidatedHandlerFunction
     ): ExpressRouter {
+        // 헬퍼 메서드를 통해 호출자 위치 정보 획득
+        const { filePath, lineNumber } = this.getCallerSourceInfo();
+        
         const middlewares = CustomRequestHandler.createHandler(
-            { request: requestConfig, response: responseConfig },
+            { 
+                request: requestConfig, 
+                response: responseConfig,
+                sourceInfo: { filePath, lineNumber }
+            },
             handler
-        );        
+        );
         
         
         this.router.patch('/', ...middlewares);

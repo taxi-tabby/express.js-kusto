@@ -15,13 +15,10 @@ router.GET_VALIDATED(
             message: { type: 'string', required: true },
             data: { type: 'object', required: false },
         },
-        400: {
-            errorx: { type: 'string', required: true },
-        },
-    },
-    async (req, res) => {
+    },    async (req, res) => {
         const { name, age } = req.validatedData?.query || {};
-        
+
+ 
 
         return {
             message: `Hello ${name || 'World'}!`,
@@ -29,8 +26,8 @@ router.GET_VALIDATED(
                 receivedName: name,
                 receivedAge: age,
                 timestamp: new Date().toISOString()
-            },
-            gay: 'xxxx'
+            }
+            // 스키마에 없는 필드 제거
         };
     }
 );

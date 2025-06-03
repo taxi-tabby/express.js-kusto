@@ -15,6 +15,10 @@ export interface ResponseConfig {
 export interface HandlerConfig {
     request?: RequestConfig;
     response?: ResponseConfig;
+    sourceInfo?: {
+        filePath: string;
+        lineNumber?: number;
+    };
 }
 
 export interface ValidatedRequest extends Request {
@@ -85,13 +89,18 @@ export class RequestHandler {
             req.validatedData = validatedData;
             next();
         };
-    }
-
-    /**
+    }    /**
      * 응답 데이터 검증 및 필터링
+     * 스키마에 정의되지 않은 추가 필드가 있는지도 검사
      */
     static validateAndFilterResponse(data: any, schema: Schema): any {
         if (!schema) return data;
+
+        // 정의되지 않은 필드 검사
+        const undefinedFields = this.checkUndefinedFields(data, schema);
+        if (undefinedFields.length > 0) {
+            throw new Error(`Response contains undefined fields not in schema: ${undefinedFields.join(', ')}`);
+        }
 
         const result = Validator.validate(data, schema);
         if (!result.isValid) {
@@ -102,10 +111,39 @@ export class RequestHandler {
     }
 
     /**
+     * 스키마에 정의되지 않은 필드 확인
+     */
+    private static checkUndefinedFields(data: any, schema: Schema): string[] {
+        if (!data || typeof data !== 'object') {
+            return [];
+        }
+        
+        const undefinedFields: string[] = [];
+        const schemaKeys = Object.keys(schema);
+        
+        // 데이터의 모든 키를 순회하며 스키마에 정의되지 않은 필드 확인
+        Object.keys(data).forEach(key => {
+            if (!schemaKeys.includes(key)) {
+                undefinedFields.push(key);
+            }
+        });
+        
+        return undefinedFields;
+    }/**
      * 성공 응답 전송
      */
-    static sendSuccess(res: Response, data?: any, statusCode: number = 200, responseSchema?: Schema): void {
+    static sendSuccess(res: Response, data?: any, statusCode: number = 200, responseSchema?: Schema, responseConfig?: ResponseConfig): void {
         let filteredData = data;
+
+        // 응답 상태 코드가 ResponseConfig에 정의되어 있는지 확인
+        if (responseConfig && !responseConfig[statusCode]) {
+            log.Error(`Undefined status code ${statusCode} in response config`, { 
+                statusCode,
+                availableCodes: Object.keys(responseConfig),
+                data
+            });
+            return this.sendError(res, 500, `Internal server error - status code ${statusCode} not defined in response config`);
+        }
 
         // 응답 스키마가 있으면 데이터 필터링
         if (responseSchema && data) {            
@@ -127,7 +165,7 @@ export class RequestHandler {
         };
 
         res.status(statusCode).json(response);
-    }    /**
+    }/**
      * 에러 응답 전송
      */
     static sendError(res: Response, statusCode: number = 500, message: string = 'Internal server error', details?: any): void {
@@ -144,6 +182,73 @@ export class RequestHandler {
         };
 
         res.status(statusCode).json(response);
+    }    
+    
+    
+    /**
+     * 라우트 핸들러 코드를 정적 분석하여 정의된 응답 상태 코드가 적절하게 구현되어 있는지 검증
+     */    
+      static validateHandlerImplementation(
+        responseConfig: ResponseConfig | undefined, 
+        handlerSource: string,
+        sourceInfo?: { filePath: string; lineNumber?: number }
+    ): string[] {
+
+        if (!responseConfig) return [];
+        
+        // 개발 환경에서만 실행
+        if (process.env.NODE_ENV === 'production') return [];
+        
+        const statusCodes = Object.keys(responseConfig);
+        if (statusCodes.length <= 1) return []; // 기본 응답 코드만 있으면 검증 불필요
+        
+        // 기본 200 상태 코드를 제외한 다른 상태 코드들
+        const nonDefaultStatusCodes = statusCodes.filter(code => code !== '200');
+        const missingImplementations: string[] = [];
+          for (const code of nonDefaultStatusCodes) {
+            // 상태 코드 설정 코드가 핸들러에 있는지 확인
+            
+            // 주석 처리된 행 제거 (/* */, //, JSDoc 등 처리)
+            const handlerWithoutComments = handlerSource
+                .replace(/\/\*[\s\S]*?\*\//g, '') // 여러 줄 주석 제거
+                .replace(/\/\/.*$/gm, '') // 한 줄 주석 제거
+                .replace(/^\s*\*.*$/gm, ''); // JSDoc 라인 제거
+            
+            // 상태 코드 설정을 감지하는 정규식 (변수 사용 패턴도 포함)
+            const statusSetPattern = new RegExp(
+                `(?<!['"\`])(?:\\.|\\s|^)status\\s*\\(\\s*(?:${code}|[a-zA-Z_$][a-zA-Z0-9_$]*\\s*(?:===?|==|===)\\s*${code})\\s*\\)|` + // .status(code) 또는 .status(변수) 패턴
+                `sendStatus\\s*\\(\\s*(?:${code}|[a-zA-Z_$][a-zA-Z0-9_$]*\\s*(?:===?|==|===)\\s*${code})\\s*\\)|` + // sendStatus(code) 패턴
+                `statusCode\\s*[\\s:=]*\\s*(?:${code}|[a-zA-Z_$][a-zA-Z0-9_$]*\\s*(?:===?|==|===)\\s*${code})|` + // statusCode = code 패턴
+                `['"]?status(?:Code)?['"]?\\s*[:=]\\s*(?:${code}|[a-zA-Z_$][a-zA-Z0-9_$]*\\s*(?:===?|==|===)\\s*${code})|` + // status: code 패턴
+                `['"]?${code}['"]?\\s*[:=]|` + // "400": {...} 패턴
+                `[a-zA-Z_$][a-zA-Z0-9_$]*\\s*=\\s*${code}\\b` // 변수 = 400 패턴
+            , 'i');
+            
+            // 에러 핸들링을 감지하는 정규식
+            const errorHandlerPattern = new RegExp(
+                `sendError.*?(?:${code}|[a-zA-Z_$][a-zA-Z0-9_$]*\\s*(?:===?|==|===)\\s*${code})|` + // sendError 함수 호출 패턴
+                `throw\\s+.*(${code}|(?:new\\s+)?Error|[a-zA-Z_$][a-zA-Z0-9_$]*Error)|` + // throw 문 패턴
+                `return\\s+.*(?:${code}|error|[a-zA-Z_$][a-zA-Z0-9_$]*\\s*(?:===?|==|===)\\s*${code})|` + // return 문 패턴 
+                `response.*?${code}|` + // response 관련 패턴
+                `code\\s*[\\s:=]*\\s*(?:${code}|[a-zA-Z_$][a-zA-Z0-9_$]*\\s*(?:===?|==|===)\\s*${code})` // code = 400 패턴
+            , 'i');
+            
+            if (!statusSetPattern.test(handlerWithoutComments) && !errorHandlerPattern.test(handlerWithoutComments)) {
+                const fileInfo = sourceInfo ? 
+                    `${sourceInfo.filePath}${sourceInfo.lineNumber ? ` (line: ${sourceInfo.lineNumber})` : ''}` : 
+                    'Unknown location';
+                
+                const message = `Response status code ${code} is defined but not implemented in handler`;
+                log.Warn(message, { 
+                    code, 
+                    location: fileInfo,
+                    handlerSource: handlerSource.substring(0, 200) + '...'  // 더 짧게 줄임
+                });
+                missingImplementations.push(`${code} (${message} in ${fileInfo})`);
+            }
+        }
+        
+        return missingImplementations;
     }
 
     /**
@@ -153,7 +258,31 @@ export class RequestHandler {
         config: HandlerConfig,
         handler: (req: ValidatedRequest, res: Response, next: NextFunction) => Promise<any> | any
     ) {
-        const middlewares: any[] = [];
+        const middlewares: any[] = [];        // 핸들러의 소스 코드를 얻어서 정적 분석 수행
+        if (config.response && process.env.NODE_ENV !== 'production') {
+            try {                const handlerSource = handler.toString();
+                // 소스 정보 로깅
+                log.Debug('Handler source info', {
+                    sourceInfo: config.sourceInfo,
+                    handlerStartsWith: handlerSource.substring(0, 100)
+                });
+                const missingImplementations = this.validateHandlerImplementation(config.response, handlerSource, config.sourceInfo);
+                
+                // STRICT_STATUS_CODE_CHECK=true 환경변수가 설정되어 있으면 누락된 구현이 있을 경우 오류를 발생시킵니다.
+                if (missingImplementations.length > 0 && process.env.STRICT_STATUS_CODE_CHECK === 'true') {
+                    const errorMessage = `The following status codes are defined but not implemented: ${missingImplementations.join(', ')}`;
+                    log.Error(errorMessage);
+                    
+                    // 자동 테스트 위해 첫 번째 미들웨어로 오류를 반환하는 함수 추가
+                    middlewares.push((req: Request, res: Response) => {
+                        this.sendError(res, 500, `API Implementation Error: ${errorMessage}`);
+                    });
+                    return middlewares;
+                }
+            } catch (error) {
+                log.Error('Failed to analyze handler implementation', { error });
+            }
+        }
 
         // 요청 검증 미들웨어 추가
         if (config.request) {
@@ -168,14 +297,12 @@ export class RequestHandler {
                 // 이미 응답이 전송되었으면 리턴
                 if (res.headersSent) {
                     return;
-                }
-
-                // 결과가 있으면 성공 응답 전송
+                }                // 결과가 있으면 성공 응답 전송
                 if (result !== undefined) {
                     const statusCode = res.statusCode || 200;
                     const responseSchema = config.response?.[statusCode];
-                    this.sendSuccess(res, result, statusCode, responseSchema);
-                }         
+                    this.sendSuccess(res, result, statusCode, responseSchema, config.response);
+                }
 
             } catch (error) {
 

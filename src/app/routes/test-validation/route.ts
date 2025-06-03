@@ -3,7 +3,6 @@ import { ExpressRouter } from '@/src/core/lib/expressRouter';
 const router = new ExpressRouter();
 
 
-// 간단한 테스트 라우트
 router.GET_VALIDATED(
     {
         query: {
@@ -20,6 +19,8 @@ router.GET_VALIDATED(
     async (req, res) => {
         const { name, age } = req.validatedData?.query || {};
         
+        res.status(401);
+
         return {
             message: `Hello ${name || 'World'}!`,
             data: {

@@ -4,18 +4,18 @@
 /**
  * Import actual Prisma client types from each database
  */
-type Testdb1Client = typeof import('@app/db/testdb1/client')['PrismaClient'];
+type OmofictionsClient = typeof import('@app/db/omofictions/client')['PrismaClient'];
 
 /**
  * Instantiated client types
  */
-type Testdb1Instance = InstanceType<Testdb1Client>;
+type OmofictionsInstance = InstanceType<OmofictionsClient>;
 
 /**
  * Type mapping for database names to their corresponding Prisma client instances
  */
 export interface DatabaseClientMap {
-  testdb1: Testdb1Instance;
+  omofictions: OmofictionsInstance;
   [key: string]: any; // Allow for additional databases
 }
 
@@ -35,7 +35,7 @@ export type DatabaseName = keyof DatabaseClientMap;
  * Method overloads for getWrap
  */
 export interface PrismaManagerWrapOverloads {
-  getWrap(databaseName: 'testdb1'): Testdb1Instance;
+  getWrap(databaseName: 'omofictions'): OmofictionsInstance;
   getWrap<T extends string>(databaseName: T): DatabaseClientType<T>;
 }
 
@@ -43,7 +43,7 @@ export interface PrismaManagerWrapOverloads {
  * Method overloads for getClient
  */
 export interface PrismaManagerClientOverloads {
-  getClient(databaseName: 'testdb1'): Testdb1Instance;
+  getClient(databaseName: 'omofictions'): OmofictionsInstance;
   getClient<T = any>(databaseName: string): T;
 }
 
@@ -53,7 +53,7 @@ export interface PrismaManagerClientOverloads {
  */
 declare module '../prismaManager' {
   interface PrismaManager {
-  getWrap(databaseName: 'testdb1'): Testdb1Instance;
-  getClient(databaseName: 'testdb1'): Testdb1Instance;
+  getWrap(databaseName: 'omofictions'): OmofictionsInstance;
+  getClient(databaseName: 'omofictions'): OmofictionsInstance;
   }
 }

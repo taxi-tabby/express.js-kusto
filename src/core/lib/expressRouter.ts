@@ -807,7 +807,9 @@ export class ExpressRouter {
      * # GET_SLUG_VALIDATED
      * 검증된 GET 슬러그 요청 처리
      * @param exact true이면 하위 경로 매칭 방지 (기본값: false)
-     */    public GET_SLUG_VALIDATED(
+     */    
+    
+    public GET_SLUG_VALIDATED(
         slug: string[],
         requestConfig: RequestConfig,
         responseConfig: ResponseConfig,

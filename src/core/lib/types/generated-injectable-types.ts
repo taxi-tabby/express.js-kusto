@@ -5,8 +5,16 @@ import ExampleModule from '@app/injectable/exampleModule';
 import Jwt from '@app/injectable/jwt';
 
 // Module type definitions
-type ExampleModuleType = InstanceType<typeof ExampleModule>;
-type JwtType = InstanceType<typeof Jwt>;
+type ExampleModuleType = typeof ExampleModule extends new (...args: any[]) => any
+  ? InstanceType<typeof ExampleModule>
+  : typeof ExampleModule extends { default: new (...args: any[]) => any }
+  ? InstanceType<typeof ExampleModule['default']>
+  : typeof ExampleModule;
+type JwtType = typeof Jwt extends new (...args: any[]) => any
+  ? InstanceType<typeof Jwt>
+  : typeof Jwt extends { default: new (...args: any[]) => any }
+  ? InstanceType<typeof Jwt['default']>
+  : typeof Jwt;
 
 // Injectable modules interface
 export interface Injectable {

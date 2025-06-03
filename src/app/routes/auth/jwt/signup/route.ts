@@ -13,9 +13,9 @@ router.POST_VALIDATED(
     {
         200: {
             message: { type: 'string' },
-            token: {type: 'string'},
-            refreshToken: {type: 'string'},
-            isSuccess: {type: 'string'}
+            token: { type: 'string' },
+            refreshToken: { type: 'string' },
+            isSuccess: { type: 'string' }
 
         },
         400: {
@@ -24,18 +24,18 @@ router.POST_VALIDATED(
     },
     async (req, res, inject, db) => {
         const jwt = inject.authJSONWEBToken;
-        
         const callbackResult = await jwt.handleSignIn(
             {
                 email: req.body.email,
                 password: req.body.password
-            },            // 사용자 조회 콜백
+            },
+            // 사용자 조회 콜백
             async (email) => {
                 // 주의: 현재 스키마에는 password 필드가 없으므로 테스트용 데이터 사용
                 const user = await db.getWrap('testdb2').user.findUnique({
-                    where: {email}
+                    where: { email }
                 });
-                
+
                 if (user) {
                     return {
                         id: user.id.toString(), // number를 string으로 변환

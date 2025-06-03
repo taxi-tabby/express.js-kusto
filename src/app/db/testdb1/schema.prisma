@@ -5,7 +5,7 @@ generator testdb1_client {
 
 datasource testdb1_db {
   provider = "postgresql"
-  url      = env("RDS1_DEFAULT_URL")
+  url      = env("RDS_DEFAULT_URL")
 }
 
 model Customer {

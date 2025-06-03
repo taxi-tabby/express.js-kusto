@@ -30,24 +30,27 @@ const resolveExternalIP = async (): Promise<string> => {
             }
         } catch (dnsError) {
             console.warn('DNS TXT record resolution failed:', dnsError);
-        }        // 2. HTTP 서비스를 통한 IP 확인 (fallback)
+        }        
+        
+        // 2. HTTP 서비스를 통한 IP 확인 (fallback)
         const ipServices = [
-            'https://api.ipify.org',
-            'https://checkip.amazonaws.com',
-            'https://ipv4.icanhazip.com',
-            'https://ifconfig.me/ip',
-            'https://api.myip.com',
-            'https://ip.seeip.org',
-            'https://ipinfo.io/ip',
-            'https://api.ipaddress.com/myip',
-            'https://ip.42.pl/raw',
-            'https://bot.whatismyipaddress.com',
-            'https://ipecho.net/plain',
-            'https://ident.me',
-            'https://wtfismyip.com/text',
-            'https://ip-api.com/line/?fields=query',
-            'https://ipv4.wtfismyip.com/text',
-            'https://myexternalip.com/raw',
+            'https://freeip2geo.net/api',
+            'https://freeipapi.com/api/json',
+            'https://apip.cc/json',
+            'https://api.ipify.org',                    // ipify - JSON/text 등 지원
+            'https://checkip.amazonaws.com',            // AWS
+            'https://ipv4.icanhazip.com',               // icanhazip - IPv4 전용
+            'https://ifconfig.me/ip',                   // ifconfig.me
+            'https://api.myip.com',                     // myip.com - JSON
+            'https://ipinfo.io/ip',                     // ipinfo.io - text
+            'https://api.ipaddress.com/myip',           // ipaddress.com
+            'https://ipecho.net/plain',                 // ipecho.net
+            'https://ident.me',                         // ident.me
+            'https://wtfismyip.com/text',               // wtfismyip
+            'https://myexternalip.com/raw',             // myexternalip.com
+            'https://us1.api-bdc.net/data/client-ip',   // BigDataCloud
+            'https://api.iplocation.net/?cmd=get-ip',   // iplocation.net
+            'https://checkip.dyndns.org'                // dyndns - HTML 형식 응답
         ];
 
         // Fisher-Yates 알고리즘을 사용한 배열 무작위 섞기

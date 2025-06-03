@@ -3,7 +3,7 @@ import { Injectable, MODULE_REGISTRY, ModuleName } from './types/generated-injec
 
 export class DependencyInjector {
     private static instance: DependencyInjector;
-    private modules: Partial<Injectable> = {};
+    private modules: any = {};
     private initialized = false;
 
     private constructor() {}
@@ -42,11 +42,8 @@ export class DependencyInjector {
         for (const moduleName of moduleNames) {
             try {
                 // Dynamic import using the module registry
-                const moduleLoader = MODULE_REGISTRY[moduleName];
-                const moduleExports = await moduleLoader();                // Get the module (prefer default export)
-                const ModuleClass = moduleExports.default || moduleExports;
-
-                // Always instantiate if it's a constructor function
+                const moduleLoader = MODULE_REGISTRY[moduleName];                const moduleExports = await moduleLoader();
+                const ModuleClass = moduleExports.default || moduleExports;                // Always instantiate if it's a constructor function
                 if (typeof ModuleClass === 'function') {
                     this.modules[moduleName] = new ModuleClass();
                 } else {

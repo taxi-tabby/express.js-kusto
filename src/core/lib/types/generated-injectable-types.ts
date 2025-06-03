@@ -4,7 +4,7 @@
 import ExampleModule from '@app/injectable/exampleModule';
 
 // Module type definitions
-type ExampleModuleType = typeof ExampleModule extends new (...args: any[]) => infer T ? T : typeof ExampleModule;
+type ExampleModuleType = InstanceType<typeof ExampleModule>;
 
 // Injectable modules interface
 export interface Injectable {

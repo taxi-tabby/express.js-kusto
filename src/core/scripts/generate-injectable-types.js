@@ -29,11 +29,10 @@ function generateInjectableTypes() {
   const imports = files.map(moduleName => 
     `import ${capitalize(moduleName)} from '@app/injectable/${moduleName}';`
   ).join('\n');
-
   // Generate module type definitions
   const moduleTypes = files.map(moduleName => {
     const capitalizedName = capitalize(moduleName);
-    return `type ${capitalizedName}Type = typeof ${capitalizedName} extends new (...args: any[]) => infer T ? T : typeof ${capitalizedName};`;
+    return `type ${capitalizedName}Type = InstanceType<typeof ${capitalizedName}>;`;
   }).join('\n');
 
   // Generate Injectable interface

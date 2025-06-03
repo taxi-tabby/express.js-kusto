@@ -3,6 +3,7 @@ import { Validator, Schema, ValidationResult } from './validator';
 import { log } from '../external/winston';
 import { DependencyInjector } from './dependencyInjector';
 import { Injectable } from './types/generated-injectable-types';
+import { prismaManager } from './prismaManager';
 
 export interface RequestConfig {
     body?: Schema;
@@ -253,10 +254,9 @@ export class RequestHandler {
         return missingImplementations;
     }/**
      * 핸들러 래퍼 - 검증과 응답을 자동으로 처리 (Dependency Injection 지원)
-     */
-    static createHandler(
+     */    static createHandler(
         config: HandlerConfig,
-        handler: (req: ValidatedRequest, res: Response, injected: Injectable) => Promise<any> | any
+        handler: (req: ValidatedRequest, res: Response, injected: Injectable, db: typeof prismaManager) => Promise<any> | any
     ) {
         const middlewares: any[] = [];
 
@@ -290,15 +290,13 @@ export class RequestHandler {
         // 요청 검증 미들웨어 추가
         if (config.request) {
             middlewares.push(this.validateRequest(config.request));
-        }
-
-        // Dependency injection을 지원하는 실제 핸들러
+        }        // Dependency injection을 지원하는 실제 핸들러
         middlewares.push(async (req: ValidatedRequest, res: Response, next: NextFunction) => {
             try {
                 // Dependency injector에서 모든 injectable 모듈 가져오기
                 const injected = DependencyInjector.getInstance().getInjectedModules();
                 
-                const result = await handler(req, res, injected);
+                const result = await handler(req, res, injected, prismaManager);
 
                 // 이미 응답이 전송되었으면 리턴
                 if (res.headersSent) {
@@ -336,7 +334,7 @@ export class RequestHandler {
      */
     static withValidation(
         requestConfig: RequestConfig,
-        handler: (req: ValidatedRequest, res: Response, injected: Injectable) => void
+        handler: (req: ValidatedRequest, res: Response, injected: Injectable, db: typeof prismaManager) => void
     ) {
         return this.createHandler({ request: requestConfig }, handler);
     }
@@ -347,7 +345,7 @@ export class RequestHandler {
     static withFullValidation(
         requestConfig: RequestConfig,
         responseConfig: ResponseConfig,
-        handler: (req: ValidatedRequest, res: Response, injected: Injectable) => Promise<any> | any
+        handler: (req: ValidatedRequest, res: Response, injected: Injectable, db: typeof prismaManager) => Promise<any> | any
     ) {
         return this.createHandler({
             request: requestConfig,

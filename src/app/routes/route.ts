@@ -2,8 +2,9 @@ import { ExpressRouter } from '@core/lib/expressRouter'
 
 const router = new ExpressRouter();
 
-router.GET((req, res, injected) => {
+router.GET((req, res, injected, db) => {
 
+    // db.getWrap('testdb1').order
     injected.exampleModule.setData('express-custom-reborn-1.0.5');
     
 

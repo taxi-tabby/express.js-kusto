@@ -196,5 +196,5 @@ sess.db
 ca/*.pem
 
 
-# End of https://www.toptal.com/developers/gitignore/api/windows,node,linux
-/generated/prisma
+# Prisma generated client directories
+src/app/db/*/client/

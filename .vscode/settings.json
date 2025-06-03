@@ -1,6 +1,9 @@
 {
   "prisma.fileWatcher": true,
   "prisma.showPrismaDataPlatformNotification": false,
+  "prisma.trace.server": "off",
+  "prisma.schemaPath": "src/app/db/**/*.prisma",
+  "prisma.enabledExtensions": true,
   "files.associations": {
     "*.prisma": "prisma"
   },
@@ -8,18 +11,25 @@
     "**/node_modules": false,
     "**/.git": true,
     "**/dist": false,
-    "**/logs": false,
-    // Exclude client directories from file watching to prevent schema conflicts
-    "**/client/**/*.prisma": true,
-    "src/app/db/*/client/schema.prisma": true
+    "**/logs": false
   },
   "search.exclude": {
     "**/node_modules": true,
     "**/dist": true,
     "**/logs": true,
-    // Exclude client schema files from search
-    "**/client/**/*.prisma": true,
-    "src/app/db/*/client/schema.prisma": true
+    // Exclude entire client directories from search
+    "src/app/db/*/client": true
   },
-  "prisma.schemaPath": "src/app/db/**/*.prisma"
+  "typescript.preferences.exclude": [
+    "src/app/db/*/client/**"
+  ],
+  "javascript.preferences.exclude": [
+    "src/app/db/*/client/**"
+  ],
+  "typescript.preferences.includePackageJsonAutoImports": "off",
+  "typescript.suggest.autoImports": false,
+  "[prisma]": {
+    "editor.semanticHighlighting.enabled": true,
+    "editor.suggest.showWords": false
+  }
 }

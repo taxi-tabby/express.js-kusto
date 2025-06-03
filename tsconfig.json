@@ -45,10 +45,10 @@
 	},
 	"include": [
 		"**/*.ts"
-	],
-	"exclude": [
+	],	"exclude": [
 		"node_modules",
 		"dist",
-		"build"
+		"build",
+		"src/app/db/*/client/**"
 	]
 }

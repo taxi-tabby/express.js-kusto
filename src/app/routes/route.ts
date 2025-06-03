@@ -2,10 +2,14 @@ import { ExpressRouter } from '@core/lib/expressRouter'
 
 const router = new ExpressRouter();
 
-router.GET((req, res) => {
+router.GET((req, res, injected) => {
+
+    injected.exampleModule.setData('express-custom-reborn-1.0.5');
+    
+
     return res.status(200).render('index', { 
         //배포명칭
-        CONST_VERSION_NAME: 'express-custom-reborn-1.0.2',
+        CONST_VERSION_NAME: injected.exampleModule.getData(),
     });
 });
 

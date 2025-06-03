@@ -217,6 +217,9 @@ program
         for (const db of dbs) {
             try {
                 await executePrismaCommand(db, 'generate');
+
+                
+
                 console.log(`✅ Generated client for ${db}`);
             } catch (error: any) {
                 console.error(`❌ Failed to generate client for ${db}: ${error?.message || String(error)}`);

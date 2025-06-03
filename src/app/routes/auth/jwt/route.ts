@@ -15,11 +15,15 @@ router.POST_VALIDATED(
             message: { type: 'string', required: true },
             data: { type: 'object', required: false },
         },
+        400: {
+            error: { type: 'string', required: true },
+        }
     }, async (req, res) => {
-        
+
     });
 
 
 
 
-export default router;
+
+export default router.build();

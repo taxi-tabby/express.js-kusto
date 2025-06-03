@@ -62,6 +62,12 @@ export class ExpressRouter {
         return fullPath;
     }
 
+    /**
+     * # convertSlugsToPath - 슬러그를 경로로 변환하는 헬퍼
+     * 슬러그 배열을 Express 경로 형식으로 변환
+     * @param slugs - 슬러그 배열
+     * @returns 변환된 경로 문자열
+     */
     private convertSlugsToPath(slugs: string[]): string {
         const pathSegments = slugs.map(slug => slug === "*" ? "*" : `/:${slug}`);
         const path = pathSegments.join('');
@@ -77,7 +83,9 @@ export class ExpressRouter {
         const path = pathSegments.join('');
         // 끝에 추가 경로가 오는 것을 방지하기 위해 '(?=/|$)' 사용
         return path + '(?=/|$)';
-    }    /**
+    }    
+    
+    /**
      * # GET
      * @param handler 
      * @param options 
@@ -105,7 +113,9 @@ export class ExpressRouter {
         }
         
         return this; // 메소드 체인을 위해 인스턴스 반환
-    }    /**
+    }    
+    
+    /**
      * # GET_SLUG
      * @param slug 
      * @param handler 
@@ -143,7 +153,10 @@ export class ExpressRouter {
         }
         
         return this; // 메소드 체인을 위해 인스턴스 반환
-    }    /**
+    }    
+    
+    
+    /**
      * # POST
      * @param handler 
      * @param options 
@@ -171,7 +184,10 @@ export class ExpressRouter {
         }
         
         return this; // 메소드 체인을 위해 인스턴스 반환
-    }    /**
+    }    
+    
+    
+    /**
      * # POST_SLUG
      * @param slug 
      * @param handler 
@@ -204,6 +220,9 @@ export class ExpressRouter {
         
         return this; // 메소드 체인을 위해 인스턴스 반환
     }
+
+
+
     /**
      * ```
      * - multer 라이브러리
@@ -243,7 +262,11 @@ export class ExpressRouter {
         }
         
         return this;
-    }    /**
+    }    
+    
+    
+    
+    /**
      * ```
      * - multer 라이브러리
      * 파일 업로드를 위한 라우터 기능
@@ -282,7 +305,10 @@ export class ExpressRouter {
         }
         
         return this;
-    }    /**
+    }    
+    
+    
+    /**
      * ```
      * - multer 라이브러리
      * 파일 업로드를 위한 라우터 기능
@@ -323,6 +349,7 @@ export class ExpressRouter {
         return this;
     }
 
+
     /**
      * ```
      * - multer 라이브러리
@@ -343,6 +370,9 @@ export class ExpressRouter {
         this.router.post('/', accpetFileType, handler);
         return this;
     }
+
+
+
     /**
      * # PUT
      * @param handler 
@@ -361,6 +391,7 @@ export class ExpressRouter {
                 parameters: {},
                 responses: { 200: { data: { type: 'object' as const, required: false } } }
             });
+
         } else {
             // basePath가 아직 설정되지 않은 경우 지연 등록
             this.pendingDocumentation.push({
@@ -372,6 +403,7 @@ export class ExpressRouter {
         
         return this;
     }
+
 
     /**
      * ```
@@ -394,6 +426,7 @@ export class ExpressRouter {
         return this;
     }
 
+
     /**
      * ```
      * - multer 라이브러리
@@ -414,6 +447,8 @@ export class ExpressRouter {
         this.router.put('/', accpetFileType, handler);
         return this;
     }
+
+
 
     /**
      * ```
@@ -436,6 +471,8 @@ export class ExpressRouter {
         return this;
     }
 
+
+
     /**
      * ```
      * - multer 라이브러리
@@ -456,6 +493,9 @@ export class ExpressRouter {
         this.router.put('/', accpetFileType, handler);
         return this;
     }
+
+
+
     /**
      * # PUT_SLUG
      * @param slug 
@@ -488,7 +528,10 @@ export class ExpressRouter {
         }
         
         return this;
-    }    /**
+    }    
+    
+    
+    /**
      * # DELETE
      * @param handler 
      * @param options 
@@ -517,7 +560,11 @@ export class ExpressRouter {
         }
         
         return this;
-    }    /**
+    }    
+    
+    
+    
+    /**
      * # DELETE_SLUG
      * @param slug 
      * @param handler 
@@ -550,6 +597,10 @@ export class ExpressRouter {
         
         return this;
     }
+
+
+
+
     /**
      * # PATCH
      * @param handler 
@@ -578,7 +629,11 @@ export class ExpressRouter {
         }
         
         return this;
-    }    /**
+    }    
+    
+    
+    
+    /**
      * # PATCH_SLUG
      * @param slug 
      * @param handler 
@@ -640,11 +695,25 @@ export class ExpressRouter {
     }
 
     
+    /**
+     * # MIDDLE_PROXY_ROUTE
+     * @param options - http-proxy-middleware 옵션
+     * @description
+     * - Express 라우터에 프록시 미들웨어를 추가합니다.
+     */
     public MIDDLE_PROXY_ROUTE(options: Options) {
         this.router.use("/", createProxyMiddleware(options));
     }
 
-    
+
+
+    /**
+     * # MIDDLE_PROXY_ROUTE_SLUG
+     * @param slug - 슬러그 배열
+     * @param options - http-proxy-middleware 옵션
+     * @description
+     * - Express 라우터에 프록시 미들웨어를 추가합니다.
+     */
     public MIDDLE_PROXY_ROUTE_SLUG(slug: string[], options: Options) {
         this.router.use(this.convertSlugsToPath(slug), createProxyMiddleware(options));
     }
@@ -657,7 +726,8 @@ export class ExpressRouter {
      * @param responseConfig 응답 검증 설정
      * @param handler 핸들러 함수
      * @returns ExpressRouter
-     */    public GET_VALIDATED(
+     */    
+    public GET_VALIDATED(
         requestConfig: RequestConfig,
         responseConfig: ResponseConfig,
         handler: ValidatedHandlerFunction
@@ -817,11 +887,14 @@ export class ExpressRouter {
         handler: ValidatedHandlerFunction,
         options?: { exact?: boolean }
     ): ExpressRouter {
+
         const middlewares = CustomRequestHandler.createHandler(
             { request: requestConfig, response: responseConfig },
             handler
         );
-          const slugPath = this.convertSlugsToPath(slug);
+
+
+        const slugPath = this.convertSlugsToPath(slug);
         
         // 문서화 등록을 지연시켜 setBasePath 호출 후 올바른 경로로 등록되도록 함
         if (this.basePath) {
@@ -950,7 +1023,10 @@ export class ExpressRouter {
         }
         
         return this;
-    }    /**
+    }    
+    
+    
+    /**
      * # PATCH_VALIDATED
      * 검증된 PATCH 요청 처리
      */
@@ -962,7 +1038,10 @@ export class ExpressRouter {
         const middlewares = CustomRequestHandler.createHandler(
             { request: requestConfig, response: responseConfig },
             handler
-        );        this.router.patch('/', ...middlewares);
+        );        
+        
+        
+        this.router.patch('/', ...middlewares);
         
         // 문서화 등록을 지연시켜 setBasePath 호출 후 올바른 경로로 등록되도록 함
         if (this.basePath) {
@@ -991,8 +1070,8 @@ export class ExpressRouter {
     }
 
     /**
-     * # 간단한 검증 메서드들 (응답 검증 없이 요청 검증만)
-     */    /**
+
+    /**
      * # GET_WITH_VALIDATION
      * 요청 검증만 있는 GET
      */
@@ -1000,7 +1079,9 @@ export class ExpressRouter {
         requestConfig: RequestConfig,
         handler: ValidatedHandlerFunction
     ): ExpressRouter {
-        const middlewares = CustomRequestHandler.withValidation(requestConfig, handler);        this.router.get('/', ...middlewares);
+        const middlewares = CustomRequestHandler.withValidation(requestConfig, handler);        
+        
+        this.router.get('/', ...middlewares);
         
         // 문서화 등록을 지연시켜 setBasePath 호출 후 올바른 경로로 등록되도록 함
         if (this.basePath) {
@@ -1015,6 +1096,7 @@ export class ExpressRouter {
                 },
                 responses: { 200: { data: { type: 'object' as const, required: false } } }
             });
+
         } else {
             // basePath가 아직 설정되지 않은 경우 지연 등록
             this.pendingDocumentation.push({
@@ -1026,7 +1108,10 @@ export class ExpressRouter {
         }
         
         return this;
-    }    /**
+    }    
+    
+    
+    /**
      * # POST_WITH_VALIDATION
      * 요청 검증만 있는 POST
      */
@@ -1034,10 +1119,13 @@ export class ExpressRouter {
         requestConfig: RequestConfig,
         handler: ValidatedHandlerFunction
     ): ExpressRouter {
-        const middlewares = CustomRequestHandler.withValidation(requestConfig, handler);        this.router.post('/', ...middlewares);
+        
+        const middlewares = CustomRequestHandler.withValidation(requestConfig, handler);        
+        this.router.post('/', ...middlewares);
         
         // 문서화 등록을 지연시켜 setBasePath 호출 후 올바른 경로로 등록되도록 함
         if (this.basePath) {
+
             // basePath가 이미 설정된 경우 즉시 등록
             DocumentationGenerator.registerRoute({
                 method: 'POST',
@@ -1060,7 +1148,10 @@ export class ExpressRouter {
         }
         
         return this;
-    }    /**
+    }    
+    
+    
+    /**
      * # GET_SLUG_VALIDATED_EXACT
      * 검증된 GET 슬러그 요청 처리 (정확한 경로 매칭만)
      * 하위 라우터에 영향을 주지 않음
@@ -1071,10 +1162,13 @@ export class ExpressRouter {
         responseConfig: ResponseConfig,
         handler: ValidatedHandlerFunction
     ): ExpressRouter {
+
         const middlewares = CustomRequestHandler.createHandler(
             { request: requestConfig, response: responseConfig },
             handler
-        );        // 정확한 경로 매칭을 위해 '$' 앵커 사용하는 대신 정규식 패턴으로 처리
+        );        
+        
+        // 정확한 경로 매칭을 위해 '$' 앵커 사용하는 대신 정규식 패턴으로 처리
         const exactPath = this.convertSlugsToPath(slug);
         this.router.get(new RegExp(`^${exactPath.replace(/:\w+/g, '([^/]+)')}$`), ...middlewares);
         
@@ -1092,6 +1186,7 @@ export class ExpressRouter {
                 responses: responseConfig
             });
         } else {
+
             // basePath가 아직 설정되지 않은 경우 지연 등록
             this.pendingDocumentation.push({
                 method: 'GET',
@@ -1102,7 +1197,12 @@ export class ExpressRouter {
         }
         
         return this;
-    }    /**
+    }    
+    
+    
+    
+    
+    /**
      * # POST_SLUG_VALIDATED_EXACT
      * 검증된 POST 슬러그 요청 처리 (정확한 경로 매칭만)
      */
@@ -1115,11 +1215,15 @@ export class ExpressRouter {
         const middlewares = CustomRequestHandler.createHandler(
             { request: requestConfig, response: responseConfig },
             handler
-        );        const exactPath = this.convertSlugsToPath(slug);
+        );        
+        
+        const exactPath = this.convertSlugsToPath(slug);
+
         this.router.post(new RegExp(`^${exactPath.replace(/:\w+/g, '([^/]+)')}$`), ...middlewares);
         
         // 문서화 등록을 지연시켜 setBasePath 호출 후 올바른 경로로 등록되도록 함
         if (this.basePath) {
+
             // basePath가 이미 설정된 경우 즉시 등록
             DocumentationGenerator.registerRoute({
                 method: 'POST',
@@ -1132,6 +1236,7 @@ export class ExpressRouter {
                 responses: responseConfig
             });
         } else {
+
             // basePath가 아직 설정되지 않은 경우 지연 등록
             this.pendingDocumentation.push({
                 method: 'POST',
@@ -1142,7 +1247,10 @@ export class ExpressRouter {
         }
         
         return this;
-    }    /**
+    }    
+    
+    
+    /**
      * # PUT_SLUG_VALIDATED_EXACT
      * 검증된 PUT 슬러그 요청 처리 (정확한 경로 매칭만)
      */
@@ -1155,7 +1263,10 @@ export class ExpressRouter {
         const middlewares = CustomRequestHandler.createHandler(
             { request: requestConfig, response: responseConfig },
             handler
-        );        const exactPath = this.convertSlugsToPath(slug);
+        );        
+        
+        
+        const exactPath = this.convertSlugsToPath(slug);
         this.router.put(new RegExp(`^${exactPath.replace(/:\w+/g, '([^/]+)')}$`), ...middlewares);
         
         // 문서화 등록을 지연시켜 setBasePath 호출 후 올바른 경로로 등록되도록 함
@@ -1182,7 +1293,11 @@ export class ExpressRouter {
         }
         
         return this;
-    }    /**
+    }    
+    
+    
+    
+    /**
      * # DELETE_SLUG_VALIDATED_EXACT
      * 검증된 DELETE 슬러그 요청 처리 (정확한 경로 매칭만)
      */
@@ -1195,7 +1310,9 @@ export class ExpressRouter {
         const middlewares = CustomRequestHandler.createHandler(
             { request: requestConfig, response: responseConfig },
             handler
-        );        const exactPath = this.convertSlugsToPath(slug);
+        );        
+        
+        const exactPath = this.convertSlugsToPath(slug);
         this.router.delete(new RegExp(`^${exactPath.replace(/:\w+/g, '([^/]+)')}$`), ...middlewares);
         
         // 문서화 등록을 지연시켜 setBasePath 호출 후 올바른 경로로 등록되도록 함
@@ -1211,6 +1328,7 @@ export class ExpressRouter {
                 },
                 responses: responseConfig
             });
+
         } else {
             // basePath가 아직 설정되지 않은 경우 지연 등록
             this.pendingDocumentation.push({
@@ -1235,6 +1353,7 @@ export class ExpressRouter {
         handler: ValidatedHandlerFunction,
         options?: { exact?: boolean }
     ): ExpressRouter {
+
         const middlewares = CustomRequestHandler.createHandler(
             { request: requestConfig, response: responseConfig },
             handler
@@ -1254,7 +1373,9 @@ export class ExpressRouter {
                     next('route'); // 다른 라우트로 패스
                 }
             };
+
             this.router.get(exactPath, exactMiddleware, ...middlewares);
+
         } else {
             // 기본 동작: 하위 경로도 매칭
             this.router.get(this.convertSlugsToPath(slug), ...middlewares);
@@ -1262,6 +1383,7 @@ export class ExpressRouter {
         
         return this;
     }
+    
 
     build(): Router {
         const router = this.router;

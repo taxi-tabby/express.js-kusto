@@ -9,15 +9,19 @@
   "scripts": {
     "start": "ts-node ./src/index.ts",
     "dev": "nodemon --watch src --ext ts,js,json --ignore src/core/lib/types/* --exec \"npm run generate-injectables && npm run generate-db-types && ts-node ./src/index.ts\"",
-    "dev:serve": "nodemon --watch src --ignore src/core/tmp/ --ignore src/core/lib/types/* --ext ts,js,json --exec \"npm run generate-injectables && npm run generate-db-types npm run build:dev && npm run serve\"",
-    "build": "npm run generate-db-types && npm run generate-routes-map && npm run build:routes && webpack --mode production && npm run clean:tmp",
-    "build:dev": "npm run generate-db-types && npm run generate-routes-map && npm run build:routes && webpack --mode development && npm run clean:tmp",
-    "build:routes": "node src/core/scripts/build-routes.js",
+    "dev:serve": "nodemon --watch src --ignore src/core/tmp/ --ignore src/core/lib/types/* --ext ts,js,json --exec \"npm run generate-injectables && npm run generate-db-types && npm run build:dev && npm run serve\"",
+
+    "build": "npm run generate-injectables && npm run generate-db-types && npm run generate-routes-map && npm run build-routes && webpack --mode production && npm run clean:tmp",
+    "build:dev": "npm run generate-injectables && npm run generate-db-types && npm run generate-routes-map && npm run build-routes && webpack --mode development && npm run clean:tmp",
+    
+    "build-routes": "node src/core/scripts/build-routes.js",
     "generate-routes-map": "node src/core/scripts/generate-routes-map.js",
     "generate-db-types": "node src/core/scripts/generate-db-types.js",
     "generate-injectables": "node src/core/scripts/generate-injectable-types.js",
+
     "clean:tmp": "node -e \"const fs = require('fs'); const path = require('path'); const tmpDir = path.join(__dirname, 'src', 'core', 'tmp'); if (fs.existsSync(tmpDir)) { fs.rmSync(tmpDir, { recursive: true, force: true }); console.log('🧹 Cleaned tmp directory'); }\"",
     "serve": "node dist/server.js",
+
     "db": "ts-node ./src/core/scripts/kusto-db-cli.ts",
     "install-cli": "tsc -p src/core/scripts/tsconfig.cli.json && npm install . && npm link",
     "uninstall-cli": "npm uninstall -g kusto-server"

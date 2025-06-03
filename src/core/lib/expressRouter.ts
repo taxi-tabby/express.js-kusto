@@ -4,9 +4,10 @@ import multer from 'multer';
 import { DocumentationGenerator } from './documentationGenerator';
 import { RequestHandler as CustomRequestHandler, RequestConfig, ResponseConfig, ValidatedRequest } from './requestHandler';
 import { Injectable } from './types/generated-injectable-types';
+import { DependencyInjector } from './dependencyInjector';
 
 
-type HandlerFunction = (req: Request, res: Response, ) => void;
+type HandlerFunction = (req: Request, res: Response, injected: Injectable) => void;
 type ValidatedHandlerFunction = (req: ValidatedRequest, res: Response, injected: Injectable) => Promise<any> | any;
 
 export class ExpressRouter {
@@ -17,7 +18,22 @@ export class ExpressRouter {
         path: string;
         requestConfig?: RequestConfig;
         responseConfig?: ResponseConfig;
-    }> = [];
+    }> = [];    
+    
+    /**
+     * HandlerFunction을 Express 호환 핸들러로 래핑하는 헬퍼 메서드
+     */
+    private wrapHandler(handler: HandlerFunction): RequestHandler {
+        return (req: Request, res: Response, next) => {
+            try {
+                // Dependency injector에서 모든 injectable 모듈 가져오기
+                const injected = DependencyInjector.getInstance().getInjectedModules();
+                handler(req, res, injected);
+            } catch (error) {
+                next(error);
+            }
+        };
+    }
 
     /**
      * 스택 트레이스를 이용하여 호출자의 파일 위치 정보를 추출하는 헬퍼 메서드
@@ -113,15 +129,14 @@ export class ExpressRouter {
         // 끝에 추가 경로가 오는 것을 방지하기 위해 '(?=/|$)' 사용
         return path + '(?=/|$)';
     }    
-    
-    /**
+      /**
      * # GET
      * @param handler 
      * @param options 
      * @returns 
      */
     public GET(handler: HandlerFunction, options?: object): ExpressRouter {
-        this.router.get('/', handler);
+        this.router.get('/', this.wrapHandler(handler));
         
         // 문서화 등록을 지연시켜 setBasePath 호출 후 올바른 경로로 등록되도록 함
         if (this.basePath) {
@@ -158,10 +173,10 @@ export class ExpressRouter {
      *     res.send(`${req.params.slug1}`);
      * });
      * ```
-     */
+     */    
     public GET_SLUG(slug: string[], handler: HandlerFunction, options?: object): ExpressRouter {
         const slugPath = this.convertSlugsToPath(slug);
-        this.router.get(slugPath, handler);
+        this.router.get(slugPath, this.wrapHandler(handler));
         
         // 문서화 등록을 지연시켜 setBasePath 호출 후 올바른 경로로 등록되도록 함
         if (this.basePath) {
@@ -192,7 +207,7 @@ export class ExpressRouter {
      * @returns 
      */
     public POST(handler: HandlerFunction, options?: object): ExpressRouter {
-        this.router.post('/', handler);
+        this.router.post('/', this.wrapHandler(handler));
         
         // 문서화 등록을 지연시켜 setBasePath 호출 후 올바른 경로로 등록되도록 함
         if (this.basePath) {
@@ -227,7 +242,7 @@ export class ExpressRouter {
      */
     public POST_SLUG(slug: string[], handler: HandlerFunction, options?: object): ExpressRouter {
         const slugPath = this.convertSlugsToPath(slug);
-        this.router.post(slugPath, handler);
+        this.router.post(slugPath, this.wrapHandler(handler));
         
         // 문서화 등록을 지연시켜 setBasePath 호출 후 올바른 경로로 등록되도록 함
         if (this.basePath) {
@@ -265,11 +280,10 @@ export class ExpressRouter {
      */
     public POST_SINGLE_FILE(multerStorageEngine: multer.StorageEngine, keyName: string, handler: HandlerFunction, options?: { 
         fileSize?: number 
-    }): ExpressRouter {
-        const fileSize = options?.fileSize ?? undefined;
+    }): ExpressRouter {        const fileSize = options?.fileSize ?? undefined;
         const upload = multer({ storage: multerStorageEngine, limits: { fileSize: fileSize }, });
         const accpetFileType = upload.single(keyName);
-        this.router.post('/', accpetFileType, handler);
+        this.router.post('/', accpetFileType, this.wrapHandler(handler));
         
         // 문서화 등록을 지연시켜 setBasePath 호출 후 올바른 경로로 등록되도록 함
         if (this.basePath) {
@@ -309,10 +323,9 @@ export class ExpressRouter {
     public POST_ARRAY_FILE(multerStorageEngine: multer.StorageEngine, keyName: string, handler: HandlerFunction, maxFileCount?: number, options?: { 
         fileSize?: number 
     }): ExpressRouter {
-        const fileSize = options?.fileSize ?? undefined;
-        const upload = multer({ storage: multerStorageEngine, limits: { fileSize: fileSize } });
+        const fileSize = options?.fileSize ?? undefined;        const upload = multer({ storage: multerStorageEngine, limits: { fileSize: fileSize } });
         const accpetFileType = upload.array(keyName, maxFileCount);
-        this.router.post('/', accpetFileType, handler);
+        this.router.post('/', accpetFileType, this.wrapHandler(handler));
         
         // 문서화 등록을 지연시켜 setBasePath 호출 후 올바른 경로로 등록되도록 함
         if (this.basePath) {
@@ -352,9 +365,8 @@ export class ExpressRouter {
         fileSize?: number 
     }): ExpressRouter {
         const fileSize = options?.fileSize ?? undefined;
-        const upload = multer({ storage: multerStorageEngine, limits: { fileSize: fileSize } });
-        const accpetFileType = upload.fields(fields);
-        this.router.post('/', accpetFileType, handler);
+        const upload = multer({ storage: multerStorageEngine, limits: { fileSize: fileSize } });        const accpetFileType = upload.fields(fields);
+        this.router.post('/', accpetFileType, this.wrapHandler(handler));
         
         // 문서화 등록을 지연시켜 setBasePath 호출 후 올바른 경로로 등록되도록 함
         if (this.basePath) {
@@ -396,7 +408,7 @@ export class ExpressRouter {
         const fileSize = options?.fileSize ?? undefined;
         const upload = multer({ storage: multerStorageEngine, limits: { fileSize: fileSize } });
         const accpetFileType = upload.any();
-        this.router.post('/', accpetFileType, handler);
+        this.router.post('/', accpetFileType, this.wrapHandler(handler));
         return this;
     }
 
@@ -409,7 +421,7 @@ export class ExpressRouter {
      * @returns 
      */
     public PUT(handler: HandlerFunction, options?: object): ExpressRouter {
-        this.router.put('/', handler);
+        this.router.put('/', this.wrapHandler(handler));
         
         // 문서화 등록을 지연시켜 setBasePath 호출 후 올바른 경로로 등록되도록 함
         if (this.basePath) {
@@ -451,7 +463,7 @@ export class ExpressRouter {
         const fileSize = options?.fileSize ?? undefined;
         const upload = multer({ storage: multerStorageEngine, limits: { fileSize: fileSize }, });
         const accpetFileType = upload.single(keyName);
-        this.router.put('/', accpetFileType, handler);
+        this.router.put('/', accpetFileType, this.wrapHandler(handler));
         return this;
     }
 
@@ -473,7 +485,7 @@ export class ExpressRouter {
         const fileSize = options?.fileSize ?? undefined;
         const upload = multer({ storage: multerStorageEngine, limits: { fileSize: fileSize } });
         const accpetFileType = upload.array(keyName, maxFileCount);
-        this.router.put('/', accpetFileType, handler);
+        this.router.put('/', accpetFileType, this.wrapHandler(handler));
         return this;
     }
 
@@ -496,7 +508,7 @@ export class ExpressRouter {
         const fileSize = options?.fileSize ?? undefined;
         const upload = multer({ storage: multerStorageEngine, limits: { fileSize: fileSize } });
         const accpetFileType = upload.fields(fields);
-        this.router.put('/', accpetFileType, handler);
+        this.router.put('/', accpetFileType, this.wrapHandler(handler));
         return this;
     }
 
@@ -519,7 +531,7 @@ export class ExpressRouter {
         const fileSize = options?.fileSize ?? undefined;
         const upload = multer({ storage: multerStorageEngine,  limits: { fileSize: fileSize } });
         const accpetFileType = upload.any();
-        this.router.put('/', accpetFileType, handler);
+        this.router.put('/', accpetFileType, this.wrapHandler(handler));
         return this;
     }
 
@@ -536,7 +548,7 @@ export class ExpressRouter {
      */
     public PUT_SLUG(slug: string[], handler: HandlerFunction, options?: object): ExpressRouter {
         const slugPath = this.convertSlugsToPath(slug);
-        this.router.put(slugPath, handler);
+        this.router.put(slugPath, this.wrapHandler(handler));
         
         // 문서화 등록을 지연시켜 setBasePath 호출 후 올바른 경로로 등록되도록 함
         if (this.basePath) {
@@ -568,7 +580,7 @@ export class ExpressRouter {
      * - http delete 요청을 처리하는 메서드입니다. 
      */
     public DELETE(handler: HandlerFunction, options?: object): ExpressRouter {
-        this.router.delete('/', handler);
+        this.router.delete('/', this.wrapHandler(handler));
         
         // 문서화 등록을 지연시켜 setBasePath 호출 후 올바른 경로로 등록되도록 함
         if (this.basePath) {
@@ -604,7 +616,7 @@ export class ExpressRouter {
      */
     public DELETE_SLUG(slug: string[], handler: HandlerFunction, options?: object): ExpressRouter {
         const slugPath = this.convertSlugsToPath(slug);
-        this.router.delete(slugPath, handler);
+        this.router.delete(slugPath, this.wrapHandler(handler));
         
         // 문서화 등록을 지연시켜 setBasePath 호출 후 올바른 경로로 등록되도록 함
         if (this.basePath) {
@@ -637,7 +649,7 @@ export class ExpressRouter {
      * @returns 
      */
     public PATCH(handler: HandlerFunction, options?: object): ExpressRouter {
-        this.router.patch('/', handler);
+        this.router.patch('/', this.wrapHandler(handler));
         
         // 문서화 등록을 지연시켜 setBasePath 호출 후 올바른 경로로 등록되도록 함
         if (this.basePath) {
@@ -673,7 +685,7 @@ export class ExpressRouter {
      */
     public PATCH_SLUG(slug: string[], handler: HandlerFunction, options?: object): ExpressRouter {
         const slugPath = this.convertSlugsToPath(slug);
-        this.router.patch(slugPath, handler);
+        this.router.patch(slugPath, this.wrapHandler(handler));
         
         // 문서화 등록을 지연시켜 setBasePath 호출 후 올바른 경로로 등록되도록 함
         if (this.basePath) {
@@ -719,7 +731,7 @@ export class ExpressRouter {
      * @returns 
      */
     public NOTFOUND(handler: HandlerFunction, options?: object): ExpressRouter {
-        this.router.all('*', handler);
+        this.router.all('*', this.wrapHandler(handler));
         return this;
     }
 

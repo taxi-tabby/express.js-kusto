@@ -878,7 +878,8 @@ export class ExpressRouter {
     /**
      * # POST_VALIDATED
      * 검증된 POST 요청 처리
-     */    public POST_VALIDATED(
+     */    
+    public POST_VALIDATED(
         requestConfig: RequestConfig,
         responseConfig: ResponseConfig,
         handler: ValidatedHandlerFunction

@@ -3,6 +3,7 @@
 import { PrismaClient } from '@prisma/client';
 import * as fs from 'fs';
 import * as path from 'path';
+import { config } from 'dotenv';
 import {
 	DatabaseClientMap,
 	DatabaseClientType,
@@ -31,10 +32,48 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 	private clientTypes: Map<string, any> = new Map(); // Store client type constructors
 	private initialized: boolean = false;
 
+
 	/**
 	 * Private constructor to enforce singleton pattern
 	 */
-	private constructor() { }
+	private constructor() { 
+		// Load environment variables when PrismaManager is created
+		this.loadEnvironmentVariables();
+	}	
+	
+	
+	/**
+	 * Load environment variables using the same logic as webpack config
+	 */
+	private loadEnvironmentVariables(): void {
+		console.log('🔧 Loading environment variables...');
+		
+		// 기본 .env 파일 로드
+		const defaultEnvPath = path.resolve(process.cwd(), '.env');
+		if (fs.existsSync(defaultEnvPath)) {
+			console.log(`📄 Loading default .env file: ${defaultEnvPath}`);
+			config({ path: defaultEnvPath });
+		}
+
+		// NODE_ENV 기반 환경별 파일 로드
+		const nodeEnv = process.env.NODE_ENV || 'development';
+		let envSpecificPath = null;
+
+		if (nodeEnv === 'development') {
+			envSpecificPath = path.resolve(process.cwd(), '.env.dev');
+		} else if (nodeEnv === 'production') {
+			envSpecificPath = path.resolve(process.cwd(), '.env.prod');
+		}
+		
+		if (envSpecificPath && fs.existsSync(envSpecificPath)) {
+			console.log(`📄 Loading environment-specific file: ${envSpecificPath}`);
+			config({ path: envSpecificPath, override: true });
+		} else if (envSpecificPath) {
+			console.log(`⚠️ Environment-specific file not found: ${envSpecificPath}`);
+		}
+		
+
+	}
 
 	/**
 	 * Get the singleton instance of PrismaManager
@@ -105,28 +144,46 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 			return;
 		}
 
+
 		try {
 			// Dynamically import the generated Prisma client
 			let clientModule;
-			let DatabasePrismaClient;
-
-
+			let DatabasePrismaClient;			
+			
 			if (process.env.WEBPACK_BUILD == 'true') {
-
+				// In webpack build environment, use Node.js Module API to bypass webpack's require interception
 				const distClientPath = path.join(process.cwd(), 'dist', 'src', 'app', 'db', folderName, 'client');
-				console.log(`Webpack build: Loading Prisma client from dist path: ${distClientPath}`);
-
-
 				const clientIndexPath = path.join(distClientPath, 'index.js');
-				delete require.cache[clientIndexPath]; 
-
-
-				clientModule = require(clientIndexPath);
-				console.log(`-------------- ✅ Loaded Prisma client for ${clientIndexPath} from dist path`);
-
-				DatabasePrismaClient = clientModule.PrismaClient;
-
-
+				
+				try {
+					// Use multiple approaches to bypass webpack's module resolution
+					let nodeRequire: any;
+					
+					// Try using Module.createRequire with __filename fallback
+					try {
+						const Module = eval('require')('module');
+						// Use __filename as fallback since import.meta.url is not available in webpack
+						nodeRequire = Module.createRequire(__filename);
+					} catch (e) {
+						// Fallback to direct eval require
+						nodeRequire = eval('require');
+					}
+					
+					// Clear cache and load the module
+					delete nodeRequire.cache[clientIndexPath];
+					clientModule = nodeRequire(clientIndexPath);
+					DatabasePrismaClient = clientModule.PrismaClient;
+					
+					if (!DatabasePrismaClient) {
+						throw new Error(`PrismaClient not found in module: ${clientIndexPath}`);
+					}
+					
+					console.log(`✅ Successfully loaded Prisma client for ${folderName} from dist path`);
+				} catch (requireError: any) {
+					console.error(`Detailed require error:`, requireError);
+					console.error(`Error stack:`, requireError.stack);
+					throw requireError;
+				}
 			} else {
 				// Development environment - use normal dynamic import
 				const clientPath = path.join(folderPath, 'client');
@@ -231,6 +288,7 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 
 			const envVarName = urlMatch[1];
 			const url = process.env[envVarName];
+			
 
 			if (!url) {
 				throw new Error(`Environment variable ${envVarName} not found for database ${folderName}`);

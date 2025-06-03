@@ -28,19 +28,19 @@ function loadEnvironmentVariables() {
 }
 
 // // 빌드 시 환경 변수 자동 생성 함수
-// function getEnvironmentVariables() {
-//     const envVars = {};
+function getEnvironmentVariables() {
+    const envVars = {};
 
-//     // process.env의 모든 환경 변수를 webpack DefinePlugin 형태로 변환
-//     // NODE_ENV는 제외 (webpack에서 명시적으로 설정)
-//     Object.keys(process.env).forEach(key => {
-//         if (key !== 'NODE_ENV') {
-//             envVars[`process.env.${key}`] = JSON.stringify(process.env[key]);
-//         }
-//     });
+    // process.env의 모든 환경 변수를 webpack DefinePlugin 형태로 변환
+    // NODE_ENV는 제외 (webpack에서 명시적으로 설정)
+    Object.keys(process.env).forEach(key => {
+        if (key !== 'NODE_ENV') {
+            envVars[`process.env.${key}`] = JSON.stringify(process.env[key]);
+        }
+    });
 
-//     return envVars;
-// }
+    return envVars;
+}
 
 
 module.exports = (env, argv) => {
@@ -51,7 +51,7 @@ module.exports = (env, argv) => {
     loadEnvironmentVariables();
 
     // 동적으로 환경 변수 생성
-    // const envVariables = getEnvironmentVariables();
+    const envVariables = getEnvironmentVariables();
 
     return {
         mode: mode,
@@ -92,6 +92,7 @@ module.exports = (env, argv) => {
             new webpack.DefinePlugin({
                 'process.env.NODE_ENV': JSON.stringify(mode),
                 'process.env.WEBPACK_BUILD': JSON.stringify('true'),
+                ...envVariables
             }),
             new CopyWebpackPlugin({
                 patterns: [

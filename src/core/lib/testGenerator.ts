@@ -70,6 +70,56 @@ export class TestGenerator {
     private static routes: RouteDocumentation[] = [];
     private static viewsPath = path.join(__dirname, 'views');
 
+    // Map: irregular → true, invariant → false
+    private static specialForms = new Map<string, boolean>([
+        // Irregular plurals
+        ["men", true], ["women", true], ["children", true], ["teeth", true], ["feet", true],
+        ["mice", true], ["geese", true], ["people", true], ["oxen", true], ["cacti", true],
+        ["alumni", true], ["dice", true], ["data", true], ["bacteria", true], ["media", true],
+        ["fungi", true], ["theses", true], ["analyses", true], ["crises", true], ["phenomena", true],
+        ["criteria", true], ["stimuli", true], ["matrices", true], ["appendices", true],
+        ["indices", true], ["lice", true], ["knives", true], ["wolves", true], ["leaves", true],
+        ["loaves", true], ["selves", true], ["lives", true], ["elves", true], ["hooves", true],
+
+        // Invariant forms (false = not plural despite ending with s)
+        ["sheep", false], ["fish", false], ["deer", false], ["species", false], ["series", false],
+        ["aircraft", false], ["moose", false], ["salmon", false], ["bison", false], ["shrimp", false],
+        ["trout", false], ["tuna", false], ["swine", false], ["offspring", false],
+        ["hovercraft", false], ["spacecraft", false], ["means", false]
+    ]);
+
+    // Words that end with "s" but are actually singular
+    private static singularSEndingExceptions = new Set([
+        "glass", "class", "boss", "pass", "kiss", "loss", "miss", "access", "process", "business"
+    ]);
+
+    // Plural suffix rules with early-exit optimization
+    private static pluralRules: [RegExp, (w: string) => boolean][] = [
+        [/ies$/, w => w.length > 4],               // babies, cities
+        [/ves$/, w => w.length > 4],               // leaves, wolves
+        [/oes$/, w => w.length > 4],               // heroes
+        [/((ch|sh|s|x|z)es)$/, w => w.length > 4], // boxes, dishes
+        [/s$/, w => !w.endsWith("ss") && w.length > 3] // cats, dogs
+    ];
+
+    /**
+     * 단어가 복수형인지 확인
+     */
+    private static isPlural(word: string): boolean {
+        const w = word.toLowerCase();
+
+        if (w.length <= 2 || !/^[a-z]+$/.test(w)) return false;
+
+        if (this.specialForms.has(w)) return this.specialForms.get(w)!;
+        if (this.singularSEndingExceptions.has(w)) return false;
+
+        for (const [regex, validator] of this.pluralRules) {
+            if (regex.test(w) && validator(w)) return true;
+        }
+
+        return false;
+    }
+
     /**
      * 테스트 기능 활성화 여부 확인
      */
@@ -99,8 +149,7 @@ export class TestGenerator {
         return testSuites;
     }    /**
      * 특정 라우트의 테스트 케이스 생성
-     */
-    private static generateTestCasesForRoute(route: RouteDocumentation): TestCase[] {
+     */    private static generateTestCasesForRoute(route: RouteDocumentation): TestCase[] {
         const testCases: TestCase[] = [];
 
         // 0. 개발 철학 검증 케이스 생성
@@ -1811,12 +1860,129 @@ export class TestGenerator {
     }
 
     /**
+     * 철학 위반 사항을 타입별로 그룹화
+     */
+    private static groupViolationsByType(violations: PhilosophyViolation[]): Record<string, PhilosophyViolation[]> {
+        const groups: Record<string, PhilosophyViolation[]> = {};
+        
+        for (const violation of violations) {
+            if (!groups[violation.type]) {
+                groups[violation.type] = [];
+            }
+            groups[violation.type].push(violation);
+        }
+        
+        return groups;
+    }
+    
+    /**
+     * 철학 위반 설명 생성
+     */
+    private static generatePhilosophyFailureDescription(type: string, violations: PhilosophyViolation[]): string {
+        const violationCount = violations.length;
+        const errorCount = violations.filter(v => v.severity === 'error').length;
+        const warningCount = violations.filter(v => v.severity === 'warning').length;
+        const infoCount = violations.filter(v => v.severity === 'info').length;
+        
+        let description = `${violationCount}개의 ${this.translateViolationType(type)} 위반 사항이 발견되었습니다: `;
+        
+        if (errorCount > 0) {
+            description += `${errorCount}개 오류`;
+        }
+        
+        if (warningCount > 0) {
+            if (errorCount > 0) description += ', ';
+            description += `${warningCount}개 경고`;
+        }
+        
+        if (infoCount > 0) {
+            if (errorCount > 0 || warningCount > 0) description += ', ';
+            description += `${infoCount}개 정보`;
+        }
+        
+        // 첫 번째 위반 사항 메시지 추가
+        if (violations.length > 0) {
+            description += `\n첫 번째 위반: ${violations[0].message}`;
+            if (violations[0].suggestion) {
+                description += `\n제안사항: ${violations[0].suggestion}`;
+            }
+        }
+        
+        // 추가 위반 사항 개수 표시
+        if (violations.length > 1) {
+            description += `\n...외 ${violations.length - 1}개 위반 사항`;
+        }
+        
+        return description;
+    }
+    
+    /**
+     * 위반 타입 한글 표현으로 변환
+     */
+    private static translateViolationType(type: string): string {
+        const translations: Record<string, string> = {
+            'naming': '명명규칙',
+            'restful': 'RESTful 설계',
+            'http-spec': 'HTTP 규격',
+            'structure': '구조',
+            'security': '보안',
+            'performance': '성능',
+            'consistency': '일관성'
+        };
+        
+        return translations[type] || type;
+    }
+
+    /**
+     * 향상된 철학 점수 계산
+     */
+    private static calculateEnhancedPhilosophyScore(violations: PhilosophyViolation[]): number {
+        let score = 100;
+        
+        // 심각도에 따른 감점
+        for (const violation of violations) {
+            switch (violation.severity) {
+                case 'error':
+                    score -= 10;
+                    break;
+                case 'warning':
+                    score -= 5;
+                    break;
+                case 'info':
+                    score -= 2;
+                    break;
+            }
+        }
+        
+        // 위반 타입에 따른 추가 감점
+        const typeWeights: Record<string, number> = {
+            'security': 1.5,  // 보안 위반은 더 심각하게 취급
+            'performance': 1.2,  // 성능 위반도 중요하게 취급
+            'naming': 0.8,  // 명명 규칙은 상대적으로 덜 심각
+        };
+        
+        for (const violation of violations) {
+            const weight = typeWeights[violation.type] || 1;
+            if (weight !== 1) {
+                // 이미 기본 감점을 했으므로, 가중치에서 1을 빼고 적용
+                score -= (weight - 1) * (violation.severity === 'error' ? 10 : violation.severity === 'warning' ? 5 : 2);
+            }
+        }
+        
+        return Math.max(0, Math.round(score));
+    }
+
+    /**
      * 고급 개발 철학 위반 테스트 케이스 생성
      */
     private static generateEnhancedPhilosophyTestCases(route: RouteDocumentation): TestCase[] {
         const testCases: TestCase[] = [];
         const violations = this.validateEnhancedDevelopmentPhilosophy().violations
             .filter(v => v.route === route.path && v.method === route.method);
+
+        // 복수형 리소스에 대한 페이지네이션 테스트 케이스 추가
+        const paginationTestCases = this.generatePaginationTestCases(route);
+        testCases.push(...paginationTestCases);
 
         // 각 위반사항에 대한 테스트 케이스 생성
         const violationsByType = this.groupViolationsByType(violations);
@@ -1839,8 +2005,8 @@ export class TestGenerator {
             });
         }
 
-        // 위반사항이 없으면 성공 케이스 추가
-        if (violations.length === 0) {
+        // 위반사항이 없으면 성공 케이스 추가 (페이지네이션 테스트 케이스가 없을 경우만)
+        if (violations.length === 0 && paginationTestCases.length === 0) {
             testCases.push({
                 name: `${route.method} ${route.path} - Philosophy Compliance Check`,
                 description: '✅ 모든 개발 철학 규칙을 준수합니다',
@@ -1850,11 +2016,113 @@ export class TestGenerator {
                 expectedStatus: 200,
                 securityTestType: 'philosophy-success'
             });
-        }        return testCases;
+        }
+        
+        return testCases;
+    }
+    
+    /**
+     * 페이지네이션 테스트 케이스 생성
+     * 복수형 리소스에 대한 GET 요청에서 페이지네이션 지원 여부를 검증
+     */
+    private static generatePaginationTestCases(route: RouteDocumentation): TestCase[] {
+        const testCases: TestCase[] = [];
+        
+        // GET 메소드이고, ID 파라미터가 없는 경우만 검증
+        if (route.method.toUpperCase() !== 'GET' || route.path.includes('/:id')) {
+            return testCases;
+        }
+        
+        // 라우트 경로의 마지막 세그먼트 확인
+        const pathSegments = route.path.split('/').filter(segment => segment && !segment.startsWith(':'));
+        const lastSegment = pathSegments[pathSegments.length - 1];
+        
+        // 마지막 세그먼트가 없거나 복수형이 아니면 검증 불필요
+        if (!lastSegment || !this.isPlural(lastSegment)) {
+            return testCases;
+        }
+        
+        // 페이지네이션 파라미터 존재 확인
+        const hasPaginationParams = route.parameters?.query && 
+            Object.keys(route.parameters.query).some(key => 
+                ['page', 'limit', 'offset', 'size', 'cursor'].includes(key.toLowerCase())
+            );
+        
+        if (hasPaginationParams) {
+            // 페이지네이션 파라미터가 있는 경우 성공 테스트 케이스 생성
+            const paginationParams = route.parameters?.query ? 
+                Object.keys(route.parameters.query)
+                    .filter(key => ['page', 'limit', 'offset', 'size', 'cursor'].includes(key.toLowerCase()))
+                : [];
+            
+            // 페이지네이션 성공 테스트 케이스
+            testCases.push({
+                name: `${route.method} ${route.path} - Pagination Support Test`,
+                description: `✅ 복수형 리소스 '${lastSegment}'에 페이지네이션 지원 확인 (${paginationParams.join(', ')})`,
+                type: 'success',
+                endpoint: route.path,
+                method: route.method,
+                data: {
+                    query: paginationParams.reduce((acc, param) => {
+                        acc[param] = param === 'page' ? 1 : param === 'cursor' ? 'someId' : 10;
+                        return acc;
+                    }, {} as Record<string, any>)
+                },
+                expectedStatus: 200,
+                securityTestType: 'philosophy-pagination'
+            });
+            
+            // 페이지네이션 응답 구조 검증 테스트 케이스
+            testCases.push({
+                name: `${route.method} ${route.path} - Pagination Response Structure Test`,
+                description: `페이지네이션 응답에 필요한 메타데이터 검증 (총 개수, 현재 페이지, 전체 페이지 등)`,
+                type: 'success',
+                endpoint: route.path,
+                method: route.method,
+                data: {
+                    query: paginationParams.reduce((acc, param) => {
+                        acc[param] = param === 'page' ? 1 : param === 'cursor' ? 'someId' : 5;  // 작은 수로 설정
+                        return acc;
+                    }, {} as Record<string, any>)
+                },
+                expectedStatus: 200,
+                expectedData: {
+                    mode: 'partial',
+                    value: {
+                        // 일반적인 페이지네이션 응답 구조 (meta 내부에 pagination 정보)
+                        meta: {
+                            pagination: {
+                                type: 'object',
+                                required: true
+                            }
+                        }
+                    }
+                },
+                securityTestType: 'philosophy-pagination-response'
+            });
+            
+        } else {
+            // 페이지네이션 파라미터 누락에 대한 실패 테스트 케이스
+            testCases.push({
+                name: `${route.method} ${route.path} - Missing Pagination Parameters`,
+                description: `❌ 복수형 리소스 '${lastSegment}'는 페이지네이션이 필요합니다`,
+                type: 'failure',
+                endpoint: route.path,
+                method: route.method,
+                expectedStatus: 400,
+                validationErrors: [
+                    `복수형 리소스 조회 엔드포인트에는 페이지네이션이 필요합니다`,
+                    `page, limit 또는 cursor 등의 쿼리 파라미터를 추가하세요`
+                ],
+                securityTestType: 'philosophy-missing-pagination'
+            });
+        }
+        
+        return testCases;
     }
 
     /**
-     * 고급 개발 철학 검증 - 보안 규칙
+     * 보안 철학 검증
      */
     private static validateSecurityPhilosophy(route: RouteDocumentation): PhilosophyViolation[] {
         const violations: PhilosophyViolation[] = [];
@@ -1926,9 +2194,7 @@ export class TestGenerator {
         }
 
         return violations;
-    }
-
-    /**
+    }    /**
      * 성능 최적화 철학 검증
      */
     private static validatePerformancePhilosophy(route: RouteDocumentation): PhilosophyViolation[] {
@@ -1939,21 +2205,30 @@ export class TestGenerator {
             // 페이지네이션 파라미터 검증
             const hasPageParam = route.parameters?.query && 
                 Object.keys(route.parameters.query).some(key => 
-                    ['page', 'limit', 'offset', 'size'].includes(key.toLowerCase())
+                    ['page', 'limit', 'offset', 'size', 'cursor'].includes(key.toLowerCase())
                 );
 
+            const pathSegments = route.path.split('/').filter(segment => segment && !segment.startsWith(':'));
+            const lastSegment = pathSegments[pathSegments.length - 1];
+            
+            // 마지막 경로 세그먼트가 복수형인지 확인
+            const isLastSegmentPlural = lastSegment ? this.isPlural(lastSegment) : false;
+
             if (!hasPageParam && !route.path.includes('/:id')) {
-                violations.push({
-                    type: 'performance',
-                    severity: 'warning',
-                    message: '컬렉션 조회 엔드포인트에 페이지네이션 파라미터가 없습니다',
-                    suggestion: 'page, limit 등의 쿼리 파라미터를 추가하여 페이지네이션을 구현하세요',
-                    route: route.path,
-                    method: route.method,
-                    ruleId: 'PERF-001',
-                    category: 'performance',
-                    examples: ['GET /users?page=1&limit=10', 'GET /posts?offset=20&size=10']
-                });
+                // 복수형 이름을 가진 GET 요청에는 페이지네이션을 강력히 권장
+                if (isLastSegmentPlural) {
+                    violations.push({
+                        type: 'performance',
+                        severity: 'error', // 경고 수준 높임
+                        message: `복수형 리소스 조회 엔드포인트 '${lastSegment}'에 페이지네이션이 필요합니다`,
+                        suggestion: 'page, limit 또는 cursor 등의 쿼리 파라미터를 추가하여 페이지네이션을 구현하세요',
+                        route: route.path,
+                        method: route.method,
+                        ruleId: 'PERF-001',
+                        category: 'performance',
+                        examples: [`GET /${lastSegment}?page=1&limit=10`, `GET /${lastSegment}?offset=20&size=10`, `GET /${lastSegment}?cursor=lastId&limit=10`]
+                    });
+                }
             }
         }
 
@@ -1974,7 +2249,7 @@ export class TestGenerator {
 
         return violations;
     }
-
+    
     /**
      * API 일관성 철학 검증
      */
@@ -2046,78 +2321,4 @@ export class TestGenerator {
 
         return violations;
     }
-
-    /**
-     * 향상된 철학 준수 점수 계산
-     */
-    private static calculateEnhancedPhilosophyScore(violations: PhilosophyViolation[]): number {
-        let score = 100;
-        
-        for (const violation of violations) {
-            switch (violation.severity) {
-                case 'error':
-                    score -= 15; // 오류는 더 큰 감점
-                    break;
-                case 'warning':
-                    score -= 8; // 경고는 중간 감점
-                    break;
-                case 'info':
-                    score -= 3; // 정보는 작은 감점
-                    break;
-            }
-        }
-        
-        return Math.max(0, score);
-    }
-
-    /**
-     * 위반사항을 타입별로 그룹화
-     */
-    private static groupViolationsByType(violations: PhilosophyViolation[]): {[key: string]: PhilosophyViolation[]} {
-        return violations.reduce((acc, violation) => {
-            if (!acc[violation.type]) {
-                acc[violation.type] = [];
-            }
-            acc[violation.type].push(violation);
-            return acc;
-        }, {} as {[key: string]: PhilosophyViolation[]});
-    }
-
-    /**
-     * 철학 위반 타입별 실패 설명 생성
-     */
-    private static generatePhilosophyFailureDescription(type: string, violations: PhilosophyViolation[]): string {
-        const errorCount = violations.filter(v => v.severity === 'error').length;
-        const warningCount = violations.filter(v => v.severity === 'warning').length;
-        
-        const typeDescription = {
-            'naming': '네이밍 규칙',
-            'restful': 'RESTful API 스펙',
-            'http-spec': 'HTTP 스펙',
-            'security': '보안 규칙',
-            'performance': '성능 최적화',
-            'consistency': 'API 일관성'
-        }[type] || type;
-        
-        let description = `❌ ${typeDescription} 위반 (`;
-        if (errorCount > 0) description += `${errorCount}개 오류`;
-        if (warningCount > 0) {
-            if (errorCount > 0) description += ', ';
-            description += `${warningCount}개 경고`;
-        }
-        description += ')';
-        
-        // 첫 번째 위반사항의 메시지와 제안 추가
-        if (violations.length > 0) {
-            const firstViolation = violations[0];
-            description += `\n\n주요 문제: ${firstViolation.message}`;
-            if (firstViolation.suggestion) {
-                description += `\n💡 해결방법: ${firstViolation.suggestion}`;
-            }
-        }
-        
-        return description;
-    }
-
-    // ...existing methods continue...
 }

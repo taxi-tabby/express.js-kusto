@@ -1253,10 +1253,10 @@ export class TestGenerator {
             log.error('Failed to generate Postman collection', { error: error.message });
             return { error: 'Failed to generate Postman collection', details: error.message };
         }
-    }    
-    
-    
-    
+    }
+
+
+
     /**
      * CMS 개발 철학 검증
      */
@@ -2251,17 +2251,36 @@ export class TestGenerator {
 
         // 2. 캐싱 전략 검증
         if (route.method.toUpperCase() === 'GET' && !route.path.includes('/:id')) {
-            violations.push({
-                type: 'performance',
-                severity: 'info',
-                message: '컬렉션 조회 엔드포인트에 캐싱 전략을 고려해보세요',
-                suggestion: 'ETag, Last-Modified 헤더나 Redis 캐싱을 고려하세요',
-                route: route.path,
-                method: route.method,
-                ruleId: 'PERF-002',
-                category: 'performance',
-                examples: ['Cache-Control: max-age=300', 'ETag: "12345"']
-            });
+            // 캐싱 관련 속성이 이미 설정되어 있는지 확인
+            const hasCachingStrategy =
+                route.responses &&
+                Object.values(route.responses).some(response => {
+                    if (typeof response === 'object' && response !== null) {
+                        // 응답 객체에 headers 속성이 있고 캐싱 관련 헤더가 포함되어 있는지 확인
+                        return response.hasOwnProperty('headers') &&
+                            (
+                                response.headers?.hasOwnProperty('ETag') ||
+                                response.headers?.hasOwnProperty('Cache-Control') ||
+                                response.headers?.hasOwnProperty('Last-Modified')
+                            );
+                    }
+                    return false;
+                });
+
+            // 캐싱 전략이 없는 경우에만 위반사항 추가
+            if (!hasCachingStrategy) {
+                violations.push({
+                    type: 'performance',
+                    severity: 'info',
+                    message: '컬렉션 조회 엔드포인트에 캐싱 전략을 고려해보세요',
+                    suggestion: 'ETag, Last-Modified 헤더나 메모리 기반 캐싱을 고려하세요',
+                    route: route.path,
+                    method: route.method,
+                    ruleId: 'PERF-002',
+                    category: 'performance',
+                    examples: ['Cache-Control: max-age=300', 'ETag: "12345"']
+                });
+            }
         }
 
         return violations;

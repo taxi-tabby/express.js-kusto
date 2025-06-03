@@ -9,12 +9,16 @@ datasource testdb2_db {
 }
 
 model User {
-  id        Int      @id @default(autoincrement())
-  email     String   @unique
-  name      String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  posts     Post[]
+  id           Int      @id @default(autoincrement())
+  email        String   @unique
+  name         String?
+  password     String   // 해시된 비밀번호
+  role         String   @default("user")
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  Post Post[]
 }
 
 model Post {

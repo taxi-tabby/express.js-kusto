@@ -2,14 +2,23 @@ import { ExpressRouter } from '@core/lib/expressRouter'
 
 const router = new ExpressRouter();
 
+
+
+
+
+
 router.GET((req, res, injected, db) => {
 
-    // db.getWrap('testdb1').order
+    // 자동 수집된 DB 접근
+    db.getWrap('testdb1')
+
+    // 자동 수집된 의존성
     injected.exampleModule.setData('express-custom-reborn-1.0.5');
     
+    // 상태
+    res.status(200);
 
-    return res.status(200).render('index', { 
-        //배포명칭
+    return res.render('index', { 
         CONST_VERSION_NAME: injected.exampleModule.getData(),
     });
 });

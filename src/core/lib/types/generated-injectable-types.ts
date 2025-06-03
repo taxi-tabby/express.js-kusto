@@ -1,5 +1,4 @@
 // Auto-generated file - DO NOT EDIT MANUALLY
-// Generated on: 2025-06-03T07:26:50.757Z
 // Source: src/app/injectable/
 
 import ExampleModule from '@app/injectable/exampleModule';

@@ -47,7 +47,6 @@ function generateInjectableTypes() {
   ).join('\n');
 
   const typeDefinition = `// Auto-generated file - DO NOT EDIT MANUALLY
-// Generated on: ${new Date().toISOString()}
 // Source: src/app/injectable/
 
 ${imports}

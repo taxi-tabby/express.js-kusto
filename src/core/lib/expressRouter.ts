@@ -6,7 +6,7 @@ import { RequestHandler as CustomRequestHandler, RequestConfig, ResponseConfig, 
 import { Injectable } from './types/generated-injectable-types';
 
 
-type HandlerFunction = (req: Request, res: Response) => void;
+type HandlerFunction = (req: Request, res: Response, ) => void;
 type ValidatedHandlerFunction = (req: ValidatedRequest, res: Response, injected: Injectable) => Promise<any> | any;
 
 export class ExpressRouter {

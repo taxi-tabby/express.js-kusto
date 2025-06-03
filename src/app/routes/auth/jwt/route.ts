@@ -15,7 +15,7 @@ router.POST_VALIDATED(
             message: { type: 'string', required: true },
             data: { type: 'object', required: false },
         }
-    }, async (req, res) => {
+    }, async (req, res, inject) => {
 
         return {};
     });

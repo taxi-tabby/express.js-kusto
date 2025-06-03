@@ -10,6 +10,7 @@ import expressApp from './lib/expressAppSingleton';
 import { DocumentationGenerator } from './lib/documentationGenerator';
 import { StaticFileMiddleware } from './lib/staticFileMiddleware';
 import { prismaManager } from './lib/prismaManager';
+import { DependencyInjector } from './lib/dependencyInjector';
 
 export interface CoreConfig {
     basePath?: string;
@@ -70,9 +71,11 @@ export class Core {
         if (customConfig) {
             this._config = { ...this._config, ...customConfig };
         }          
-        
-        // Initialize PrismaManager before setting up routes
+          // Initialize PrismaManager before setting up routes
         await this.initializePrismaManager();
+        
+        // Initialize Dependency Injector
+        await this.initializeDependencyInjector();
         
         this.setupExpress();
         this.setupDocumentationRoutes(); // 문서화 라우트를 먼저 등록
@@ -339,12 +342,25 @@ export class Core {
                 } else {
                     log.Error(`❌ Database '${db.name}' failed to connect`);
                 }
-            });
-
-        } catch (error) {
+            });        } catch (error) {
             log.Error('Failed to initialize Prisma Manager', { error });
             // Don't throw error here to allow application to continue without database
             log.Warn('Application will continue without database connections');
+        }
+    }
+
+    /**
+     * Initialize Dependency Injector to load injectable modules
+     */
+    private async initializeDependencyInjector(): Promise<void> {
+        try {
+            log.Info('💉 Initializing Dependency Injector...');
+            await DependencyInjector.getInstance().initialize();
+            log.Info('Dependency Injector initialization complete');
+        } catch (error) {
+            log.Error('Failed to initialize Dependency Injector', { error });
+            // Don't throw error here to allow application to continue without DI
+            log.Warn('Application will continue without dependency injection');
         }
     }
 }

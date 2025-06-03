@@ -1,6 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import { Validator, Schema, ValidationResult } from './validator';
 import { log } from '../external/winston';
+import { DependencyInjector } from './dependencyInjector';
+import { Injectable } from './types/generated-injectable-types';
 
 export interface RequestConfig {
     body?: Schema;
@@ -249,18 +251,19 @@ export class RequestHandler {
         }
         
         return missingImplementations;
-    }
-
-    /**
-     * 핸들러 래퍼 - 검증과 응답을 자동으로 처리
+    }/**
+     * 핸들러 래퍼 - 검증과 응답을 자동으로 처리 (Dependency Injection 지원)
      */
     static createHandler(
         config: HandlerConfig,
-        handler: (req: ValidatedRequest, res: Response, next: NextFunction) => Promise<any> | any
+        handler: (req: ValidatedRequest, res: Response, injected: Injectable) => Promise<any> | any
     ) {
-        const middlewares: any[] = [];        // 핸들러의 소스 코드를 얻어서 정적 분석 수행
+        const middlewares: any[] = [];
+
+        // 핸들러의 소스 코드를 얻어서 정적 분석 수행
         if (config.response && process.env.NODE_ENV !== 'production') {
-            try {                const handlerSource = handler.toString();
+            try {
+                const handlerSource = handler.toString();
                 // 소스 정보 로깅
                 log.Debug('Handler source info', {
                     sourceInfo: config.sourceInfo,
@@ -289,15 +292,20 @@ export class RequestHandler {
             middlewares.push(this.validateRequest(config.request));
         }
 
-        // 실제 핸들러
+        // Dependency injection을 지원하는 실제 핸들러
         middlewares.push(async (req: ValidatedRequest, res: Response, next: NextFunction) => {
             try {
-                const result = await handler(req, res, next);
+                // Dependency injector에서 모든 injectable 모듈 가져오기
+                const injected = DependencyInjector.getInstance().getInjectedModules();
+                
+                const result = await handler(req, res, injected);
 
                 // 이미 응답이 전송되었으면 리턴
                 if (res.headersSent) {
                     return;
-                }                // 결과가 있으면 성공 응답 전송
+                }
+
+                // 결과가 있으면 성공 응답 전송
                 if (result !== undefined) {
                     const statusCode = res.statusCode || 200;
                     const responseSchema = config.response?.[statusCode];
@@ -305,7 +313,6 @@ export class RequestHandler {
                 }
 
             } catch (error) {
-
                 log.Error('Handler error:', { 
                     path: req.originalUrl, 
                     method: req.method,
@@ -320,19 +327,16 @@ export class RequestHandler {
                         this.sendError(res, 500, 'Internal server error');
                     }
                 }
-                
             }
         });
 
         return middlewares;
-    }
-
-    /**
+    }    /**
      * 간단한 핸들러 생성 (요청 검증만)
      */
     static withValidation(
         requestConfig: RequestConfig,
-        handler: (req: ValidatedRequest, res: Response, next: NextFunction) => void
+        handler: (req: ValidatedRequest, res: Response, injected: Injectable) => void
     ) {
         return this.createHandler({ request: requestConfig }, handler);
     }
@@ -343,7 +347,7 @@ export class RequestHandler {
     static withFullValidation(
         requestConfig: RequestConfig,
         responseConfig: ResponseConfig,
-        handler: (req: ValidatedRequest, res: Response, next: NextFunction) => Promise<any> | any
+        handler: (req: ValidatedRequest, res: Response, injected: Injectable) => Promise<any> | any
     ) {
         return this.createHandler({
             request: requestConfig,

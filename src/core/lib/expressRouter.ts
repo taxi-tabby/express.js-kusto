@@ -3,10 +3,11 @@ import { createProxyMiddleware, Options } from 'http-proxy-middleware';
 import multer from 'multer';
 import { DocumentationGenerator } from './documentationGenerator';
 import { RequestHandler as CustomRequestHandler, RequestConfig, ResponseConfig, ValidatedRequest } from './requestHandler';
+import { Injectable } from './types/generated-injectable-types';
 
 
 type HandlerFunction = (req: Request, res: Response) => void;
-type ValidatedHandlerFunction = (req: ValidatedRequest, res: Response) => Promise<any> | any;
+type ValidatedHandlerFunction = (req: ValidatedRequest, res: Response, injected: Injectable) => Promise<any> | any;
 
 export class ExpressRouter {
     public router = Router();

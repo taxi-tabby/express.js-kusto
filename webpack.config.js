@@ -5,9 +5,36 @@ const nodeExternals = require("webpack-node-externals");
 
 const envVariables = {}; // 필요 시 여기에 환경 변수 추가
 
+
+// 환경 변수 로딩 함수
+function loadEnvironmentVariables() {
+    // 기본 .env 파일 로드
+    const defaultEnvPath = path.resolve(__dirname, '.env');
+    if (fs.existsSync(defaultEnvPath)) {
+        config({ path: defaultEnvPath });
+    }
+    
+    // NODE_ENV 기반 환경별 파일 로드
+    const nodeEnv = process.env.NODE_ENV || 'development';
+    let envSpecificPath = null;
+    
+    if (nodeEnv === 'development') {
+        envSpecificPath = path.resolve(__dirname, '.env.dev');
+    } else if (nodeEnv === 'production') {
+        envSpecificPath = path.resolve(__dirname, '.env.prod');
+    }
+    
+    if (envSpecificPath && fs.existsSync(envSpecificPath)) {
+        config({ path: envSpecificPath, override: true });
+    }
+}
+
+
 module.exports = (env, argv) => {
     const mode = argv.mode || 'production';
     const isProduction = mode === 'production';
+    
+    loadEnvironmentVariables();
     
     return {
         mode: mode,
@@ -57,7 +84,8 @@ module.exports = (env, argv) => {
                 {
                     from: 'src/app/views',
                     to: 'views'
-                },                {
+                },                
+                {
                     from: 'src/core/lib/views',
                     to: 'views'
                 },

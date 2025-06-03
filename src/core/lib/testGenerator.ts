@@ -172,27 +172,27 @@ export class TestGenerator {
      */
     private static generateSuccessCase(route: RouteDocumentation): TestCase | null {
         const validData = this.generateValidData(route.parameters);
-        
+
         // Determine expected status code from response schema
         let expectedStatus = 200;
         let expectedData = undefined;
-        
+
         if (route.responses) {
             // Find the success status code (2xx range)
             const statusCodes = Object.keys(route.responses).map(Number);
             const successStatusCode = statusCodes.find(code => code >= 200 && code < 300);
-            
+
             if (successStatusCode) {
                 expectedStatus = successStatusCode;
                 const responseSchema = route.responses[successStatusCode];
-                
+
                 // Generate expected response data based on schema
                 if (responseSchema && typeof responseSchema === 'object') {
                     expectedData = this.generateExpectedResponseData(responseSchema, validData);
                 }
             }
         }
-        
+
         const testCase: TestCase = {
             name: `${route.method} ${route.path} - Success Case`,
             description: `Valid request with all required fields`,
@@ -202,12 +202,12 @@ export class TestGenerator {
             data: validData,
             expectedStatus
         };
-        
+
         // Add expected data if available
         if (expectedData) {
             testCase.expectedData = expectedData;
         }
-        
+
         return testCase;
     }
 
@@ -223,7 +223,7 @@ export class TestGenerator {
 
         // 각 파라미터 위치별로 실패 케이스 생성
         const locations: Array<keyof typeof route.parameters> = ['query', 'params', 'body'];
-        
+
         for (const location of locations) {
             const schema = route.parameters[location];
             if (schema) {
@@ -238,8 +238,8 @@ export class TestGenerator {
      * 스키마별 실패 케이스 생성
      */
     private static generateSchemaFailureCases(
-        route: RouteDocumentation, 
-        location: string, 
+        route: RouteDocumentation,
+        location: string,
         schema: Schema
     ): TestCase[] {
         const cases: TestCase[] = [];
@@ -255,7 +255,7 @@ export class TestGenerator {
 
             // 범위 검증 실패 테스트
             cases.push(...this.generateRangeValidationCases(route, location, fieldName, fieldSchema));
-            
+
             // 보안 공격 테스트 케이스 생성
             cases.push(...this.generateSecurityTestCases(route, location, fieldName, fieldSchema));
         }
@@ -267,23 +267,23 @@ export class TestGenerator {
      * 보안 공격 테스트 케이스 생성 (SQL 인젝션, 특수문자)
      */
     private static generateSecurityTestCases(
-        route: RouteDocumentation, 
-        location: string, 
-        fieldName: string, 
+        route: RouteDocumentation,
+        location: string,
+        fieldName: string,
         fieldSchema: FieldSchema
     ): TestCase[] {
         const cases: TestCase[] = [];
         const invalidData = this.generateValidData(route.parameters);
-        
+
         if (!invalidData[location]) return cases;
-        
+
         // 필드 타입에 따라 다른 공격 패턴 적용
         const attackPatterns = this.getSecurityAttackPatterns(fieldSchema.type);
-        
+
         for (const pattern of attackPatterns) {
             const attackData = JSON.parse(JSON.stringify(invalidData)); // 깊은 복사
             attackData[location][fieldName] = pattern.value;
-              cases.push({
+            cases.push({
                 name: `${route.method} ${route.path} - Security Attack: ${pattern.type} for ${location}.${fieldName}`,
                 description: `${pattern.description} in ${location} parameter: ${fieldName}`,
                 type: 'failure',
@@ -295,217 +295,217 @@ export class TestGenerator {
                 securityTestType: pattern.type
             });
         }
-        
+
         return cases;
     }
-    
+
     /**
      * 필드 타입별 보안 공격 패턴 생성
      */
-    private static getSecurityAttackPatterns(fieldType: string): Array<{type: string, value: any, description: string}> {
-        const patterns: Array<{type: string, value: any, description: string}> = [];
-        
+    private static getSecurityAttackPatterns(fieldType: string): Array<{ type: string, value: any, description: string }> {
+        const patterns: Array<{ type: string, value: any, description: string }> = [];
+
         // 공통 SQL Injection 패턴
         const sqlInjectionPatterns = [
-            { 
-                type: 'SQLi-Basic', 
-                value: "' OR '1'='1", 
-                description: 'Basic SQL injection attack' 
+            {
+                type: 'SQLi-Basic',
+                value: "' OR '1'='1",
+                description: 'Basic SQL injection attack'
             },
-            { 
-                type: 'SQLi-Comment', 
-                value: "'; --", 
-                description: 'SQL injection with comment' 
+            {
+                type: 'SQLi-Comment',
+                value: "'; --",
+                description: 'SQL injection with comment'
             },
-            { 
-                type: 'SQLi-Union', 
-                value: "' UNION SELECT username,password FROM users; --", 
-                description: 'UNION-based SQL injection attack' 
+            {
+                type: 'SQLi-Union',
+                value: "' UNION SELECT username,password FROM users; --",
+                description: 'UNION-based SQL injection attack'
             },
-            { 
-                type: 'SQLi-Batch', 
-                value: "'; DROP TABLE users; --", 
-                description: 'Batch SQL injection attack' 
+            {
+                type: 'SQLi-Batch',
+                value: "'; DROP TABLE users; --",
+                description: 'Batch SQL injection attack'
             }
         ];
-        
+
         // 타입별 특수 공격 패턴
         switch (fieldType) {
             case 'string':
                 // 문자열 타입에 대한 공격
                 patterns.push(...sqlInjectionPatterns);
                 patterns.push(
-                    { 
-                        type: 'XSS-Basic', 
-                        value: "<script>alert('XSS')</script>", 
-                        description: 'Basic XSS attack' 
+                    {
+                        type: 'XSS-Basic',
+                        value: "<script>alert('XSS')</script>",
+                        description: 'Basic XSS attack'
                     },
-                    { 
-                        type: 'XSS-Attribute', 
-                        value: "\" onmouseover=\"alert('XSS')\" ", 
-                        description: 'Event-based XSS attack' 
+                    {
+                        type: 'XSS-Attribute',
+                        value: "\" onmouseover=\"alert('XSS')\" ",
+                        description: 'Event-based XSS attack'
                     },
-                    { 
-                        type: 'Command-Injection', 
-                        value: "$(cat /etc/passwd)", 
-                        description: 'Command injection attack' 
+                    {
+                        type: 'Command-Injection',
+                        value: "$(cat /etc/passwd)",
+                        description: 'Command injection attack'
                     },
-                    { 
-                        type: 'Special-Chars', 
-                        value: "!@#$%^&*()_+{}[]|\\:;\"'<>,.?/~`", 
-                        description: 'Special character injection' 
+                    {
+                        type: 'Special-Chars',
+                        value: "!@#$%^&*()_+{}[]|\\:;\"'<>,.?/~`",
+                        description: 'Special character injection'
                     }
                 );
                 break;
-                
+
             case 'email':
                 // 이메일 타입에 대한 공격
                 patterns.push(
-                    { 
-                        type: 'Email-SQLi', 
-                        value: "user@example.com' OR '1'='1", 
-                        description: 'SQL injection in email field' 
+                    {
+                        type: 'Email-SQLi',
+                        value: "user@example.com' OR '1'='1",
+                        description: 'SQL injection in email field'
                     },
-                    { 
-                        type: 'Email-XSS', 
-                        value: "user@<script>alert('XSS')</script>.com", 
-                        description: 'XSS in email field' 
+                    {
+                        type: 'Email-XSS',
+                        value: "user@<script>alert('XSS')</script>.com",
+                        description: 'XSS in email field'
                     },
-                    { 
-                        type: 'Email-Special', 
-                        value: "user+bypass@example.com';--", 
-                        description: 'Email with special characters and SQL injection' 
+                    {
+                        type: 'Email-Special',
+                        value: "user+bypass@example.com';--",
+                        description: 'Email with special characters and SQL injection'
                     }
                 );
                 break;
-                
+
             case 'url':
                 // URL 타입에 대한 공격
                 patterns.push(
-                    { 
-                        type: 'URL-SQLi', 
-                        value: "https://example.com?id=' OR '1'='1", 
-                        description: 'SQL injection in URL field' 
+                    {
+                        type: 'URL-SQLi',
+                        value: "https://example.com?id=' OR '1'='1",
+                        description: 'SQL injection in URL field'
                     },
-                    { 
-                        type: 'URL-XSS', 
-                        value: "javascript:alert('XSS')", 
-                        description: 'JavaScript URL XSS attack' 
+                    {
+                        type: 'URL-XSS',
+                        value: "javascript:alert('XSS')",
+                        description: 'JavaScript URL XSS attack'
                     },
-                    { 
-                        type: 'URL-SSRF', 
-                        value: "http://localhost:3000/admin", 
-                        description: 'Server Side Request Forgery attempt' 
+                    {
+                        type: 'URL-SSRF',
+                        value: "http://localhost:3000/admin",
+                        description: 'Server Side Request Forgery attempt'
                     },
-                    { 
-                        type: 'URL-PathTraversal', 
-                        value: "https://example.com/../../../etc/passwd", 
-                        description: 'Path traversal attack in URL' 
+                    {
+                        type: 'URL-PathTraversal',
+                        value: "https://example.com/../../../etc/passwd",
+                        description: 'Path traversal attack in URL'
                     }
                 );
                 break;
-                
+
             case 'number':
                 // 숫자 타입에 대한 공격
                 patterns.push(
-                    { 
-                        type: 'Number-SQLi', 
-                        value: "1 OR 1=1", 
-                        description: 'SQL injection in numeric field' 
+                    {
+                        type: 'Number-SQLi',
+                        value: "1 OR 1=1",
+                        description: 'SQL injection in numeric field'
                     },
-                    { 
-                        type: 'Number-Overflow', 
-                        value: Number.MAX_SAFE_INTEGER + 1, 
-                        description: 'Integer overflow attack' 
+                    {
+                        type: 'Number-Overflow',
+                        value: Number.MAX_SAFE_INTEGER + 1,
+                        description: 'Integer overflow attack'
                     },
-                    { 
-                        type: 'Number-Negative', 
-                        value: -1, 
-                        description: 'Negative number attack' 
+                    {
+                        type: 'Number-Negative',
+                        value: -1,
+                        description: 'Negative number attack'
                     },
-                    { 
-                        type: 'Number-Zero', 
-                        value: 0, 
-                        description: 'Zero value attack' 
+                    {
+                        type: 'Number-Zero',
+                        value: 0,
+                        description: 'Zero value attack'
                     }
                 );
                 break;
-                
+
             case 'boolean':
                 // 불리언 타입에 대한 공격
                 patterns.push(
-                    { 
-                        type: 'Boolean-SQLi', 
-                        value: "true OR 1=1", 
-                        description: 'SQL injection in boolean field' 
+                    {
+                        type: 'Boolean-SQLi',
+                        value: "true OR 1=1",
+                        description: 'SQL injection in boolean field'
                     },
-                    { 
-                        type: 'Boolean-String', 
-                        value: "true; DROP TABLE users;", 
-                        description: 'SQL injection with string in boolean field' 
+                    {
+                        type: 'Boolean-String',
+                        value: "true; DROP TABLE users;",
+                        description: 'SQL injection with string in boolean field'
                     }
                 );
                 break;
-                
+
             case 'array':
                 // 배열 타입에 대한 공격
                 patterns.push(
-                    { 
-                        type: 'Array-SQLi', 
-                        value: ["normal", "'; DROP TABLE users; --"], 
-                        description: 'SQL injection in array item' 
+                    {
+                        type: 'Array-SQLi',
+                        value: ["normal", "'; DROP TABLE users; --"],
+                        description: 'SQL injection in array item'
                     },
-                    { 
-                        type: 'Array-XSS', 
-                        value: ["normal", "<script>alert('XSS')</script>"], 
-                        description: 'XSS in array item' 
+                    {
+                        type: 'Array-XSS',
+                        value: ["normal", "<script>alert('XSS')</script>"],
+                        description: 'XSS in array item'
                     },
-                    { 
-                        type: 'Array-Overflow', 
-                        value: Array(1000).fill("x"), 
-                        description: 'Array overflow attack with excessive items' 
+                    {
+                        type: 'Array-Overflow',
+                        value: Array(1000).fill("x"),
+                        description: 'Array overflow attack with excessive items'
                     }
                 );
                 break;
-                
+
             case 'object':
                 // 객체 타입에 대한 공격
                 patterns.push(
-                    { 
-                        type: 'Object-Pollution', 
-                        value: { "__proto__": { "polluted": true } }, 
-                        description: 'Prototype pollution attack' 
+                    {
+                        type: 'Object-Pollution',
+                        value: { "__proto__": { "polluted": true } },
+                        description: 'Prototype pollution attack'
                     },
-                    { 
-                        type: 'Object-SQLi', 
-                        value: { "key": "value", "injection": "' OR '1'='1" }, 
-                        description: 'SQL injection in object property' 
+                    {
+                        type: 'Object-SQLi',
+                        value: { "key": "value", "injection": "' OR '1'='1" },
+                        description: 'SQL injection in object property'
                     },
-                    { 
-                        type: 'Object-XSS', 
-                        value: { "key": "<script>alert('XSS')</script>" }, 
-                        description: 'XSS in object property' 
+                    {
+                        type: 'Object-XSS',
+                        value: { "key": "<script>alert('XSS')</script>" },
+                        description: 'XSS in object property'
                     },
-                    { 
-                        type: 'Object-DoS', 
-                        value: JSON.parse('{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{}}}}}}}}}}}'), 
-                        description: 'Deeply nested object DoS attack' 
+                    {
+                        type: 'Object-DoS',
+                        value: JSON.parse('{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{}}}}}}}}}}}'),
+                        description: 'Deeply nested object DoS attack'
                     }
                 );
                 break;
-                
+
             default:
                 // 기본 공격 패턴
                 patterns.push(...sqlInjectionPatterns);
                 patterns.push(
-                    { 
-                        type: 'XSS-Basic', 
-                        value: "<script>alert('XSS')</script>", 
-                        description: 'Basic XSS attack' 
+                    {
+                        type: 'XSS-Basic',
+                        value: "<script>alert('XSS')</script>",
+                        description: 'Basic XSS attack'
                     }
                 );
         }
-        
+
         return patterns;
     }
 
@@ -513,15 +513,15 @@ export class TestGenerator {
      * 필수 필드 누락 케이스 생성
      */
     private static generateMissingFieldCase(
-        route: RouteDocumentation, 
-        location: string, 
+        route: RouteDocumentation,
+        location: string,
         fieldName: string
     ): TestCase[] {
         const invalidData = this.generateValidData(route.parameters);
-        
+
         if (invalidData[location] && invalidData[location][fieldName] !== undefined) {
             delete invalidData[location][fieldName];
-            
+
             return [{
                 name: `${route.method} ${route.path} - Missing Required ${location}.${fieldName}`,
                 description: `Request without required ${location} parameter: ${fieldName}`,
@@ -539,23 +539,23 @@ export class TestGenerator {
      * 타입 검증 실패 케이스 생성
      */
     private static generateTypeValidationCases(
-        route: RouteDocumentation, 
-        location: string, 
-        fieldName: string, 
+        route: RouteDocumentation,
+        location: string,
+        fieldName: string,
         fieldSchema: FieldSchema
     ): TestCase[] {
         const cases: TestCase[] = [];
         const invalidData = this.generateValidData(route.parameters);
-        
+
         if (!invalidData[location]) return cases;
 
         let invalidValue: any;
         let shouldGenerateTypeCase = true;
-        
+
         // For GET/HEAD requests with query parameters, we can't send non-string types
         // since HTTP query parameters are always strings. Instead, generate constraint violations.
         const isQueryParam = location === 'query' && ['GET', 'HEAD'].includes(route.method.toUpperCase());
-        
+
         switch (fieldSchema.type) {
             case 'string':
             case 'email':
@@ -590,19 +590,19 @@ export class TestGenerator {
 
         if (invalidValue !== undefined && shouldGenerateTypeCase) {
             invalidData[location][fieldName] = invalidValue;
-            
+
             const testName = isQueryParam && (fieldSchema.type === 'string' || fieldSchema.type === 'email' || fieldSchema.type === 'url')
                 ? `${route.method} ${route.path} - Below Min Length for ${location}.${fieldName}`
                 : `${route.method} ${route.path} - Invalid Type for ${location}.${fieldName}`;
-                
+
             const description = isQueryParam && (fieldSchema.type === 'string' || fieldSchema.type === 'email' || fieldSchema.type === 'url')
                 ? `Request with value below minimum length for ${location} parameter: ${fieldName}`
                 : `Request with invalid type for ${location} parameter: ${fieldName}`;
-                
+
             const expectedError = isQueryParam && (fieldSchema.type === 'string' || fieldSchema.type === 'email' || fieldSchema.type === 'url')
                 ? `${fieldName} must be at least ${fieldSchema.min} characters/items`
                 : `${fieldName} must be of type ${fieldSchema.type}`;
-            
+
             cases.push({
                 name: testName,
                 description: description,
@@ -622,9 +622,9 @@ export class TestGenerator {
      * 범위 검증 실패 케이스 생성
      */
     private static generateRangeValidationCases(
-        route: RouteDocumentation, 
-        location: string, 
-        fieldName: string, 
+        route: RouteDocumentation,
+        location: string,
+        fieldName: string,
         fieldSchema: FieldSchema
     ): TestCase[] {
         const cases: TestCase[] = [];
@@ -644,7 +644,7 @@ export class TestGenerator {
 
             if (invalidValue !== undefined && invalidData[location]) {
                 invalidData[location][fieldName] = invalidValue;
-                
+
                 cases.push({
                     name: `${route.method} ${route.path} - Below Min for ${location}.${fieldName}`,
                     description: `Request with value below minimum for ${location} parameter: ${fieldName}`,
@@ -673,7 +673,7 @@ export class TestGenerator {
 
             if (invalidValue !== undefined && invalidData[location]) {
                 invalidData[location][fieldName] = invalidValue;
-                
+
                 cases.push({
                     name: `${route.method} ${route.path} - Above Max for ${location}.${fieldName}`,
                     description: `Request with value above maximum for ${location} parameter: ${fieldName}`,
@@ -763,7 +763,7 @@ export class TestGenerator {
                 return Array.from({ length: arrayLength }, (_, i) => `item${i + 1}`);
 
             case 'object':
-                return { key: 'value', timestamp: new Date().toISOString() };            default:
+                return { key: 'value', timestamp: new Date().toISOString() }; default:
                 return 'test-value';
         }
     }
@@ -779,10 +779,10 @@ export class TestGenerator {
                 schema: responseSchema
             };
         }
-        
+
         // Generate sample response data with partial matching for dynamic fields
         const expectedData: any = {};
-        
+
         for (const [fieldName, fieldSchema] of Object.entries(responseSchema)) {
             if (fieldSchema.required) {
                 // For required fields, generate expected values
@@ -807,7 +807,7 @@ export class TestGenerator {
                 }
             }
         }
-        
+
         // Return as partial match mode for flexible validation
         return {
             mode: 'partial',
@@ -824,7 +824,7 @@ export class TestGenerator {
         for (const suite of testSuites) {
             const pathParts = suite.route.path.split('/').filter(part => part && !part.startsWith(':'));
             const basePath = pathParts.length > 0 ? `/${pathParts[0]}` : '/';
-            
+
             if (!groups.has(basePath)) {
                 groups.set(basePath, []);
             }
@@ -842,19 +842,19 @@ export class TestGenerator {
      */    private static generateStats(testSuites: RouteTestSuite[]): TestReportStats {
         // 전체 철학 검증 수행
         const philosophyResult = this.validateDevelopmentPhilosophy();
-        
+
         return {
             totalRoutes: testSuites.length,
             totalTests: testSuites.reduce((sum, suite) => sum + suite.testCases.length, 0),
-            successTests: testSuites.reduce((sum, suite) => 
+            successTests: testSuites.reduce((sum, suite) =>
                 sum + suite.testCases.filter(tc => tc.type === 'success').length, 0),
-            failureTests: testSuites.reduce((sum, suite) => 
+            failureTests: testSuites.reduce((sum, suite) =>
                 sum + suite.testCases.filter(tc => tc.type === 'failure').length, 0),
-            securityTests: testSuites.reduce((sum, suite) => 
-                sum + suite.testCases.filter(tc => 
+            securityTests: testSuites.reduce((sum, suite) =>
+                sum + suite.testCases.filter(tc =>
                     tc.name.includes('Security Attack')).length, 0),
-            philosophyTests: testSuites.reduce((sum, suite) => 
-                sum + suite.testCases.filter(tc => 
+            philosophyTests: testSuites.reduce((sum, suite) =>
+                sum + suite.testCases.filter(tc =>
                     tc.securityTestType && tc.securityTestType.includes('philosophy')).length, 0),
             philosophyScore: philosophyResult.score,
             philosophyViolations: philosophyResult.violations
@@ -875,7 +875,7 @@ export class TestGenerator {
             const stats = this.generateStats(testSuites);
 
             const templatePath = path.join(this.viewsPath, 'test-report.ejs');
-            
+
             const html = await ejs.renderFile(templatePath, {
                 stats,
                 routeGroups,
@@ -884,7 +884,8 @@ export class TestGenerator {
                 views: [this.viewsPath]
             });
 
-            return html;        } catch (error: any) {
+            return html;
+        } catch (error: any) {
             log.error('Failed to generate test report', { error: error.message });
             return `
                 <h1>Error generating test report</h1>
@@ -910,8 +911,10 @@ export class TestGenerator {
         return `
 <!DOCTYPE html>
 <html lang="en">
-<head>    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">    <title>API Test Report</title>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Test Report</title>
     <link rel="stylesheet" href="/test-styles.css">
     <link rel="stylesheet" href="/summary-styles.css">
     <script src="/test-scripts-optimized.js"></script>
@@ -970,7 +973,8 @@ export class TestGenerator {
         <div id="noResults" class="no-results" style="display: none;">
             <h3>No test cases found</h3>
             <p>Try adjusting your search or filter criteria</p>
-        </div>    </div>
+        </div>    
+        </div>
 </body>
 </html>`;
     }
@@ -1005,7 +1009,7 @@ export class TestGenerator {
      */
     private static generateTestSuiteHTML(testSuite: RouteTestSuite): string {
         const suiteId = `${testSuite.route.method}-${testSuite.route.path.replace(/[^a-zA-Z0-9]/g, '-')}`;
-        
+
         return `
             <div class="test-suite" data-method="${testSuite.route.method}" data-path="${testSuite.route.path}">
                 <div class="suite-header" onclick="toggleSuite('${suiteId}')">
@@ -1023,8 +1027,8 @@ export class TestGenerator {
                 </div>
                 
                 <div class="suite-content" id="suite-${suiteId}">
-                    ${testSuite.testCases.map((testCase, index) => 
-                        this.generateTestCaseHTML(testCase, index, suiteId)).join('')}
+                    ${testSuite.testCases.map((testCase, index) =>
+            this.generateTestCaseHTML(testCase, index, suiteId)).join('')}
                 </div>
             </div>
         `;
@@ -1036,8 +1040,9 @@ export class TestGenerator {
     private static generateTestCaseHTML(testCase: TestCase, index: number, suiteId: string): string {
         const testDataJson = testCase.data ? JSON.stringify(testCase.data, null, 2) : '';
         const testDataStr = JSON.stringify(testCase.data || {}).replace(/'/g, '&#39;').replace(/"/g, '&quot;');
-        
-        return `            <div class="test-case ${testCase.type} ${testCase.securityTestType ? 'security' : ''}" 
+
+        return `            
+            <div class="test-case ${testCase.type} ${testCase.securityTestType ? 'security' : ''}" 
                  data-type="${testCase.type}" 
                  data-method="${testCase.method}" 
                  data-endpoint="${testCase.endpoint}"
@@ -1048,8 +1053,8 @@ export class TestGenerator {
                     <div class="test-description">${testCase.description}</div>
                     <div class="test-details">
                         Expected Status: <strong>${testCase.expectedStatus}</strong>
-                        ${testCase.expectedErrors && testCase.expectedErrors.length > 0 ? 
-                            `| Expected Errors: <strong>${testCase.expectedErrors.join(', ')}</strong>` : ''}
+                        ${testCase.expectedErrors && testCase.expectedErrors.length > 0 ?
+                `| Expected Errors: <strong>${testCase.expectedErrors.join(', ')}</strong>` : ''}
                     </div>
                     
                     ${testCase.data && Object.keys(testCase.data).length > 0 ? `
@@ -1099,7 +1104,8 @@ export class TestGenerator {
             const stats = this.generateStats(testSuites);
 
             return {
-                metadata: {                    generatedAt: new Date().toISOString(),
+                metadata: {
+                    generatedAt: new Date().toISOString(),
                     totalRoutes: stats.totalRoutes,
                     totalTests: stats.totalTests,
                     successTests: stats.successTests,
@@ -1213,7 +1219,7 @@ export class TestGenerator {
                         '    pm.response.to.be.json;',
                         '});'
                     ];
-                    
+
                     // Add additional tests for security test cases
                     if (testCase.securityTestType) {
                         execScript.push(
@@ -1227,7 +1233,7 @@ export class TestGenerator {
                             '});'
                         );
                     }
-                    
+
                     request.event = [{
                         listen: 'test',
                         script: {
@@ -1247,7 +1253,11 @@ export class TestGenerator {
             log.error('Failed to generate Postman collection', { error: error.message });
             return { error: 'Failed to generate Postman collection', details: error.message };
         }
-    }    /**
+    }    
+    
+    
+    
+    /**
      * CMS 개발 철학 검증
      */
     static validateDevelopmentPhilosophy(): PhilosophyValidationResult {
@@ -1265,12 +1275,12 @@ export class TestGenerator {
         for (const route of this.routes) {
             // 1. 기본 라우트 경로 네이밍 검증
             violations.push(...this.validateRouteNaming(route));
-              // 2. 고급 라우트 네이밍 검증
+            // 2. 고급 라우트 네이밍 검증
             violations.push(...this.validateEnhancedRouteNaming(route));
-            
+
             // 3. RESTful API 스펙 검증
             violations.push(...this.validateRESTfulSpecs(route));
-            
+
             // 4. HTTP 스펙 검증
             violations.push(...this.validateHTTPSpecs(route));
 
@@ -1313,10 +1323,10 @@ export class TestGenerator {
         for (const route of this.routes) {
             // 1. 기본 라우트 경로 네이밍 검증
             violations.push(...this.validateEnhancedRouteNaming(route));
-            
+
             // 2. RESTful API 스펙 검증
             violations.push(...this.validateEnhancedRESTfulSpecs(route));
-            
+
             // 3. HTTP 스펙 검증
             violations.push(...this.validateEnhancedHTTPSpecs(route));
 
@@ -1516,11 +1526,11 @@ export class TestGenerator {
      */
     private static validateEnhancedResourcePluralization(route: RouteDocumentation, resourceName: string): PhilosophyViolation[] {
         const violations: PhilosophyViolation[] = [];
-        
+
         const commonSingulars = ['user', 'post', 'comment', 'file', 'image', 'document', 'category', 'tag'];
-        const singularToPlural: {[key: string]: string} = {
+        const singularToPlural: { [key: string]: string } = {
             'user': 'users',
-            'post': 'posts', 
+            'post': 'posts',
             'comment': 'comments',
             'file': 'files',
             'image': 'images',
@@ -1602,7 +1612,7 @@ export class TestGenerator {
      */
     private static validateEnhancedMethodSpecificResponses(route: RouteDocumentation): PhilosophyViolation[] {
         const violations: PhilosophyViolation[] = [];
-        
+
         if (!route.responses) return violations;
 
         const method = route.method.toUpperCase();
@@ -1834,7 +1844,7 @@ export class TestGenerator {
      */
     private static calculatePhilosophyScore(violations: PhilosophyViolation[]): number {
         let score = 100;
-        
+
         for (const violation of violations) {
             switch (violation.severity) {
                 case 'error':
@@ -1848,7 +1858,7 @@ export class TestGenerator {
                     break;
             }
         }
-        
+
         return Math.max(0, score);
     }
 
@@ -1864,17 +1874,17 @@ export class TestGenerator {
      */
     private static groupViolationsByType(violations: PhilosophyViolation[]): Record<string, PhilosophyViolation[]> {
         const groups: Record<string, PhilosophyViolation[]> = {};
-        
+
         for (const violation of violations) {
             if (!groups[violation.type]) {
                 groups[violation.type] = [];
             }
             groups[violation.type].push(violation);
         }
-        
+
         return groups;
     }
-    
+
     /**
      * 철학 위반 설명 생성
      */
@@ -1883,23 +1893,23 @@ export class TestGenerator {
         const errorCount = violations.filter(v => v.severity === 'error').length;
         const warningCount = violations.filter(v => v.severity === 'warning').length;
         const infoCount = violations.filter(v => v.severity === 'info').length;
-        
+
         let description = `${violationCount}개의 ${this.translateViolationType(type)} 위반 사항이 발견되었습니다: `;
-        
+
         if (errorCount > 0) {
             description += `${errorCount}개 오류`;
         }
-        
+
         if (warningCount > 0) {
             if (errorCount > 0) description += ', ';
             description += `${warningCount}개 경고`;
         }
-        
+
         if (infoCount > 0) {
             if (errorCount > 0 || warningCount > 0) description += ', ';
             description += `${infoCount}개 정보`;
         }
-        
+
         // 첫 번째 위반 사항 메시지 추가
         if (violations.length > 0) {
             description += `\n첫 번째 위반: ${violations[0].message}`;
@@ -1907,15 +1917,15 @@ export class TestGenerator {
                 description += `\n제안사항: ${violations[0].suggestion}`;
             }
         }
-        
+
         // 추가 위반 사항 개수 표시
         if (violations.length > 1) {
             description += `\n...외 ${violations.length - 1}개 위반 사항`;
         }
-        
+
         return description;
     }
-    
+
     /**
      * 위반 타입 한글 표현으로 변환
      */
@@ -1929,7 +1939,7 @@ export class TestGenerator {
             'performance': '성능',
             'consistency': '일관성'
         };
-        
+
         return translations[type] || type;
     }
 
@@ -1938,7 +1948,7 @@ export class TestGenerator {
      */
     private static calculateEnhancedPhilosophyScore(violations: PhilosophyViolation[]): number {
         let score = 100;
-        
+
         // 심각도에 따른 감점
         for (const violation of violations) {
             switch (violation.severity) {
@@ -1953,14 +1963,14 @@ export class TestGenerator {
                     break;
             }
         }
-        
+
         // 위반 타입에 따른 추가 감점
         const typeWeights: Record<string, number> = {
             'security': 1.5,  // 보안 위반은 더 심각하게 취급
             'performance': 1.2,  // 성능 위반도 중요하게 취급
             'naming': 0.8,  // 명명 규칙은 상대적으로 덜 심각
         };
-        
+
         for (const violation of violations) {
             const weight = typeWeights[violation.type] || 1;
             if (weight !== 1) {
@@ -1968,7 +1978,7 @@ export class TestGenerator {
                 score -= (weight - 1) * (violation.severity === 'error' ? 10 : violation.severity === 'warning' ? 5 : 2);
             }
         }
-        
+
         return Math.max(0, Math.round(score));
     }
 
@@ -2017,44 +2027,45 @@ export class TestGenerator {
                 securityTestType: 'philosophy-success'
             });
         }
-        
+
         return testCases;
     }
-    
+
+
     /**
      * 페이지네이션 테스트 케이스 생성
      * 복수형 리소스에 대한 GET 요청에서 페이지네이션 지원 여부를 검증
      */
     private static generatePaginationTestCases(route: RouteDocumentation): TestCase[] {
         const testCases: TestCase[] = [];
-        
+
         // GET 메소드이고, ID 파라미터가 없는 경우만 검증
         if (route.method.toUpperCase() !== 'GET' || route.path.includes('/:id')) {
             return testCases;
         }
-        
+
         // 라우트 경로의 마지막 세그먼트 확인
         const pathSegments = route.path.split('/').filter(segment => segment && !segment.startsWith(':'));
         const lastSegment = pathSegments[pathSegments.length - 1];
-        
+
         // 마지막 세그먼트가 없거나 복수형이 아니면 검증 불필요
         if (!lastSegment || !this.isPlural(lastSegment)) {
             return testCases;
         }
-        
+
         // 페이지네이션 파라미터 존재 확인
-        const hasPaginationParams = route.parameters?.query && 
-            Object.keys(route.parameters.query).some(key => 
+        const hasPaginationParams = route.parameters?.query &&
+            Object.keys(route.parameters.query).some(key =>
                 ['page', 'limit', 'offset', 'size', 'cursor'].includes(key.toLowerCase())
             );
-        
+
         if (hasPaginationParams) {
             // 페이지네이션 파라미터가 있는 경우 성공 테스트 케이스 생성
-            const paginationParams = route.parameters?.query ? 
+            const paginationParams = route.parameters?.query ?
                 Object.keys(route.parameters.query)
                     .filter(key => ['page', 'limit', 'offset', 'size', 'cursor'].includes(key.toLowerCase()))
                 : [];
-            
+
             // 페이지네이션 성공 테스트 케이스
             testCases.push({
                 name: `${route.method} ${route.path} - Pagination Support Test`,
@@ -2071,7 +2082,7 @@ export class TestGenerator {
                 expectedStatus: 200,
                 securityTestType: 'philosophy-pagination'
             });
-            
+
             // 페이지네이션 응답 구조 검증 테스트 케이스
             testCases.push({
                 name: `${route.method} ${route.path} - Pagination Response Structure Test`,
@@ -2100,7 +2111,7 @@ export class TestGenerator {
                 },
                 securityTestType: 'philosophy-pagination-response'
             });
-            
+
         } else {
             // 페이지네이션 파라미터 누락에 대한 실패 테스트 케이스
             testCases.push({
@@ -2117,9 +2128,11 @@ export class TestGenerator {
                 securityTestType: 'philosophy-missing-pagination'
             });
         }
-        
+
         return testCases;
     }
+
+
 
     /**
      * 보안 철학 검증
@@ -2130,7 +2143,7 @@ export class TestGenerator {
         // 1. 민감한 데이터 경로 검증
         const sensitivePatterns = ['password', 'secret', 'token', 'key', 'auth', 'login', 'admin'];
         const pathLower = route.path.toLowerCase();
-        
+
         for (const pattern of sensitivePatterns) {
             if (pathLower.includes(pattern)) {
                 // POST는 허용, GET은 경고
@@ -2153,7 +2166,7 @@ export class TestGenerator {
 
         // 2. 인증 요구사항 검증 (간접적 검증)
         const privateMethods = ['POST', 'PUT', 'PATCH', 'DELETE'];
-        
+
         if (privateMethods.includes(route.method.toUpperCase())) {
             // 민감한 경로에 대한 보안 검증 - 실제 미들웨어는 확인 불가하므로 경고만
             if (sensitivePatterns.some(pattern => pathLower.includes(pattern))) {
@@ -2175,7 +2188,7 @@ export class TestGenerator {
         if (route.parameters?.query) {
             const queryParams = Object.keys(route.parameters.query);
             const riskyParams = ['id', 'search', 'filter', 'query', 'where'];
-            
+
             for (const param of queryParams) {
                 if (riskyParams.includes(param.toLowerCase())) {
                     violations.push({
@@ -2194,7 +2207,11 @@ export class TestGenerator {
         }
 
         return violations;
-    }    /**
+    }
+
+
+
+    /**
      * 성능 최적화 철학 검증
      */
     private static validatePerformancePhilosophy(route: RouteDocumentation): PhilosophyViolation[] {
@@ -2203,14 +2220,14 @@ export class TestGenerator {
         // 1. 대량 데이터 처리 검증
         if (route.method.toUpperCase() === 'GET') {
             // 페이지네이션 파라미터 검증
-            const hasPageParam = route.parameters?.query && 
-                Object.keys(route.parameters.query).some(key => 
+            const hasPageParam = route.parameters?.query &&
+                Object.keys(route.parameters.query).some(key =>
                     ['page', 'limit', 'offset', 'size', 'cursor'].includes(key.toLowerCase())
                 );
 
             const pathSegments = route.path.split('/').filter(segment => segment && !segment.startsWith(':'));
             const lastSegment = pathSegments[pathSegments.length - 1];
-            
+
             // 마지막 경로 세그먼트가 복수형인지 확인
             const isLastSegmentPlural = lastSegment ? this.isPlural(lastSegment) : false;
 
@@ -2249,7 +2266,10 @@ export class TestGenerator {
 
         return violations;
     }
-    
+
+
+
+
     /**
      * API 일관성 철학 검증
      */
@@ -2259,7 +2279,7 @@ export class TestGenerator {
         // 1. 네이밍 일관성 검증
         const allPaths = this.routes.map(r => r.path);
         const pathSegments = route.path.split('/').filter(segment => segment && !segment.startsWith(':'));
-        
+
         for (const segment of pathSegments) {
             // 같은 리소스에 대해 다른 네이밍 사용 검증
             const variations = [
@@ -2270,7 +2290,7 @@ export class TestGenerator {
 
             const conflictingPaths = allPaths.filter(path => {
                 const otherSegments = path.split('/').filter(s => s && !s.startsWith(':'));
-                return otherSegments.some(otherSegment => 
+                return otherSegments.some(otherSegment =>
                     variations.includes(otherSegment) && otherSegment !== segment
                 );
             });
@@ -2301,7 +2321,7 @@ export class TestGenerator {
                     // 공통 응답 필드 검증 (data, meta, pagination 등)
                     const commonFields = ['data', 'message', 'status', 'meta', 'pagination'];
                     const hasCommonStructure = commonFields.some(field => field in response);
-                    
+
                     if (!hasCommonStructure && route.method.toUpperCase() === 'GET') {
                         violations.push({
                             type: 'consistency',

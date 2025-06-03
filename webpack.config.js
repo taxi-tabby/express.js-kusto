@@ -105,18 +105,38 @@ module.exports = (env, argv) => {
                     {
                         from: 'public',
                         to: 'public',
-                    },
-                    {
+                    }, {
                         from: 'src/core/lib/static',
                         to: 'public',
+                    },                    
+                    
+                    // Prisma 클라이언트 파일들 복사
+                    {
+                        from: 'src/app/db/**/client/**',
+                        to: ({ context, absoluteFilename }) => {
+                            const relativePath = path.relative(context, absoluteFilename);
+                            return relativePath;
+                        },
+                        globOptions: {
+                            ignore: ['**/node_modules/**']
+                        }
                     },
+                    
+                    // Prisma 스키마 파일들 복사
+                    {
+                        from: 'src/app/db/**/schema.prisma',
+                        to: ({ context, absoluteFilename }) => {
+                            const relativePath = path.relative(context, absoluteFilename);
+                            return relativePath;
+                        }
+                    }
                 ]
             })
-        ], 
+        ],
         target: "node",
         externalsPresets: {
             node: true,
-        }, 
+        },
         externals: [
             nodeExternals({})
         ],

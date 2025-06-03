@@ -163,6 +163,17 @@ function getSchemaPath(dbName: string): string {
 }
 
 /**
+ * Clean up generated schema.prisma files from client directories
+ */
+function cleanupClientSchemaFiles(dbName: string): void {
+    const clientSchemaPath = path.join(process.cwd(), 'src', 'app', 'db', dbName, 'client', 'schema.prisma');
+    if (fs.existsSync(clientSchemaPath)) {
+        fs.unlinkSync(clientSchemaPath);
+        console.log(`🗑️  Removed redundant schema.prisma from ${dbName}/client/`);
+    }
+}
+
+/**
  * Execute a Prisma command for a specific database
  */
 async function executePrismaCommand(dbName: string, command: string): Promise<void> {
@@ -212,13 +223,12 @@ program
             return;
         }
 
-        console.log(`Generating Prisma client for ${options.db ? `database: ${options.db}` : 'all databases'}`);
-
-        for (const db of dbs) {
+        console.log(`Generating Prisma client for ${options.db ? `database: ${options.db}` : 'all databases'}`);        for (const db of dbs) {
             try {
                 await executePrismaCommand(db, 'generate');
 
-                
+                // Clean up redundant schema.prisma file from client directory
+                cleanupClientSchemaFiles(db);
 
                 console.log(`✅ Generated client for ${db}`);
             } catch (error: any) {
@@ -267,15 +277,18 @@ program
             console.log(`⚠️  WARNING: This will reset the database and delete ALL data!`);
             console.log(`🔄 Resetting database for ${options.db ? `database: ${options.db}` : 'all databases'}`);
             
-            for (const db of dbs) {
-                try {
-                    await executePrismaCommand(db, 'migrate reset --force');
-                    console.log(`✅ Database reset completed for ${db}`);
-                    console.log(`   📁 All migrations have been reapplied`);
-                    console.log(`   🚀 You can now continue with development`);
-                } catch (error: any) {
-                    console.error(`❌ Database reset failed for ${db}: ${error?.message || String(error)}`);
-                }
+            for (const db of dbs) {            try {
+                await executePrismaCommand(db, 'migrate reset --force');
+                
+                // Clean up any generated schema files after reset (which includes generation)
+                cleanupClientSchemaFiles(db);
+                
+                console.log(`✅ Database reset completed for ${db}`);
+                console.log(`   📁 All migrations have been reapplied`);
+                console.log(`   🚀 You can now continue with development`);
+            } catch (error: any) {
+                console.error(`❌ Database reset failed for ${db}: ${error?.message || String(error)}`);
+            }
             }
             return;
         }
@@ -327,11 +340,15 @@ program
                 migrationCommand = `migrate ${options.type}`;
         }
 
-        console.log(`🔄 Running migration '${options.type}' for ${options.db ? `database: ${options.db}` : 'all databases'}`);
-
-        for (const db of dbs) {
+        console.log(`🔄 Running migration '${options.type}' for ${options.db ? `database: ${options.db}` : 'all databases'}`);        for (const db of dbs) {
             try {
                 await executePrismaCommand(db, migrationCommand);
+                
+                // Clean up schema files for commands that generate client
+                if (['dev', 'reset'].includes(options.type) && !options.skipGenerate) {
+                    cleanupClientSchemaFiles(db);
+                }
+                
                 console.log(`✅ Migration '${options.type}' completed for ${db}`);
                 
                 // Additional info for specific commands

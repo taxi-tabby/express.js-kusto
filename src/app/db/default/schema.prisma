@@ -8,15 +8,38 @@ datasource testdb1_db {
   url      = env("RDS_DEFAULT_URL")
 }
 
+// ============================================================================
+// BASE MODELS WITH SOFT DELETE
+// ============================================================================
+
 model Customer {
   id        BigInt   @id @default(autoincrement())
   uuid      String   @unique @default(uuid())
   email     String   @unique
   name      String
   phone     String?
+  
+  // Soft delete
+  deletedAt DateTime?
+  deletedBy BigInt?
+  
+  // Audit fields
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  orders    Order[]
+  createdBy BigInt?
+  updatedBy BigInt?
+  
+  // Relations
+  orders        Order[]
+  deletedByAdmin Admin? @relation("CustomerDeletedBy", fields: [deletedBy], references: [id])
+  createdByAdmin Admin? @relation("CustomerCreatedBy", fields: [createdBy], references: [id])
+  updatedByAdmin Admin? @relation("CustomerUpdatedBy", fields: [updatedBy], references: [id])
+  
+  @@map("customers")
+  @@index([email])
+  @@index([uuid])
+  @@index([deletedAt])
+  @@index([createdAt])
 }
 
 model Order {
@@ -26,10 +49,26 @@ model Order {
   totalAmount Float
   status      String      @default("pending")
   customerId  BigInt
+  userId      BigInt?     // User who placed the order
+  
+  // Soft delete fields
+  deletedAt   DateTime?
+  
+  // Audit fields
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
+  
+  // Relations
   customer    Customer    @relation(fields: [customerId], references: [id])
+  user        User?       @relation(fields: [userId], references: [id])
   items       OrderItem[]
+  
+  @@map("orders")
+  @@index([customerId])
+  @@index([userId])
+  @@index([orderNumber])
+  @@index([status])
+  @@index([deletedAt])
 }
 
 model OrderItem {
@@ -40,4 +79,609 @@ model OrderItem {
   price       Float
   orderId     BigInt
   order       Order  @relation(fields: [orderId], references: [id])
+}
+
+// ============================================================================
+// USER AUTHENTICATION & MANAGEMENT SCHEMA
+// ============================================================================
+
+// 일반 사용자 테이블
+model User {
+  id            BigInt       @id @default(autoincrement())
+  uuid          String       @unique @default(uuid())
+  email         String       @unique
+  username      String?      @unique
+  passwordHash  String
+  firstName     String?
+  lastName      String?
+  phoneNumber   String?
+  profileImage  String?
+  timezone      String?      @default("UTC")
+  locale        String?      @default("en-US")
+  
+  // Account status
+  isActive      Boolean      @default(true)
+  isVerified    Boolean      @default(false)
+  isSuspended   Boolean      @default(false)
+  
+  // Security fields
+  twoFactorEnabled      Boolean  @default(false)
+  twoFactorSecret       String?
+  passwordResetToken    String?
+  passwordResetExpires  DateTime?
+  emailVerificationToken String?
+  emailVerificationExpires DateTime?
+  
+  // Login tracking
+  lastLoginAt   DateTime?
+  lastLoginIp   String?
+  loginAttempts Int          @default(0)
+  lockoutUntil  DateTime?
+  
+  // Soft delete fields
+  deletedAt     DateTime?
+  deletedBy     BigInt?
+  
+  // Audit fields
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  createdBy     BigInt?
+  updatedBy     BigInt?
+  
+  // Relations
+  roles         UserRole[]
+  sessions      UserSession[]
+  refreshTokens UserRefreshToken[]
+  auditLogs     UserAuditLog[]
+  permissions   UserPermission[]
+  orders        Order[]
+  
+  // Relations to Admin for audit trails
+  deletedByAdmin Admin? @relation("UserDeletedByAdmin", fields: [deletedBy], references: [id])
+  createdByAdmin Admin? @relation("UserCreatedByAdmin", fields: [createdBy], references: [id])
+  updatedByAdmin Admin? @relation("UserUpdatedByAdmin", fields: [updatedBy], references: [id])
+  
+  @@map("users")
+  @@index([email])
+  @@index([username])
+  @@index([uuid])
+  @@index([isActive, isVerified])
+  @@index([deletedAt])
+  @@index([lastLoginAt])
+  @@index([createdAt])
+}
+
+// 관리자 테이블
+model Admin {
+  id            BigInt       @id @default(autoincrement())
+  uuid          String       @unique @default(uuid())
+  email         String       @unique
+  username      String       @unique
+  passwordHash  String
+  firstName     String
+  lastName      String
+  employeeId    String?      @unique
+  department    String?
+  position      String?
+  phoneNumber   String?
+  profileImage  String?
+  timezone      String?      @default("UTC")
+  locale        String?      @default("en-US")
+  
+  // Account status
+  isActive      Boolean      @default(true)
+  isSuperAdmin  Boolean      @default(false)
+  isSuspended   Boolean      @default(false)
+  
+  // Security fields
+  twoFactorEnabled      Boolean  @default(true) // 관리자는 기본적으로 2FA 활성화
+  twoFactorSecret       String?
+  passwordResetToken    String?
+  passwordResetExpires  DateTime?
+  
+  // Login tracking
+  lastLoginAt   DateTime?
+  lastLoginIp   String?
+  loginAttempts Int          @default(0)
+  lockoutUntil  DateTime?
+  
+  // Soft delete fields
+  deletedAt     DateTime?
+  deletedBy     BigInt?
+  
+  // Audit fields
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  createdBy     BigInt?
+  updatedBy     BigInt?
+  
+  // Direct Relations
+  roles         AdminRoleAssignment[]
+  sessions      AdminSession[]
+  refreshTokens AdminRefreshToken[]
+  auditLogs     AdminAuditLog[]
+  permissions   AdminPermission[]
+  
+  // Relations for user management audit trails
+  usersDeleted  User[] @relation("UserDeletedByAdmin")
+  usersCreated  User[] @relation("UserCreatedByAdmin")
+  usersUpdated  User[] @relation("UserUpdatedByAdmin")
+  
+  // Customer audit trails
+  customersDeleted Customer[] @relation("CustomerDeletedBy")
+  customersCreated Customer[] @relation("CustomerCreatedBy")
+  customersUpdated Customer[] @relation("CustomerUpdatedBy")
+  
+  // Role management audit trails
+  rolesDeleted Role[] @relation("RoleDeletedByAdmin")
+  rolesCreated Role[] @relation("RoleCreatedByAdmin")
+  rolesUpdated Role[] @relation("RoleUpdatedByAdmin")
+  
+  // Admin role management audit trails
+  adminRolesDeleted AdminRole[] @relation("AdminRoleDeletedByAdmin")
+  adminRolesCreated AdminRole[] @relation("AdminRoleCreatedByAdmin")
+  adminRolesUpdated AdminRole[] @relation("AdminRoleUpdatedByAdmin")
+  
+  // Permission management audit trails
+  permissionsDeleted Permission[] @relation("PermissionDeletedByAdmin")
+  permissionsCreated Permission[] @relation("PermissionCreatedByAdmin")
+  permissionsUpdated Permission[] @relation("PermissionUpdatedByAdmin")
+  
+  // Role assignment audit trails
+  userRolesAssigned UserRole[] @relation("UserRoleAssignedByAdmin")
+  adminRoleAssignmentsBy AdminRoleAssignment[] @relation("AdminRoleAssignmentBy")
+  
+  // Permission grant audit trails
+  rolePermissionsGranted RolePermission[] @relation("RolePermissionGrantedByAdmin")
+  adminRolePermissionsGranted AdminRolePermission[] @relation("AdminRolePermissionGrantedBy")
+  userPermissionsGranted UserPermission[] @relation("UserPermissionGrantedByAdmin")
+  adminPermissionsGranted AdminPermission[] @relation("AdminPermissionGrantedBy")
+  
+  // Token revocation audit trails
+  userRefreshTokensRevoked UserRefreshToken[] @relation("UserRefreshTokenRevokedBy")
+  adminRefreshTokensRevoked AdminRefreshToken[] @relation("AdminRefreshTokenRevokedBy")
+  
+  // Self-referential relations for admin management
+  deletedByAdmin Admin? @relation("AdminDeletedBy", fields: [deletedBy], references: [id])
+  createdByAdmin Admin? @relation("AdminCreatedBy", fields: [createdBy], references: [id])
+  updatedByAdmin Admin? @relation("AdminUpdatedBy", fields: [updatedBy], references: [id])
+  adminsDeleted  Admin[] @relation("AdminDeletedBy")
+  adminsCreated  Admin[] @relation("AdminCreatedBy")
+  adminsUpdated  Admin[] @relation("AdminUpdatedBy")
+  
+  @@map("admins")
+  @@index([email])
+  @@index([username])
+  @@index([employeeId])
+  @@index([uuid])
+  @@index([isActive, isSuperAdmin])
+  @@index([deletedAt])
+  @@index([lastLoginAt])
+  @@index([createdAt])
+  @@index([department])
+}
+
+model Role {
+  id          BigInt     @id @default(autoincrement())
+  uuid        String     @unique @default(uuid())
+  name        String     @unique
+  description String?
+  isSystem    Boolean    @default(false) // System roles cannot be deleted
+  isActive    Boolean    @default(true)
+  
+  // Soft delete fields
+  deletedAt   DateTime?
+  deletedBy   BigInt?
+  
+  // Audit fields
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  createdBy   BigInt?
+  updatedBy   BigInt?
+  
+  // Relations
+  userRoles   UserRole[]
+  permissions RolePermission[]
+  
+  // Audit relations
+  deletedByAdmin Admin? @relation("RoleDeletedByAdmin", fields: [deletedBy], references: [id])
+  createdByAdmin Admin? @relation("RoleCreatedByAdmin", fields: [createdBy], references: [id])
+  updatedByAdmin Admin? @relation("RoleUpdatedByAdmin", fields: [updatedBy], references: [id])
+  
+  @@map("roles")
+  @@index([name])
+  @@index([isActive, isSystem])
+  @@index([deletedAt])
+}
+
+model AdminRole {
+  id          BigInt     @id @default(autoincrement())
+  uuid        String     @unique @default(uuid())
+  name        String     @unique
+  description String?
+  isSystem    Boolean    @default(false)
+  isActive    Boolean    @default(true)
+  
+  // Soft delete fields
+  deletedAt   DateTime?
+  deletedBy   BigInt?
+  
+  // Audit fields
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  createdBy   BigInt?
+  updatedBy   BigInt?
+  
+  // Relations
+  admins      AdminRoleAssignment[]
+  permissions AdminRolePermission[]
+  
+  // Audit relations
+  deletedByAdmin Admin? @relation("AdminRoleDeletedByAdmin", fields: [deletedBy], references: [id])
+  createdByAdmin Admin? @relation("AdminRoleCreatedByAdmin", fields: [createdBy], references: [id])
+  updatedByAdmin Admin? @relation("AdminRoleUpdatedByAdmin", fields: [updatedBy], references: [id])
+  
+  @@map("admin_roles")
+  @@index([name])
+  @@index([isActive, isSystem])
+  @@index([deletedAt])
+}
+
+model Permission {
+  id          BigInt           @id @default(autoincrement())
+  uuid        String           @unique @default(uuid())
+  name        String           @unique
+  resource    String           // e.g., "users", "orders", "products"
+  action      String           // e.g., "create", "read", "update", "delete"
+  description String?
+  isSystem    Boolean          @default(false)
+  
+  // Soft delete fields
+  deletedAt   DateTime?
+  deletedBy   BigInt?
+  
+  // Audit fields
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  createdBy   BigInt?
+  updatedBy   BigInt?
+  
+  // Relations
+  rolePermissions      RolePermission[]
+  userPermissions      UserPermission[]
+  adminRolePermissions AdminRolePermission[]
+  adminPermissions     AdminPermission[]
+  
+  // Audit relations
+  deletedByAdmin Admin? @relation("PermissionDeletedByAdmin", fields: [deletedBy], references: [id])
+  createdByAdmin Admin? @relation("PermissionCreatedByAdmin", fields: [createdBy], references: [id])
+  updatedByAdmin Admin? @relation("PermissionUpdatedByAdmin", fields: [updatedBy], references: [id])
+  
+  @@unique([resource, action])
+  @@map("permissions")
+  @@index([resource])
+  @@index([action])
+  @@index([deletedAt])
+}
+
+model UserRole {
+  id        BigInt   @id @default(autoincrement())
+  userId    BigInt
+  roleId    BigInt
+  assignedAt DateTime @default(now())
+  assignedBy BigInt?
+  expiresAt  DateTime?
+  
+  // Soft delete fields
+  deletedAt  DateTime?
+  
+  // Relations
+  user           User  @relation(fields: [userId], references: [id])
+  role           Role  @relation(fields: [roleId], references: [id])
+  assignedByAdmin Admin? @relation("UserRoleAssignedByAdmin", fields: [assignedBy], references: [id])
+  
+  @@unique([userId, roleId])
+  @@map("user_roles")
+  @@index([userId])
+  @@index([roleId])
+  @@index([expiresAt])
+  @@index([deletedAt])
+}
+
+model AdminRoleAssignment {
+  id        BigInt   @id @default(autoincrement())
+  adminId   BigInt
+  roleId    BigInt
+  assignedAt DateTime @default(now())
+  assignedBy BigInt?
+  expiresAt  DateTime?
+  
+  // Soft delete fields
+  deletedAt  DateTime?
+  
+  // Relations
+  admin          Admin     @relation(fields: [adminId], references: [id])
+  role           AdminRole @relation(fields: [roleId], references: [id])
+  assignedByAdmin Admin?   @relation("AdminRoleAssignmentBy", fields: [assignedBy], references: [id])
+  
+  @@unique([adminId, roleId])
+  @@map("admin_role_assignments")
+  @@index([adminId])
+  @@index([roleId])
+  @@index([expiresAt])
+  @@index([deletedAt])
+}
+
+model RolePermission {
+  id           BigInt     @id @default(autoincrement())
+  roleId       BigInt
+  permissionId BigInt
+  grantedAt    DateTime   @default(now())
+  grantedBy    BigInt?
+  
+  // Soft delete fields
+  deletedAt    DateTime?
+  
+  // Relations
+  role       Role       @relation(fields: [roleId], references: [id])
+  permission Permission @relation(fields: [permissionId], references: [id])
+  grantedByAdmin Admin? @relation("RolePermissionGrantedByAdmin", fields: [grantedBy], references: [id])
+  
+  @@unique([roleId, permissionId])
+  @@map("role_permissions")
+  @@index([roleId])
+  @@index([permissionId])
+  @@index([deletedAt])
+}
+
+model AdminRolePermission {
+  id           BigInt     @id @default(autoincrement())
+  roleId       BigInt
+  permissionId BigInt
+  grantedAt    DateTime   @default(now())
+  grantedBy    BigInt?
+  
+  // Soft delete fields
+  deletedAt    DateTime?
+  
+  // Relations
+  role       AdminRole  @relation(fields: [roleId], references: [id])
+  permission Permission @relation(fields: [permissionId], references: [id])
+  grantedByAdmin Admin? @relation("AdminRolePermissionGrantedBy", fields: [grantedBy], references: [id])
+  
+  @@unique([roleId, permissionId])
+  @@map("admin_role_permissions")
+  @@index([roleId])
+  @@index([permissionId])
+  @@index([deletedAt])
+}
+
+model UserPermission {
+  id           BigInt     @id @default(autoincrement())
+  userId       BigInt
+  permissionId BigInt
+  grantedAt    DateTime   @default(now())
+  grantedBy    BigInt?
+  expiresAt    DateTime?
+  
+  // Soft delete fields
+  deletedAt    DateTime?
+  
+  // Relations
+  user       User       @relation(fields: [userId], references: [id])
+  permission Permission @relation(fields: [permissionId], references: [id])
+  grantedByAdmin Admin? @relation("UserPermissionGrantedByAdmin", fields: [grantedBy], references: [id])
+  
+  @@unique([userId, permissionId])
+  @@map("user_permissions")
+  @@index([userId])
+  @@index([permissionId])
+  @@index([expiresAt])
+  @@index([deletedAt])
+}
+
+model AdminPermission {
+  id           BigInt     @id @default(autoincrement())
+  adminId      BigInt
+  permissionId BigInt
+  grantedAt    DateTime   @default(now())
+  grantedBy    BigInt?
+  expiresAt    DateTime?
+  
+  // Soft delete fields
+  deletedAt    DateTime?
+  
+  // Relations
+  admin      Admin      @relation(fields: [adminId], references: [id])
+  permission Permission @relation(fields: [permissionId], references: [id])
+  grantedByAdmin Admin? @relation("AdminPermissionGrantedBy", fields: [grantedBy], references: [id])
+  
+  @@unique([adminId, permissionId])
+  @@map("admin_permissions")
+  @@index([adminId])
+  @@index([permissionId])
+  @@index([expiresAt])
+  @@index([deletedAt])
+}
+
+model UserSession {
+  id          BigInt   @id @default(autoincrement())
+  uuid        String   @unique @default(uuid())
+  userId      BigInt
+  tokenHash   String   @unique // Hashed JWT token ID
+  deviceInfo  String? // User agent, device info
+  ipAddress   String?
+  location    String? // Geolocation info
+  isActive    Boolean  @default(true)
+  lastUsedAt  DateTime @default(now())
+  expiresAt   DateTime
+  
+  // Soft delete fields
+  deletedAt   DateTime?
+  
+  // Audit fields
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relations
+  user        User     @relation(fields: [userId], references: [id])
+  
+  @@map("user_sessions")
+  @@index([userId])
+  @@index([tokenHash])
+  @@index([isActive, expiresAt])
+  @@index([lastUsedAt])
+  @@index([deletedAt])
+}
+
+model AdminSession {
+  id          BigInt   @id @default(autoincrement())
+  uuid        String   @unique @default(uuid())
+  adminId     BigInt
+  tokenHash   String   @unique // Hashed JWT token ID
+  deviceInfo  String? // User agent, device info
+  ipAddress   String?
+  location    String? // Geolocation info
+  isActive    Boolean  @default(true)
+  lastUsedAt  DateTime @default(now())
+  expiresAt   DateTime
+  
+  // Soft delete fields
+  deletedAt   DateTime?
+  
+  // Audit fields
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relations
+  admin       Admin    @relation(fields: [adminId], references: [id])
+  
+  @@map("admin_sessions")
+  @@index([adminId])
+  @@index([tokenHash])
+  @@index([isActive, expiresAt])
+  @@index([lastUsedAt])
+  @@index([deletedAt])
+}
+
+model UserRefreshToken {
+  id          BigInt   @id @default(autoincrement())
+  uuid        String   @unique @default(uuid())
+  userId      BigInt
+  tokenHash   String   @unique
+  deviceInfo  String?
+  ipAddress   String?
+  isRevoked   Boolean  @default(false)
+  revokedAt   DateTime?
+  revokedBy   BigInt?
+  expiresAt   DateTime
+  
+  // Soft delete fields
+  deletedAt   DateTime?
+  
+  // Audit fields
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relations
+  user        User     @relation(fields: [userId], references: [id])
+  revokedByAdmin Admin? @relation("UserRefreshTokenRevokedBy", fields: [revokedBy], references: [id])
+  
+  @@map("user_refresh_tokens")
+  @@index([userId])
+  @@index([tokenHash])
+  @@index([isRevoked, expiresAt])
+  @@index([deletedAt])
+}
+
+model AdminRefreshToken {
+  id          BigInt   @id @default(autoincrement())
+  uuid        String   @unique @default(uuid())
+  adminId     BigInt
+  tokenHash   String   @unique
+  deviceInfo  String?
+  ipAddress   String?
+  isRevoked   Boolean  @default(false)
+  revokedAt   DateTime?
+  revokedBy   BigInt?
+  expiresAt   DateTime
+  
+  // Soft delete fields
+  deletedAt   DateTime?
+  
+  // Audit fields
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relations
+  admin       Admin    @relation(fields: [adminId], references: [id])
+  revokedByAdmin Admin? @relation("AdminRefreshTokenRevokedBy", fields: [revokedBy], references: [id])
+  
+  @@map("admin_refresh_tokens")
+  @@index([adminId])
+  @@index([tokenHash])
+  @@index([isRevoked, expiresAt])
+  @@index([deletedAt])
+}
+
+model UserAuditLog {
+  id          BigInt   @id @default(autoincrement())
+  uuid        String   @unique @default(uuid())
+  userId      BigInt?  // Nullable for system actions
+  action      String   // e.g., "login", "logout", "password_change", "role_assigned"
+  resource    String?  // What was affected
+  resourceId  String?  // ID of affected resource
+  oldValues   Json?    // Previous values (for updates)
+  newValues   Json?    // New values (for updates/creates)
+  ipAddress   String?
+  userAgent   String?
+  metadata    Json?    // Additional context
+  
+  // Soft delete fields
+  deletedAt   DateTime?
+  
+  // Audit fields
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relations
+  user        User?    @relation(fields: [userId], references: [id])
+  
+  @@map("user_audit_logs")
+  @@index([userId])
+  @@index([action])
+  @@index([resource, resourceId])
+  @@index([createdAt])
+  @@index([deletedAt])
+}
+
+model AdminAuditLog {
+  id          BigInt   @id @default(autoincrement())
+  uuid        String   @unique @default(uuid())
+  adminId     BigInt?  // Nullable for system actions
+  action      String   // e.g., "login", "user_created", "role_assigned"
+  resource    String?  // What was affected
+  resourceId  String?  // ID of affected resource
+  oldValues   Json?    // Previous values (for updates)
+  newValues   Json?    // New values (for updates/creates)
+  ipAddress   String?
+  userAgent   String?
+  metadata    Json?    // Additional context
+  
+  // Soft delete fields
+  deletedAt   DateTime?
+  
+  // Audit fields
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relations
+  admin       Admin?   @relation(fields: [adminId], references: [id])
+  
+  @@map("admin_audit_logs")
+  @@index([adminId])
+  @@index([action])
+  @@index([resource, resourceId])
+  @@index([createdAt])
+  @@index([deletedAt])
 }

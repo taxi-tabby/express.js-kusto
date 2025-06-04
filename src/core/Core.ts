@@ -11,6 +11,7 @@ import { DocumentationGenerator } from './lib/documentationGenerator';
 import { StaticFileMiddleware } from './lib/staticFileMiddleware';
 import { prismaManager } from './lib/prismaManager';
 import { DependencyInjector } from './lib/dependencyInjector';
+import { repositoryManager } from './lib/repositoryManager';
 
 export interface CoreConfig {
     basePath?: string;
@@ -70,9 +71,11 @@ export class Core {
         // Merge custom config with defaults
         if (customConfig) {
             this._config = { ...this._config, ...customConfig };
-        }          
-          // Initialize PrismaManager before setting up routes
+        }              // Initialize PrismaManager before setting up routes
         await this.initializePrismaManager();
+        
+        // Initialize Repository Manager
+        await this.initializeRepositoryManager();
         
         // Initialize Dependency Injector
         await this.initializeDependencyInjector();
@@ -346,6 +349,30 @@ export class Core {
             log.Error('Failed to initialize Prisma Manager', { error });
             // Don't throw error here to allow application to continue without database
             log.Warn('Application will continue without database connections');
+        }
+    }    /**
+     * Initialize Repository Manager to handle repository loading and management
+     */
+    private async initializeRepositoryManager(): Promise<void> {
+        try {
+            log.Info('📦 Initializing Repository Manager...');
+            await repositoryManager.initialize();
+            
+            const status = repositoryManager.getStatus();
+            log.Info('Repository Manager initialization complete', {
+                initialized: status.initialized,
+                repositoryCount: status.repositoryCount,
+                repositories: status.repositories
+            });
+
+            // Log each repository loading status
+            status.repositories.forEach(repoName => {
+                log.Info(`✅ Repository '${repoName}' loaded successfully`);
+            });
+        } catch (error) {
+            log.Error('Failed to initialize Repository Manager', { error });
+            // Don't throw error here to allow application to continue without repositories
+            log.Warn('Application will continue without repository management');
         }
     }
 

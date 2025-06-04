@@ -25,6 +25,8 @@ router.POST_VALIDATED(
     async (req, res, inject, db) => {
         
         const jwt = inject.authJSONWEBToken;
+        // inject.authJSONWEBToken.
+        
         const callbackResult = await jwt.handleSignIn(
             {
                 email: req.body.email,

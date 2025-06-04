@@ -7,7 +7,11 @@ const router = new ExpressRouter();
 
 
 
-router.GET((req, res, injected, db) => {
+router.GET((req, res, injected, repo, db) => {
+
+    const userRepo = repo.getRepository('accountUser');
+    
+
 
 
     // 상태

@@ -1,17 +1,15 @@
-import { BaseRepository } from '@lib/baseRepository';
 import { log } from '@core/external/winston';
-
-// Import types from the user database client
-type User = import('@app/db/user/client').User;
-type UserCreateInput = import('@app/db/user/client').Prisma.UserCreateInput;
-type UserUpdateInput = import('@app/db/user/client').Prisma.UserUpdateInput;
-type UserWhereInput = import('@app/db/user/client').Prisma.UserWhereInput;
-type UserWhereUniqueInput = import('@app/db/user/client').Prisma.UserWhereUniqueInput;
-type UserInclude = import('@app/db/user/client').Prisma.UserInclude;
-type UserSession = import('@app/db/user/client').UserSession;
-type UserRefreshToken = import('@app/db/user/client').UserRefreshToken;
-type UserRole = import('@app/db/user/client').UserRole;
-type Role = import('@app/db/user/client').Role;
+import { BaseRepository } from '@core/lib/baseRepository';
+import {
+    User,
+    UserSession,
+    UserRole,
+    UserCreateInput,
+    UserUpdateInput,
+    UserWhereInput,
+    UserWhereUniqueInput,
+    UserInclude,
+} from './types';
 
 /**
  * User repository for handling user-related database operations
@@ -292,6 +290,14 @@ export class UserRepository extends BaseRepository {
         }
     }
 
+
+
+
+
+
+
+
+    
     // ========== Authentication Related Methods ==========
 
     /**
@@ -448,6 +454,13 @@ export class UserRepository extends BaseRepository {
         }
     }
 
+
+
+
+
+
+
+
     // ========== Email Verification Methods ==========
 
     /**
@@ -510,6 +523,16 @@ export class UserRepository extends BaseRepository {
             throw new Error(`Failed to verify email: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
     }
+
+
+
+
+
+
+
+
+
+
 
     // ========== Session Management Methods ==========
 
@@ -638,6 +661,13 @@ export class UserRepository extends BaseRepository {
         }
     }
 
+
+
+
+
+
+
+
     // ========== Role Management Methods ==========
 
     /**
@@ -746,6 +776,17 @@ export class UserRepository extends BaseRepository {
             throw new Error(`Failed to check user role: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
     }
+
+
+
+
+
+
+
+
+
+
+
 
     // ========== Account Status Methods ==========
 

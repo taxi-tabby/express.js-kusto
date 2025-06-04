@@ -6,11 +6,12 @@ import { RequestHandler as CustomRequestHandler, RequestConfig, ResponseConfig, 
 import { Injectable } from './types/generated-injectable-types';
 import { DependencyInjector } from './dependencyInjector';
 import { prismaManager } from '@lib/prismaManager'
+import { repositoryManager } from '@lib/repositoryManager'
 
 
+type HandlerFunction = (req: Request, res: Response, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => void;
+type ValidatedHandlerFunction = (req: ValidatedRequest, res: Response, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => Promise<any> | any;
 
-type HandlerFunction = (req: Request, res: Response, injected: Injectable, db: typeof prismaManager) => void;
-type ValidatedHandlerFunction = (req: ValidatedRequest, res: Response, injected: Injectable, db: typeof prismaManager) => Promise<any> | any;
 
 
 
@@ -25,13 +26,12 @@ export class ExpressRouter {
     }> = [];    
       /**
      * HandlerFunction을 Express 호환 핸들러로 래핑하는 헬퍼 메서드
-     */
-    private wrapHandler(handler: HandlerFunction): RequestHandler {
+     */    private wrapHandler(handler: HandlerFunction): RequestHandler {
         return (req: Request, res: Response, next) => {
             try {
                 // Dependency injector에서 모든 injectable 모듈 가져오기
                 const injected = DependencyInjector.getInstance().getInjectedModules();
-                handler(req, res, injected, prismaManager);
+                handler(req, res, injected, repositoryManager, prismaManager);
             } catch (error) {
                 next(error);
             }

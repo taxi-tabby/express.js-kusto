@@ -23,6 +23,7 @@ router.POST_VALIDATED(
         },
     },
     async (req, res, inject, db) => {
+        
         const jwt = inject.authJSONWEBToken;
         const callbackResult = await jwt.handleSignIn(
             {

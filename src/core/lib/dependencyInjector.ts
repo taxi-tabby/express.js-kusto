@@ -42,8 +42,11 @@ export class DependencyInjector {
         for (const moduleName of moduleNames) {
             try {
                 // Dynamic import using the module registry
-                const moduleLoader = MODULE_REGISTRY[moduleName];                const moduleExports = await moduleLoader();
-                const ModuleClass = moduleExports.default || moduleExports;                // Always instantiate if it's a constructor function
+                const moduleLoader = MODULE_REGISTRY[moduleName];                
+                const moduleExports = await moduleLoader();
+
+                const ModuleClass = moduleExports.default || moduleExports;  
+                              
                 if (typeof ModuleClass === 'function') {
                     this.modules[moduleName] = new ModuleClass();
                 } else {

@@ -1,59 +1,9 @@
 import * as jwt from 'jsonwebtoken';
 import * as bcrypt from 'bcrypt';
 
-interface TokenPayload {
-    userId: string;
-    email: string;
-    role?: string;
-    iat?: number;
-    exp?: number;
-}
+import { TokenPayload, SignInCredentials, SignInResult, UserDbRecord, UserCreateCallback, UserLookupCallback, UserUpdateCallback, AuthMiddlewareOptions } from './type'; // 필요한 타입 정의를 가져옵니다
 
-interface SignInCredentials {
-    email: string;
-    password: string;
-}
-
-interface SignInResult {
-    success: boolean;
-    user?: {
-        id: string;
-        email: string;
-        role?: string;
-    };
-    accessToken?: string;
-    refreshToken?: string;
-    message?: string;
-}
-
-type AuthSuccessCallback = (user: TokenPayload) => void | Promise<void>;
-type AuthFailureCallback = (error: string) => void | Promise<void>;
-
-interface AuthMiddlewareOptions {
-    onSuccess?: AuthSuccessCallback;
-    onFailure?: AuthFailureCallback;
-    extractToken?: (req: any) => string | null;
-}
-
-interface UserDbRecord {
-    id: string;
-    email: string;
-    hashedPassword: string;
-    role?: string;
-    isActive?: boolean;
-    [key: string]: any;
-}
-
-type UserLookupCallback = (email: string) => Promise<UserDbRecord | null>;
-type UserCreateCallback = (userData: {
-    email: string;
-    hashedPassword: string;
-    role?: string;
-    [key: string]: any;
-}) => Promise<UserDbRecord>;
-type UserUpdateCallback = (userId: string, updates: Partial<UserDbRecord>) => Promise<UserDbRecord | null>;
-
-class JWTService {
+export default class JWTService {
     private readonly accessTokenSecret: string;
     private readonly refreshTokenSecret: string;
     private readonly accessTokenExpiry: string;
@@ -600,4 +550,4 @@ class JWTService {
     }
 }
 
-export default JWTService;
+

@@ -9,9 +9,6 @@ const router = new ExpressRouter();
 
 router.GET((req, res, injected, db) => {
 
-    // 자동 수집된 DB 접근
-    db.getWrap('testdb1')
-
     // 자동 수집된 의존성
     injected.exampleModule.setData('express-custom-reborn-1.0.5');
     

@@ -61,15 +61,28 @@ model User {
   refreshTokens UserRefreshToken[]
   auditLogs     UserAuditLog[]
   permissions   UserPermission[]
-  
   @@map("users")
+  // Core unique indexes
   @@index([email])
   @@index([username])
   @@index([uuid])
-  @@index([isActive, isVerified])
-  @@index([deletedAt])
-  @@index([lastLoginAt])
-  @@index([createdAt])
+  
+  // High-frequency query optimized indexes
+  @@index([deletedAt, isActive, isVerified]) // Most common filter pattern
+  @@index([email, deletedAt]) // Authentication queries
+  @@index([uuid, deletedAt]) // UUID-based operations
+  @@index([username, deletedAt]) // Username lookups
+  
+  // Authentication & security indexes
+  @@index([loginAttempts, lockoutUntil]) // Security checks
+  @@index([isActive, lastLoginAt]) // Active user analytics
+  @@index([emailVerificationToken]) // Email verification
+  @@index([passwordResetToken]) // Password reset
+  
+  // Audit & analytics indexes
+  @@index([createdAt, isActive]) // User registration analytics
+  @@index([lastLoginAt]) // Login analytics
+  @@index([deletedAt, createdAt]) // Soft delete with chronological order
 }
 
 // 역할(Role) 테이블 - 사용자 권한 관리

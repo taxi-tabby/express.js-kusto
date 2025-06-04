@@ -157,25 +157,26 @@ function scanDirectory(dirPath, basePath = '', modules = []) {
 
 		if (item.isDirectory()) {
 			// Recursively scan subdirectories
-			scanDirectory(itemPath, relativePath, modules);
-		} else if (item.isFile() && item.name.endsWith('.ts') && !item.name.endsWith('.d.ts')) {
+			scanDirectory(itemPath, relativePath, modules);		} else if (item.isFile() && item.name.endsWith('.module.ts')) {
+			// Only include *.module.ts files
 			const fileName = path.basename(item.name, '.ts');
+			const cleanFileName = fileName.replace('.module', ''); // Remove .module suffix
 			const modulePath = basePath ? `${basePath}/${fileName}` : fileName;
 
-			// Generate property name by converting path to camelCase
+			// Generate property name by converting path to camelCase (without Module suffix)
 			const propertyName = basePath
-				? toCamelCase(`${basePath.replace(/\//g, '_')}_${fileName}`)
-				: toCamelCase(fileName);
+				? toCamelCase(`${basePath.replace(/\//g, '_')}_${cleanFileName}`)
+				: toCamelCase(cleanFileName);
 
-			// Generate class name by converting path to PascalCase
-			const className = basePath
-				? toPascalCase(`${basePath.replace(/\//g, '_')}_${fileName}`)
-				: toPascalCase(fileName);
+			// Generate unique import alias using full path
+			const importAlias = basePath
+				? toPascalCase(`${basePath.replace(/\//g, '_')}_${cleanFileName}_Module`)
+				: toPascalCase(`${cleanFileName}_Module`);
 
 			modules.push({
 				modulePath,
 				propertyName,
-				className,
+				className: importAlias, // Use unique alias as className
 				importPath: modulePath
 			});
 		}

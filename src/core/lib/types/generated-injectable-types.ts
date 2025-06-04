@@ -1,27 +1,19 @@
 // Auto-generated file - DO NOT EDIT MANUALLY
 // Source: src/app/injectable/
 
-import AUTHJSONWEBToken from '@app/injectable/auth/jsonWebToken';
-import AUTHTYPE from '@app/injectable/auth/type';
-import ExampleModule from '@app/injectable/exampleModule';
+import AUTHJSONWEBTokenModule from '@app/injectable/auth/jsonWebToken.module';
 
 // Module type definitions
-type AUTHJSONWEBTokenType = InstanceType<typeof AUTHJSONWEBToken>;
-type AUTHTYPEType = InstanceType<typeof AUTHTYPE>;
-type ExampleModuleType = InstanceType<typeof ExampleModule>;
+type AUTHJSONWEBTokenModuleType = InstanceType<typeof AUTHJSONWEBTokenModule>;
 
 // Injectable modules interface
 export interface Injectable {
-  authJSONWEBToken: AUTHJSONWEBTokenType;
-  authTYPE: AUTHTYPEType;
-  exampleModule: ExampleModuleType;
+  authJSONWEBToken: AUTHJSONWEBTokenModuleType;
 }
 
 // Module registry for dynamic loading
 export const MODULE_REGISTRY = {
-  'authJSONWEBToken': () => import('@app/injectable/auth/jsonWebToken'),
-  'authTYPE': () => import('@app/injectable/auth/type'),
-  'exampleModule': () => import('@app/injectable/exampleModule'),
+  'authJSONWEBToken': () => import('@app/injectable/auth/jsonWebToken.module'),
 } as const;
 
 // Module names type

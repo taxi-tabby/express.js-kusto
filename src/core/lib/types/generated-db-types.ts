@@ -5,14 +5,12 @@
  * Import actual Prisma client types from each database
  */
 type AdminClient = typeof import('@app/db/admin/client')['PrismaClient'];
-type DefaultClient = typeof import('@app/db/default/client')['PrismaClient'];
 type UserClient = typeof import('@app/db/user/client')['PrismaClient'];
 
 /**
  * Instantiated client types
  */
 type AdminInstance = InstanceType<AdminClient>;
-type DefaultInstance = InstanceType<DefaultClient>;
 type UserInstance = InstanceType<UserClient>;
 
 /**
@@ -20,7 +18,6 @@ type UserInstance = InstanceType<UserClient>;
  */
 export interface DatabaseClientMap {
   admin: AdminInstance;
-  default: DefaultInstance;
   user: UserInstance;
   [key: string]: any; // Allow for additional databases
 }
@@ -42,7 +39,6 @@ export type DatabaseName = keyof DatabaseClientMap;
  */
 export interface PrismaManagerWrapOverloads {
   getWrap(databaseName: 'admin'): AdminInstance;
-  getWrap(databaseName: 'default'): DefaultInstance;
   getWrap(databaseName: 'user'): UserInstance;
   getWrap<T extends string>(databaseName: T): DatabaseClientType<T>;
 }
@@ -52,7 +48,6 @@ export interface PrismaManagerWrapOverloads {
  */
 export interface PrismaManagerClientOverloads {
   getClient(databaseName: 'admin'): AdminInstance;
-  getClient(databaseName: 'default'): DefaultInstance;
   getClient(databaseName: 'user'): UserInstance;
   getClient<T = any>(databaseName: string): T;
 }
@@ -64,10 +59,8 @@ export interface PrismaManagerClientOverloads {
 declare module '../prismaManager' {
   interface PrismaManager {
   getWrap(databaseName: 'admin'): AdminInstance;
-  getWrap(databaseName: 'default'): DefaultInstance;
   getWrap(databaseName: 'user'): UserInstance;
   getClient(databaseName: 'admin'): AdminInstance;
-  getClient(databaseName: 'default'): DefaultInstance;
   getClient(databaseName: 'user'): UserInstance;
   }
 }

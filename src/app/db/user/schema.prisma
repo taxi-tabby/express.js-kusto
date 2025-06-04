@@ -1,0 +1,296 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("RDS_DEFAULT_URL")
+}
+
+// ============================================================================
+// USER AUTHENTICATION & MANAGEMENT SCHEMA
+// ============================================================================
+
+// 일반 사용자 테이블
+model User {
+  id            BigInt       @id @default(autoincrement())
+  uuid          String       @unique @default(uuid())
+  email         String       @unique
+  username      String?      @unique
+  passwordHash  String
+  firstName     String?
+  lastName      String?
+  phoneNumber   String?
+  profileImage  String?
+  timezone      String?      @default("UTC")
+  locale        String?      @default("en-US")
+  
+  // Account status
+  isActive      Boolean      @default(true)
+  isVerified    Boolean      @default(false)
+  isSuspended   Boolean      @default(false)
+  
+  // Security fields
+  twoFactorEnabled      Boolean  @default(false)
+  twoFactorSecret       String?
+  passwordResetToken    String?
+  passwordResetExpires  DateTime?
+  emailVerificationToken String?
+  emailVerificationExpires DateTime?
+  
+  // Login tracking
+  lastLoginAt   DateTime?
+  lastLoginIp   String?
+  loginAttempts Int          @default(0)
+  lockoutUntil  DateTime?
+  
+  // Soft delete fields
+  deletedAt     DateTime?
+  deletedBy     BigInt?
+  
+  // Audit fields
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  createdBy     BigInt?
+  updatedBy     BigInt?
+  
+  // Relations
+  roles         UserRole[]
+  sessions      UserSession[]
+  refreshTokens UserRefreshToken[]
+  auditLogs     UserAuditLog[]
+  permissions   UserPermission[]
+  
+  @@map("users")
+  @@index([email])
+  @@index([username])
+  @@index([uuid])
+  @@index([isActive, isVerified])
+  @@index([deletedAt])
+  @@index([lastLoginAt])
+  @@index([createdAt])
+}
+
+// 역할(Role) 테이블 - 사용자 권한 관리
+model Role {
+  id          BigInt     @id @default(autoincrement())
+  uuid        String     @unique @default(uuid())
+  name        String     @unique
+  description String?
+  isSystem    Boolean    @default(false) // System roles cannot be deleted
+  isActive    Boolean    @default(true)
+  
+  // Soft delete fields
+  deletedAt   DateTime?
+  deletedBy   BigInt?
+  
+  // Audit fields
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  createdBy   BigInt?
+  updatedBy   BigInt?
+  
+  // Relations
+  userRoles   UserRole[]
+  permissions RolePermission[]
+  
+  @@map("roles")
+  @@index([name])
+  @@index([isActive, isSystem])
+  @@index([deletedAt])
+}
+
+// 권한(Permission) 테이블
+model Permission {
+  id          BigInt           @id @default(autoincrement())
+  uuid        String           @unique @default(uuid())
+  name        String           @unique
+  resource    String           // e.g., "users", "orders", "products"
+  action      String           // e.g., "create", "read", "update", "delete"
+  description String?
+  isSystem    Boolean          @default(false)
+  
+  // Soft delete fields
+  deletedAt   DateTime?
+  deletedBy   BigInt?
+  
+  // Audit fields
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  createdBy   BigInt?
+  updatedBy   BigInt?
+  
+  // Relations
+  rolePermissions      RolePermission[]
+  userPermissions      UserPermission[]
+  
+  @@unique([resource, action])
+  @@map("permissions")
+  @@index([resource])
+  @@index([action])
+  @@index([deletedAt])
+}
+
+// 사용자 역할 할당
+model UserRole {
+  id        BigInt   @id @default(autoincrement())
+  userId    BigInt
+  roleId    BigInt
+  assignedAt DateTime @default(now())
+  assignedBy BigInt?
+  expiresAt  DateTime?
+  
+  // Soft delete fields
+  deletedAt  DateTime?
+  
+  // Relations
+  user           User  @relation(fields: [userId], references: [id])
+  role           Role  @relation(fields: [roleId], references: [id])
+  
+  @@unique([userId, roleId])
+  @@map("user_roles")
+  @@index([userId])
+  @@index([roleId])
+  @@index([expiresAt])
+  @@index([deletedAt])
+}
+
+// 역할별 권한 매핑
+model RolePermission {
+  id           BigInt     @id @default(autoincrement())
+  roleId       BigInt
+  permissionId BigInt
+  grantedAt    DateTime   @default(now())
+  grantedBy    BigInt?
+  
+  // Soft delete fields
+  deletedAt    DateTime?
+  
+  // Relations
+  role       Role       @relation(fields: [roleId], references: [id])
+  permission Permission @relation(fields: [permissionId], references: [id])
+  
+  @@unique([roleId, permissionId])
+  @@map("role_permissions")
+  @@index([roleId])
+  @@index([permissionId])
+  @@index([deletedAt])
+}
+
+// 사용자별 개별 권한
+model UserPermission {
+  id           BigInt     @id @default(autoincrement())
+  userId       BigInt
+  permissionId BigInt
+  grantedAt    DateTime   @default(now())
+  grantedBy    BigInt?
+  expiresAt    DateTime?
+  
+  // Soft delete fields
+  deletedAt    DateTime?
+  
+  // Relations
+  user       User       @relation(fields: [userId], references: [id])
+  permission Permission @relation(fields: [permissionId], references: [id])
+  
+  @@unique([userId, permissionId])
+  @@map("user_permissions")
+  @@index([userId])
+  @@index([permissionId])
+  @@index([expiresAt])
+  @@index([deletedAt])
+}
+
+// 사용자 세션 관리
+model UserSession {
+  id          BigInt   @id @default(autoincrement())
+  uuid        String   @unique @default(uuid())
+  userId      BigInt
+  tokenHash   String   @unique // Hashed JWT token ID
+  deviceInfo  String? // User agent, device info
+  ipAddress   String?
+  location    String? // Geolocation info
+  isActive    Boolean  @default(true)
+  lastUsedAt  DateTime @default(now())
+  expiresAt   DateTime
+  
+  // Soft delete fields
+  deletedAt   DateTime?
+  
+  // Audit fields
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relations
+  user        User     @relation(fields: [userId], references: [id])
+  
+  @@map("user_sessions")
+  @@index([userId])
+  @@index([tokenHash])
+  @@index([isActive, expiresAt])
+  @@index([lastUsedAt])
+  @@index([deletedAt])
+}
+
+// 사용자 리프레시 토큰
+model UserRefreshToken {
+  id          BigInt   @id @default(autoincrement())
+  uuid        String   @unique @default(uuid())
+  userId      BigInt
+  tokenHash   String   @unique
+  deviceInfo  String?
+  ipAddress   String?
+  isRevoked   Boolean  @default(false)
+  revokedAt   DateTime?
+  revokedBy   BigInt?
+  expiresAt   DateTime
+  
+  // Soft delete fields
+  deletedAt   DateTime?
+  
+  // Audit fields
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relations
+  user        User     @relation(fields: [userId], references: [id])
+  
+  @@map("user_refresh_tokens")
+  @@index([userId])
+  @@index([tokenHash])
+  @@index([isRevoked, expiresAt])
+  @@index([deletedAt])
+}
+
+// 사용자 활동 감사 로그
+model UserAuditLog {
+  id          BigInt   @id @default(autoincrement())
+  uuid        String   @unique @default(uuid())
+  userId      BigInt?  // Nullable for system actions
+  action      String   // e.g., "login", "logout", "password_change", "role_assigned"
+  resource    String?  // What was affected
+  resourceId  String?  // ID of affected resource
+  oldValues   Json?    // Previous values (for updates)
+  newValues   Json?    // New values (for updates/creates)
+  ipAddress   String?
+  userAgent   String?
+  metadata    Json?    // Additional context
+  
+  // Soft delete fields
+  deletedAt   DateTime?
+  
+  // Audit fields
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relations
+  user        User?    @relation(fields: [userId], references: [id])
+  
+  @@map("user_audit_logs")
+  @@index([userId])
+  @@index([action])
+  @@index([resource, resourceId])
+  @@index([createdAt])
+  @@index([deletedAt])
+}

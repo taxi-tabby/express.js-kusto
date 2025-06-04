@@ -1,0 +1,310 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("RDS_DEFAULT_URL")
+}
+
+// ============================================================================
+// ADMIN AUTHENTICATION & MANAGEMENT SCHEMA
+// ============================================================================
+
+// 관리자 테이블
+model Admin {
+  id            BigInt       @id @default(autoincrement())
+  uuid          String       @unique @default(uuid())
+  email         String       @unique
+  username      String       @unique
+  passwordHash  String
+  firstName     String
+  lastName      String
+  employeeId    String?      @unique
+  department    String?
+  position      String?
+  phoneNumber   String?
+  profileImage  String?
+  timezone      String?      @default("UTC")
+  locale        String?      @default("en-US")
+  
+  // Account status
+  isActive      Boolean      @default(true)
+  isSuperAdmin  Boolean      @default(false)
+  isSuspended   Boolean      @default(false)
+  
+  // Security fields
+  twoFactorEnabled      Boolean  @default(true) // 관리자는 기본적으로 2FA 활성화
+  twoFactorSecret       String?
+  passwordResetToken    String?
+  passwordResetExpires  DateTime?
+  
+  // Login tracking
+  lastLoginAt   DateTime?
+  lastLoginIp   String?
+  loginAttempts Int          @default(0)
+  lockoutUntil  DateTime?
+  
+  // Soft delete fields
+  deletedAt     DateTime?
+  deletedBy     BigInt?
+  
+  // Audit fields
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  createdBy     BigInt?
+  updatedBy     BigInt?
+    // Direct Relations
+  roles         AdminRoleAssignment[]
+  sessions      AdminSession[]
+  refreshTokens AdminRefreshToken[]
+  auditLogs     AdminAuditLog[]
+  
+  // Self-referential relations for admin management
+  deletedByAdmin Admin? @relation("AdminDeletedBy", fields: [deletedBy], references: [id])
+  createdByAdmin Admin? @relation("AdminCreatedBy", fields: [createdBy], references: [id])
+  updatedByAdmin Admin? @relation("AdminUpdatedBy", fields: [updatedBy], references: [id])
+  adminsDeleted  Admin[] @relation("AdminDeletedBy")
+  adminsCreated  Admin[] @relation("AdminCreatedBy")
+  adminsUpdated  Admin[] @relation("AdminUpdatedBy")
+  
+  // Admin role management audit trails
+  adminRolesDeleted AdminRole[] @relation("AdminRoleDeletedByAdmin")
+  adminRolesCreated AdminRole[] @relation("AdminRoleCreatedByAdmin")
+  adminRolesUpdated AdminRole[] @relation("AdminRoleUpdatedByAdmin")
+  
+  // Role assignment audit trails
+  adminRoleAssignmentsBy AdminRoleAssignment[] @relation("AdminRoleAssignmentBy")
+  
+  // Permission grant audit trails
+  adminRolePermissionsGranted AdminRolePermission[] @relation("AdminRolePermissionGrantedBy")
+  adminPermissionsDeleted AdminPermission[] @relation("AdminPermissionDeletedBy")
+  adminPermissionsCreated AdminPermission[] @relation("AdminPermissionCreatedBy")
+  adminPermissionsUpdated AdminPermission[] @relation("AdminPermissionUpdatedBy")
+  
+  // Token revocation audit trails
+  adminRefreshTokensRevoked AdminRefreshToken[] @relation("AdminRefreshTokenRevokedBy")
+  
+  @@map("admins")
+  @@index([email])
+  @@index([username])
+  @@index([employeeId])
+  @@index([uuid])
+  @@index([isActive, isSuperAdmin])
+  @@index([deletedAt])
+  @@index([lastLoginAt])
+  @@index([createdAt])
+  @@index([department])
+}
+
+// 관리자 역할 테이블
+model AdminRole {
+  id          BigInt     @id @default(autoincrement())
+  uuid        String     @unique @default(uuid())
+  name        String     @unique
+  description String?
+  isSystem    Boolean    @default(false)
+  isActive    Boolean    @default(true)
+  
+  // Soft delete fields
+  deletedAt   DateTime?
+  deletedBy   BigInt?
+  
+  // Audit fields
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  createdBy   BigInt?
+  updatedBy   BigInt?
+  
+  // Relations
+  admins      AdminRoleAssignment[]
+  permissions AdminRolePermission[]
+  
+  // Audit relations
+  deletedByAdmin Admin? @relation("AdminRoleDeletedByAdmin", fields: [deletedBy], references: [id])
+  createdByAdmin Admin? @relation("AdminRoleCreatedByAdmin", fields: [createdBy], references: [id])
+  updatedByAdmin Admin? @relation("AdminRoleUpdatedByAdmin", fields: [updatedBy], references: [id])
+  
+  @@map("admin_roles")
+  @@index([name])
+  @@index([isActive, isSystem])
+  @@index([deletedAt])
+}
+
+// 관리자 권한 테이블
+model AdminPermission {
+  id          BigInt     @id @default(autoincrement())
+  uuid        String     @unique @default(uuid())
+  name        String     @unique
+  resource    String     // e.g., "users", "admins", "roles", "permissions"
+  action      String     // e.g., "create", "read", "update", "delete", "manage"
+  description String?
+  isSystem    Boolean    @default(false)
+  
+  // Soft delete fields
+  deletedAt   DateTime?
+  deletedBy   BigInt?
+  
+  // Audit fields
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  createdBy   BigInt?
+  updatedBy   BigInt?
+  
+  // Relations
+  rolePermissions      AdminRolePermission[]
+  
+  // Audit relations
+  deletedByAdmin Admin? @relation("AdminPermissionDeletedBy", fields: [deletedBy], references: [id])
+  createdByAdmin Admin? @relation("AdminPermissionCreatedBy", fields: [createdBy], references: [id])
+  updatedByAdmin Admin? @relation("AdminPermissionUpdatedBy", fields: [updatedBy], references: [id])
+  
+  @@unique([resource, action])
+  @@map("admin_permissions")
+  @@index([resource])
+  @@index([action])
+  @@index([deletedAt])
+}
+
+// 관리자 역할 할당
+model AdminRoleAssignment {
+  id        BigInt   @id @default(autoincrement())
+  adminId   BigInt
+  roleId    BigInt
+  assignedAt DateTime @default(now())
+  assignedBy BigInt?
+  expiresAt  DateTime?
+  
+  // Soft delete fields
+  deletedAt  DateTime?
+  
+  // Relations
+  admin          Admin     @relation(fields: [adminId], references: [id])
+  role           AdminRole @relation(fields: [roleId], references: [id])
+  assignedByAdmin Admin?   @relation("AdminRoleAssignmentBy", fields: [assignedBy], references: [id])
+  
+  @@unique([adminId, roleId])
+  @@map("admin_role_assignments")
+  @@index([adminId])
+  @@index([roleId])
+  @@index([expiresAt])
+  @@index([deletedAt])
+}
+
+// 관리자 역할별 권한 매핑
+model AdminRolePermission {
+  id           BigInt     @id @default(autoincrement())
+  roleId       BigInt
+  permissionId BigInt
+  grantedAt    DateTime   @default(now())
+  grantedBy    BigInt?
+  
+  // Soft delete fields
+  deletedAt    DateTime?
+  
+  // Relations
+  role       AdminRole       @relation(fields: [roleId], references: [id])
+  permission AdminPermission @relation(fields: [permissionId], references: [id])
+  grantedByAdmin Admin?      @relation("AdminRolePermissionGrantedBy", fields: [grantedBy], references: [id])
+  
+  @@unique([roleId, permissionId])
+  @@map("admin_role_permissions")
+  @@index([roleId])
+  @@index([permissionId])
+  @@index([deletedAt])
+}
+
+// 관리자 세션 관리
+model AdminSession {
+  id          BigInt   @id @default(autoincrement())
+  uuid        String   @unique @default(uuid())
+  adminId     BigInt
+  tokenHash   String   @unique // Hashed JWT token ID
+  deviceInfo  String? // User agent, device info
+  ipAddress   String?
+  location    String? // Geolocation info
+  isActive    Boolean  @default(true)
+  lastUsedAt  DateTime @default(now())
+  expiresAt   DateTime
+  
+  // Soft delete fields
+  deletedAt   DateTime?
+  
+  // Audit fields
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relations
+  admin       Admin    @relation(fields: [adminId], references: [id])
+  
+  @@map("admin_sessions")
+  @@index([adminId])
+  @@index([tokenHash])
+  @@index([isActive, expiresAt])
+  @@index([lastUsedAt])
+  @@index([deletedAt])
+}
+
+// 관리자 리프레시 토큰
+model AdminRefreshToken {
+  id          BigInt   @id @default(autoincrement())
+  uuid        String   @unique @default(uuid())
+  adminId     BigInt
+  tokenHash   String   @unique
+  deviceInfo  String?
+  ipAddress   String?
+  isRevoked   Boolean  @default(false)
+  revokedAt   DateTime?
+  revokedBy   BigInt?
+  expiresAt   DateTime
+  
+  // Soft delete fields
+  deletedAt   DateTime?
+  
+  // Audit fields
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relations
+  admin       Admin    @relation(fields: [adminId], references: [id])
+  revokedByAdmin Admin? @relation("AdminRefreshTokenRevokedBy", fields: [revokedBy], references: [id])
+  
+  @@map("admin_refresh_tokens")
+  @@index([adminId])
+  @@index([tokenHash])
+  @@index([isRevoked, expiresAt])
+  @@index([deletedAt])
+}
+
+// 관리자 활동 감사 로그
+model AdminAuditLog {
+  id          BigInt   @id @default(autoincrement())
+  uuid        String   @unique @default(uuid())
+  adminId     BigInt?  // Nullable for system actions
+  action      String   // e.g., "login", "user_created", "role_assigned"
+  resource    String?  // What was affected
+  resourceId  String?  // ID of affected resource
+  oldValues   Json?    // Previous values (for updates)
+  newValues   Json?    // New values (for updates/creates)
+  ipAddress   String?
+  userAgent   String?
+  metadata    Json?    // Additional context
+  
+  // Soft delete fields
+  deletedAt   DateTime?
+  
+  // Audit fields
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relations
+  admin       Admin?   @relation(fields: [adminId], references: [id])
+  
+  @@map("admin_audit_logs")
+  @@index([adminId])
+  @@index([action])
+  @@index([resource, resourceId])
+  @@index([createdAt])
+  @@index([deletedAt])
+}

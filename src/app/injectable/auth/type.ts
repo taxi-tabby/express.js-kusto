@@ -1,3 +1,5 @@
+
+// === Core Interfaces ===
 export interface TokenPayload {
     userId: string;
     email: string;
@@ -23,15 +25,6 @@ export interface SignInResult {
     message?: string;
 }
 
-export type AuthSuccessCallback = (user: TokenPayload) => void | Promise<void>;
-export type AuthFailureCallback = (error: string) => void | Promise<void>;
-
-export interface AuthMiddlewareOptions {
-    onSuccess?: AuthSuccessCallback;
-    onFailure?: AuthFailureCallback;
-    extractToken?: (req: any) => string | null;
-}
-
 export interface UserDbRecord {
     id: string;
     email: string;
@@ -41,12 +34,5 @@ export interface UserDbRecord {
     [key: string]: any;
 }
 
+// === Callback Types ===
 export type UserLookupCallback = (email: string) => Promise<UserDbRecord | null>;
-export type UserCreateCallback = (userData: {
-    email: string;
-    hashedPassword: string;
-    role?: string;
-    [key: string]: any;
-}) => Promise<UserDbRecord>;
-
-export type UserUpdateCallback = (userId: string, updates: Partial<UserDbRecord>) => Promise<UserDbRecord | null>;

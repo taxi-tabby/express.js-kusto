@@ -58,29 +58,6 @@ npm run uninstall-cli
 
 > **⚠️ 위험 표시**: 해당 명령어는 데이터 손실 위험이 있어 이중 보안 확인이 필요합니다.
 
-## 💻 코드에서 데이터베이스 사용
-
-### 1. KustoManager를 통한 접근
-```typescript
-import { kusto } from '@/core';
-
-// 사용자 데이터베이스 클라이언트 접근
-const userClient = kusto.db.getClient('user');
-const users = await userClient.user.findMany();
-
-// 임시 데이터베이스 클라이언트 접근
-const tempClient = kusto.db.getClient('temporary');
-```
-
-### 2. 직접 클라이언트 Import
-```typescript
-// 생성된 클라이언트를 직접 import
-import { PrismaClient as UserClient } from '@/app/db/user/client';
-import { PrismaClient as TempClient } from '@/app/db/temporary/client';
-
-const userDb = new UserClient();
-const tempDb = new TempClient();
-```
 
 ## 🔒 보안 기능
 
@@ -122,7 +99,7 @@ datasource db {
 |------|----|----|------|
 | `generator.provider` | `"prisma-client-js"` | ❌ 필수 | Prisma 클라이언트 생성기 |
 | `generator.output` | `"client"` | ❌ 필수 | 클라이언트 출력 폴더 |
-| `datasource.provider` | `"postgresql"` | ❌ 필수 | 데이터베이스 타입 |
+| `datasource.provider` | `"postgresql"` | Prisma 지원 내에서 자율 | 데이터베이스 타입 |
 | `datasource.url` | `env("RDS_DB_URL")` | ✅ 변경 가능 | **환경변수 이름만 변경 가능** |
 
 > **⚠️ 중요**: `datasource.url`에서는 환경변수 이름(예: `RDS_USER_URL`)만 변경할 수 있습니다. 나머지 설정은 프레임워크 동작을 위해 반드시 유지해야 합니다.

@@ -8,6 +8,40 @@
 [![Express.js](https://img.shields.io/badge/Express.js-4.18+-black.svg)](https://expressjs.com/)
 [![Prisma](https://img.shields.io/badge/Prisma-5.0+-2D3748.svg)](https://www.prisma.io/)
 
+## ✨ 핵심 기능
+
+<div align="center">
+
+| 🏗️ **혁신적 아키텍처** | 🛡️ **완전 타입 안전** | ⚡ **제로 코드 자동화** | 🔧 **고급 개발 환경** |
+|:---:|:---:|:---:|:---:|
+| **App 라우트 시스템**<br/>파일 기반 자동 등록 | **Injectable DI**<br/>타입 안전 의존성 주입 | **CRUD 자동 생성**<br/>REST API + 문서화 | **Webpack 빌드**<br/>프로덕션 최적화 |
+| **DB/Repo 분리**<br/>멀티 데이터베이스 관리 | **Import-Free 구조**<br/>injected/repo/db 자동 주입 | **테스트 자동 생성**<br/>보안 테스트 포함 | **실시간 대시보드**<br/>/docs/dev 모니터링 |
+
+</div>
+
+---
+
+<div align="center">
+
+### 🎯 **쓸데없는 추상화 제거!**
+
+**기능 하나 수정한답시고 여러 파일과 폴더를 바꿔야 하는 번거로움을 완전히 제거합니다**
+
+</div>
+
+<div align="center">
+
+📋 **DTO 변환**, **Mapper 로직**, **반복적인 CRUD 작성**에 지친 개발자들을 위한 혁신적 솔루션  
+
+🚀 복잡한 설정과 불필요한 추상화를 제거하고 **진짜 비즈니스 로직**에만 집중  
+
+⚡ **개발 속도 3배 향상** • **팀 협업 효율성 극대화** • **유지보수성 혁신적 개선**
+
+</div>
+
+
+
+
 ## 🚀 빠른 시작
 
 ```bash
@@ -37,11 +71,23 @@ ISC
 
 ---
 
+## 🔗 주요 링크
+
+<div align="center">
+
+### 📚 [개발 시작하기](./docs/00-documentation-index.md)
+> 프레임워크 사용법과 개발 가이드를 확인하세요
+
+### 💬 [이슈 리포트](../../issues)
+> 버그 신고나 기능 요청을 해주세요
+
+</div>
+
+---
+
 <div align="center">
 
 **Express.js-Kusto Framework**  
 엔터프라이즈급 TypeScript 백엔드 프레임워크
-
-[📚 개발 시작하기](./docs/00-documentation-index.md) • [💬 이슈 리포트](../../issues)
 
 </div>

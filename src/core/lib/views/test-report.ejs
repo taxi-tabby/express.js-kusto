@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">    <title>API Test Report</title>
+    <link rel="stylesheet" href="/test-styles.css">
+    <link rel="stylesheet" href="/summary-styles.css">
+    <script src="/test-scripts-optimized.js"></script>
+    <script src="/test-fixes.js"></script>
+    <script src="/progress-fix.js"></script>
+</head>
+<body>
+    <div class="container">
+        <!-- Header Section -->
+        <div class="header">
+            <h1>🧪 API Test Report</h1>
+            <p>Automated test cases for API routes</p>
+              <div class="stats">
+                <div class="stat-card">
+                    <div class="stat-number routes"><%= stats.totalRoutes %></div>
+                    <div class="stat-label">Routes</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number total"><%= stats.totalTests %></div>
+                    <div class="stat-label">Total Tests</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number success"><%= stats.successTests %></div>
+                    <div class="stat-label">Success Cases</div>
+                </div>                <div class="stat-card">
+                    <div class="stat-number failure"><%= stats.failureTests %></div>
+                    <div class="stat-label">Failure Cases</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number security"><%= stats.securityTests %></div>
+                    <div class="stat-label">Security Tests</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number philosophy"><%= stats.philosophyTests %></div>
+                    <div class="stat-label">Philosophy Tests</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number philosophy-score <%= stats.philosophyScore >= 80 ? 'good' : stats.philosophyScore >= 60 ? 'warning' : 'poor' %>">
+                        <%= stats.philosophyScore %>
+                    </div>
+                    <div class="stat-label">Philosophy Score</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Search and Filter Controls -->
+        <div class="controls">
+            <div class="search-container">
+                <input type="text" class="search-input" id="searchInput" placeholder="🔍 Search test cases...">
+            </div>            <div class="filter-container">
+                <button class="filter-btn active" data-filter="all" title="Show all test cases">All Tests</button>
+                <button class="filter-btn" data-filter="success" title="Show success test cases or tests that passed">✅ Success/Passed</button>
+                <button class="filter-btn" data-filter="failure" title="Show failure test cases or tests that failed">❌ Failure/Failed</button>
+                <button class="filter-btn" data-filter="philosophy" title="Show philosophy validation tests">🏛️ Philosophy</button>
+            </div>        </div>
+        
+        <!-- Philosophy Violations Section -->
+        <% if (stats.philosophyViolations && stats.philosophyViolations.length > 0) { %>
+        <div class="philosophy-violations">
+            <h2>🏛️ Development Philosophy Violations</h2>
+            <div class="violations-summary">
+                <p>총 <strong><%= stats.philosophyViolations.length %></strong>개의 개발 철학 위반사항이 발견되었습니다.</p>
+                <p>철학 준수 점수: <span class="score <%= stats.philosophyScore >= 80 ? 'good' : stats.philosophyScore >= 60 ? 'warning' : 'poor' %>"><%= stats.philosophyScore %>/100</span></p>
+            </div>
+            
+            <div class="violations-list">
+                <% 
+                const violationsByType = stats.philosophyViolations.reduce((acc, v) => {
+                    if (!acc[v.type]) acc[v.type] = [];
+                    acc[v.type].push(v);
+                    return acc;
+                }, {});
+                %>
+                
+                <% Object.keys(violationsByType).forEach(function(type) { %>
+                <div class="violation-group">
+                    <h3 class="violation-type">
+                        <%= type === 'naming' ? '📝 네이밍 규칙' : 
+                            type === 'restful' ? '🔄 RESTful API 스펙' : 
+                            type === 'http-spec' ? '🌐 HTTP 스펙' : 
+                            type === 'structure' ? '🏗️ 구조적 규칙' : type %>
+                        (<%= violationsByType[type].length %>)
+                    </h3>
+                    
+                    <% violationsByType[type].forEach(function(violation) { %>
+                    <div class="violation-item <%= violation.severity %>">
+                        <div class="violation-header">
+                            <span class="severity-badge <%= violation.severity %>">
+                                <%= violation.severity === 'error' ? '🚨' : '⚠️' %>
+                                <%= violation.severity.toUpperCase() %>
+                            </span>
+                            <span class="route-info">
+                                <strong><%= violation.method %></strong> <%= violation.route %>
+                            </span>
+                        </div>
+                        
+                        <div class="violation-content">
+                            <p class="violation-message"><%= violation.message %></p>
+                            <% if (violation.suggestion) { %>
+                            <div class="violation-suggestion">
+                                <strong>💡 제안:</strong> <%= violation.suggestion %>
+                            </div>
+                            <% } %>
+                        </div>
+                    </div>
+                    <% }); %>
+                </div>
+                <% }); %>
+            </div>
+        </div>
+        <% } else { %>
+        <div class="philosophy-compliance">
+            <h2>🏛️ Development Philosophy Compliance</h2>
+            <div class="compliance-message">
+                <p>🎉 축하합니다! 모든 라우트가 개발 철학을 완벽히 준수하고 있습니다.</p>
+                <p>철학 준수 점수: <span class="score good"><%= stats.philosophyScore %>/100</span></p>
+            </div>
+        </div>
+        <% } %>
+        
+        <!-- Bulk Actions -->
+        <div class="bulk-actions">
+            <button class="bulk-btn expand-all" onclick="expandAll()">Expand All</button>
+            <button class="bulk-btn collapse-all" onclick="collapseAll()">Collapse All</button>
+            <button class="bulk-btn run-all" onclick="runAllTests()">Run All Tests</button>
+        </div>
+        
+        <!-- Test Results -->
+        <div id="testResults">
+            <% routeGroups.forEach(function(group) { %>
+                <%- include('partials/route-group', { group: group }) %>
+            <% }); %>
+        </div>
+        
+        <!-- No Results Message -->
+        <div id="noResults" class="no-results" style="display: none;">
+            <h3>No test cases found</h3>
+            <p>Try adjusting your search or filter criteria</p>
+    </div>
+    </div>
+</body>
+</html>

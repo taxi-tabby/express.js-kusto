@@ -1,0 +1,58 @@
+<div class="test-case <%= testCase.type %>" 
+     data-type="<%= testCase.type %>" 
+     data-method="<%= testCase.method %>" 
+     data-endpoint="<%= testCase.endpoint %>">
+      <div class="test-info">
+        <div class="test-name"><%= testCase.name %></div>
+        <div class="test-description">
+            <%= testCase.description %>
+            <% if (testCase.acceptableStatuses && testCase.acceptableStatuses.length > 1) { %>
+                <br><small class="security-note">🛡️ <strong>Security Test:</strong> Accepts both blocked (<%= testCase.acceptableStatuses.filter(s => s >= 400).join(', ') %>) and success (<%= testCase.acceptableStatuses.filter(s => s < 400).join(', ') %>) responses - ORM protection may vary</small>
+            <% } %>
+        </div>
+        <div class="test-details">
+            <% if (testCase.acceptableStatuses && testCase.acceptableStatuses.length > 1) { %>
+                Expected Status: <strong>Any of [<%= testCase.acceptableStatuses.join(', ') %>]</strong>
+            <% } else { %>
+                Expected Status: <strong><%= testCase.expectedStatus %></strong>
+            <% } %>
+            <% if (testCase.expectedErrors && testCase.expectedErrors.length > 0) { %>
+                | Expected Errors: <strong><%= testCase.expectedErrors.join(', ') %></strong>
+            <% } %>
+        </div>
+        
+        <% if (testCase.data && Object.keys(testCase.data).length > 0) { %>
+            <div class="test-data" onclick="toggleTestData('<%= suiteId %>-<%= index %>')">
+                <div class="data-header">
+                    📋 Test Data <span class="expand-icon">▼</span>
+                    <button class="copy-btn" onclick="event.stopPropagation(); copyTestData('<%- encodeURIComponent(JSON.stringify(testCase.data)) %>')">
+                        Copy
+                    </button>
+                </div>                <div class="data-content" id="data-<%= suiteId %>-<%= index %>" style="display: none;">
+                    <pre><%= JSON.stringify(testCase.data, null, 2) %></pre>
+                </div>
+            </div>
+        <% } %>
+    </div>
+      <div class="test-actions">
+        <span class="test-badge <%= testCase.type %>"><%= testCase.type %></span>        <button class="run-test-btn" 
+                data-method="<%= testCase.method %>" 
+                data-endpoint="<%= testCase.endpoint %>" 
+                data-test-data="<%- encodeURIComponent(JSON.stringify(testCase.data || {})) %>" 
+                data-expected-status="<%= testCase.expectedStatus %>" 
+                <% if (testCase.acceptableStatuses) { %>
+                data-acceptable-statuses="<%- JSON.stringify(testCase.acceptableStatuses) %>"
+                <% } %>
+                <% if (testCase.expectedData) { %>
+                data-expected-data="<%- encodeURIComponent(JSON.stringify(testCase.expectedData)) %>"
+                <% } else { %>
+                data-expected-data="null"
+                <% } %>
+                data-result-id="result-<%= suiteId %>-<%= index %>"
+                onclick="runTestFromButton(this)">
+            Run Test
+        </button>
+    </div>
+    
+    <div id="result-<%= suiteId %>-<%= index %>" class="test-result" style="display: none;"></div>
+</div>

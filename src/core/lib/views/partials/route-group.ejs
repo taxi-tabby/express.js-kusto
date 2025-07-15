@@ -1,0 +1,19 @@
+<div class="route-group" data-path="<%= group.path %>">
+    <div class="route-group-header" onclick="toggleGroup('<%= group.id %>')">
+        <div class="route-group-title">
+            <span class="path-icon">📁</span>
+            <%= group.path || 'Root Path' %>
+        </div>
+        <div class="route-group-stats">
+            <span class="route-count"><%= group.routes.length %> routes</span>
+            <span class="test-count"><%= group.totalTests %> tests</span>
+            <span class="collapse-icon">▼</span>
+        </div>
+    </div>
+    
+    <div class="route-group-content" id="<%= group.id %>">
+        <% group.routes.forEach(function(testSuite) { %>
+            <%- include('test-suite', { testSuite: testSuite }) %>
+        <% }); %>
+    </div>
+</div>

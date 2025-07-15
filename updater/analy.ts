@@ -1,0 +1,283 @@
+import * as fs from 'fs';
+import * as path from 'path';
+import * as crypto from 'crypto';
+
+interface FileMapEntry {
+    checksum: string;
+}
+
+interface FileMap {
+    [filePath: string]: FileMapEntry;
+}
+
+/**
+ * .gitignore 파일을 파싱하여 무시할 패턴 목록을 반환합니다.
+ * @param gitignorePath .gitignore 파일 경로
+ * @returns 무시할 패턴 배열
+ */
+function parseGitignore(gitignorePath: string): string[] {
+    try {
+        if (!fs.existsSync(gitignorePath)) {
+            console.log('No .gitignore file found');
+            return [];
+        }
+
+        const content = fs.readFileSync(gitignorePath, 'utf8');
+        const patterns: string[] = [];
+
+        for (const line of content.split('\n')) {
+            const trimmed = line.trim();
+            // 빈 줄이나 주석(#으로 시작)은 무시
+            if (trimmed && !trimmed.startsWith('#')) {
+                patterns.push(trimmed);
+            }
+        }
+
+        console.log(`Loaded ${patterns.length} patterns from .gitignore`);
+        return patterns;
+    } catch (error) {
+        console.error('Error parsing .gitignore:', error);
+        return [];
+    }
+}
+
+/**
+ * 파일 경로가 .gitignore 패턴에 매치되는지 확인합니다.
+ * @param filePath 검사할 파일 경로 (상대 경로)
+ * @param patterns .gitignore 패턴 배열
+ * @returns 무시해야 하는 파일이면 true
+ */
+function shouldIgnoreFile(filePath: string, patterns: string[]): boolean {
+  // 윈도우 경로 구분자를 슬래시로 변환
+  const normalizedPath = filePath.replace(/\\/g, '/');
+  
+  let shouldIgnore = false;
+  
+  // 패턴을 순서대로 처리 (! 패턴이 이전 매치를 덮어쓸 수 있도록)
+  for (const pattern of patterns) {
+    let currentPattern = pattern;
+    let isNegation = false;
+    
+    // ! 로 시작하는 패턴 처리 (부정 패턴)
+    if (pattern.startsWith('!')) {
+      isNegation = true;
+      currentPattern = pattern.substring(1);
+    }
+    
+    let matches = false;
+    
+    // 디렉토리 패턴 (/ 로 끝나는 경우)
+    if (currentPattern.endsWith('/')) {
+      const dirPattern = currentPattern.slice(0, -1);
+      if (normalizedPath.startsWith(dirPattern + '/') || normalizedPath === dirPattern) {
+        matches = true;
+      }
+    } else {
+      // 정확한 매치
+      if (normalizedPath === currentPattern) {
+        matches = true;
+      }
+      
+      // 디렉토리명 매치 (디렉토리 전체를 무시)
+      else if (normalizedPath.startsWith(currentPattern + '/')) {
+        matches = true;
+      }
+      
+      // 와일드카드 처리
+      else if (currentPattern.includes('*')) {
+        const regexPattern = currentPattern
+          .replace(/\./g, '\\.')
+          .replace(/\*/g, '.*');
+        const regex = new RegExp('^' + regexPattern + '$');
+        if (regex.test(normalizedPath)) {
+          matches = true;
+        } else {
+          // 디렉토리 내 파일도 매치
+          const pathParts = normalizedPath.split('/');
+          for (let i = 0; i < pathParts.length; i++) {
+            const subPath = pathParts.slice(i).join('/');
+            if (regex.test(subPath)) {
+              matches = true;
+              break;
+            }
+          }
+        }
+      }
+      
+      // 파일명 매치 (경로의 어느 부분에서든)
+      else {
+        const pathParts = normalizedPath.split('/');
+        if (pathParts.includes(currentPattern)) {
+          matches = true;
+        }
+      }
+      
+      // 확장자 매치
+      if (!matches && currentPattern.startsWith('*.') && normalizedPath.endsWith(currentPattern.substring(1))) {
+        matches = true;
+      }
+    }
+    
+    // 매치된 경우 무시 여부 결정
+    if (matches) {
+      if (isNegation) {
+        shouldIgnore = false;  // ! 패턴은 이전 무시를 취소
+      } else {
+        shouldIgnore = true;   // 일반 패턴은 무시
+      }
+    }
+  }
+
+  return shouldIgnore;
+}
+
+/**
+ * 파일의 체크섬을 계산합니다.
+ * @param filePath 파일 경로
+ * @returns MD5 해시 체크섬
+ */
+function calculateFileChecksum(filePath: string): string {
+    try {
+        const fileBuffer = fs.readFileSync(filePath);
+        const hashSum = crypto.createHash('md5');
+        hashSum.update(fileBuffer);
+        return hashSum.digest('hex');
+    } catch (error) {
+        console.error(`Error calculating checksum for ${filePath}:`, error);
+        return '';
+    }
+}
+
+/**
+ * 디렉토리를 재귀적으로 스캔하여 모든 파일을 찾습니다.
+ * @param dirPath 스캔할 디렉토리 경로
+ * @param fileList 파일 목록을 저장할 배열
+ * @param baseDir 기준 디렉토리 (상대 경로 계산용)
+ */
+function scanDirectory(dirPath: string, fileList: string[] = [], baseDir?: string): string[] {
+    try {
+        const items = fs.readdirSync(dirPath);
+        const base = baseDir || dirPath;
+
+        for (const item of items) {
+            const fullPath = path.join(dirPath, item);
+            const stat = fs.statSync(fullPath);
+
+            if (stat.isDirectory()) {
+                // 상대 경로로 변환하여 src/app 경로인지 확인
+                const relativePath = path.relative(base, fullPath).replace(/\\/g, '/');
+
+                // node_modules, .git 등 제외할 디렉토리 및 src/app, updater 폴더 제외
+                const shouldSkip = ['node_modules', '.git', '.vscode', 'dist', 'build'].includes(item) ||
+                    relativePath === 'src/app' ||
+                    relativePath.startsWith('src/app/') ||
+                    relativePath === 'updater' ||
+                    relativePath.startsWith('updater/');
+
+                if (!shouldSkip) {
+                    scanDirectory(fullPath, fileList, base);
+                }
+            } else if (stat.isFile()) {
+                fileList.push(fullPath);
+            }
+        }
+    } catch (error) {
+        console.error(`Error scanning directory ${dirPath}:`, error);
+    }
+
+    return fileList;
+}
+
+/**
+ * 상위 폴더의 모든 파일을 스캔하여 체크섬과 함께 JSON으로 추출합니다.
+ * @param outputDir 출력할 디렉토리 (기본값: './updater/map')
+ * @returns 생성된 파일 경로
+ */
+export function generateFileMap(outputDir: string = './updater/map'): string {
+    try {
+        // 현재 디렉토리의 상위 폴더 경로
+        const parentDir = path.resolve(__dirname, '..');
+        console.log(`Scanning parent directory: ${parentDir}`);
+
+        // .gitignore 패턴 로드
+        const gitignorePath = path.join(parentDir, '.gitignore');
+        const gitignorePatterns = parseGitignore(gitignorePath);
+
+        // 모든 파일 스캔
+        const allFiles = scanDirectory(parentDir, [], parentDir);
+        console.log(`Found ${allFiles.length} files`);
+
+        // 파일 맵 생성
+        const fileMap: FileMap = {};
+        let processedCount = 0;
+        let ignoredCount = 0;
+
+        for (const filePath of allFiles) {
+            try {
+                // 상대 경로로 변환
+                const relativePath = path.relative(parentDir, filePath);
+                // 윈도우 경로 구분자를 슬래시로 변환
+                const normalizedPath = relativePath.replace(/\\/g, '/');
+
+                // .gitignore 패턴에 매치되는지 확인
+                if (shouldIgnoreFile(normalizedPath, gitignorePatterns)) {
+                    ignoredCount++;
+                    continue;
+                }
+
+                const checksum = calculateFileChecksum(filePath);
+                if (checksum) {
+                    fileMap[normalizedPath] = { checksum };
+                    processedCount++;
+                }
+            } catch (error) {
+                console.error(`Error processing file ${filePath}:`, error);
+            }
+        }
+
+        // 출력 디렉토리 생성
+        if (!fs.existsSync(outputDir)) {
+            fs.mkdirSync(outputDir, { recursive: true });
+            console.log(`Created output directory: ${outputDir}`);
+        }
+
+        // 버전 정보 생성
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const version = `v${timestamp}`;
+        const outputFileName = `${version}.json`;
+        const outputPath = path.join(outputDir, outputFileName);
+
+        // JSON 파일로 저장
+        const jsonContent = JSON.stringify(fileMap, null, 2);
+        fs.writeFileSync(outputPath, jsonContent, 'utf8');
+
+        console.log(`File map generated successfully: ${outputPath}`);
+        console.log(`Total files processed: ${processedCount}`);
+        console.log(`Files ignored by .gitignore: ${ignoredCount}`);
+
+        return outputPath;
+    } catch (error) {
+        console.error('Error generating file map:', error);
+        throw error;
+    }
+}
+
+/**
+ * 파일 맵을 생성하고 실행 정보를 출력합니다.
+ */
+export function runAnalysis(): void {
+    try {
+        const outputPath = generateFileMap();
+        console.log('\n=== File Analysis Complete ===');
+        console.log(`Output file: ${outputPath}`);
+        console.log(`Generated at: ${new Date().toISOString()}`);
+    } catch (error) {
+        console.error('Analysis failed:', error);
+        process.exit(1);
+    }
+}
+
+// 직접 실행 시 분석 수행
+if (require.main === module) {
+    runAnalysis();
+}

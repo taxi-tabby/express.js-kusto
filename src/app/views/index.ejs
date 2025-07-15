@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>
+        Service
+    </title>
+</head>
+
+<body>
+
+
+    <style>
+        * {
+            box-sizing: border-box;
+            -webkit-box-sizing: border-box;
+            position: relative;
+        }
+
+        html,
+        body {
+            display: block;
+            margin: 0;
+            padding: 0;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            background-color: #1a202c;
+            /* bg-gray-950 */
+            color: #f9fafb;
+            /* text-gray-50 */
+        }
+
+        .main {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+        }
+
+        @media (min-width: 768px) {
+            .main {
+                padding: 1.5rem;
+                /* md:px-6 */
+            }
+        }
+
+        .content {
+            max-width: 36rem;
+            /* max-w-xl */
+            margin: 1.5rem 0;
+            /* space-y-6 */
+            text-align: center;
+        }
+
+        .heading {
+            font-size: 2.25rem;
+            /* text-4xl */
+            font-weight: 700;
+            /* font-bold */
+            letter-spacing: -0.025em;
+            /* tracking-tight */
+        }
+
+        @media (min-width: 640px) {
+            .heading {
+                font-size: 3rem;
+                /* sm:text-5xl */
+            }
+        }
+
+        @media (min-width: 768px) {
+            .heading {
+                font-size: 3.75rem;
+                /* md:text-6xl */
+            }
+        }
+
+        .paragraph {
+            font-size: 1.125rem;
+            /* text-lg */
+            color: #9ca3af;
+            /* text-gray-400 */
+        }
+
+        .button {
+            display: inline-flex;
+            height: 2.5rem;
+            align-items: center;
+            justify-content: center;
+            border-radius: 0.375rem;
+            /* rounded-md */
+            background-color: #f9fafb;
+            /* bg-gray-50 */
+            padding-left: 1.5rem;
+            padding-right: 1.5rem;
+            font-size: 0.875rem;
+            /* text-sm */
+            font-weight: 500;
+            /* font-medium */
+            color: #1a202c;
+            /* text-gray-950 */
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+            /* shadow */
+            transition: background-color 0.2s;
+            /* transition-colors */
+        }
+
+        .button:hover {
+            background-color: #e5e7eb;
+            /* hover:bg-gray-200 */
+        }
+
+        .button:focus-visible {
+            outline: none;
+            /* focus-visible:outline-none */
+            box-shadow: 0 0 0 2px #1a202c;
+            /* focus-visible:ring-1 focus-visible:ring-gray-950 */
+        }
+
+        .button:disabled {
+            pointer-events: none;
+            /* disabled:pointer-events-none */
+            opacity: 0.5;
+            /* disabled:opacity-50 */
+        }
+
+    </style>
+
+    <div class="container">
+        <main class="main">
+            <div class="content">
+                <h1 class="heading">Service</h1>
+                <p class="paragraph">
+                    <% if (typeof CONST_VERSION_NAME !== 'undefined' && CONST_VERSION_NAME) { %>
+                        <%= CONST_VERSION_NAME %>
+                    <% } else { %>
+                        Ver: NoNamed
+                    <% } %>
+                </p>
+            </div>
+        </main>
+    </div>
+
+
+</body>
+
+</html>

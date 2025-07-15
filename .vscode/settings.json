@@ -1,0 +1,26 @@
+{
+  "prisma.fileWatcher": false,
+  "prisma.trace.server": "messages",
+  "files.associations": {
+    "*.prisma": "prisma"
+  },
+  "files.watcherExclude": {
+    "**/client/**/*.prisma": true
+  },
+  "files.exclude": {
+    "**/.git": true,
+    "src/app/db/*/client": true
+  },
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/dist": true,
+    "**/logs": true,
+    "src/app/db/*/client": true
+  },
+  "typescript.preferences.includePackageJsonAutoImports": "off",
+  "typescript.suggest.autoImports": false,
+  "[prisma]": {
+    "editor.semanticHighlighting.enabled": true,
+    "editor.suggest.showWords": false
+  },
+}

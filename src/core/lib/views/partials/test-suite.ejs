@@ -1,0 +1,23 @@
+<div class="test-suite" data-method="<%= testSuite.route.method %>" data-path="<%= testSuite.route.path %>">
+    <div class="suite-header" onclick="toggleSuite('<%= testSuite.route.method %>-<%= testSuite.route.path.replace(/[^a-zA-Z0-9]/g, '-') %>')">
+        <div class="suite-title">
+            <div class="route-info">
+                <span class="method-badge <%= testSuite.route.method %>"><%= testSuite.route.method %></span>
+                <span class="route-path"><%= testSuite.route.path %></span>
+                <% if (testSuite.route.summary) { %>
+                    <span class="route-summary"> - <%= testSuite.route.summary %></span>
+                <% } %>
+            </div>
+            <div class="suite-stats">
+                <span class="test-count"><%= testSuite.testCases.length %> tests</span>
+                <span class="collapse-icon">▼</span>
+            </div>
+        </div>
+    </div>
+    
+    <div class="suite-content" id="suite-<%= testSuite.route.method %>-<%= testSuite.route.path.replace(/[^a-zA-Z0-9]/g, '-') %>">
+        <% testSuite.testCases.forEach(function(testCase, index) { %>
+            <%- include('test-case', { testCase: testCase, index: index, suiteId: testSuite.route.method + '-' + testSuite.route.path.replace(/[^a-zA-Z0-9]/g, '-') }) %>
+        <% }); %>
+    </div>
+</div>

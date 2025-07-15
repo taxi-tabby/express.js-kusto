@@ -1,0 +1,677 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("RDS_USER_URL")
+}
+
+// ########################################
+// 공통 ENUM 타입 정의
+// ########################################
+
+// 로그인 방법 Enum (사용자와 관리자 공통)
+enum LoginMethod {
+  PASSWORD
+  TWO_FACTOR
+  OAUTH
+  SSO
+  BIOMETRIC
+}
+
+// 사용자 상태 관련 Enum
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  PENDING_VERIFICATION
+  BANNED
+}
+
+// 토큰 유형 Enum
+enum TokenType {
+  ACCESS
+  REFRESH
+  RESET_PASSWORD
+  EMAIL_VERIFICATION
+  TWO_FACTOR
+}
+
+// 토큰 무효화 사유 Enum
+enum TokenRevocationReason {
+  LOGOUT
+  SECURITY_BREACH
+  PASSWORD_CHANGE
+  ADMIN_ACTION
+  TOKEN_THEFT
+  EXPIRED
+  USER_REQUESTED
+}
+
+// 보안 이벤트 유형 Enum
+enum SecurityEventType {
+  FAILED_LOGIN
+  SUSPICIOUS_IP
+  TOKEN_THEFT
+  BRUTE_FORCE
+  ACCOUNT_LOCKOUT
+  PASSWORD_CHANGE
+  TWO_FACTOR_ENABLED
+  TWO_FACTOR_DISABLED
+}
+
+// 보안 이벤트 심각도 Enum
+enum SecuritySeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+// 감사 로그 액션 Enum
+enum AuditAction {
+  LOGIN
+  LOGOUT
+  PROFILE_UPDATE
+  PASSWORD_CHANGE
+  ROLE_ASSIGNED
+  ROLE_REMOVED
+  PERMISSION_GRANTED
+  PERMISSION_REVOKED
+  ACCOUNT_CREATED
+  ACCOUNT_DELETED
+  ACCOUNT_SUSPENDED
+  ADMIN_ACTION
+}
+
+
+
+
+
+
+
+
+
+// HTTP 메소드 Enum
+enum HttpMethod {
+  GET
+  POST
+  PUT
+  DELETE
+  PATCH
+  HEAD
+  OPTIONS
+}
+
+// ########################################
+// 일반 사용자 인증 및 관리
+// ########################################
+
+/**
+ * 일반 사용자 계정 정보를 관리하는 메인 테이블
+ * - 일반 사용자들의 기본 정보, 권한, 보안 설정을 저장
+ * - JWT 기반 인증 시스템의 핵심 테이블
+ * - 역할 기반 접근 제어(RBAC) 시스템의 사용자 주체
+ */
+model User {
+  // === 기본 식별자 ===
+  id   BigInt @id @default(autoincrement()) // 내부용 Primary Key (숫자형 ID)
+  uuid String @unique @default(uuid()) @db.Uuid // 외부 노출용 고유 식별자 (보안을 위해 UUID 사용)  
+
+  // === 로그인 및 인증 정보 ===
+  email        String @unique @db.VarChar(255) // 로그인용 이메일 주소 (중복 불가)
+  username     String @unique @db.VarChar(100) // 로그인용 사용자명 (필수, 중복 불가)
+  passwordHash String @db.VarChar(255) // 해시화된 비밀번호 (bcrypt 등으로 암호화)
+
+  // === 개인 정보 ===
+  firstName    String? @db.VarChar(100) // 사용자 이름
+  lastName     String? @db.VarChar(100) // 사용자 성
+  phoneNumber  String? @db.VarChar(20) // 연락처 전화번호
+  profileImage String? @db.VarChar(500) // 프로필 이미지 URL 또는 파일 경로
+  timezone     String? @default("UTC") @db.VarChar(50) // 사용자 시간대 (기본값: UTC)
+  locale       String? @default("en-US") @db.VarChar(10) // 언어/지역 설정 (기본값: 영어-미국)
+
+  // === 계정 상태 관리 ===
+  isActive                 Boolean   @default(true) // 계정 활성화 상태 (비활성화시 로그인 불가)
+  isVerified               Boolean   @default(false) // 이메일 인증 상태 (인증 필수)
+  isSuspended              Boolean   @default(false) // 계정 정지 상태 (임시 접근 차단)
+  // === 보안 설정 ===
+  twoFactorEnabled         Boolean   @default(false) // 2단계 인증 활성화 여부 (일반 사용자는 선택사항)
+  twoFactorSecret          String?   @db.VarChar(100) // 2FA 시크릿 키 (TOTP 앱용)
+  passwordResetToken       String?   @db.VarChar(255) // 비밀번호 재설정 토큰 (일회용)
+  passwordResetExpires     DateTime? // 비밀번호 재설정 토큰 만료 시간
+  emailVerificationToken   String?   @db.VarChar(255) // 이메일 인증 토큰 (일회용)
+  emailVerificationExpires DateTime? // 이메일 인증 토큰 만료 시간
+
+  // === 로그인 추적 및 보안 ===
+  lastLoginAt   DateTime? // 마지막 로그인 시간 (활동 추적용)
+  lastLoginIp   String?   @db.VarChar(45) // 마지막 로그인 IP 주소 (보안 모니터링용) - IPv6 지원
+  loginAttempts Int       @default(0) // 연속 로그인 실패 횟수 (브루트포스 방지)
+  lockoutUntil  DateTime? // 계정 잠금 해제 시간 (로그인 실패시 임시 잠금)
+
+  // === JWT 토큰 보안 관리 ===
+  jwtVersion         Int       @default(1) // JWT 버전 (보안 사고시 모든 토큰 무효화용)
+  lastPasswordChange DateTime? // 마지막 비밀번호 변경 시간 (이전 토큰 무효화 기준)
+  // === 소프트 삭제 (논리적 삭제) ===
+  deletedAt          DateTime? // 삭제 시간 (NULL이면 활성 상태)
+
+  // === 감사 추적 (Audit Trail) ===
+  createdAt         DateTime               @default(now()) // 계정 생성 시간
+  updatedAt         DateTime               @updatedAt // 마지막 수정 시간 (자동 업데이트)  // Direct Relations
+  roles             UserRole[]
+  sessions          UserSession[]
+  refreshTokens     UserRefreshToken[]
+  auditLogs         UserAuditLog[]
+  permissions       UserPermission[]
+  tokenBlacklist    UserTokenBlacklist[]
+  rateLimitLogs     UserRateLimit[]
+  securityEvents    UserSecurityEvent[]
+
+  // Token revocation audit trails
+  userRefreshTokensRevoked UserRefreshToken[] @relation("UserRefreshTokenRevokedBy")
+
+  // Core unique indexes
+  @@index([email])
+  @@index([uuid])
+  // High-frequency query optimized indexes
+  @@index([deletedAt, isActive, isVerified]) // Most common filter pattern
+  @@index([email, deletedAt]) // Authentication queries
+  @@index([uuid, deletedAt]) // UUID-based operations
+  @@index([username, deletedAt]) // Username lookups
+  // Authentication & security indexes
+  @@index([loginAttempts, lockoutUntil]) // Security checks
+  @@index([isActive, lastLoginAt]) // Active user analytics
+  @@index([emailVerificationToken]) // Email verification
+  @@index([passwordResetToken]) // Password reset
+  // Audit & analytics indexes
+  @@index([createdAt, isActive]) // User registration analytics
+  @@index([lastLoginAt]) // Login analytics
+  @@index([deletedAt, createdAt]) // Soft delete with chronological order
+  @@map("users")
+}
+
+/**
+ * 사용자 역할(Role) 정의 테이블
+ * - 사용자들의 권한을 그룹화하여 관리
+ * - 역할 기반 접근 제어(RBAC) 시스템의 역할(Role) 정의
+ * - 시스템 기본 역할과 사용자 정의 역할을 구분하여 관리
+ */
+model Role {
+  // === 기본 식별자 ===
+  id          BigInt  @id @default(autoincrement()) // 내부용 Primary Key
+  uuid        String  @unique @default(uuid()) @db.Uuid // 외부 노출용 고유 식별자
+  // === 역할 정보 ===
+  name        String  @unique @db.VarChar(100) // 역할명 (예: "customer", "premium_user", "moderator")
+  description String? @db.VarChar(500) // 역할 설명 (해당 역할의 목적과 권한 범위)
+
+  // === 역할 속성 ===
+  isSystem Boolean @default(false) // 시스템 기본 역할 여부 (삭제/수정 불가)
+  isActive Boolean @default(true) // 역할 활성화 상태 (비활성화시 할당 불가)
+
+  // === 소프트 삭제 ===
+  deletedAt DateTime? // 삭제 시간 (논리적 삭제)
+
+  // === 감사 추적 ===
+  createdAt DateTime @default(now()) // 역할 생성 시간
+  updatedAt DateTime @updatedAt // 마지막 수정 시간
+
+  // Relations
+  userRoles   UserRole[]
+  permissions RolePermission[]
+
+  @@index([name])
+  @@index([isActive, isSystem])
+  @@index([deletedAt])
+  @@map("roles")
+}
+
+/**
+ * 사용자 권한(Permission) 정의 테이블
+ * - 시스템의 세부적인 권한을 정의
+ * - 리소스별, 액션별로 권한을 세분화하여 관리
+ * - 역할에 권한을 할당하여 RBAC 시스템 구현
+ */
+model Permission {
+  // === 기본 식별자 ===
+  id          BigInt  @id @default(autoincrement()) // 내부용 Primary Key
+  uuid        String  @unique @default(uuid()) @db.Uuid // 외부 노출용 고유 식별자
+  // === 권한 정보 ===
+  name        String  @unique @db.VarChar(100) // 권한명 (예: "posts.create", "profile.update")
+  resource    String  @db.VarChar(50) // 리소스 대상 (예: "posts", "profile", "comments")
+  action      String  @db.VarChar(50) // 수행 액션 (예: "create", "read", "update", "delete")
+  description String? @db.VarChar(500) // 권한 설명 (해당 권한의 목적과 범위)
+
+  // === 권한 속성 ===
+  isSystem  Boolean   @default(false) // 시스템 기본 권한 여부 (삭제/수정 불가)
+  // === 소프트 삭제 ===
+  deletedAt DateTime? // 삭제 시간 (논리적 삭제)
+
+  // === 감사 추적 ===
+  createdAt DateTime @default(now()) // 권한 생성 시간
+  updatedAt DateTime @updatedAt // 마지막 수정 시간
+
+  // Relations
+  rolePermissions RolePermission[]
+  userPermissions UserPermission[]
+
+  @@unique([resource, action])
+  @@index([resource])
+  @@index([action])
+  @@index([deletedAt])
+  @@map("permissions")
+}
+
+/**
+ * 사용자 역할 할당 테이블
+ * - 사용자와 역할 간의 다대다 관계를 관리
+ * - 역할 할당 시점과 만료 시점을 추적
+ * - 임시 권한 부여 및 자동 만료 기능 지원
+ */
+model UserRole {
+  // === 기본 식별자 ===
+  id         BigInt    @id @default(autoincrement()) // 내부용 Primary Key  // === 연결 관계 ===
+  userUuid   String    @db.Uuid // 역할을 할당받을 사용자 UUID
+  roleUuid   String    @db.Uuid // 할당할 역할 UUID
+  // === 할당 정보 ===
+  assignedAt DateTime  @default(now()) // 역할 할당 시간
+  expiresAt  DateTime? // 역할 만료 시간 (NULL이면 영구)
+
+  // === 소프트 삭제 ===
+  deletedAt DateTime? // 삭제 시간 (논리적 삭제)
+  // Relations
+  user      User      @relation(fields: [userUuid], references: [uuid])
+  role      Role      @relation(fields: [roleUuid], references: [uuid])
+
+  @@unique([userUuid, roleUuid])
+  @@index([userUuid])
+  @@index([roleUuid])
+  @@index([expiresAt])
+  @@index([deletedAt])
+  @@map("user_roles")
+}
+
+/**
+ * 사용자 역할별 권한 매핑 테이블
+ * - 역할과 권한 간의 다대다 관계를 관리
+ * - 특정 역할에 어떤 권한이 부여되었는지 추적
+ * - 권한 부여/회수의 감사 추적 기능 제공
+ */
+model RolePermission {
+  // === 기본 식별자 ===
+  id   BigInt @id @default(autoincrement()) // 내부용 Primary Key
+  uuid String @unique @default(uuid()) @db.Uuid // 외부 노출용 고유 식별자
+
+  // === 연결 관계 ===
+  roleUuid       String   @db.Uuid // 권한을 가질 역할 UUID
+  permissionUuid String   @db.Uuid // 부여할 권한 UUID
+  // === 권한 부여 정보 ===
+  grantedAt      DateTime @default(now()) // 권한 부여 시간
+
+  // === 소프트 삭제 ===
+  deletedAt  DateTime? // 삭제 시간 (권한 회수)
+  // Relations
+  role       Role       @relation(fields: [roleUuid], references: [uuid])
+  permission Permission @relation(fields: [permissionUuid], references: [uuid])
+
+  @@unique([roleUuid, permissionUuid])
+  @@index([roleUuid])
+  @@index([permissionUuid])
+  @@index([deletedAt])
+  @@map("role_permissions")
+}
+
+/**
+ * 사용자별 개별 권한 테이블
+ * - 사용자에게 직접 부여된 권한을 관리
+ * - 역할과 별개로 개별 권한 부여/회수 가능
+ * - 임시 권한 부여 및 자동 만료 기능 지원
+ */
+model UserPermission {
+  // === 기본 식별자 ===
+  id             BigInt    @id @default(autoincrement()) // 내부용 Primary Key  // === 연결 관계 ===
+  userUuid       String    @db.Uuid // 권한을 받을 사용자 UUID
+  permissionUuid String    @db.Uuid // 부여할 권한 UUID
+  // === 권한 부여 정보 ===
+  grantedAt      DateTime  @default(now()) // 권한 부여 시간
+  expiresAt      DateTime? // 권한 만료 시간 (NULL이면 영구)
+
+  // === 소프트 삭제 ===
+  deletedAt  DateTime? // 삭제 시간 (권한 회수)
+  // Relations
+  user       User       @relation(fields: [userUuid], references: [uuid])
+  permission Permission @relation(fields: [permissionUuid], references: [uuid])
+
+  @@unique([userUuid, permissionUuid])
+  @@index([userUuid])
+  @@index([permissionUuid])
+  @@index([expiresAt])
+  @@index([deletedAt])
+  @@map("user_permissions")
+}
+
+/**
+ * JWT 토큰 블랙리스트 테이블
+ * - 로그아웃, 보안 사고시 토큰을 무효화하기 위한 블랙리스트
+ * - 특정 토큰을 강제로 무효화하여 보안 사고 대응
+ * - 시스템 전체 또는 특정 사용자의 토큰 무효화 지원
+ */
+model UserTokenBlacklist {
+  id        BigInt                @id @default(autoincrement()) // 내부용 Primary Key
+  uuid      String                @unique @default(uuid()) @db.Uuid // 외부 노출용 고유 식별자  // === 토큰 정보 ===
+  userUuid  String?               @db.Uuid // 사용자 UUID (NULL이면 시스템 전체 블랙리스트)
+  jti       String                @unique @db.VarChar(100) // JWT ID (jti claim) - 무효화할 토큰 식별자
+  tokenType TokenType // 토큰 유형
+  reason    TokenRevocationReason // 무효화 사유
+  expiresAt DateTime // 원래 토큰 만료 시간 (이후 자동 정리)
+
+  // === 메타데이터 ===
+  ipAddress  String? @db.VarChar(45) // 토큰 사용 IP 주소 (IPv6 지원)
+  userAgent  String? @db.Text // 토큰 사용 User Agent (가변 길이)
+  deviceInfo String? @db.Text // 디바이스 정보 (가변 길이)
+
+  // === 감사 추적 ===
+  createdAt DateTime @default(now()) // 블랙리스트 추가 시간
+  // Relations
+  user      User?    @relation(fields: [userUuid], references: [uuid])
+
+  @@index([jti])
+  @@index([userUuid])
+  @@index([tokenType])
+  @@index([expiresAt])
+  @@index([createdAt])
+  @@index([reason])
+  @@map("user_token_blacklist")
+}
+
+/**
+ * API 요청 레이트 리미팅 정보 저장 테이블
+ * - API 호출 빈도를 제한하여 DDoS 공격 방지
+ * - IP 기반 또는 사용자 기반 요청 제한
+ * - 악의적인 요청을 자동으로 차단하고 추적
+ */
+model UserRateLimit {
+  // === 기본 식별자 ===
+  id        BigInt  @id @default(autoincrement()) // 내부용 Primary Key  // === 요청 주체 정보 ===
+  userUuid  String? @db.Uuid // 사용자 UUID (NULL이면 IP 기반 제한)
+  ipAddress String  @db.VarChar(45) // 요청 IP 주소 (IPv6 지원)
+
+  // === API 엔드포인트 정보 ===
+  endpoint String @db.VarChar(200) // API 엔드포인트 경로 (예: "/api/user/login")
+  method   String @db.VarChar(10) // HTTP 메소드 (GET, POST, PUT, DELETE)
+
+  // === 레이트 리미트 추적 ===
+  requestCount Int       @default(1) // 현재 윈도우 내 요청 횟수
+  windowStart  DateTime // 레이트 리미트 윈도우 시작 시간
+  windowEnd    DateTime // 레이트 리미트 윈도우 종료 시간
+  isBlocked    Boolean   @default(false) // 차단 상태 여부
+  blockUntil   DateTime? // 차단 해제 시간
+
+  // === 요청 상세 정보 ===
+  userAgent   String?  @db.Text // User Agent 정보 (가변 길이)
+  lastRequest DateTime @default(now()) // 마지막 요청 시간
+
+  // === 감사 추적 ===
+  createdAt DateTime @default(now()) // 레코드 생성 시간
+  updatedAt DateTime @updatedAt // 마지막 업데이트 시간
+  // Relations
+  user      User?    @relation(fields: [userUuid], references: [uuid])
+
+  @@unique([userUuid, ipAddress, endpoint, method, windowStart])
+  @@index([userUuid])
+  @@index([ipAddress])
+  @@index([endpoint, method])
+  @@index([windowEnd])
+  @@index([isBlocked, blockUntil])
+  @@index([lastRequest])
+  @@map("user_rate_limits")
+}
+
+/**
+ * 보안 이벤트 로그 테이블
+ * - 의심스러운 활동과 보안 위협을 추적
+ * - 로그인 실패, IP 차단, 토큰 도난 등 보안 이벤트 기록
+ * - 보안 사고 대응과 분석을 위한 데이터 수집
+ */
+model UserSecurityEvent {
+  // === 기본 식별자 ===
+  id          BigInt            @id @default(autoincrement()) // 내부용 Primary Key
+  uuid        String            @unique @default(uuid()) @db.Uuid // 외부 노출용 고유 식별자  // === 연결 관계 ===
+  userUuid    String?           @db.Uuid // 사용자 UUID (익명 시도시 NULL)  // === 이벤트 상세 정보 ===
+  eventType   SecurityEventType // 이벤트 유형
+  severity    SecuritySeverity // 심각도
+  description String            @db.VarChar(1000) // 이벤트 상세 설명
+
+  // === 요청 컨텍스트 ===
+  ipAddress String? @db.VarChar(45) // 요청 IP 주소 (IPv6 지원)
+  userAgent String? @db.Text // User Agent 정보 (가변 길이)
+  endpoint  String? @db.VarChar(200) // 접근한 API 엔드포인트
+  method    String? @db.VarChar(10) // HTTP 메소드
+
+  // === 탐지 상세 정보 ===
+  riskScore     Float? // 위험도 점수 (0.0 ~ 1.0)
+  detectionRule String? @db.VarChar(100) // 사용된 탐지 규칙명
+
+  // === 대응 액션 ===
+  actionTaken String? @db.VarChar(100) // 취한 조치 ("blocked", "rate_limited", "token_revoked", "account_locked")
+
+  // === 메타데이터 ===
+  metadata Json? // 추가 컨텍스트 정보 (JSON 형태)
+
+  // === 감사 추적 ===
+  createdAt DateTime @default(now()) // 이벤트 발생 시간
+
+  // Relations
+  user User? @relation(fields: [userUuid], references: [uuid])
+
+  @@index([userUuid])
+  @@index([eventType])
+  @@index([severity])
+  @@index([ipAddress])
+  @@index([createdAt])
+  @@index([riskScore])
+  @@map("user_security_events")
+}
+
+/**
+ * 사용자 세션 관리 테이블 (JWT 기반 세션 추적)
+ * - JWT 액세스 토큰과 리프레시 토큰을 추적
+ * - 디바이스별 세션 관리 및 보안 모니터링
+ * - 토큰 패밀리와 세대 관리로 토큰 회전(rotation) 지원
+ */
+model UserSession {
+  // === 기본 식별자 ===
+  id         BigInt  @id @default(autoincrement()) // 내부용 Primary Key
+  uuid       String  @unique @default(uuid()) @db.Uuid // 외부 노출용 고유 식별자  // === 연결 관계 ===
+  userUuid   String  @db.Uuid // 세션 소유 사용자 UUID
+  // === 토큰 식별자 ===
+  jti        String  @unique @db.VarChar(100) // 액세스 토큰의 JWT ID
+  refreshJti String? @unique @db.VarChar(100) // 리프레시 토큰의 JWT ID
+
+  // === 토큰 패밀리 관리 (리프레시 토큰 회전용) ===
+  familyId   String @db.VarChar(100) // 같은 디바이스/세션의 토큰 패밀리 ID
+  generation Int    @default(1) // 토큰 갱신 세대 번호
+
+  // === 세션 정보 ===
+  deviceInfo String? @db.Text // User Agent, 디바이스 정보 (가변 길이)
+  deviceId   String? @db.VarChar(100) // 고유 디바이스 식별자
+  ipAddress  String? @db.VarChar(45) // 세션 IP 주소 (IPv6 지원)
+  location   String? @db.VarChar(200) // 지리적 위치 정보
+
+  // === 세션 상태 ===
+  isActive              Boolean      @default(true) // 세션 활성화 상태
+  isCompromised         Boolean      @default(false) // 보안 위험 감지 상태
+  // === 시간 관리 ===
+  lastUsedAt            DateTime     @default(now()) // 마지막 사용 시간
+  expiresAt             DateTime // 세션 전체 만료 시간
+  accessTokenExpiresAt  DateTime // 액세스 토큰 만료 시간
+  refreshTokenExpiresAt DateTime? // 리프레시 토큰 만료 시간
+  // === 보안 메타데이터 ===
+  loginMethod           LoginMethod? // 로그인 방법
+  trustScore            Float?       @default(1.0) // 세션 신뢰도 점수 (0.0~1.0)
+
+  // === 소프트 삭제 ===
+  deletedAt DateTime? // 삭제 시간 (논리적 삭제)
+  // === 감사 추적 ===
+  createdAt DateTime  @default(now()) // 세션 생성 시간
+  updatedAt DateTime  @updatedAt // 마지막 업데이트 시간
+
+  // Relations
+  user User @relation(fields: [userUuid], references: [uuid])
+
+  @@index([userUuid])
+  @@index([jti])
+  @@index([refreshJti])
+  @@index([familyId])
+  @@index([deviceId])
+  @@index([isActive, expiresAt])
+  @@index([isCompromised])
+  @@index([lastUsedAt])
+  @@index([deletedAt])
+  @@index([accessTokenExpiresAt])
+  @@index([refreshTokenExpiresAt])
+  @@map("user_sessions")
+}
+
+/**
+ * 사용자 리프레시 토큰 관리 테이블
+ * - JWT 리프레시 토큰의 라이프사이클을 관리
+ * - 토큰 회전(Rotation) 기능을 통한 보안 강화
+ * - 토큰 패밀리와 세대 관리로 도난 감지 및 차단
+ */
+model UserRefreshToken {
+  // === 기본 식별자 ===
+  id         BigInt @id @default(autoincrement()) // 내부용 Primary Key
+  uuid       String @unique @default(uuid()) @db.Uuid // 외부 노출용 고유 식별자  // === 연결 관계 ===
+  userUuid   String @db.Uuid // 토큰 소유 사용자 UUID
+  // === 토큰 식별 정보 ===
+  jti        String @unique @db.VarChar(100) // JWT ID (고유 토큰 식별자)
+  familyId   String @db.VarChar(100) // 토큰 패밀리 ID (같은 디바이스의 토큰들)
+  generation Int // 토큰 세대 번호 (회전시 증가)
+
+  // === 토큰 보안 정보 ===
+  tokenHash         String    @unique @db.VarChar(255) // 해시화된 토큰 (추가 보안)
+  deviceInfo        String?   @db.Text // 디바이스 정보 (User Agent, 가변 길이)
+  deviceId          String?   @db.VarChar(100) // 고유 디바이스 식별자
+  ipAddress         String?   @db.VarChar(45) // 토큰 발급 IP 주소 (IPv6 지원)
+  // === 토큰 상태 관리 ===
+  isRevoked         Boolean   @default(false) // 토큰 폐기 상태 (강제 무효화)
+  isUsed            Boolean   @default(false) // 토큰 사용 상태 (rotation시 true)
+  revokedAt         DateTime? // 토큰 폐기 시간
+  revokedByUserUuid BigInt? // 토큰을 폐기한 관리자 UUID
+  usedAt            DateTime? // 토큰 사용 시간 (rotation시)
+  // === 토큰 회전 관리 ===
+  parentJti         String?   @db.VarChar(100) // 이전 세대 토큰의 JTI (회전 추적용)
+
+  // === 시간 관리 ===
+  expiresAt DateTime // 토큰 만료 시간
+
+  // === 보안 점수 ===
+  trustScore Float? @default(1.0) // 토큰 신뢰도 점수 (0.0~1.0)
+
+  // === 소프트 삭제 ===
+  deletedAt DateTime? // 삭제 시간 (논리적 삭제)
+
+  // === 감사 추적 ===
+  createdAt     DateTime @default(now()) // 토큰 생성 시간
+  updatedAt     DateTime @updatedAt // 마지막 업데이트 시간
+  // Relations
+  user          User     @relation(fields: [userUuid], references: [uuid])
+  revokedByUser User?    @relation("UserRefreshTokenRevokedBy", fields: [revokedByUserUuid], references: [id])
+
+  @@index([userUuid])
+  @@index([jti])
+  @@index([familyId])
+  @@index([generation])
+  @@index([tokenHash])
+  @@index([deviceId])
+  @@index([isRevoked, isUsed, expiresAt])
+  @@index([parentJti])
+  @@index([deletedAt])
+  @@index([createdAt])
+  @@map("user_refresh_tokens")
+}
+
+/**
+ * 사용자 활동 감사 로그 테이블
+ * - 사용자의 모든 중요한 활동을 기록
+ * - 데이터 변경 이력을 추적하여 감사 요구사항 충족
+ * - 보안 사고 발생시 원인 분석을 위한 상세 로그 제공
+ */
+model UserAuditLog {
+  // === 기본 식별자 ===
+  id         BigInt      @id @default(autoincrement()) // 내부용 Primary Key
+  uuid       String      @unique @default(uuid()) @db.Uuid // 외부 노출용 고유 식별자  // === 연결 관계 ===
+  userUuid   String?     @db.Uuid // 활동을 수행한 사용자 UUID (시스템 액션시 NULL)  // === 활동 정보 ===
+  action     AuditAction // 수행된 액션
+  resource   String?     @db.VarChar(50) // 영향받은 리소스 유형 (예: "profile", "settings", "posts")
+  resourceId String?     @db.VarChar(100) // 영향받은 리소스 ID
+
+  // === 데이터 변경 추적 ===
+  oldValues Json? // 변경 전 값들 (업데이트시)
+  newValues Json? // 변경 후 값들 (생성/업데이트시)
+
+  // === 요청 컨텍스트 ===
+  ipAddress String? @db.VarChar(45) // 요청 IP 주소 (IPv6 지원)
+  userAgent String? @db.Text // User Agent 정보 (가변 길이)
+
+  // === 추가 메타데이터 ===
+  metadata Json? // 추가 컨텍스트 정보
+
+  // === 소프트 삭제 ===
+  deletedAt DateTime? // 삭제 시간 (논리적 삭제)
+  // === 감사 추적 ===
+  createdAt DateTime  @default(now()) // 로그 생성 시간
+  updatedAt DateTime  @updatedAt // 마지막 수정 시간
+
+  // Relations
+  user User? @relation(fields: [userUuid], references: [uuid])
+
+  @@index([userUuid])
+  @@index([action])
+  @@index([resource, resourceId])
+  @@index([createdAt])
+  @@index([deletedAt])
+  @@map("user_audit_logs")
+}
+
+/**
+ * JWT 설정 및 메타데이터 관리 테이블
+ * - JWT 토큰 생성 및 검증을 위한 시스템 설정
+ * - 다양한 보안 레벨에 따른 JWT 설정 관리
+ * - 토큰 수명, 알고리즘, 보안 정책 등을 관리
+ */
+model UserJwtConfig {
+  id         BigInt @id @default(autoincrement()) // 내부용 Primary Key
+  configName String @unique @db.VarChar(100) // 설정명 (예: "default", "high_security")
+
+  // === 토큰 수명 설정 ===
+  accessTokenTtl  Int // 액세스 토큰 수명 (초)
+  refreshTokenTtl Int // 리프레시 토큰 수명 (초)
+  // === JWT 메타데이터 ===
+  issuer          String @db.VarChar(255) // JWT 발급자 (iss claim)
+  audience        String @db.VarChar(255) // JWT 대상 (aud claim)
+  algorithm       String @default("RS256") @db.VarChar(20) // 서명 알고리즘 (RS256, HS256 등)
+
+  // === 보안 설정 ===
+  allowRefreshRotation Boolean @default(true) // 리프레시 토큰 회전 허용 여부
+  maxRefreshTokens     Int     @default(5) // 사용자당 최대 리프레시 토큰 개수
+  requireDeviceId      Boolean @default(false) // 디바이스 ID 필수 여부
+  enableFingerprinting Boolean @default(true) // 디바이스 핑거프린팅 활성화
+
+  // === 레이트 리미팅 설정 ===
+  maxLoginAttempts Int @default(5) // 최대 로그인 시도 횟수
+  lockoutDuration  Int @default(900) // 계정 잠금 지속 시간 (초)
+
+  // === 활성화 상태 ===
+  isActive Boolean @default(true) // 설정 활성화 여부
+
+  // === 감사 추적 ===
+  createdAt DateTime @default(now()) // 설정 생성 시간
+  updatedAt DateTime @updatedAt // 마지막 수정 시간
+
+  @@index([configName])
+  @@index([isActive])
+  @@map("user_jwt_configs")
+}

@@ -1,0 +1,4 @@
+# updater/.gitignore
+# Ignore updater generated files
+map/
+packages/

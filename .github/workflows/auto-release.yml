@@ -1,0 +1,155 @@
+name: Auto Release Framework
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    types:
+      - closed
+    branches:
+      - main
+
+permissions:
+  contents: write
+  packages: write
+  pull-requests: read
+
+jobs:
+  auto-release:
+    if: github.event_name == 'push' || (github.event.pull_request.merged == true)
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        token: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm install
+    
+    - name: Get current version
+      id: version_info
+      run: |
+        # 현재 버전 읽기 (증가시키지 않음)
+        CURRENT_VERSION=$(node -p "require('./package.json').version")
+        echo "Current version: $CURRENT_VERSION"
+        
+        echo "package_version=${CURRENT_VERSION}" >> $GITHUB_OUTPUT
+    
+    - name: Generate version tag
+      id: version
+      run: |
+        # 현재 버전 사용 (증가시키지 않음)
+        PACKAGE_VERSION="${{ steps.version_info.outputs.package_version }}"
+        
+        # 현재 날짜와 시간을 버전에 추가
+        TIMESTAMP=$(date +"%Y.%m.%d-%H%M")
+        
+        # 태그 생성 (framework-v{package_version}-{timestamp})
+        TAG_NAME="framework-v${PACKAGE_VERSION}-${TIMESTAMP}"
+        
+        echo "tag_name=${TAG_NAME}" >> $GITHUB_OUTPUT
+        echo "package_version=${PACKAGE_VERSION}" >> $GITHUB_OUTPUT
+        echo "timestamp=${TIMESTAMP}" >> $GITHUB_OUTPUT
+        
+        echo "Generated tag: ${TAG_NAME}"
+    
+    - name: Generate update package
+      run: |
+        echo "Generating framework update package..."
+        npm run updater:generate
+    
+    - name: Find generated package
+      id: package
+      run: |
+        # 가장 최근에 생성된 패키지 파일 찾기
+        PACKAGE_FILE=$(ls -t updater/packages/update-package-*.zip | head -1)
+        
+        if [ -z "$PACKAGE_FILE" ] || [ ! -f "$PACKAGE_FILE" ]; then
+          echo "No package file found!"
+          exit 1
+        fi
+        
+        echo "package_file=${PACKAGE_FILE}" >> $GITHUB_OUTPUT
+        echo "Found package: ${PACKAGE_FILE}"
+        
+        # 파일 크기 확인 (Linux 환경)
+        FILE_SIZE=$(stat -c%s "$PACKAGE_FILE")
+        FILE_SIZE_MB=$(awk "BEGIN {printf \"%.2f\", $FILE_SIZE/1024/1024}")
+        echo "package_size=${FILE_SIZE_MB}MB" >> $GITHUB_OUTPUT
+    
+    - name: Find generated map file
+      id: mapfile
+      run: |
+        # 가장 최근에 생성된 맵 파일 찾기
+        MAP_FILE=$(ls -t updater/map/v*.json | head -1)
+        
+        if [ -z "$MAP_FILE" ] || [ ! -f "$MAP_FILE" ]; then
+          echo "No map file found!"
+          exit 1
+        fi
+        
+        echo "map_file=${MAP_FILE}" >> $GITHUB_OUTPUT
+        echo "Found map: ${MAP_FILE}"
+        
+        # 맵 파일에서 파일 수 계산
+        FILE_COUNT=$(jq 'length' "$MAP_FILE")
+        echo "file_count=${FILE_COUNT}" >> $GITHUB_OUTPUT
+    
+    - name: Generate release notes
+      id: notes
+      run: |
+        # 릴리즈 노트 생성
+        cat > release_notes.md << 'EOF'
+        # Express.js Kusto Framework Update
+        
+        ## Package Information
+        - **Framework Version**: v${{ steps.version.outputs.package_version }}
+        - **Build Timestamp**: ${{ steps.version.outputs.timestamp }}
+        - **Package Size**: ${{ steps.package.outputs.package_size }}
+        - **Files Included**: ${{ steps.mapfile.outputs.file_count }} files
+        
+        ---
+        EOF
+        
+        # 추가 정보 추가
+        echo "**Generated on**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")" >> release_notes.md
+        echo "**Commit**: ${{ github.sha }}" >> release_notes.md
+        echo "**Workflow**: ${{ github.workflow }}" >> release_notes.md
+        
+        echo "Release notes generated"
+    
+    - name: Create Release
+      id: create_release
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        # GitHub CLI를 사용하여 릴리즈 생성
+        gh release create "${{ steps.version.outputs.tag_name }}" \
+          --title "Framework v${{ steps.version.outputs.package_version }} (${{ steps.version.outputs.timestamp }})" \
+          --notes-file release_notes.md \
+          --target main \
+          "${{ steps.package.outputs.package_file }}#express-kusto-framework-v${{ steps.version.outputs.package_version }}-${{ steps.version.outputs.timestamp }}.zip" \
+          "${{ steps.mapfile.outputs.map_file }}#file-map-v${{ steps.version.outputs.package_version }}-${{ steps.version.outputs.timestamp }}.json"
+        
+        # 릴리즈 URL 가져오기
+        RELEASE_URL=$(gh release view "${{ steps.version.outputs.tag_name }}" --json url --jq .url)
+        echo "html_url=${RELEASE_URL}" >> $GITHUB_OUTPUT
+    
+    - name: Release Summary
+      run: |
+        echo "🎉 Release Created Successfully!"
+        echo "📦 Release: ${{ steps.create_release.outputs.html_url }}"
+        echo "🏷️ Tag: ${{ steps.version.outputs.tag_name }}"
+        echo "📁 Package: ${{ steps.package.outputs.package_file }} (${{ steps.package.outputs.package_size }})"
+        echo "📋 Map File: ${{ steps.mapfile.outputs.map_file }} (${{ steps.mapfile.outputs.file_count }} files)"
+        echo "� Version: v${{ steps.version.outputs.package_version }}"

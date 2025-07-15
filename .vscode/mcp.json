@@ -1,0 +1,9 @@
+{
+    // MCP 서버 설정
+    "servers": {
+        "Prisma": {
+            "command": "npx",
+            "args": ["-y", "prisma", "mcp"],
+        }
+    }
+}

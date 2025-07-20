@@ -2420,6 +2420,9 @@ export class ExpressRouter {
                 // attributes에서 데이터 추출
                 let data = requestData.attributes || {};
 
+                // 빈 값이나 null 값들 정리만 수행
+                data = this.cleanEmptyValues(data);
+
                 // Before hook 실행
                 if (options?.hooks?.beforeUpdate) {
                     data = await options.hooks.beforeUpdate(data, req);
@@ -2926,6 +2929,40 @@ export class ExpressRouter {
                 }
             ]
         };
+    }
+
+    /**
+     * 빈 값들 정리 (undefined, 빈 객체, 빈 배열 등)
+     */
+    private cleanEmptyValues(data: any): any {
+        const cleanedData = { ...data };
+        
+        Object.keys(cleanedData).forEach(key => {
+            const value = cleanedData[key];
+            
+            // undefined 제거
+            if (value === undefined) {
+                delete cleanedData[key];
+                return;
+            }
+            
+            // 빈 객체 제거 (null이 아닌 경우)
+            if (typeof value === 'object' && value !== null) {
+                if (Array.isArray(value)) {
+                    // 빈 배열 제거 (설정에 따라)
+                    if (value.length === 0) {
+                        delete cleanedData[key];
+                    }
+                } else {
+                    // 빈 객체 제거
+                    if (Object.keys(value).length === 0) {
+                        delete cleanedData[key];
+                    }
+                }
+            }
+        });
+
+        return cleanedData;
     }
 
     /**

@@ -9,7 +9,7 @@ import { DependencyInjector } from './dependencyInjector';
 import { prismaManager } from '@lib/prismaManager'
 import { repositoryManager } from '@lib/repositoryManager'
 import { kustoManager } from '@lib/kustoManager'
-import { CrudQueryParser, PrismaQueryBuilder, CrudResponseFormatter } from './crudHelpers';
+import { CrudQueryParser, PrismaQueryBuilder, CrudResponseFormatter, JsonApiTransformer, JsonApiResponse, JsonApiResource } from './crudHelpers';
 import { ErrorFormatter } from './errorFormatter';
 import { serializeBigInt } from './serializer';
 import './types/express-extensions';
@@ -1822,6 +1822,9 @@ export class ExpressRouter {
             this.setupRecoverRoute(client, modelName, options, primaryKey, primaryKeyParser);
         }
 
+        // JSON:API Relationship 라우트 추가
+        this.setupRelationshipRoutes(client, modelName, options, primaryKey, primaryKeyParser);
+
         return this;
     }
 
@@ -1966,41 +1969,45 @@ export class ExpressRouter {
                     client[modelName].count({ where: totalCountOptions.where })
                 ]);
 
-                // JSON:API 형식으로 데이터 변환
-                const jsonApiData = items.map((item: any) => this.transformToJsonApiResource(item, modelName, req, primaryKey));
+                // Base URL 생성
+                const baseUrl = `${req.protocol}://${req.get('host')}${req.baseUrl}`;
                 
-                // JSON:API 응답 포맷
-                const response: any = {
-                    data: jsonApiData,
-                    jsonapi: {
-                        version: "1.1"
-                    }
-                };
+                // 포함된 리소스 생성 (include 파라미터가 있는 경우)
+                let included: JsonApiResource[] | undefined;
+                if (queryParams.include && queryParams.include.length > 0) {
+                    included = JsonApiTransformer.createIncludedResources(
+                        items,
+                        queryParams.include,
+                        queryParams.fields,
+                        baseUrl
+                    );
+                }
 
-                // 링크 추가 (페이지네이션)
+                // 페이지네이션 링크 생성
+                let links: any;
                 if (queryParams.page) {
-                    const baseUrl = `${req.protocol}://${req.get('host')}${req.baseUrl}${req.path}`;
                     const pageSize = queryParams.page.size || 10;
                     const currentPage = queryParams.page.number || 1;
                     const totalPages = Math.ceil(total / pageSize);
                     
-                    response.links = {
+                    links = {
                         self: this.buildPaginationUrl(baseUrl, req.query, currentPage, pageSize),
                         first: this.buildPaginationUrl(baseUrl, req.query, 1, pageSize),
                         last: this.buildPaginationUrl(baseUrl, req.query, totalPages, pageSize)
                     };
                     
                     if (currentPage > 1) {
-                        response.links.prev = this.buildPaginationUrl(baseUrl, req.query, currentPage - 1, pageSize);
+                        links.prev = this.buildPaginationUrl(baseUrl, req.query, currentPage - 1, pageSize);
                     }
                     if (currentPage < totalPages) {
-                        response.links.next = this.buildPaginationUrl(baseUrl, req.query, currentPage + 1, pageSize);
+                        links.next = this.buildPaginationUrl(baseUrl, req.query, currentPage + 1, pageSize);
                     }
                 }
 
-                // 메타데이터 추가
-                response.meta = {
+                // 메타데이터 생성
+                const meta = {
                     total: total,
+                    count: items.length,
                     ...(queryParams.page && {
                         page: {
                             current: queryParams.page.number || 1,
@@ -2009,6 +2016,20 @@ export class ExpressRouter {
                         }
                     })
                 };
+
+                // JSON:API 응답 생성
+                const response: JsonApiResponse = JsonApiTransformer.createJsonApiResponse(
+                    items,
+                    modelName,
+                    {
+                        primaryKey,
+                        fields: queryParams.fields,
+                        baseUrl,
+                        links,
+                        meta,
+                        included
+                    }
+                );
                 
                 // BigInt 직렬화 처리
                 const serializedResponse = serializeBigInt(response);
@@ -2034,11 +2055,12 @@ export class ExpressRouter {
 
         // 문서화 등록
         const queryParams: any = {
-            include: { type: 'string', required: false, description: 'Related resources to include (comma-separated)' },
-            sort: { type: 'string', required: false, description: 'Sort fields (prefix with - for desc)' },
-            'page[number]': { type: 'number', required: false, description: 'Page number' },
-            'page[size]': { type: 'number', required: false, description: 'Page size' },
-            'filter[field_op]': { type: 'string', required: false, description: 'Filter conditions (see API docs for operators)' }
+            include: { type: 'string', required: false, description: 'Related resources to include (comma-separated). Example: author,comments.author' },
+            'fields[type]': { type: 'string', required: false, description: 'Sparse fieldsets - specify which fields to include for each resource type. Example: fields[posts]=title,content&fields[users]=name,email' },
+            sort: { type: 'string', required: false, description: 'Sort fields (prefix with - for desc). Example: -createdAt,title' },
+            'page[number]': { type: 'number', required: false, description: 'Page number for pagination' },
+            'page[size]': { type: 'number', required: false, description: 'Page size for pagination' },
+            'filter[field_op]': { type: 'string', required: false, description: 'Filter conditions. Operators: eq, ne, gt, gte, lt, lte, like, in, etc. Example: filter[status_eq]=active&filter[age_gte]=18' }
         };
         
         // Soft delete가 활성화된 경우 include_deleted 파라미터 추가
@@ -2136,13 +2158,31 @@ export class ExpressRouter {
                     return res.status(404).json(errorResponse);
                 }
 
-                // JSON:API 응답 포맷
-                const response = {
-                    data: this.transformToJsonApiResource(item, modelName, req, primaryKey),
-                    jsonapi: {
-                        version: "1.1"
+                // Base URL 생성
+                const baseUrl = `${req.protocol}://${req.get('host')}${req.baseUrl}`;
+                
+                // 포함된 리소스 생성 (include 파라미터가 있는 경우)
+                let included: JsonApiResource[] | undefined;
+                if (queryParams.include && queryParams.include.length > 0) {
+                    included = JsonApiTransformer.createIncludedResources(
+                        [item],
+                        queryParams.include,
+                        queryParams.fields,
+                        baseUrl
+                    );
+                }
+
+                // JSON:API 응답 생성
+                const response: JsonApiResponse = JsonApiTransformer.createJsonApiResponse(
+                    item,
+                    modelName,
+                    {
+                        primaryKey,
+                        fields: queryParams.fields,
+                        baseUrl,
+                        included
                     }
-                };
+                );
                 
                 // BigInt 직렬화 처리
                 const serializedResponse = serializeBigInt(response);
@@ -2263,13 +2303,18 @@ export class ExpressRouter {
                     await options.hooks.afterCreate(result, req);
                 }
 
-                // JSON:API 응답 포맷
-                const response = {
-                    data: this.transformToJsonApiResource(result, modelName, req, primaryKey),
-                    jsonapi: {
-                        version: "1.0"
+                // Base URL 생성
+                const baseUrl = `${req.protocol}://${req.get('host')}${req.baseUrl}`;
+
+                // JSON:API 응답 생성
+                const response: JsonApiResponse = JsonApiTransformer.createJsonApiResponse(
+                    result,
+                    modelName,
+                    {
+                        primaryKey,
+                        baseUrl
                     }
-                };
+                );
                 
                 // BigInt 직렬화 처리
                 const serializedResponse = serializeBigInt(response);
@@ -3120,7 +3165,155 @@ export class ExpressRouter {
         }
     }
 
+    /**
+     * JSON:API Relationship 라우트 설정
+     * 관계 자체를 관리하는 라우트와 관련 리소스를 조회하는 라우트를 생성
+     */
+    private setupRelationshipRoutes(
+        client: any, 
+        modelName: string, 
+        options?: any, 
+        primaryKey: string = 'id', 
+        primaryKeyParser: (value: string) => any = ExpressRouter.parseString
+    ): void {
+        // 현재는 기본적인 관계 조회 라우트만 구현
+        // 향후 확장 가능: POST, PATCH, DELETE for relationships
+        
+        // GET /:identifier/relationships/:relationName - 관계 자체 조회
+        this.router.get(`/:${primaryKey}/relationships/:relationName`, async (req, res) => {
+            try {
+                res.setHeader('Content-Type', 'application/vnd.api+json');
+                
+                const { success, parsedIdentifier } = this.extractAndParsePrimaryKey(
+                    req, res, primaryKey, primaryKeyParser, modelName
+                );
+                if (!success) return;
 
+                const relationName = req.params.relationName;
+                
+                // 기본 리소스 조회
+                const item = await client[modelName].findUnique({
+                    where: { [primaryKey]: parsedIdentifier },
+                    include: { [relationName]: true }
+                });
+
+                if (!item) {
+                    const errorResponse = this.formatJsonApiError(
+                        new Error(`${modelName} not found`),
+                        'NOT_FOUND',
+                        404,
+                        req.path
+                    );
+                    return res.status(404).json(errorResponse);
+                }
+
+                const relationData = item[relationName];
+                
+                // 관계 데이터를 JSON:API 형식으로 변환
+                let data = null;
+                if (relationData) {
+                    if (Array.isArray(relationData)) {
+                        data = relationData.map(relItem => ({
+                            type: JsonApiTransformer.inferResourceTypeFromRelationship(relationName, true),
+                            id: String(relItem.id || relItem.uuid || relItem._id)
+                        }));
+                    } else {
+                        data = {
+                            type: JsonApiTransformer.inferResourceTypeFromRelationship(relationName, false),
+                            id: String(relationData.id || relationData.uuid || relationData._id)
+                        };
+                    }
+                }
+
+                const baseUrl = `${req.protocol}://${req.get('host')}${req.baseUrl}`;
+                const response = {
+                    data,
+                    links: {
+                        self: `${baseUrl}/${modelName.toLowerCase()}/${parsedIdentifier}/relationships/${relationName}`,
+                        related: `${baseUrl}/${modelName.toLowerCase()}/${parsedIdentifier}/${relationName}`
+                    },
+                    jsonapi: {
+                        version: "1.1"
+                    }
+                };
+
+                res.json(serializeBigInt(response));
+
+            } catch (error: any) {
+                console.error(`Relationship Error for ${modelName}:`, error);
+                const { code, status } = ErrorFormatter.mapPrismaError(error);
+                const errorResponse = this.formatJsonApiError(error, code, status, req.path);
+                res.status(status).json(errorResponse);
+            }
+        });
+
+        // GET /:identifier/:relationName - 관련 리소스 조회
+        this.router.get(`/:${primaryKey}/:relationName`, async (req, res) => {
+            try {
+                res.setHeader('Content-Type', 'application/vnd.api+json');
+                
+                const { success, parsedIdentifier } = this.extractAndParsePrimaryKey(
+                    req, res, primaryKey, primaryKeyParser, modelName
+                );
+                if (!success) return;
+
+                const relationName = req.params.relationName;
+                const queryParams = CrudQueryParser.parseQuery(req);
+                
+                // 기본 리소스 조회
+                const item = await client[modelName].findUnique({
+                    where: { [primaryKey]: parsedIdentifier },
+                    include: { [relationName]: true }
+                });
+
+                if (!item) {
+                    const errorResponse = this.formatJsonApiError(
+                        new Error(`${modelName} not found`),
+                        'NOT_FOUND',
+                        404,
+                        req.path
+                    );
+                    return res.status(404).json(errorResponse);
+                }
+
+                const relationData = item[relationName];
+                
+                if (!relationData) {
+                    // 관계가 없는 경우 빈 데이터 반환
+                    const response = {
+                        data: Array.isArray(relationData) ? [] : null,
+                        jsonapi: {
+                            version: "1.1"
+                        }
+                    };
+                    return res.json(response);
+                }
+
+                // Base URL 생성
+                const baseUrl = `${req.protocol}://${req.get('host')}${req.baseUrl}`;
+                const resourceType = JsonApiTransformer.inferResourceTypeFromRelationship(relationName, Array.isArray(relationData));
+
+                // JSON:API 응답 생성
+                const response: JsonApiResponse = JsonApiTransformer.createJsonApiResponse(
+                    relationData,
+                    resourceType,
+                    {
+                        primaryKey: 'id', // 관련 리소스는 기본적으로 id 사용
+                        fields: queryParams.fields,
+                        baseUrl
+                    }
+                );
+
+                res.json(serializeBigInt(response));
+
+            } catch (error: any) {
+                console.error(`Related Resource Error for ${modelName}:`, error);
+                const { code, status } = ErrorFormatter.mapPrismaError(error);
+                const errorResponse = this.formatJsonApiError(error, code, status, req.path);
+                res.status(status).json(errorResponse);
+            }
+        });
+    }
 
     
     public build(): Router {

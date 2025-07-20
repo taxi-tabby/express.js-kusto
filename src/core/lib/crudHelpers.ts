@@ -7,9 +7,90 @@ import { Request } from 'express';
 export interface CrudQueryParams {
   include?: string[];
   select?: string[];  // 필드 선택 파라미터 추가
+  fields?: Record<string, string[]>;  // JSON:API Sparse Fieldsets
   sort?: SortParam[];
   page?: PageParam;
   filter?: Record<string, any>;
+}
+
+/**
+ * JSON:API 리소스 객체 인터페이스
+ */
+export interface JsonApiResource {
+  type: string;
+  id: string;
+  attributes?: Record<string, any>;
+  relationships?: Record<string, JsonApiRelationship>;
+  links?: JsonApiLinks;
+  meta?: Record<string, any>;
+}
+
+/**
+ * JSON:API 관계 객체 인터페이스
+ */
+export interface JsonApiRelationship {
+  data?: JsonApiResourceIdentifier | JsonApiResourceIdentifier[] | null;
+  links?: JsonApiRelationshipLinks;
+  meta?: Record<string, any>;
+}
+
+/**
+ * JSON:API 리소스 식별자 인터페이스
+ */
+export interface JsonApiResourceIdentifier {
+  type: string;
+  id: string;
+  meta?: Record<string, any>;
+}
+
+/**
+ * JSON:API 링크 객체 인터페이스
+ */
+export interface JsonApiLinks {
+  self?: string;
+  related?: string;
+  first?: string;
+  last?: string;
+  prev?: string;
+  next?: string;
+}
+
+/**
+ * JSON:API 관계 링크 객체 인터페이스
+ */
+export interface JsonApiRelationshipLinks {
+  self?: string;
+  related?: string;
+}
+
+/**
+ * JSON:API 응답 인터페이스
+ */
+export interface JsonApiResponse {
+  data: JsonApiResource | JsonApiResource[] | null;
+  included?: JsonApiResource[];
+  links?: JsonApiLinks;
+  meta?: Record<string, any>;
+  jsonapi?: {
+    version: string;
+    meta?: Record<string, any>;
+  };
+}
+
+/**
+ * JSON:API 에러 객체 인터페이스
+ */
+export interface JsonApiError {
+  id?: string;
+  status?: string;
+  code?: string;
+  title?: string;
+  detail?: string;
+  source?: {
+    pointer?: string;
+    parameter?: string;
+  };
+  meta?: Record<string, any>;
 }
 
 export interface SortParam {
@@ -52,6 +133,7 @@ export class CrudQueryParser {
     return {
       include: this.parseInclude(query.include as string),
       select: this.parseSelect(query.select as string),
+      fields: this.parseFields(query),
       sort: this.parseSort(query.sort as string),
       page: this.parsePage(query),
       filter: this.parseFilter(query)
@@ -78,6 +160,33 @@ export class CrudQueryParser {
     return select.split(',')
       .map(item => item.trim())
       .filter(item => item.length > 0); // 빈 문자열 제거
+  }
+
+  /**
+   * JSON:API Sparse Fieldsets 파라미터 파싱
+   * ?fields[users]=name,email&fields[posts]=title,content
+   */
+  private static parseFields(query: any): Record<string, string[]> | undefined {
+    const fields: Record<string, string[]> = {};
+    let hasFields = false;
+
+    Object.keys(query).forEach(key => {
+      // fields[type] 패턴 매칭
+      const match = key.match(/^fields\[([^\]]+)\]$/);
+      if (match) {
+        const resourceType = match[1];
+        const fieldValue = query[key];
+        
+        if (typeof fieldValue === 'string' && fieldValue.length > 0) {
+          fields[resourceType] = fieldValue.split(',')
+            .map(field => field.trim())
+            .filter(field => field.length > 0);
+          hasFields = true;
+        }
+      }
+    });
+
+    return hasFields ? fields : undefined;
   }
 
   /**
@@ -956,5 +1065,345 @@ export class CrudResponseFormatter {
       metadata,
       success: true
     };
+  }
+}
+
+/**
+ * JSON:API 변환 및 포맷팅을 위한 유틸리티 클래스
+ */
+export class JsonApiTransformer {
+  
+  /**
+   * 원시 데이터를 JSON:API 리소스 객체로 변환
+   */
+  static transformToResource(
+    item: any, 
+    resourceType: string, 
+    primaryKey: string = 'id',
+    fields?: string[],
+    baseUrl?: string,
+    id?: string
+  ): JsonApiResource {
+    const resourceId = id || item[primaryKey] || item.id || item.uuid || item._id;
+    
+    if (!resourceId) {
+      throw new Error(`Cannot transform to JSON:API resource: missing ${primaryKey} field`);
+    }
+
+    // 기본 리소스 객체 생성
+    const resource: JsonApiResource = {
+      type: resourceType.toLowerCase(),
+      id: String(resourceId)
+    };
+
+    // attributes와 relationships 분리
+    const { attributes, relationships } = this.separateAttributesAndRelationships(
+      item, 
+      primaryKey, 
+      fields
+    );
+
+    // attributes가 있는 경우에만 추가
+    if (Object.keys(attributes).length > 0) {
+      resource.attributes = attributes;
+    }
+
+    // relationships가 있는 경우에만 추가
+    if (Object.keys(relationships).length > 0) {
+      resource.relationships = relationships;
+    }
+
+    // 링크 추가
+    if (baseUrl) {
+      resource.links = {
+        self: `${baseUrl}/${resourceType.toLowerCase()}/${resourceId}`
+      };
+    }
+
+    return resource;
+  }
+
+  /**
+   * 여러 리소스를 JSON:API 컬렉션으로 변환
+   */
+  static transformToCollection(
+    items: any[], 
+    resourceType: string, 
+    primaryKey: string = 'id',
+    fields?: string[],
+    baseUrl?: string
+  ): JsonApiResource[] {
+    return items.map(item => 
+      this.transformToResource(item, resourceType, primaryKey, fields, baseUrl)
+    );
+  }
+
+  /**
+   * attributes와 relationships 분리
+   */
+  private static separateAttributesAndRelationships(
+    item: any, 
+    primaryKey: string, 
+    fields?: string[]
+  ): { attributes: Record<string, any>, relationships: Record<string, JsonApiRelationship> } {
+    const attributes: Record<string, any> = {};
+    const relationships: Record<string, JsonApiRelationship> = {};
+    
+    // 모든 필드를 복사 (primary key 제외)
+    const allFields = { ...item };
+    delete allFields[primaryKey];
+    
+    // primary key가 'id'가 아닌 경우 다른 기본 ID 필드들 제거
+    if (primaryKey !== 'id') delete allFields.id;
+    if (primaryKey !== 'uuid') delete allFields.uuid;
+    if (primaryKey !== '_id') delete allFields._id;
+
+    Object.keys(allFields).forEach(key => {
+      const value = allFields[key];
+      
+      // Sparse Fieldsets 적용 (fields가 지정된 경우)
+      if (fields && !fields.includes(key)) {
+        return; // 지정된 필드가 아니면 스킵
+      }
+      
+      // 관계 데이터인지 확인
+      if (this.isRelationshipData(value)) {
+        relationships[key] = this.transformToRelationship(value, key);
+      } else {
+        attributes[key] = value;
+      }
+    });
+
+    return { attributes, relationships };
+  }
+
+  /**
+   * 값이 관계 데이터인지 확인
+   */
+  private static isRelationshipData(value: any): boolean {
+    // null이나 undefined는 관계 데이터가 아님
+    if (value === null || value === undefined) {
+      return false;
+    }
+    
+    // 배열인 경우: 첫 번째 요소가 객체이고 id를 가지고 있으면 관계
+    if (Array.isArray(value)) {
+      return value.length > 0 && 
+             typeof value[0] === 'object' && 
+             value[0] !== null &&
+             (value[0].id || value[0].uuid || value[0]._id);
+    }
+    
+    // 객체인 경우: id를 가지고 있고 Date가 아니면 관계
+    if (typeof value === 'object' && !(value instanceof Date)) {
+      return !!(value.id || value.uuid || value._id);
+    }
+    
+    return false;
+  }
+
+  /**
+   * 관계 데이터를 JSON:API 관계 객체로 변환
+   */
+  private static transformToRelationship(value: any, relationshipName: string): JsonApiRelationship {
+    const relationship: JsonApiRelationship = {};
+
+    if (Array.isArray(value)) {
+      // 일대다 관계
+      relationship.data = value.map(item => ({
+        type: this.inferResourceTypeFromRelationship(relationshipName, true),
+        id: String(item.id || item.uuid || item._id)
+      }));
+    } else {
+      // 일대일 관계
+      relationship.data = {
+        type: this.inferResourceTypeFromRelationship(relationshipName, false),
+        id: String(value.id || value.uuid || value._id)
+      };
+    }
+
+    return relationship;
+  }
+
+  /**
+   * 관계 이름에서 리소스 타입 추론 (public 메서드로 변경)
+   */
+  static inferResourceTypeFromRelationship(relationshipName: string, isArray: boolean): string {
+    if (isArray) {
+      // 복수형에서 단수형으로 변환 (간단한 규칙)
+      if (relationshipName.endsWith('ies')) {
+        return relationshipName.slice(0, -3) + 'y'; // categories -> category
+      } else if (relationshipName.endsWith('s')) {
+        return relationshipName.slice(0, -1); // posts -> post
+      }
+    }
+    return relationshipName;
+  }
+
+  /**
+   * 완전한 JSON:API 응답 객체 생성
+   */
+  static createJsonApiResponse(
+    data: any | any[], 
+    resourceType: string,
+    options: {
+      primaryKey?: string;
+      fields?: Record<string, string[]>;
+      include?: string[];
+      baseUrl?: string;
+      links?: JsonApiLinks;
+      meta?: Record<string, any>;
+      included?: JsonApiResource[];
+    } = {}
+  ): JsonApiResponse {
+    const {
+      primaryKey = 'id',
+      fields,
+      baseUrl,
+      links,
+      meta,
+      included
+    } = options;
+
+    // 현재 리소스 타입의 필드 제한
+    const resourceFields = fields?.[resourceType.toLowerCase()];
+
+    let jsonApiData: JsonApiResource | JsonApiResource[] | null = null;
+
+    if (data === null || data === undefined) {
+      jsonApiData = null;
+    } else if (Array.isArray(data)) {
+      jsonApiData = this.transformToCollection(
+        data, 
+        resourceType, 
+        primaryKey, 
+        resourceFields, 
+        baseUrl
+      );
+    } else {
+      jsonApiData = this.transformToResource(
+        data, 
+        resourceType, 
+        primaryKey, 
+        resourceFields, 
+        baseUrl
+      );
+    }
+
+    const response: JsonApiResponse = {
+      data: jsonApiData,
+      jsonapi: {
+        version: "1.1"
+      }
+    };
+
+    // 선택적 필드들 추가
+    if (included && included.length > 0) {
+      response.included = included;
+    }
+
+    if (links) {
+      response.links = links;
+    }
+
+    if (meta) {
+      response.meta = meta;
+    }
+
+    return response;
+  }
+
+  /**
+   * 포함된 리소스(included) 생성
+   */
+  static createIncludedResources(
+    data: any | any[],
+    includeParams: string[],
+    fieldsParams?: Record<string, string[]>,
+    baseUrl?: string
+  ): JsonApiResource[] {
+    const included: JsonApiResource[] = [];
+    const processedResources = new Set<string>(); // 중복 방지
+
+    const dataArray = Array.isArray(data) ? data : [data];
+
+    dataArray.forEach(item => {
+      includeParams.forEach(includePath => {
+        this.extractIncludedResources(
+          item, 
+          includePath, 
+          included, 
+          processedResources, 
+          fieldsParams, 
+          baseUrl
+        );
+      });
+    });
+
+    return included;
+  }
+
+  /**
+   * 중첩된 포함 리소스 추출
+   */
+  private static extractIncludedResources(
+    item: any,
+    includePath: string,
+    included: JsonApiResource[],
+    processedResources: Set<string>,
+    fieldsParams?: Record<string, string[]>,
+    baseUrl?: string
+  ): void {
+    const pathParts = includePath.split('.');
+    let currentData = item;
+
+    for (let i = 0; i < pathParts.length; i++) {
+      const relationName = pathParts[i];
+      const relationData = currentData[relationName];
+
+      if (!relationData) break;
+
+      const resourceType = this.inferResourceTypeFromRelationship(relationName, Array.isArray(relationData));
+      const resourceFields = fieldsParams?.[resourceType];
+
+      if (Array.isArray(relationData)) {
+        relationData.forEach(relItem => {
+          const resourceKey = `${resourceType}:${relItem.id || relItem.uuid || relItem._id}`;
+          
+          if (!processedResources.has(resourceKey)) {
+            processedResources.add(resourceKey);
+            included.push(this.transformToResource(
+              relItem, 
+              resourceType, 
+              'id', 
+              resourceFields, 
+              baseUrl
+            ));
+          }
+        });
+
+        // 중첩된 관계를 위해 첫 번째 항목으로 계속 진행
+        if (relationData.length > 0) {
+          currentData = relationData[0];
+        } else {
+          break;
+        }
+      } else {
+        const resourceKey = `${resourceType}:${relationData.id || relationData.uuid || relationData._id}`;
+        
+        if (!processedResources.has(resourceKey)) {
+          processedResources.add(resourceKey);
+          included.push(this.transformToResource(
+            relationData, 
+            resourceType, 
+            'id', 
+            resourceFields, 
+            baseUrl
+          ));
+        }
+
+        currentData = relationData;
+      }
+    }
   }
 }

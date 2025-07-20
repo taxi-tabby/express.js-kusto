@@ -1834,27 +1834,18 @@ export class ExpressRouter {
     }
 
     /**
-     * INDEX 라우트 설정 (GET /)
+     * INDEX 라우트 설정 (GET /) - JSON:API 준수
      */
     private setupIndexRoute(client: any, modelName: string, options?: any): void {
         const middlewares = options?.middleware?.index || [];
         
         const handler: HandlerFunction = async (req, res, injected, repo, db) => {
             try {
+                // JSON:API Content-Type 헤더 설정
+                res.setHeader('Content-Type', 'application/vnd.api+json');
+                
                 // 쿼리 파라미터 파싱
                 const queryParams = CrudQueryParser.parseQuery(req);
-                
-                // 페이지네이션 파라미터가 없으면 에러 반환
-                if (!queryParams.page) {
-                    const error = new Error('Pagination parameters are required for listing resources');
-                    const errorResponse = ErrorFormatter.formatError(
-                        error,
-                        'VALIDATION_ERROR',
-                        422,
-                        req.path
-                    );
-                    return res.status(422).json(errorResponse);
-                }
                 
                 // Prisma 쿼리 옵션 빌드
                 const findManyOptions = PrismaQueryBuilder.buildFindManyOptions(queryParams);
@@ -1870,21 +1861,48 @@ export class ExpressRouter {
                     client[modelName].count({ where: totalCountOptions.where })
                 ]);
 
-                // 메타데이터 생성
-                const metadata = CrudResponseFormatter.createPaginationMeta(
-                    items, 
-                    total, 
-                    queryParams.page,
-                    'index',
-                    queryParams.include,
-                    queryParams
-                );
+                // JSON:API 형식으로 데이터 변환
+                const jsonApiData = items.map((item: any) => this.transformToJsonApiResource(item, modelName, req));
+                
+                // JSON:API 응답 포맷
+                const response: any = {
+                    data: jsonApiData,
+                    jsonapi: {
+                        version: "1.0"
+                    }
+                };
 
-                // 응답 포맷
-                const response = {
-                    data: items,
-                    metadata,
-                    success: true
+                // 링크 추가 (페이지네이션)
+                if (queryParams.page) {
+                    const baseUrl = `${req.protocol}://${req.get('host')}${req.baseUrl}${req.path}`;
+                    const pageSize = queryParams.page.size || 10;
+                    const currentPage = queryParams.page.number || 1;
+                    const totalPages = Math.ceil(total / pageSize);
+                    
+                    response.links = {
+                        self: this.buildPaginationUrl(baseUrl, req.query, currentPage, pageSize),
+                        first: this.buildPaginationUrl(baseUrl, req.query, 1, pageSize),
+                        last: this.buildPaginationUrl(baseUrl, req.query, totalPages, pageSize)
+                    };
+                    
+                    if (currentPage > 1) {
+                        response.links.prev = this.buildPaginationUrl(baseUrl, req.query, currentPage - 1, pageSize);
+                    }
+                    if (currentPage < totalPages) {
+                        response.links.next = this.buildPaginationUrl(baseUrl, req.query, currentPage + 1, pageSize);
+                    }
+                }
+
+                // 메타데이터 추가
+                response.meta = {
+                    total: total,
+                    ...(queryParams.page && {
+                        page: {
+                            current: queryParams.page.number || 1,
+                            size: queryParams.page.size || 10,
+                            total: Math.ceil(total / (queryParams.page.size || 10))
+                        }
+                    })
                 };
                 
                 // BigInt 직렬화 처리
@@ -1896,12 +1914,7 @@ export class ExpressRouter {
                 console.error(`CRUD Index Error for ${modelName}:`, error);
                 
                 const { code, status } = ErrorFormatter.mapPrismaError(error);
-                const errorResponse = ErrorFormatter.formatError(
-                    error,
-                    code,
-                    status,
-                    req.path
-                );
+                const errorResponse = this.formatJsonApiError(error, code, status, req.path);
                 
                 res.status(status).json(errorResponse);
             }
@@ -1936,7 +1949,7 @@ export class ExpressRouter {
     }
 
     /**
-     * SHOW 라우트 설정 (GET /:identifier)
+     * SHOW 라우트 설정 (GET /:identifier) - JSON:API 준수
      */
     private setupShowRoute(
         client: any, 
@@ -1949,6 +1962,9 @@ export class ExpressRouter {
         
         const handler: HandlerFunction = async (req, res, injected, repo, db) => {
             try {
+                // JSON:API Content-Type 헤더 설정
+                res.setHeader('Content-Type', 'application/vnd.api+json');
+                
                 // 파라미터 추출 및 파싱
                 const { success, parsedIdentifier } = this.extractAndParsePrimaryKey(
                     req, res, primaryKey, primaryKeyParser, modelName
@@ -1967,9 +1983,8 @@ export class ExpressRouter {
                 });
 
                 if (!item) {
-                    const error = new Error(`${modelName} not found`);
-                    const errorResponse = ErrorFormatter.formatError(
-                        error,
+                    const errorResponse = this.formatJsonApiError(
+                        new Error(`${modelName} not found`),
                         'NOT_FOUND',
                         404,
                         req.path
@@ -1977,7 +1992,13 @@ export class ExpressRouter {
                     return res.status(404).json(errorResponse);
                 }
 
-                const response = ErrorFormatter.formatSuccess(item);
+                // JSON:API 응답 포맷
+                const response = {
+                    data: this.transformToJsonApiResource(item, modelName, req),
+                    jsonapi: {
+                        version: "1.0"
+                    }
+                };
                 
                 // BigInt 직렬화 처리
                 const serializedResponse = serializeBigInt(response);
@@ -1988,12 +2009,7 @@ export class ExpressRouter {
                 console.error(`CRUD Show Error for ${modelName}:`, error);
                 
                 const { code, status } = ErrorFormatter.mapPrismaError(error);
-                const errorResponse = ErrorFormatter.formatError(
-                    error,
-                    code,
-                    status,
-                    req.path
-                );
+                const errorResponse = this.formatJsonApiError(error, code, status, req.path);
                 
                 res.status(status).json(errorResponse);
             }
@@ -2030,14 +2046,43 @@ export class ExpressRouter {
     }
 
     /**
-     * CREATE 라우트 설정 (POST /)
+     * CREATE 라우트 설정 (POST /) - JSON:API 준수
      */
     private setupCreateRoute(client: any, modelName: string, options?: any): void {
         const middlewares = options?.middleware?.create || [];
         
         const handler: HandlerFunction = async (req, res, injected, repo, db) => {
             try {
-                let data = req.body;
+                // JSON:API Content-Type 헤더 설정
+                res.setHeader('Content-Type', 'application/vnd.api+json');
+                
+                // JSON:API 요청 형식 검증
+                if (!req.body || !req.body.data) {
+                    const errorResponse = this.formatJsonApiError(
+                        new Error('Request must contain a data object'),
+                        'INVALID_REQUEST',
+                        400,
+                        req.path
+                    );
+                    return res.status(400).json(errorResponse);
+                }
+
+                const { data: requestData } = req.body;
+                
+                // 리소스 타입 검증
+                const expectedType = modelName.toLowerCase();
+                if (requestData.type !== expectedType) {
+                    const errorResponse = this.formatJsonApiError(
+                        new Error(`Expected resource type '${expectedType}', got '${requestData.type}'`),
+                        'INVALID_TYPE',
+                        409,
+                        req.path
+                    );
+                    return res.status(409).json(errorResponse);
+                }
+
+                // attributes에서 데이터 추출
+                let data = requestData.attributes || {};
 
                 // Before hook 실행
                 if (options?.hooks?.beforeCreate) {
@@ -2053,7 +2098,13 @@ export class ExpressRouter {
                     await options.hooks.afterCreate(result, req);
                 }
 
-                const response = ErrorFormatter.formatSuccess(result);
+                // JSON:API 응답 포맷
+                const response = {
+                    data: this.transformToJsonApiResource(result, modelName, req),
+                    jsonapi: {
+                        version: "1.0"
+                    }
+                };
                 
                 // BigInt 직렬화 처리
                 const serializedResponse = serializeBigInt(response);
@@ -2064,12 +2115,7 @@ export class ExpressRouter {
                 console.error(`CRUD Create Error for ${modelName}:`, error);
                 
                 const { code, status } = ErrorFormatter.mapPrismaError(error);
-                const errorResponse = ErrorFormatter.formatError(
-                    error,
-                    code,
-                    status,
-                    req.path
-                );
+                const errorResponse = this.formatJsonApiError(error, code, status, req.path);
                 
                 res.status(status).json(errorResponse);
             }
@@ -2098,24 +2144,38 @@ export class ExpressRouter {
 
         // 문서화 등록
         this.registerDocumentation('POST', '/', {
-            summary: `Create new ${modelName}`,
+            summary: `Create new ${modelName} (JSON:API)`,
             parameters: {
-                body: options?.validation?.create?.body || 
-                      { type: 'object', required: true, description: `${modelName} data` }
+                body: {
+                    type: 'object',
+                    required: true,
+                    description: 'JSON:API resource object',
+                    properties: {
+                        data: {
+                            type: 'object',
+                            required: true,
+                            properties: {
+                                type: { type: 'string', required: true, description: 'Resource type' },
+                                attributes: options?.validation?.create?.body || 
+                                          { type: 'object', required: true, description: `${modelName} attributes` }
+                            }
+                        }
+                    }
+                }
             },
             responses: {
                 201: {
-                    data: { type: 'object', required: true, description: `Created ${modelName} object` }
+                    data: { type: 'object', required: true, description: `Created ${modelName} resource` }
                 },
                 400: {
-                    error: { type: 'object', required: true, description: 'Validation or creation error' }
+                    errors: { type: 'array', required: true, description: 'JSON:API error objects' }
                 }
             }
         });
     }
 
     /**
-     * UPDATE 라우트 설정 (PUT /:identifier, PATCH /:identifier)
+     * UPDATE 라우트 설정 (PUT /:identifier, PATCH /:identifier) - JSON:API 준수
      */
     private setupUpdateRoute(
         client: any, 
@@ -2128,13 +2188,53 @@ export class ExpressRouter {
         
         const handler: HandlerFunction = async (req, res, injected, repo, db) => {
             try {
-                // 파라미터 추출 및 검증 (SHOW와 동일한 로직)
+                // JSON:API Content-Type 헤더 설정
+                res.setHeader('Content-Type', 'application/vnd.api+json');
+                
+                // 파라미터 추출 및 검증
                 const extractResult = this.extractAndParsePrimaryKey(req, res, primaryKey, primaryKeyParser, modelName);
                 if (!extractResult.success) return; // 에러 응답은 헬퍼 메서드에서 처리
 
                 const { parsedIdentifier } = extractResult;
 
-                let data = req.body;
+                // JSON:API 요청 형식 검증
+                if (!req.body || !req.body.data) {
+                    const errorResponse = this.formatJsonApiError(
+                        new Error('Request must contain a data object'),
+                        'INVALID_REQUEST',
+                        400,
+                        req.path
+                    );
+                    return res.status(400).json(errorResponse);
+                }
+
+                const { data: requestData } = req.body;
+                
+                // 리소스 타입 검증
+                const expectedType = modelName.toLowerCase();
+                if (requestData.type !== expectedType) {
+                    const errorResponse = this.formatJsonApiError(
+                        new Error(`Expected resource type '${expectedType}', got '${requestData.type}'`),
+                        'INVALID_TYPE',
+                        409,
+                        req.path
+                    );
+                    return res.status(409).json(errorResponse);
+                }
+
+                // ID 일치성 검증
+                if (requestData.id && String(requestData.id) !== String(parsedIdentifier)) {
+                    const errorResponse = this.formatJsonApiError(
+                        new Error('Resource ID in body does not match URL parameter'),
+                        'ID_MISMATCH',
+                        409,
+                        req.path
+                    );
+                    return res.status(409).json(errorResponse);
+                }
+
+                // attributes에서 데이터 추출
+                let data = requestData.attributes || {};
 
                 // Before hook 실행
                 if (options?.hooks?.beforeUpdate) {
@@ -2151,7 +2251,13 @@ export class ExpressRouter {
                     await options.hooks.afterUpdate(result, req);
                 }
 
-                const response = ErrorFormatter.formatSuccess(result);
+                // JSON:API 응답 포맷
+                const response = {
+                    data: this.transformToJsonApiResource(result, modelName, req),
+                    jsonapi: {
+                        version: "1.0"
+                    }
+                };
                 
                 // BigInt 직렬화 처리
                 const serializedResponse = serializeBigInt(response);
@@ -2162,12 +2268,7 @@ export class ExpressRouter {
                 console.error(`CRUD Update Error for ${modelName}:`, error);
                 
                 const { code, status } = ErrorFormatter.mapPrismaError(error);
-                const errorResponse = ErrorFormatter.formatError(
-                    error,
-                    code,
-                    status,
-                    req.path
-                );
+                const errorResponse = this.formatJsonApiError(error, code, status, req.path);
                 
                 res.status(status).json(errorResponse);
             }
@@ -2199,26 +2300,41 @@ export class ExpressRouter {
         registerMethod('put');
         registerMethod('patch');
 
-        // 문서화 등록 (PUT/PATCH 동일)
+        // 문서화 등록 (PUT/PATCH 동일) - JSON:API 형식
         ['PUT', 'PATCH'].forEach(method => {
             this.registerDocumentation(method, routePath, {
-                summary: `Update ${modelName} by ${primaryKey}`,
+                summary: `Update ${modelName} by ${primaryKey} (JSON:API)`,
                 parameters: {
                     params: {
                         [primaryKey]: { type: 'string', required: true, description: `${modelName} ${primaryKey}` }
                     },
-                    body: options?.validation?.update?.body || 
-                          { type: 'object', required: true, description: `${modelName} update data` }
+                    body: {
+                        type: 'object',
+                        required: true,
+                        description: 'JSON:API resource object',
+                        properties: {
+                            data: {
+                                type: 'object',
+                                required: true,
+                                properties: {
+                                    type: { type: 'string', required: true, description: 'Resource type' },
+                                    id: { type: 'string', required: false, description: 'Resource ID (must match URL parameter)' },
+                                    attributes: options?.validation?.update?.body || 
+                                              { type: 'object', required: true, description: `${modelName} attributes to update` }
+                                }
+                            }
+                        }
+                    }
                 },
                 responses: {
                     200: {
-                        data: { type: 'object', required: true, description: `Updated ${modelName} object` }
+                        data: { type: 'object', required: true, description: `Updated ${modelName} resource` }
                     },
                     404: {
-                        error: { type: 'object', required: true, description: 'Not found error' }
+                        errors: { type: 'array', required: true, description: 'JSON:API error objects' }
                     },
                     400: {
-                        error: { type: 'object', required: true, description: 'Validation or update error' }
+                        errors: { type: 'array', required: true, description: 'JSON:API error objects' }
                     }
                 }
             });
@@ -2230,7 +2346,7 @@ export class ExpressRouter {
 
 
     /**
-     * DESTROY 라우트 설정 (DELETE /:identifier)
+     * DESTROY 라우트 설정 (DELETE /:identifier) - JSON:API 준수
      */
     private setupDestroyRoute(
         client: any, 
@@ -2243,6 +2359,9 @@ export class ExpressRouter {
         
         const handler: HandlerFunction = async (req, res, injected, repo, db) => {
             try {
+                // JSON:API Content-Type 헤더 설정
+                res.setHeader('Content-Type', 'application/vnd.api+json');
+                
                 // 파라미터 추출 및 파싱
                 const { success, parsedIdentifier } = this.extractAndParsePrimaryKey(
                     req, res, primaryKey, primaryKeyParser, modelName
@@ -2263,29 +2382,14 @@ export class ExpressRouter {
                     await options.hooks.afterDestroy(parsedIdentifier, req);
                 }
 
-                const response = ErrorFormatter.formatSuccess(null, {
-                    total: 1,
-                    page: 1,
-                    limit: 1,
-                    hasNext: false,
-                    hasPrev: false
-                });
-                
-                // BigInt 직렬화 처리 (일관성을 위해)
-                const serializedResponse = serializeBigInt(response);
-                
-                res.json(serializedResponse);
+                // JSON:API 삭제 성공 응답 (204 No Content)
+                res.status(204).send();
                 
             } catch (error: any) {
                 console.error(`CRUD Destroy Error for ${modelName}:`, error);
                 
                 const { code, status } = ErrorFormatter.mapPrismaError(error);
-                const errorResponse = ErrorFormatter.formatError(
-                    error,
-                    code,
-                    status,
-                    req.path
-                );
+                const errorResponse = this.formatJsonApiError(error, code, status, req.path);
                 
                 res.status(status).json(errorResponse);
             }
@@ -2299,32 +2403,27 @@ export class ExpressRouter {
             this.router.delete(routePath, this.wrapHandler(handler));
         }
 
-        // 문서화 등록
+        // 문서화 등록 - JSON:API 형식
         this.registerDocumentation('DELETE', routePath, {
-            summary: `Delete ${modelName} by ${primaryKey}`,
+            summary: `Delete ${modelName} by ${primaryKey} (JSON:API)`,
             parameters: {
                 params: {
                     [primaryKey]: { type: 'string', required: true, description: `${modelName} ${primaryKey}` }
                 }
             },
             responses: {
-                200: {
-                    data: { type: 'null', required: true, description: 'Deletion confirmation' },
-                    meta: { type: 'object', required: true, description: 'Success message' }
+                204: {
+                    description: 'Successfully deleted (no content)'
                 },
                 404: {
-                    error: { type: 'object', required: true, description: 'Not found error' }
+                    errors: { type: 'array', required: true, description: 'JSON:API error objects' }
                 }
             }
         });
     }
 
-
-
-
-
     /**
-     * RECOVER 라우트 설정 (POST /:identifier/recover)
+     * RECOVER 라우트 설정 (POST /:identifier/recover) - JSON:API 준수
      */
     private setupRecoverRoute(
         client: any, 
@@ -2337,6 +2436,9 @@ export class ExpressRouter {
         
         const handler: HandlerFunction = async (req, res, injected, repo, db) => {
             try {
+                // JSON:API Content-Type 헤더 설정
+                res.setHeader('Content-Type', 'application/vnd.api+json');
+                
                 // 파라미터 추출 및 파싱
                 const { success, parsedIdentifier } = this.extractAndParsePrimaryKey(
                     req, res, primaryKey, primaryKeyParser, modelName
@@ -2363,18 +2465,16 @@ export class ExpressRouter {
                     });
                     
                     if (activeItem) {
-                        const error = new Error(`${modelName} is already active (not deleted)`);
-                        const errorResponse = ErrorFormatter.formatError(
-                            error,
+                        const errorResponse = this.formatJsonApiError(
+                            new Error(`${modelName} is already active (not deleted)`),
                             'CONFLICT',
                             409,
                             req.path
                         );
                         return res.status(409).json(errorResponse);
                     } else {
-                        const error = new Error(`${modelName} not found`);
-                        const errorResponse = ErrorFormatter.formatError(
-                            error,
+                        const errorResponse = this.formatJsonApiError(
+                            new Error(`${modelName} not found`),
                             'NOT_FOUND',
                             404,
                             req.path
@@ -2382,8 +2482,6 @@ export class ExpressRouter {
                         return res.status(404).json(errorResponse);
                     }
                 }
-
-                const wasSoftDeleted = existingItem.deletedAt !== null;
 
                 // 복구 실행 (deletedAt을 null로 설정)
                 const result = await client[modelName].update({
@@ -2396,16 +2494,16 @@ export class ExpressRouter {
                     await options.hooks.afterRecover(result, req);
                 }
 
-                // 응답 데이터 구성
+                // JSON:API 응답 포맷
                 const response = {
-                    data: result,
-                    metadata: {
-                        operation: 'recover',
-                        timestamp: new Date().toISOString(),
-                        affectedCount: 1,
-                        wasSoftDeleted
+                    data: this.transformToJsonApiResource(result, modelName, req),
+                    jsonapi: {
+                        version: "1.0"
                     },
-                    success: true
+                    meta: {
+                        operation: 'recover',
+                        timestamp: new Date().toISOString()
+                    }
                 };
                 
                 // BigInt 직렬화 처리
@@ -2417,12 +2515,7 @@ export class ExpressRouter {
                 console.error(`CRUD Recover Error for ${modelName}:`, error);
                 
                 const { code, status } = ErrorFormatter.mapPrismaError(error);
-                const errorResponse = ErrorFormatter.formatError(
-                    error,
-                    code,
-                    status,
-                    req.path
-                );
+                const errorResponse = this.formatJsonApiError(error, code, status, req.path);
                 
                 res.status(status).json(errorResponse);
             }
@@ -2450,9 +2543,9 @@ export class ExpressRouter {
             }
         }
 
-        // 문서화 등록
+        // 문서화 등록 - JSON:API 형식
         this.registerDocumentation('POST', routePath, {
-            summary: `Recover soft-deleted ${modelName} by ${primaryKey}`,
+            summary: `Recover soft-deleted ${modelName} by ${primaryKey} (JSON:API)`,
             parameters: {
                 params: {
                     [primaryKey]: { type: 'string', required: true, description: `${modelName} ${primaryKey}` }
@@ -2461,21 +2554,18 @@ export class ExpressRouter {
             },
             responses: {
                 200: {
-                    data: { type: 'object', required: true, description: `Recovered ${modelName} object` },
-                    metadata: { 
+                    data: { type: 'object', required: true, description: `Recovered ${modelName} resource` },
+                    meta: { 
                         type: 'object', 
                         required: true, 
-                        description: 'Recovery metadata including operation, timestamp, affectedCount, and wasSoftDeleted' 
+                        description: 'Recovery operation metadata' 
                     }
                 },
                 404: {
-                    error: { type: 'object', required: true, description: 'Not found error' }
+                    errors: { type: 'array', required: true, description: 'JSON:API error objects' }
                 },
                 409: {
-                    error: { type: 'object', required: true, description: 'Item is already active (not deleted)' }
-                },
-                400: {
-                    error: { type: 'object', required: true, description: 'Validation or recovery error' }
+                    errors: { type: 'array', required: true, description: 'JSON:API error objects' }
                 }
             }
         });
@@ -2487,7 +2577,133 @@ export class ExpressRouter {
 
 
     /**
-     * 요청에서 primary key 파라미터를 추출하고 파싱하는 헬퍼 메서드
+     * JSON:API 리소스 객체로 변환하는 헬퍼 메서드
+     */
+    private transformToJsonApiResource(item: any, modelName: string, req: any): any {
+        const resourceType = modelName.toLowerCase();
+        const baseUrl = `${req.protocol}://${req.get('host')}${req.baseUrl}`;
+        
+        // ID 추출 (id, uuid 등 다양한 primary key 지원)
+        const id = item.id || item.uuid || item._id || Object.values(item)[0];
+        
+        // attributes에서 id와 관계 필드 제외
+        const attributes = { ...item };
+        delete attributes.id;
+        delete attributes.uuid;
+        delete attributes._id;
+        
+        // 관계 필드 분리
+        const relationships: any = {};
+        const resourceAttributes: any = {};
+        
+        Object.keys(attributes).forEach(key => {
+            const value = attributes[key];
+            // 배열이거나 객체이면서 id를 가진 경우 관계로 처리
+            if (Array.isArray(value) || (value && typeof value === 'object' && value.id)) {
+                relationships[key] = {
+                    links: {
+                        self: `${baseUrl}/${resourceType}/${id}/relationships/${key}`,
+                        related: `${baseUrl}/${resourceType}/${id}/${key}`
+                    }
+                };
+                
+                // 관계 데이터가 포함된 경우
+                if (Array.isArray(value)) {
+                    relationships[key].data = value.map((relItem: any) => ({
+                        type: key.slice(0, -1), // 복수형에서 단수형으로 (간단한 변환)
+                        id: relItem.id || relItem.uuid || relItem._id
+                    }));
+                } else if (value.id) {
+                    relationships[key].data = {
+                        type: key,
+                        id: value.id || value.uuid || value._id
+                    };
+                }
+            } else {
+                resourceAttributes[key] = value;
+            }
+        });
+        
+        const resource: any = {
+            type: resourceType,
+            id: String(id),
+            attributes: resourceAttributes,
+            links: {
+                self: `${baseUrl}/${resourceType}/${id}`
+            }
+        };
+        
+        // 관계가 있는 경우에만 relationships 필드 추가
+        if (Object.keys(relationships).length > 0) {
+            resource.relationships = relationships;
+        }
+        
+        return resource;
+    }
+
+    /**
+     * 페이지네이션 URL 생성 헬퍼 메서드
+     */
+    private buildPaginationUrl(baseUrl: string, query: any, page: number, size: number): string {
+        const params = new URLSearchParams();
+        
+        // 기존 쿼리 파라미터 유지 (page 제외)
+        Object.keys(query).forEach(key => {
+            if (!key.startsWith('page[')) {
+                params.append(key, query[key]);
+            }
+        });
+        
+        // 페이지네이션 파라미터 추가
+        params.append('page[number]', String(page));
+        params.append('page[size]', String(size));
+        
+        return `${baseUrl}?${params.toString()}`;
+    }
+
+    /**
+     * JSON:API 에러 형식으로 포맷하는 헬퍼 메서드
+     */
+    private formatJsonApiError(error: any, code: string, status: number, path: string): any {
+        return {
+            jsonapi: {
+                version: "1.0"
+            },
+            errors: [
+                {
+                    status: String(status),
+                    code: code,
+                    title: this.getErrorTitle(status),
+                    detail: error.message,
+                    source: {
+                        pointer: path
+                    },
+                    meta: {
+                        timestamp: new Date().toISOString()
+                    }
+                }
+            ]
+        };
+    }
+
+    /**
+     * HTTP 상태 코드에 따른 에러 제목 반환
+     */
+    private getErrorTitle(status: number): string {
+        switch (status) {
+            case 400: return 'Bad Request';
+            case 401: return 'Unauthorized';
+            case 403: return 'Forbidden';
+            case 404: return 'Not Found';
+            case 409: return 'Conflict';
+            case 422: return 'Unprocessable Entity';
+            case 500: return 'Internal Server Error';
+            default: return 'Error';
+        }
+    }
+
+    /**
+     * 요청에서 primary key 파라미터를 추출하고 파싱하는 헬퍼 메서드 - JSON:API 대응
      */
     private extractAndParsePrimaryKey(
         req: any, 
@@ -2508,9 +2724,8 @@ export class ExpressRouter {
             if (paramKeys.length > 0) {
                 identifier = req.params[paramKeys[0]];
             } else {
-                const error = new Error(`Missing ${primaryKey} parameter`);
-                const errorResponse = ErrorFormatter.formatError(
-                    error,
+                const errorResponse = this.formatJsonApiError(
+                    new Error(`Missing ${primaryKey} parameter`),
                     'VALIDATION_ERROR',
                     400,
                     req.path
@@ -2522,9 +2737,8 @@ export class ExpressRouter {
 
         // 파라미터 유효성 검사
         if (!identifier || identifier.trim() === '') {
-            const error = new Error(`Invalid ${primaryKey} parameter`);
-            const errorResponse = ErrorFormatter.formatError(
-                error,
+            const errorResponse = this.formatJsonApiError(
+                new Error(`Invalid ${primaryKey} parameter`),
                 'VALIDATION_ERROR',
                 400,
                 req.path
@@ -2539,12 +2753,7 @@ export class ExpressRouter {
             return { success: true, parsedIdentifier };
         } catch (parseError: any) {
             const { code, status } = ErrorFormatter.mapPrismaError(parseError);
-            const errorResponse = ErrorFormatter.formatError(
-                parseError,
-                code,
-                status,
-                req.path
-            );
+            const errorResponse = this.formatJsonApiError(parseError, code, status, req.path);
             res.status(status).json(errorResponse);
             return { success: false };
         }

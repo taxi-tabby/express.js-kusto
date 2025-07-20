@@ -1761,13 +1761,13 @@ export class ExpressRouter {
         const enabledActions = this.getEnabledActions(options);
         const client = prismaManager.getWrap(databaseName);
         
-        // Primary key 설정
+        // Primary key 설정 및 자동 파서 선택
         const primaryKey = options?.primaryKey || 'id';
-        const primaryKeyParser = options?.primaryKeyParser || ExpressRouter.parseString;
+        const primaryKeyParser = options?.primaryKeyParser || this.getSmartPrimaryKeyParser(databaseName, modelName, primaryKey);
         
         // INDEX - GET / (목록 조회)
         if (enabledActions.includes('index')) {
-            this.setupIndexRoute(client, modelName, options);
+            this.setupIndexRoute(client, modelName, options, primaryKey);
         }
 
         // SHOW - GET /:identifier (단일 조회)
@@ -1777,7 +1777,7 @@ export class ExpressRouter {
 
         // CREATE - POST / (생성)
         if (enabledActions.includes('create')) {
-            this.setupCreateRoute(client, modelName, options);
+            this.setupCreateRoute(client, modelName, options, primaryKey);
         }
 
         // UPDATE - PUT /:identifier, PATCH /:identifier (수정)
@@ -1797,6 +1797,61 @@ export class ExpressRouter {
 
         return this;
     }
+
+    /**
+     * Primary key 타입을 자동으로 감지하고 적절한 파서를 반환하는 헬퍼 메서드
+     */
+    private getSmartPrimaryKeyParser(databaseName: string, modelName: string, primaryKey: string): (value: string) => any {
+        try {
+            // 간단한 타입 추론 로직
+            // 실제로는 Prisma 스키마나 메타데이터를 읽어서 판단할 수 있지만,
+            // 여기서는 일반적인 패턴을 기반으로 추론
+            
+            // primaryKey 이름 기반 추론
+            if (primaryKey === 'uuid' || primaryKey.includes('uuid') || primaryKey.endsWith('_uuid')) {
+                return ExpressRouter.parseUuid;
+            }
+            
+            // 기본적으로 스마트 파서 사용 (숫자인지 UUID인지 자동 판단)
+            return this.parseIdSmart;
+        } catch (error) {
+            console.warn(`Failed to determine primary key type for ${modelName}.${primaryKey}, using string parser`);
+            return ExpressRouter.parseString;
+        }
+    }
+
+    /**
+     * 스마트 ID 파서 - 입력값을 보고 적절한 타입으로 변환
+     * UUID 형식이 아닌 경우 숫자나 문자열로 안전하게 처리
+     */
+    private parseIdSmart = (id: string): any => {
+        // 먼저 입력값 검증
+        if (!id || typeof id !== 'string') {
+            throw new Error('Invalid ID format: ID must be a non-empty string');
+        }
+
+        // UUID 패턴 체크 (엄격한 검증)
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+        if (uuidRegex.test(id)) {
+            return id; // 유효한 UUID 그대로 반환
+        }
+        
+        // 순수 숫자인 경우 정수로 변환
+        if (/^\d+$/.test(id)) {
+            const numValue = parseInt(id, 10);
+            if (!isNaN(numValue) && numValue > 0) {
+                return numValue;
+            }
+        }
+        
+        // 유효한 문자열 ID인 경우 (알파벳, 숫자, 하이픈, 언더스코어 허용)
+        if (/^[a-zA-Z0-9_-]+$/.test(id)) {
+            return id;
+        }
+        
+        // 그 외의 경우 에러 발생
+        throw new Error(`Invalid ID format: '${id}' is not a valid UUID, number, or string identifier`);
+    };
 
     /**
      * 활성화된 액션 목록 계산
@@ -1836,7 +1891,7 @@ export class ExpressRouter {
     /**
      * INDEX 라우트 설정 (GET /) - JSON:API 준수
      */
-    private setupIndexRoute(client: any, modelName: string, options?: any): void {
+    private setupIndexRoute(client: any, modelName: string, options?: any, primaryKey: string = 'id'): void {
         const middlewares = options?.middleware?.index || [];
         
         const handler: HandlerFunction = async (req, res, injected, repo, db) => {
@@ -1862,7 +1917,7 @@ export class ExpressRouter {
                 ]);
 
                 // JSON:API 형식으로 데이터 변환
-                const jsonApiData = items.map((item: any) => this.transformToJsonApiResource(item, modelName, req));
+                const jsonApiData = items.map((item: any) => this.transformToJsonApiResource(item, modelName, req, primaryKey));
                 
                 // JSON:API 응답 포맷
                 const response: any = {
@@ -1994,7 +2049,7 @@ export class ExpressRouter {
 
                 // JSON:API 응답 포맷
                 const response = {
-                    data: this.transformToJsonApiResource(item, modelName, req),
+                    data: this.transformToJsonApiResource(item, modelName, req, primaryKey),
                     jsonapi: {
                         version: "1.0"
                     }
@@ -2048,7 +2103,7 @@ export class ExpressRouter {
     /**
      * CREATE 라우트 설정 (POST /) - JSON:API 준수
      */
-    private setupCreateRoute(client: any, modelName: string, options?: any): void {
+    private setupCreateRoute(client: any, modelName: string, options?: any, primaryKey: string = 'id'): void {
         const middlewares = options?.middleware?.create || [];
         
         const handler: HandlerFunction = async (req, res, injected, repo, db) => {
@@ -2100,7 +2155,7 @@ export class ExpressRouter {
 
                 // JSON:API 응답 포맷
                 const response = {
-                    data: this.transformToJsonApiResource(result, modelName, req),
+                    data: this.transformToJsonApiResource(result, modelName, req, primaryKey),
                     jsonapi: {
                         version: "1.0"
                     }
@@ -2253,7 +2308,7 @@ export class ExpressRouter {
 
                 // JSON:API 응답 포맷
                 const response = {
-                    data: this.transformToJsonApiResource(result, modelName, req),
+                    data: this.transformToJsonApiResource(result, modelName, req, primaryKey),
                     jsonapi: {
                         version: "1.0"
                     }
@@ -2496,7 +2551,7 @@ export class ExpressRouter {
 
                 // JSON:API 응답 포맷
                 const response = {
-                    data: this.transformToJsonApiResource(result, modelName, req),
+                    data: this.transformToJsonApiResource(result, modelName, req, primaryKey),
                     jsonapi: {
                         version: "1.0"
                     },
@@ -2579,18 +2634,21 @@ export class ExpressRouter {
     /**
      * JSON:API 리소스 객체로 변환하는 헬퍼 메서드
      */
-    private transformToJsonApiResource(item: any, modelName: string, req: any): any {
+    private transformToJsonApiResource(item: any, modelName: string, req: any, primaryKey: string = 'id'): any {
         const resourceType = modelName.toLowerCase();
         const baseUrl = `${req.protocol}://${req.get('host')}${req.baseUrl}`;
         
-        // ID 추출 (id, uuid 등 다양한 primary key 지원)
-        const id = item.id || item.uuid || item._id || Object.values(item)[0];
+        // Primary key 값 추출
+        const id = item[primaryKey] || item.id || item.uuid || item._id || Object.values(item)[0];
         
-        // attributes에서 id와 관계 필드 제외
+        // attributes에서 primary key와 관계 필드 제외
         const attributes = { ...item };
-        delete attributes.id;
-        delete attributes.uuid;
-        delete attributes._id;
+        delete attributes[primaryKey];
+        
+        // primaryKey가 'id'가 아닌 경우, 기존 'id' 필드는 attributes에 유지
+        // 다른 기본 ID 필드들은 제거 (중복 방지)
+        if (primaryKey !== 'uuid') delete attributes.uuid;
+        if (primaryKey !== '_id') delete attributes._id;
         
         // 관계 필드 분리
         const relationships: any = {};

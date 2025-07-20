@@ -208,7 +208,7 @@ const whitelist = getWhitelist();
 
 const corsOptions: cors.CorsOptions = {
     optionsSuccessStatus: 204,
-    methods: ["POST", "PUT", "GET", "OPTIONS", "HEAD"],
+    methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS", "HEAD"],
     origin: (origin, callback) => {
         // Create dynamic whitelist including server's own IP if available
         const dynamicWhitelist = [...whitelist];
@@ -268,7 +268,9 @@ export default [
     /**
      * 보안 헤더 설정
      */
-    helmet({}),
+    helmet({
+        
+    }),
 
     /**
      * CORS 등록하기

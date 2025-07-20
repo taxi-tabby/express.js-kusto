@@ -8,7 +8,7 @@ router.CRUD('user', 'user', {
     softDelete: {
         enabled: true,
         field: 'deletedAt',
-    },
+    }
 });
 
 

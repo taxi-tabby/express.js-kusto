@@ -1740,6 +1740,10 @@ export class ExpressRouter {
             primaryKeyParser?: (value: string) => any;
 
 
+            /** JSON:API 리소스 타입 (기본값: modelName.toLowerCase()) */
+            resourceType?: string;
+
+
             /** Soft Delete 설정 */
             softDelete?: {
                 enabled: boolean;
@@ -1773,7 +1777,7 @@ export class ExpressRouter {
 
                 beforeDestroy?: (id: any, req: Request) => Promise<void> | void;
                 afterDestroy?: (id: any, req: Request) => Promise<void> | void;
-                
+
                 beforeRecover?: (id: any, req: Request) => Promise<void> | void;
                 afterRecover?: (result: any, req: Request) => Promise<void> | void;
             };
@@ -2229,8 +2233,9 @@ export class ExpressRouter {
 
                 const { data: requestData } = req.body;
                 
-                // 리소스 타입 검증
-                const expectedType = modelName.toLowerCase();
+                // 리소스 타입 검증 (라우트 경로에서 추출 또는 옵션 사용)
+                const routeResourceType = req.baseUrl.split('/').filter(Boolean).pop() || modelName.toLowerCase();
+                const expectedType = options?.resourceType || routeResourceType;
                 if (requestData.type !== expectedType) {
                     const errorResponse = this.formatJsonApiError(
                         new Error(`Expected resource type '${expectedType}', got '${requestData.type}'`),
@@ -2359,8 +2364,24 @@ export class ExpressRouter {
 
                 // JSON:API 요청 형식 검증
                 if (!req.body || !req.body.data) {
+                    // 리소스 타입을 동적으로 결정
+                    const routeResourceType = req.baseUrl.split('/').filter(Boolean).pop() || modelName.toLowerCase();
+                    const resourceType = options?.resourceType || routeResourceType;
+                    
+                    const exampleRequest = {
+                        data: {
+                            type: resourceType,
+                            id: String(parsedIdentifier),
+                            attributes: {
+                                // "fieldName": "fieldValue"
+                                // 예: "email": "user@example.com"
+                            }
+                        }
+                    };
+                    
+                    const errorDetail = `Request must contain a data object following JSON:API specification. Expected format: ${JSON.stringify(exampleRequest, null, 2)}`;
                     const errorResponse = this.formatJsonApiError(
-                        new Error('Request must contain a data object'),
+                        new Error(errorDetail),
                         'INVALID_REQUEST',
                         400,
                         req.path
@@ -2370,8 +2391,11 @@ export class ExpressRouter {
 
                 const { data: requestData } = req.body;
                 
-                // 리소스 타입 검증
-                const expectedType = modelName.toLowerCase();
+                // 리소스 타입 검증 (라우트 경로에서 추출 또는 옵션 사용)
+                const routeResourceType = req.baseUrl.split('/').filter(Boolean).pop() || modelName.toLowerCase();
+                const expectedType = options?.resourceType || routeResourceType;
+
+                
                 if (requestData.type !== expectedType) {
                     const errorResponse = this.formatJsonApiError(
                         new Error(`Expected resource type '${expectedType}', got '${requestData.type}'`),
@@ -2856,7 +2880,19 @@ export class ExpressRouter {
         // 기존 쿼리 파라미터 유지 (page 제외)
         Object.keys(query).forEach(key => {
             if (!key.startsWith('page[')) {
-                params.append(key, query[key]);
+                const value = query[key];
+                // 객체나 배열인 경우 JSON.stringify로 직렬화하거나 무시
+                if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+                    params.append(key, String(value));
+                } else if (Array.isArray(value)) {
+                    // 배열인 경우 각 요소를 개별적으로 추가
+                    value.forEach(item => {
+                        if (typeof item === 'string' || typeof item === 'number' || typeof item === 'boolean') {
+                            params.append(key, String(item));
+                        }
+                    });
+                }
+                // 객체인 경우는 무시 (page 객체 등)
             }
         });
         

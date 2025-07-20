@@ -94,6 +94,9 @@ export class Core {
         // Set trust proxy
         this._app.set('trust proxy', this._config.trustProxy ? 1 : 0);
         
+        // JSON parsing middleware is handled by global middleware.ts
+        // No need to add express.json() here as it's already in src/app/routes/middleware.ts
+        
         // Serve static files from public directory
         // In webpack build environment, use dist/public, otherwise use public
         const publicPath = process.env.WEBPACK_BUILD === 'true' 

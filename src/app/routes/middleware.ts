@@ -268,9 +268,7 @@ export default [
     /**
      * 보안 헤더 설정
      */
-    helmet({
-        
-    }),
+    helmet(),
 
     /**
      * CORS 등록하기
@@ -281,7 +279,10 @@ export default [
      * 요청 파싱 미들웨어
      */
     cookieParser(),
-    bodyParser.json(),
+    bodyParser.json({ 
+        type: ['application/json', 'application/vnd.api+json'],
+        limit: '50mb'
+    }),
     bodyParser.urlencoded({ extended: true, limit: '50mb' }),
 
     /**

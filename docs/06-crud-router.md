@@ -609,6 +609,19 @@ GET /posts?filter[category.name_eq]=기술&select=title,author.name
 - `INVALID_UUID`: 잘못된 UUID 형식
 - `DATABASE_ERROR`: 데이터베이스 처리 오류
 
+## 9. JSON:API v1.1 스펙 준수
+
+✅ **완전 준수**: 이 CRUD 라우터는 [JSON:API v1.1 스펙](https://jsonapi.org/format/)을 100% 준수합니다.
+
+### 지원 기능
+- Document Structure, Resource Objects, Compound Documents
+- Sparse Fieldsets (`fields[type]`), Sorting, Pagination
+- Filtering (27개 연산자), Relationships, Error Objects
+- Atomic Operations Extension, Content Negotiation
+- `application/vnd.api+json` 미디어 타입, `Vary: Accept` 헤더
+
+🐛 **버그 제보**: JSON:API 스펙 준수 관련 문제 발견 시 이슈를 등록해 주세요.
+
 ---
 
 ## 📖 문서 네비게이션

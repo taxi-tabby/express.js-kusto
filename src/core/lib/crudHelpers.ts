@@ -14,15 +14,43 @@ export interface CrudQueryParams {
 }
 
 /**
- * JSON:API 리소스 객체 인터페이스
+ * JSON:API Atomic Operations 인터페이스
  */
-export interface JsonApiResource {
-  type: string;
-  id: string;
-  attributes?: Record<string, any>;
-  relationships?: Record<string, JsonApiRelationship>;
-  links?: JsonApiLinks;
+export interface JsonApiAtomicOperation {
+  op: 'add' | 'update' | 'remove';
+  data?: JsonApiResource;
+  ref?: {
+    type: string;
+    id: string;
+    relationship?: string;
+  };
+}
+
+export interface JsonApiAtomicOperationsDocument {
+  'atomic:operations': JsonApiAtomicOperation[];
+  jsonapi?: JsonApiObject;
+}
+
+export interface JsonApiAtomicResultsDocument {
+  'atomic:results': (JsonApiResource | null)[];
+  jsonapi?: JsonApiObject;
   meta?: Record<string, any>;
+}
+
+/**
+ * JSON:API 객체 (확장)
+ */
+export interface JsonApiObject {
+  version?: string;
+  ext?: string[]; // Applied extensions URIs
+  profile?: string[]; // Applied profiles URIs  
+  meta?: {
+    implementedFeatures?: string[];
+    supportedExtensions?: string[];
+    supportedProfiles?: string[];
+    implementation?: string;
+    [key: string]: any;
+  };
 }
 
 /**
@@ -35,12 +63,26 @@ export interface JsonApiRelationship {
 }
 
 /**
- * JSON:API 리소스 식별자 인터페이스
+ * JSON:API 리소스 객체
+ */
+export interface JsonApiResource {
+  type: string;
+  id?: string;
+  lid?: string; // Local ID for client-generated resources
+  attributes?: Record<string, any>;
+  relationships?: Record<string, JsonApiRelationship>;
+  links?: JsonApiLinks;
+  meta?: Record<string, any>;
+}
+
+/**
+ * JSON:API 리소스 식별자 객체 (확장)
  */
 export interface JsonApiResourceIdentifier {
   type: string;
-  id: string;
-  meta?: Record<string, any>;
+  id?: string;
+  lid?: string; // Local ID for client-generated resources
+  meta?: Record<string, any>; // Non-standard meta-information
 }
 
 /**
@@ -71,10 +113,7 @@ export interface JsonApiResponse {
   included?: JsonApiResource[];
   links?: JsonApiLinks;
   meta?: Record<string, any>;
-  jsonapi?: {
-    version: string;
-    meta?: Record<string, any>;
-  };
+  jsonapi?: JsonApiObject;
 }
 
 /**
@@ -82,6 +121,10 @@ export interface JsonApiResponse {
  */
 export interface JsonApiError {
   id?: string;
+  links?: {
+    about?: string;
+    type?: string;
+  };
   status?: string;
   code?: string;
   title?: string;
@@ -89,8 +132,19 @@ export interface JsonApiError {
   source?: {
     pointer?: string;
     parameter?: string;
+    header?: string;
   };
   meta?: Record<string, any>;
+}
+
+/**
+ * JSON:API 에러 응답 인터페이스
+ */
+export interface JsonApiErrorResponse {
+  errors: JsonApiError[];
+  jsonapi?: JsonApiObject;
+  meta?: Record<string, any>;
+  links?: JsonApiLinks;
 }
 
 export interface SortParam {
@@ -117,7 +171,8 @@ export type FilterOperator =
   | 'gt' | 'gte' | 'lt' | 'lte' | 'between'
   | 'like' | 'ilike' | 'start' | 'end' | 'contains'
   | 'in' | 'not_in'
-  | 'null' | 'not_null' | 'present' | 'blank';
+  | 'null' | 'not_null' | 'present' | 'blank'
+  | 'regex' | 'exists' | 'size' | 'all' | 'elemMatch';
 
 /**
  * 쿼리 파라미터를 파싱하여 CRUD 파라미터로 변환
@@ -325,8 +380,8 @@ export class CrudQueryParser {
    */
   private static parseFilterExpression(expression: string, value: any) {
     const operators = [
-      'not_null', 'not_in', 'between', 'present', 'blank',
-      'ilike', 'like', 'start', 'end', 'contains',
+      'not_null', 'not_in', 'between', 'present', 'blank', 'elemMatch',
+      'ilike', 'like', 'start', 'end', 'contains', 'regex', 'exists', 'size', 'all',
       'gte', 'lte', 'gt', 'lt', 'ne', 'eq', 'in', 'null'
     ];
 
@@ -791,6 +846,40 @@ export class PrismaQueryBuilder {
           }
           hasConditions = true;
           break;
+
+        case 'regex':
+          // 정규식 매칭 (DB에 따라 지원되지 않을 수 있음)
+          fieldCondition.regex = value;
+          hasConditions = true;
+          break;
+
+        case 'exists':
+          // 필드 존재 여부 (NoSQL용, Prisma에서는 not null로 처리)
+          if (value === true || value === 'true') {
+            fieldCondition.not = null;
+          } else {
+            fieldCondition._directValue = null;
+          }
+          hasConditions = true;
+          break;
+
+        case 'size':
+          // 배열 크기 (JSON 필드용)
+          fieldCondition.array_length = parseInt(value);
+          hasConditions = true;
+          break;
+
+        case 'all':
+          // 배열의 모든 요소가 조건 만족 (JSON 필드용)
+          fieldCondition.array_contains = Array.isArray(value) ? value : [value];
+          hasConditions = true;
+          break;
+
+        case 'elemMatch':
+          // 배열 요소 중 하나가 조건 만족 (JSON 필드용)
+          fieldCondition.array_element_match = value;
+          hasConditions = true;
+          break;
           
         default:
           console.warn(`Unknown filter operator: ${operator}`);
@@ -1241,7 +1330,7 @@ export class JsonApiTransformer {
   }
 
   /**
-   * 완전한 JSON:API 응답 객체 생성
+   * 완전한 JSON:API 응답 객체 생성 - Meta 정보 개선
    */
   static createJsonApiResponse(
     data: any | any[], 
@@ -1254,6 +1343,7 @@ export class JsonApiTransformer {
       links?: JsonApiLinks;
       meta?: Record<string, any>;
       included?: JsonApiResource[];
+      query?: any; // 요청 쿼리 정보 추가
     } = {}
   ): JsonApiResponse {
     const {
@@ -1262,7 +1352,8 @@ export class JsonApiTransformer {
       baseUrl,
       links,
       meta,
-      included
+      included,
+      query
     } = options;
 
     // 현재 리소스 타입의 필드 제한
@@ -1293,7 +1384,29 @@ export class JsonApiTransformer {
     const response: JsonApiResponse = {
       data: jsonApiData,
       jsonapi: {
-        version: "1.1"
+        version: "1.1",
+        ext: ["https://jsonapi.org/ext/atomic"],
+        profile: ["https://jsonapi.org/profiles/ethanresnick/cursor-pagination/"],
+        meta: {
+          implementation: "express.js-kusto v2.0",
+          implementedFeatures: [
+            "sparse-fieldsets",
+            "compound-documents", 
+            "resource-relationships",
+            "pagination",
+            "sorting",
+            "filtering",
+            "atomic-operations",
+            "content-negotiation",
+            "resource-identification"
+          ],
+          supportedExtensions: [
+            "https://jsonapi.org/ext/atomic"
+          ],
+          supportedProfiles: [
+            "https://jsonapi.org/profiles/ethanresnick/cursor-pagination/"
+          ]
+        }
       }
     };
 
@@ -1307,7 +1420,20 @@ export class JsonApiTransformer {
     }
 
     if (meta) {
-      response.meta = meta;
+      // 기본 메타 정보와 사용자 정의 메타 정보 병합
+      response.meta = {
+        timestamp: new Date().toISOString(),
+        ...(query && {
+          requestInfo: {
+            fields: query.fields,
+            include: query.include,
+            sort: query.sort,
+            filter: query.filter,
+            page: query.page
+          }
+        }),
+        ...meta
+      };
     }
 
     return response;

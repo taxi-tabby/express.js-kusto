@@ -9,7 +9,7 @@ import { DependencyInjector } from './dependencyInjector';
 import { prismaManager } from '@lib/prismaManager'
 import { repositoryManager } from '@lib/repositoryManager'
 import { kustoManager } from '@lib/kustoManager'
-import { CrudQueryParser, PrismaQueryBuilder, CrudResponseFormatter, JsonApiTransformer, JsonApiResponse, JsonApiResource } from './crudHelpers';
+import { CrudQueryParser, PrismaQueryBuilder, CrudResponseFormatter, JsonApiTransformer, JsonApiResponse, JsonApiResource, JsonApiRelationship, JsonApiErrorResponse } from './crudHelpers';
 import { ErrorFormatter } from './errorFormatter';
 import { serializeBigInt } from './serializer';
 import './types/express-extensions';
@@ -1817,6 +1817,9 @@ export class ExpressRouter {
             this.setupDestroyRoute(client, modelName, options, primaryKey, primaryKeyParser);
         }
 
+        // ATOMIC OPERATIONS - POST /atomic (원자적 작업)
+        this.setupAtomicOperationsRoute(client, modelName, options);
+
         // RECOVER - POST /:identifier/recover (복구)
         if (enabledActions.includes('recover')) {
             this.setupRecoverRoute(client, modelName, options, primaryKey, primaryKeyParser);
@@ -1930,6 +1933,7 @@ export class ExpressRouter {
             try {
                 // JSON:API Content-Type 헤더 설정
                 res.setHeader('Content-Type', 'application/vnd.api+json');
+                res.setHeader('Vary', 'Accept');
                 
                 // 쿼리 파라미터 파싱
                 const queryParams = CrudQueryParser.parseQuery(req);
@@ -2104,6 +2108,7 @@ export class ExpressRouter {
             try {
                 // JSON:API Content-Type 헤더 설정
                 res.setHeader('Content-Type', 'application/vnd.api+json');
+                res.setHeader('Vary', 'Accept');
                 
                 // 파라미터 추출 및 파싱
                 const { success, parsedIdentifier } = this.extractAndParsePrimaryKey(
@@ -2259,6 +2264,12 @@ export class ExpressRouter {
             try {
                 // JSON:API Content-Type 헤더 설정
                 res.setHeader('Content-Type', 'application/vnd.api+json');
+                res.setHeader('Vary', 'Accept');
+                
+                // Content Negotiation 검증
+                if (!this.validateJsonApiContentType(req, res)) {
+                    return;
+                }
                 
                 // JSON:API 요청 형식 검증
                 if (!req.body || !req.body.data) {
@@ -2276,18 +2287,34 @@ export class ExpressRouter {
                 // 리소스 타입 검증 (라우트 경로에서 추출 또는 옵션 사용)
                 const routeResourceType = req.baseUrl.split('/').filter(Boolean).pop() || modelName.toLowerCase();
                 const expectedType = options?.resourceType || routeResourceType;
-                if (requestData.type !== expectedType) {
-                    const errorResponse = this.formatJsonApiError(
-                        new Error(`Expected resource type '${expectedType}', got '${requestData.type}'`),
-                        'INVALID_TYPE',
-                        409,
-                        req.path
-                    );
-                    return res.status(409).json(errorResponse);
+                
+                // JSON:API 리소스 구조 검증
+                if (!this.validateJsonApiResource(requestData, expectedType, req, res, false)) {
+                    return;
                 }
 
                 // attributes에서 데이터 추출
                 let data = requestData.attributes || {};
+
+                // 클라이언트 생성 ID 지원 (JSON:API 스펙)
+                if (requestData.id) {
+                    // 클라이언트가 ID를 제공한 경우
+                    if (primaryKey === 'id') {
+                        data.id = requestData.id;
+                    } else {
+                        data[primaryKey] = requestData.id;
+                    }
+                }
+
+                // 관계 데이터 처리 (relationships가 있는 경우)
+                if (requestData.relationships) {
+                    data = await this.processRelationships(
+                        data, 
+                        requestData.relationships, 
+                        client, 
+                        modelName
+                    );
+                }
 
                 // Before hook 실행
                 if (options?.hooks?.beforeCreate) {
@@ -2385,6 +2412,359 @@ export class ExpressRouter {
     }
 
     /**
+     * Atomic Operations 엔드포인트 설정 (JSON:API Extension)
+     */
+    private setupAtomicOperationsRoute(client: any, modelName: string, options?: any): void {
+        const handler: HandlerFunction = async (req, res, injected, repo, db) => {
+            try {
+                res.setHeader('Content-Type', 'application/vnd.api+json; ext="https://jsonapi.org/ext/atomic"');
+                
+                // Content-Type 검증 (atomic extension 필요)
+                const contentType = req.get('Content-Type');
+                if (!contentType || !contentType.includes('application/vnd.api+json') || !contentType.includes('ext="https://jsonapi.org/ext/atomic"')) {
+                    const errorResponse = this.formatJsonApiError(
+                        new Error('Content-Type must include atomic extension'),
+                        'INVALID_CONTENT_TYPE',
+                        415,
+                        req.path
+                    );
+                    return res.status(415).json(errorResponse);
+                }
+
+                // 요청 구조 검증
+                if (!req.body || !req.body['atomic:operations']) {
+                    const errorResponse = this.formatJsonApiError(
+                        new Error('Request must contain atomic:operations'),
+                        'INVALID_REQUEST',
+                        400,
+                        req.path
+                    );
+                    return res.status(400).json(errorResponse);
+                }
+
+                const operations = req.body['atomic:operations'];
+                const results: (any | null)[] = [];
+
+                // 트랜잭션으로 모든 작업 실행
+                await client.$transaction(async (tx: any) => {
+                    for (const operation of operations) {
+                        const result = await this.executeAtomicOperation(tx, operation, modelName, options, req);
+                        results.push(result);
+                    }
+                });
+
+                const response = {
+                    'atomic:results': results,
+                    jsonapi: {
+                        version: "1.1",
+                        ext: ["https://jsonapi.org/ext/atomic"]
+                    }
+                };
+
+                res.status(200).json(response);
+
+            } catch (error: any) {
+                console.error(`Atomic Operations Error for ${modelName}:`, error);
+                const { code, status } = ErrorFormatter.mapPrismaError(error);
+                const errorResponse = this.formatJsonApiError(error, code, status, req.path);
+                res.status(status).json(errorResponse);
+            }
+        };
+
+        this.router.post('/atomic', this.wrapHandler(handler));
+    }
+
+    /**
+     * 단일 원자적 작업 실행
+     */
+    private async executeAtomicOperation(
+        tx: any, 
+        operation: any, 
+        modelName: string, 
+        options: any, 
+        req: any
+    ): Promise<any | null> {
+        switch (operation.op) {
+            case 'add':
+                if (!operation.data) {
+                    throw new Error('Add operation requires data');
+                }
+                
+                const createData = operation.data.attributes || {};
+                if (operation.data.relationships) {
+                    const processedData = await this.processRelationships(
+                        createData,
+                        operation.data.relationships,
+                        tx,
+                        modelName
+                    );
+                    Object.assign(createData, processedData);
+                }
+
+                const created = await tx[modelName].create({ data: createData });
+                return JsonApiTransformer.transformToResource(created, modelName);
+
+            case 'update':
+                if (!operation.ref || !operation.data) {
+                    throw new Error('Update operation requires ref and data');
+                }
+
+                const updateData = operation.data.attributes || {};
+                if (operation.data.relationships) {
+                    const processedData = await this.processRelationships(
+                        updateData,
+                        operation.data.relationships,
+                        tx,
+                        modelName
+                    );
+                    Object.assign(updateData, processedData);
+                }
+
+                const updated = await tx[modelName].update({
+                    where: { id: operation.ref.id },
+                    data: updateData
+                });
+                return JsonApiTransformer.transformToResource(updated, modelName);
+
+            case 'remove':
+                if (!operation.ref) {
+                    throw new Error('Remove operation requires ref');
+                }
+
+                if (operation.ref.relationship) {
+                    // 관계 제거
+                    const relationshipData: any = {};
+                    relationshipData[operation.ref.relationship] = { disconnect: true };
+                    
+                    await tx[modelName].update({
+                        where: { id: operation.ref.id },
+                        data: relationshipData
+                    });
+                } else {
+                    // 리소스 제거
+                    await tx[modelName].delete({
+                        where: { id: operation.ref.id }
+                    });
+                }
+                return null;
+
+            default:
+                throw new Error(`Unsupported atomic operation: ${operation.op}`);
+        }
+    }
+
+    /**
+     * JSON:API 고급 에러 검증
+     */
+    private validateJsonApiResource(data: any, expectedType: string, req: any, res: any, isUpdate: boolean = false): boolean {
+        // 리소스 객체 구조 검증
+        if (!data || typeof data !== 'object') {
+            const errorResponse = this.formatJsonApiError(
+                new Error('Resource must be an object'),
+                'INVALID_RESOURCE_STRUCTURE',
+                400,
+                req.path
+            );
+            res.status(400).json(errorResponse);
+            return false;
+        }
+
+        // 타입 필드 검증
+        if (!data.type || typeof data.type !== 'string') {
+            const errorResponse = this.formatJsonApiError(
+                new Error('Resource must have a type field'),
+                'MISSING_RESOURCE_TYPE',
+                400,
+                req.path
+            );
+            res.status(400).json(errorResponse);
+            return false;
+        }
+
+        // 타입 일치 검증
+        if (data.type !== expectedType) {
+            const errorResponse = this.formatJsonApiError(
+                new Error(`Resource type "${data.type}" does not match expected type "${expectedType}"`),
+                'INVALID_RESOURCE_TYPE',
+                409,
+                req.path
+            );
+            res.status(409).json(errorResponse);
+            return false;
+        }
+
+        // 업데이트 시 ID 필드 검증
+        if (isUpdate) {
+            if (!data.id) {
+                const errorResponse = this.formatJsonApiError(
+                    new Error('Resource must have an id field for updates'),
+                    'MISSING_RESOURCE_ID',
+                    400,
+                    req.path
+                );
+                res.status(400).json(errorResponse);
+                return false;
+            }
+
+            // URL의 ID와 본문의 ID 일치 검증
+            const urlId = req.params.id || req.params.identifier;
+            if (urlId && data.id !== urlId) {
+                const errorResponse = this.formatJsonApiError(
+                    new Error(`Resource id "${data.id}" does not match URL id "${urlId}"`),
+                    'ID_MISMATCH',
+                    400,
+                    req.path
+                );
+                res.status(400).json(errorResponse);
+                return false;
+            }
+        }
+
+        // attributes와 relationships 검증
+        if (data.attributes && typeof data.attributes !== 'object') {
+            const errorResponse = this.formatJsonApiError(
+                new Error('Resource attributes must be an object'),
+                'INVALID_ATTRIBUTES',
+                400,
+                req.path
+            );
+            res.status(400).json(errorResponse);
+            return false;
+        }
+
+        if (data.relationships && typeof data.relationships !== 'object') {
+            const errorResponse = this.formatJsonApiError(
+                new Error('Resource relationships must be an object'),
+                'INVALID_RELATIONSHIPS',
+                400,
+                req.path
+            );
+            res.status(400).json(errorResponse);
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Content Negotiation 헬퍼 - JSON:API 스펙 준수
+     */
+    private validateJsonApiContentType(req: any, res: any): boolean {
+        const contentType = req.get('Content-Type');
+        
+        if (contentType && !contentType.includes('application/vnd.api+json')) {
+            const errorResponse = this.formatJsonApiError(
+                new Error('Content-Type must be application/vnd.api+json'),
+                'INVALID_CONTENT_TYPE',
+                415,
+                req.path
+            );
+            res.status(415).json(errorResponse);
+            return false;
+        }
+
+        // 지원하지 않는 미디어 타입 파라미터 검증
+        if (contentType) {
+            const mediaTypeParams = this.parseMediaTypeParameters(contentType);
+            for (const param of Object.keys(mediaTypeParams)) {
+                if (param !== 'ext' && param !== 'profile') {
+                    const errorResponse = this.formatJsonApiError(
+                        new Error(`Unsupported media type parameter: ${param}`),
+                        'UNSUPPORTED_MEDIA_TYPE_PARAMETER',
+                        415,
+                        req.path
+                    );
+                    res.status(415).json(errorResponse);
+                    return false;
+                }
+            }
+        }
+        
+        return true;
+    }
+
+    /**
+     * 미디어 타입 파라미터 파싱
+     */
+    private parseMediaTypeParameters(contentType: string): Record<string, string> {
+        const params: Record<string, string> = {};
+        const parts = contentType.split(';');
+        
+        for (let i = 1; i < parts.length; i++) {
+            const [key, value] = parts[i].split('=').map(s => s.trim());
+            if (key && value) {
+                params[key] = value.replace(/"/g, '');
+            }
+        }
+        
+        return params;
+    }
+
+    /**
+     * PATCH 부분 업데이트 전략 처리
+     */
+    private async applyPatchStrategy(
+        existingData: any,
+        newData: any,
+        strategy: 'merge' | 'replace' = 'merge'
+    ): Promise<any> {
+        if (strategy === 'replace') {
+            return newData;
+        }
+
+        // merge 전략: 기존 데이터와 새 데이터를 병합
+        const mergedData = { ...existingData };
+        
+        Object.keys(newData).forEach(key => {
+            if (newData[key] !== undefined) {
+                if (typeof newData[key] === 'object' && newData[key] !== null && !Array.isArray(newData[key])) {
+                    // 객체인 경우 재귀적으로 병합
+                    mergedData[key] = {
+                        ...(mergedData[key] || {}),
+                        ...newData[key]
+                    };
+                } else {
+                    // 원시값 또는 배열인 경우 교체
+                    mergedData[key] = newData[key];
+                }
+            }
+        });
+
+        return mergedData;
+    }
+
+    /**
+     * JSON:API 관계 데이터 처리
+     * 생성/수정 시 관계 데이터를 Prisma 형식으로 변환
+     */
+    private async processRelationships(
+        data: any, 
+        relationships: Record<string, JsonApiRelationship>, 
+        client: any, 
+        modelName: string
+    ): Promise<any> {
+        const processedData = { ...data };
+        
+        for (const [relationName, relationshipData] of Object.entries(relationships)) {
+            if (relationshipData.data) {
+                if (Array.isArray(relationshipData.data)) {
+                    // 일대다 관계 처리
+                    processedData[relationName] = {
+                        connect: relationshipData.data.map((item: any) => ({ id: item.id }))
+                    };
+                } else if (relationshipData.data) {
+                    // 일대일 관계 처리
+                    processedData[relationName] = {
+                        connect: { id: relationshipData.data.id }
+                    };
+                }
+            }
+        }
+        
+        return processedData;
+    }
+
+    /**
      * UPDATE 라우트 설정 (PUT /:identifier, PATCH /:identifier) - JSON:API 준수
      */
     private setupUpdateRoute(
@@ -2400,6 +2780,11 @@ export class ExpressRouter {
             try {
                 // JSON:API Content-Type 헤더 설정
                 res.setHeader('Content-Type', 'application/vnd.api+json');
+                
+                // Content Negotiation 검증
+                if (!this.validateJsonApiContentType(req, res)) {
+                    return;
+                }
                 
                 // 파라미터 추출 및 검증
                 const extractResult = this.extractAndParsePrimaryKey(req, res, primaryKey, primaryKeyParser, modelName);
@@ -2440,30 +2825,23 @@ export class ExpressRouter {
                 const routeResourceType = req.baseUrl.split('/').filter(Boolean).pop() || modelName.toLowerCase();
                 const expectedType = options?.resourceType || routeResourceType;
 
-                
-                if (requestData.type !== expectedType) {
-                    const errorResponse = this.formatJsonApiError(
-                        new Error(`Expected resource type '${expectedType}', got '${requestData.type}'`),
-                        'INVALID_TYPE',
-                        409,
-                        req.path
-                    );
-                    return res.status(409).json(errorResponse);
-                }
-
-                // ID 일치성 검증
-                if (requestData.id && String(requestData.id) !== String(parsedIdentifier)) {
-                    const errorResponse = this.formatJsonApiError(
-                        new Error('Resource ID in body does not match URL parameter'),
-                        'ID_MISMATCH',
-                        409,
-                        req.path
-                    );
-                    return res.status(409).json(errorResponse);
+                // JSON:API 리소스 구조 검증 (업데이트용)
+                if (!this.validateJsonApiResource(requestData, expectedType, req, res, true)) {
+                    return;
                 }
 
                 // attributes에서 데이터 추출
                 let data = requestData.attributes || {};
+
+                // 관계 데이터 처리 (relationships가 있는 경우)
+                if (requestData.relationships) {
+                    data = await this.processRelationships(
+                        data, 
+                        requestData.relationships, 
+                        client, 
+                        modelName
+                    );
+                }
 
                 // 빈 값이나 null 값들 정리만 수행
                 data = this.cleanEmptyValues(data);
@@ -2483,13 +2861,18 @@ export class ExpressRouter {
                     await options.hooks.afterUpdate(result, req);
                 }
 
-                // JSON:API 응답 포맷
-                const response = {
-                    data: this.transformToJsonApiResource(result, modelName, req, primaryKey),
-                    jsonapi: {
-                        version: "1.0"
+                // Base URL 생성
+                const baseUrl = `${req.protocol}://${req.get('host')}${req.baseUrl}`;
+
+                // JSON:API 응답 생성
+                const response: JsonApiResponse = JsonApiTransformer.createJsonApiResponse(
+                    result,
+                    modelName,
+                    {
+                        primaryKey,
+                        baseUrl
                     }
-                };
+                );
                 
                 // BigInt 직렬화 처리
                 const serializedResponse = serializeBigInt(response);
@@ -2596,6 +2979,13 @@ export class ExpressRouter {
                 // JSON:API Content-Type 헤더 설정
                 res.setHeader('Content-Type', 'application/vnd.api+json');
                 
+                // Content Negotiation 검증 (DELETE 요청에 본문이 있는 경우)
+                if (req.body && Object.keys(req.body).length > 0) {
+                    if (!this.validateJsonApiContentType(req, res)) {
+                        return;
+                    }
+                }
+                
                 // 파라미터 추출 및 파싱
                 const { success, parsedIdentifier } = this.extractAndParsePrimaryKey(
                     req, res, primaryKey, primaryKeyParser, modelName
@@ -2633,6 +3023,21 @@ export class ExpressRouter {
                     
                     res.status(200).json(response);
                 } else {
+                    // 삭제 전 존재 여부 확인 (404 처리를 위해)
+                    const existingItem = await client[modelName].findUnique({
+                        where: { [primaryKey]: parsedIdentifier },
+                    });
+
+                    if (!existingItem) {
+                        const errorResponse = this.formatJsonApiError(
+                            new Error(`${modelName} not found`),
+                            'NOT_FOUND',
+                            404,
+                            req.path
+                        );
+                        return res.status(404).json(errorResponse);
+                    }
+
                     // Hard Delete: 완전 삭제
                     await client[modelName].delete({
                         where: { [primaryKey]: parsedIdentifier }
@@ -2644,7 +3049,7 @@ export class ExpressRouter {
                     }
 
                     // JSON:API 삭제 성공 응답 (204 No Content)
-                    res.status(204).send();
+                    res.status(204).end();
                 }
                 
             } catch (error: any) {
@@ -2952,27 +3357,74 @@ export class ExpressRouter {
     }
 
     /**
-     * JSON:API 에러 형식으로 포맷하는 헬퍼 메서드
+     * JSON:API 에러 형식으로 포맷하는 헬퍼 메서드 - 완전한 스펙 준수
      */
-    private formatJsonApiError(error: any, code: string, status: number, path: string): any {
+    private formatJsonApiError(error: any, code: string, status: number, path: string): JsonApiErrorResponse {
+        const errorId = `error_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        
         return {
             jsonapi: {
-                version: "1.0"
+                version: "1.1",
+                ext: ["https://jsonapi.org/ext/atomic"],
+                profile: ["https://jsonapi.org/profiles/ethanresnick/cursor-pagination/"],
+                meta: {
+                    implementation: "express.js-kusto v2.0",
+                    implementedFeatures: [
+                        "sparse-fieldsets",
+                        "compound-documents", 
+                        "resource-relationships",
+                        "pagination",
+                        "sorting",
+                        "filtering",
+                        "atomic-operations",
+                        "content-negotiation",
+                        "resource-identification"
+                    ],
+                    supportedExtensions: [
+                        "https://jsonapi.org/ext/atomic"
+                    ],
+                    supportedProfiles: [
+                        "https://jsonapi.org/profiles/ethanresnick/cursor-pagination/"
+                    ]
+                }
             },
             errors: [
                 {
+                    id: errorId,
+                    links: {
+                        about: `https://docs.api.com/errors/${code}`,
+                        type: `https://docs.api.com/error-types/${status}`
+                    },
                     status: String(status),
                     code: code,
                     title: this.getErrorTitle(status),
-                    detail: error.message,
+                    detail: error.message || `An error occurred while processing the request`,
                     source: {
-                        pointer: path
+                        pointer: path,
+                        ...(error.parameter && { parameter: error.parameter }),
+                        ...(error.header && { header: error.header })
                     },
                     meta: {
-                        timestamp: new Date().toISOString()
+                        timestamp: new Date().toISOString(),
+                        requestId: errorId,
+                        ...(error.meta && { originalError: error.meta }),
+                        ...(process.env.NODE_ENV === 'development' && error.stack && { 
+                            stack: error.stack.split('\n').slice(0, 5) 
+                        })
                     }
                 }
-            ]
+            ],
+            meta: {
+                timestamp: new Date().toISOString(),
+                errorCount: 1,
+                requestInfo: {
+                    path: path,
+                    method: error.method || 'UNKNOWN'
+                }
+            },
+            links: {
+                self: path
+            }
         };
     }
 
@@ -3179,6 +3631,83 @@ export class ExpressRouter {
         // 현재는 기본적인 관계 조회 라우트만 구현
         // 향후 확장 가능: POST, PATCH, DELETE for relationships
         
+        // GET /:identifier/:relationName - 관련 리소스 직접 조회
+        this.router.get(`/:${primaryKey}/:relationName`, async (req, res) => {
+            try {
+                res.setHeader('Content-Type', 'application/vnd.api+json');
+                
+                const { success, parsedIdentifier } = this.extractAndParsePrimaryKey(
+                    req, res, primaryKey, primaryKeyParser, modelName
+                );
+                if (!success) return;
+
+                const relationName = req.params.relationName;
+                
+                // 쿼리 파라미터 파싱 (include, fields, sort, pagination 지원)
+                const queryParams = CrudQueryParser.parseQuery(req);
+                
+                // 기본 리소스 조회
+                const item = await client[modelName].findUnique({
+                    where: { [primaryKey]: parsedIdentifier },
+                    include: { [relationName]: true }
+                });
+
+                if (!item) {
+                    const errorResponse = this.formatJsonApiError(
+                        new Error(`${modelName} not found`),
+                        'NOT_FOUND',
+                        404,
+                        req.path
+                    );
+                    return res.status(404).json(errorResponse);
+                }
+
+                const relationData = item[relationName];
+                
+                if (!relationData) {
+                    const errorResponse = this.formatJsonApiError(
+                        new Error(`Relationship '${relationName}' not found`),
+                        'RELATIONSHIP_NOT_FOUND',
+                        404,
+                        req.path
+                    );
+                    return res.status(404).json(errorResponse);
+                }
+
+                // Base URL 생성
+                const baseUrl = `${req.protocol}://${req.get('host')}${req.baseUrl}`;
+                
+                // 관계 리소스 타입 추론
+                const relationResourceType = JsonApiTransformer.inferResourceTypeFromRelationship(
+                    relationName, 
+                    Array.isArray(relationData)
+                );
+
+                // JSON:API 응답 생성
+                const response: JsonApiResponse = JsonApiTransformer.createJsonApiResponse(
+                    relationData,
+                    relationResourceType,
+                    {
+                        primaryKey: 'id',
+                        fields: queryParams.fields,
+                        baseUrl,
+                        links: {
+                            self: `${baseUrl}/${modelName.toLowerCase()}/${parsedIdentifier}/${relationName}`,
+                            related: `${baseUrl}/${modelName.toLowerCase()}/${parsedIdentifier}/relationships/${relationName}`
+                        }
+                    }
+                );
+
+                res.json(serializeBigInt(response));
+
+            } catch (error: any) {
+                console.error(`Related Resource Error for ${modelName}:`, error);
+                const { code, status } = ErrorFormatter.mapPrismaError(error);
+                const errorResponse = this.formatJsonApiError(error, code, status, req.path);
+                res.status(status).json(errorResponse);
+            }
+        });
+
         // GET /:identifier/relationships/:relationName - 관계 자체 조회
         this.router.get(`/:${primaryKey}/relationships/:relationName`, async (req, res) => {
             try {
@@ -3241,6 +3770,189 @@ export class ExpressRouter {
 
             } catch (error: any) {
                 console.error(`Relationship Error for ${modelName}:`, error);
+                const { code, status } = ErrorFormatter.mapPrismaError(error);
+                const errorResponse = this.formatJsonApiError(error, code, status, req.path);
+                res.status(status).json(errorResponse);
+            }
+        });
+
+        // POST /:identifier/relationships/:relationName - 관계 추가
+        this.router.post(`/:${primaryKey}/relationships/:relationName`, async (req, res) => {
+            try {
+                res.setHeader('Content-Type', 'application/vnd.api+json');
+                
+                // Content-Type 검증
+                const contentType = req.get('Content-Type');
+                if (contentType && !contentType.includes('application/vnd.api+json')) {
+                    const errorResponse = this.formatJsonApiError(
+                        new Error('Content-Type must be application/vnd.api+json'),
+                        'INVALID_CONTENT_TYPE',
+                        415,
+                        req.path
+                    );
+                    return res.status(415).json(errorResponse);
+                }
+                
+                const { success, parsedIdentifier } = this.extractAndParsePrimaryKey(
+                    req, res, primaryKey, primaryKeyParser, modelName
+                );
+                if (!success) return;
+
+                const relationName = req.params.relationName;
+                
+                if (!req.body || !req.body.data) {
+                    const errorResponse = this.formatJsonApiError(
+                        new Error('Request must contain data field with relationship identifiers'),
+                        'INVALID_REQUEST',
+                        400,
+                        req.path
+                    );
+                    return res.status(400).json(errorResponse);
+                }
+
+                const relationshipData = req.body.data;
+                let connectData;
+
+                if (Array.isArray(relationshipData)) {
+                    connectData = { [relationName]: { connect: relationshipData.map((item: any) => ({ id: item.id })) } };
+                } else {
+                    connectData = { [relationName]: { connect: { id: relationshipData.id } } };
+                }
+
+                await client[modelName].update({
+                    where: { [primaryKey]: parsedIdentifier },
+                    data: connectData
+                });
+
+                res.status(204).end();
+
+            } catch (error: any) {
+                console.error(`Relationship Update Error for ${modelName}:`, error);
+                const { code, status } = ErrorFormatter.mapPrismaError(error);
+                const errorResponse = this.formatJsonApiError(error, code, status, req.path);
+                res.status(status).json(errorResponse);
+            }
+        });
+
+        // PATCH /:identifier/relationships/:relationName - 관계 완전 교체
+        this.router.patch(`/:${primaryKey}/relationships/:relationName`, async (req, res) => {
+            try {
+                res.setHeader('Content-Type', 'application/vnd.api+json');
+                
+                // Content-Type 검증
+                const contentType = req.get('Content-Type');
+                if (contentType && !contentType.includes('application/vnd.api+json')) {
+                    const errorResponse = this.formatJsonApiError(
+                        new Error('Content-Type must be application/vnd.api+json'),
+                        'INVALID_CONTENT_TYPE',
+                        415,
+                        req.path
+                    );
+                    return res.status(415).json(errorResponse);
+                }
+                
+                const { success, parsedIdentifier } = this.extractAndParsePrimaryKey(
+                    req, res, primaryKey, primaryKeyParser, modelName
+                );
+                if (!success) return;
+
+                const relationName = req.params.relationName;
+                
+                if (!req.body || req.body.data === undefined) {
+                    const errorResponse = this.formatJsonApiError(
+                        new Error('Request must contain data field'),
+                        'INVALID_REQUEST',
+                        400,
+                        req.path
+                    );
+                    return res.status(400).json(errorResponse);
+                }
+
+                const relationshipData = req.body.data;
+                let updateData;
+
+                if (relationshipData === null) {
+                    // 관계 제거
+                    updateData = { [relationName]: { disconnect: true } };
+                } else if (Array.isArray(relationshipData)) {
+                    // 일대다 관계 교체
+                    updateData = { 
+                        [relationName]: { 
+                            set: relationshipData.map((item: any) => ({ id: item.id })) 
+                        } 
+                    };
+                } else {
+                    // 일대일 관계 교체
+                    updateData = { [relationName]: { connect: { id: relationshipData.id } } };
+                }
+
+                await client[modelName].update({
+                    where: { [primaryKey]: parsedIdentifier },
+                    data: updateData
+                });
+
+                res.status(204).end();
+
+            } catch (error: any) {
+                console.error(`Relationship Replace Error for ${modelName}:`, error);
+                const { code, status } = ErrorFormatter.mapPrismaError(error);
+                const errorResponse = this.formatJsonApiError(error, code, status, req.path);
+                res.status(status).json(errorResponse);
+            }
+        });
+
+        // DELETE /:identifier/relationships/:relationName - 관계 제거
+        this.router.delete(`/:${primaryKey}/relationships/:relationName`, async (req, res) => {
+            try {
+                res.setHeader('Content-Type', 'application/vnd.api+json');
+                
+                // Content-Type 검증
+                const contentType = req.get('Content-Type');
+                if (contentType && !contentType.includes('application/vnd.api+json')) {
+                    const errorResponse = this.formatJsonApiError(
+                        new Error('Content-Type must be application/vnd.api+json'),
+                        'INVALID_CONTENT_TYPE',
+                        415,
+                        req.path
+                    );
+                    return res.status(415).json(errorResponse);
+                }
+                
+                const { success, parsedIdentifier } = this.extractAndParsePrimaryKey(
+                    req, res, primaryKey, primaryKeyParser, modelName
+                );
+                if (!success) return;
+
+                const relationName = req.params.relationName;
+                
+                if (!req.body || !req.body.data) {
+                    const errorResponse = this.formatJsonApiError(
+                        new Error('Request must contain data field with relationship identifiers to remove'),
+                        'INVALID_REQUEST',
+                        400,
+                        req.path
+                    );
+                    return res.status(400).json(errorResponse);
+                }
+
+                const relationshipData = req.body.data;
+                let disconnectData;
+
+                if (Array.isArray(relationshipData)) {
+                    disconnectData = { [relationName]: { disconnect: relationshipData.map((item: any) => ({ id: item.id })) } };
+                } else {
+                    disconnectData = { [relationName]: { disconnect: { id: relationshipData.id } } };
+                }
+
+                await client[modelName].update({
+                    where: { [primaryKey]: parsedIdentifier },
+                    data: disconnectData
+                });
+
+                res.status(204).end();
+
+            } catch (error: any) {
+                console.error(`Relationship Delete Error for ${modelName}:`, error);
                 const { code, status } = ErrorFormatter.mapPrismaError(error);
                 const errorResponse = this.formatJsonApiError(error, code, status, req.path);
                 res.status(status).json(errorResponse);

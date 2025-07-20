@@ -1726,12 +1726,27 @@ export class ExpressRouter {
         databaseName: T, 
         modelName: ModelNamesFor<T>,
         options?: {
+
+            /** CRUD 액션 활성화 설정 */
             only?: ('index' | 'show' | 'create' | 'update' | 'destroy' | 'recover')[];
             except?: ('index' | 'show' | 'create' | 'update' | 'destroy' | 'recover')[];
+
+
             /** Primary key 필드명 지정 (기본값: 'id') */
             primaryKey?: string;
+
+
             /** Primary key 타입 변환 함수 */
             primaryKeyParser?: (value: string) => any;
+
+
+            /** Soft Delete 설정 */
+            softDelete?: {
+                enabled: boolean;
+                field: string;
+            };
+
+            /** 미들웨어 */
             middleware?: {
                 index?: HandlerFunction[];
                 show?: HandlerFunction[];
@@ -1740,24 +1755,32 @@ export class ExpressRouter {
                 destroy?: HandlerFunction[];
                 recover?: HandlerFunction[];
             };
+
+            /** 요청 검증 설정 */
             validation?: {
                 create?: RequestConfig;
                 update?: RequestConfig;
                 recover?: RequestConfig;
             };
+
+            /** 응답 검증 설정 */
             hooks?: {
                 beforeCreate?: (data: any, req: Request) => Promise<any> | any;
                 afterCreate?: (result: any, req: Request) => Promise<any> | any;
+
                 beforeUpdate?: (data: any, req: Request) => Promise<any> | any;
-                afterUpdate?: (result: any, req: Request) => Promise<any> | any;
+                afterUpdate?: (result: any, req: Request) => Promise<any> | any
+
                 beforeDestroy?: (id: any, req: Request) => Promise<void> | void;
                 afterDestroy?: (id: any, req: Request) => Promise<void> | void;
+                
                 beforeRecover?: (id: any, req: Request) => Promise<void> | void;
                 afterRecover?: (result: any, req: Request) => Promise<void> | void;
             };
         }
     ): ExpressRouter {
         
+
         const enabledActions = this.getEnabledActions(options);
         const client = prismaManager.getWrap(databaseName);
         
@@ -1893,6 +1916,8 @@ export class ExpressRouter {
      */
     private setupIndexRoute(client: any, modelName: string, options?: any, primaryKey: string = 'id'): void {
         const middlewares = options?.middleware?.index || [];
+        const isSoftDelete = options?.softDelete?.enabled;
+        const softDeleteField = options?.softDelete?.field || 'deletedAt';
         
         const handler: HandlerFunction = async (req, res, injected, repo, db) => {
             try {
@@ -1904,6 +1929,27 @@ export class ExpressRouter {
                 
                 // Prisma 쿼리 옵션 빌드
                 const findManyOptions = PrismaQueryBuilder.buildFindManyOptions(queryParams);
+                
+                // Soft Delete 필터 추가 (기존 where 조건과 병합)
+                if (isSoftDelete) {
+                    // include_deleted 쿼리 파라미터가 true가 아닌 경우 삭제된 항목 제외
+                    const includeDeleted = req.query.include_deleted === 'true';
+                    
+                    if (!includeDeleted) {
+                        // 기존 where 조건이 있는 경우 AND 조건으로 추가
+                        if (findManyOptions.where) {
+                            findManyOptions.where = {
+                                AND: [
+                                    findManyOptions.where,
+                                    { [softDeleteField]: null }
+                                ]
+                            };
+                        } else {
+                            // where 조건이 없는 경우 새로 생성
+                            findManyOptions.where = { [softDeleteField]: null };
+                        }
+                    }
+                }
                 
                 // 총 개수 조회 (페이지네이션용)
                 const totalCountOptions = { ...findManyOptions };
@@ -1923,7 +1969,7 @@ export class ExpressRouter {
                 const response: any = {
                     data: jsonApiData,
                     jsonapi: {
-                        version: "1.0"
+                        version: "1.1"
                     }
                 };
 
@@ -1983,16 +2029,27 @@ export class ExpressRouter {
         }
 
         // 문서화 등록
+        const queryParams: any = {
+            include: { type: 'string', required: false, description: 'Related resources to include (comma-separated)' },
+            sort: { type: 'string', required: false, description: 'Sort fields (prefix with - for desc)' },
+            'page[number]': { type: 'number', required: false, description: 'Page number' },
+            'page[size]': { type: 'number', required: false, description: 'Page size' },
+            'filter[field_op]': { type: 'string', required: false, description: 'Filter conditions (see API docs for operators)' }
+        };
+        
+        // Soft delete가 활성화된 경우 include_deleted 파라미터 추가
+        if (isSoftDelete) {
+            queryParams.include_deleted = { 
+                type: 'boolean', 
+                required: false, 
+                description: 'Include soft deleted items (default: false)' 
+            };
+        }
+        
         this.registerDocumentation('GET', '/', {
             summary: `Get ${modelName} list with filtering, sorting, and pagination`,
             parameters: {
-                query: {
-                    include: { type: 'string', required: false, description: 'Related resources to include (comma-separated)' },
-                    sort: { type: 'string', required: false, description: 'Sort fields (prefix with - for desc)' },
-                    'page[number]': { type: 'number', required: false, description: 'Page number' },
-                    'page[size]': { type: 'number', required: false, description: 'Page size' },
-                    'filter[field_op]': { type: 'string', required: false, description: 'Filter conditions (see API docs for operators)' }
-                }
+                query: queryParams
             },
             responses: {
                 200: {
@@ -2014,6 +2071,8 @@ export class ExpressRouter {
         primaryKeyParser: (value: string) => any = ExpressRouter.parseString
     ): void {
         const middlewares = options?.middleware?.show || [];
+        const isSoftDelete = options?.softDelete?.enabled;
+        const softDeleteField = options?.softDelete?.field || 'deletedAt';
         
         const handler: HandlerFunction = async (req, res, injected, repo, db) => {
             try {
@@ -2032,12 +2091,38 @@ export class ExpressRouter {
                     ? PrismaQueryBuilder['buildIncludeOptions'](queryParams.include)
                     : undefined;
 
-                const item = await client[modelName].findUnique({
-                    where: { [primaryKey]: parsedIdentifier },
+                // Soft Delete 필터 추가 (include_deleted가 true가 아닌 경우)
+                const includeDeleted = req.query.include_deleted === 'true';
+                const whereClause: any = { [primaryKey]: parsedIdentifier };
+                
+                if (isSoftDelete && !includeDeleted) {
+                    whereClause[softDeleteField] = null;
+                }
+
+                const item = await client[modelName].findFirst({
+                    where: whereClause,
                     ...(includeOptions && { include: includeOptions })
                 });
 
                 if (!item) {
+                    // Soft delete된 항목인지 확인 (include_deleted=false 상태에서)
+                    if (isSoftDelete && !includeDeleted) {
+                        const deletedItem = await client[modelName].findUnique({
+                            where: { [primaryKey]: parsedIdentifier }
+                        });
+                        
+                        if (deletedItem && deletedItem[softDeleteField]) {
+                            // Soft delete된 항목에 대한 410 Gone 응답 (JSON:API 확장)
+                            const errorResponse = this.formatJsonApiError(
+                                new Error(`${modelName} has been deleted`),
+                                'RESOURCE_DELETED',
+                                410,
+                                req.path
+                            );
+                            return res.status(410).json(errorResponse);
+                        }
+                    }
+                    
                     const errorResponse = this.formatJsonApiError(
                         new Error(`${modelName} not found`),
                         'NOT_FOUND',
@@ -2051,7 +2136,7 @@ export class ExpressRouter {
                 const response = {
                     data: this.transformToJsonApiResource(item, modelName, req, primaryKey),
                     jsonapi: {
-                        version: "1.0"
+                        version: "1.1"
                     }
                 };
                 
@@ -2079,24 +2164,44 @@ export class ExpressRouter {
         }
 
         // 문서화 등록
+        const queryParams: any = {
+            include: { type: 'string', required: false, description: 'Related resources to include' }
+        };
+        
+        // Soft delete가 활성화된 경우 include_deleted 파라미터 추가
+        if (isSoftDelete) {
+            queryParams.include_deleted = { 
+                type: 'boolean', 
+                required: false, 
+                description: 'Include soft deleted items (default: false)' 
+            };
+        }
+        
+        const responses: any = {
+            200: {
+                data: { type: 'object', required: true, description: `${modelName} object` }
+            },
+            404: {
+                error: { type: 'object', required: true, description: 'Not found error' }
+            }
+        };
+        
+        // Soft delete가 활성화된 경우 410 Gone 응답 추가
+        if (isSoftDelete) {
+            responses[410] = {
+                error: { type: 'object', required: true, description: 'Resource has been soft deleted' }
+            };
+        }
+        
         this.registerDocumentation('GET', routePath, {
             summary: `Get single ${modelName} by ${primaryKey}`,
             parameters: {
                 params: {
                     [primaryKey]: { type: 'string', required: true, description: `${modelName} ${primaryKey}` }
                 },
-                query: {
-                    include: { type: 'string', required: false, description: 'Related resources to include' }
-                }
+                query: queryParams
             },
-            responses: {
-                200: {
-                    data: { type: 'object', required: true, description: `${modelName} object` }
-                },
-                404: {
-                    error: { type: 'object', required: true, description: 'Not found error' }
-                }
-            }
+            responses: responses
         });
     }
 
@@ -2411,6 +2516,8 @@ export class ExpressRouter {
         primaryKeyParser: (value: string) => any = ExpressRouter.parseString
     ): void {
         const middlewares = options?.middleware?.destroy || [];
+        const isSoftDelete = options?.softDelete?.enabled;
+        const softDeleteField = options?.softDelete?.field || 'deletedAt';
         
         const handler: HandlerFunction = async (req, res, injected, repo, db) => {
             try {
@@ -2428,17 +2535,45 @@ export class ExpressRouter {
                     await options.hooks.beforeDestroy(parsedIdentifier, req);
                 }
 
-                await client[modelName].delete({
-                    where: { [primaryKey]: parsedIdentifier }
-                });
+                if (isSoftDelete) {
+                    // Soft Delete: 삭제 시간 설정
+                    const result = await client[modelName].update({
+                        where: { [primaryKey]: parsedIdentifier },
+                        data: { [softDeleteField]: new Date() }
+                    });
 
-                // After hook 실행
-                if (options?.hooks?.afterDestroy) {
-                    await options.hooks.afterDestroy(parsedIdentifier, req);
+                    // After hook 실행
+                    if (options?.hooks?.afterDestroy) {
+                        await options.hooks.afterDestroy(parsedIdentifier, req);
+                    }
+
+                    // JSON:API 준수 - 성공적인 soft delete 응답 (200 OK with meta)
+                    const response = {
+                        jsonapi: {
+                            version: "1.1"
+                        },
+                        meta: {
+                            operation: 'soft_delete',
+                            timestamp: new Date().toISOString(),
+                            [softDeleteField]: result[softDeleteField]
+                        }
+                    };
+                    
+                    res.status(200).json(response);
+                } else {
+                    // Hard Delete: 완전 삭제
+                    await client[modelName].delete({
+                        where: { [primaryKey]: parsedIdentifier }
+                    });
+
+                    // After hook 실행
+                    if (options?.hooks?.afterDestroy) {
+                        await options.hooks.afterDestroy(parsedIdentifier, req);
+                    }
+
+                    // JSON:API 삭제 성공 응답 (204 No Content)
+                    res.status(204).send();
                 }
-
-                // JSON:API 삭제 성공 응답 (204 No Content)
-                res.status(204).send();
                 
             } catch (error: any) {
                 console.error(`CRUD Destroy Error for ${modelName}:`, error);
@@ -2459,21 +2594,34 @@ export class ExpressRouter {
         }
 
         // 문서화 등록 - JSON:API 형식
+        const deleteDescription = isSoftDelete ? 
+            `Soft delete ${modelName} by ${primaryKey} (JSON:API)` : 
+            `Delete ${modelName} by ${primaryKey} (JSON:API)`;
+            
+        const deleteResponses = isSoftDelete ? {
+            200: {
+                meta: { type: 'object', required: true, description: 'Soft delete metadata with timestamp' }
+            },
+            404: {
+                errors: { type: 'array', required: true, description: 'JSON:API error objects' }
+            }
+        } : {
+            204: {
+                description: 'Successfully deleted (no content)'
+            },
+            404: {
+                errors: { type: 'array', required: true, description: 'JSON:API error objects' }
+            }
+        };
+        
         this.registerDocumentation('DELETE', routePath, {
-            summary: `Delete ${modelName} by ${primaryKey} (JSON:API)`,
+            summary: deleteDescription,
             parameters: {
                 params: {
                     [primaryKey]: { type: 'string', required: true, description: `${modelName} ${primaryKey}` }
                 }
             },
-            responses: {
-                204: {
-                    description: 'Successfully deleted (no content)'
-                },
-                404: {
-                    errors: { type: 'array', required: true, description: 'JSON:API error objects' }
-                }
-            }
+            responses: deleteResponses
         });
     }
 

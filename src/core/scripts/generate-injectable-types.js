@@ -571,12 +571,7 @@ export type GetMiddlewareType<T extends MiddlewareName> = T extends keyof Middle
 	console.log('Generated default injectable types:', outputPath);
 }
 
-/**
- * Capitalize first letter of string
- */
-function capitalize(str) {
-	return str.charAt(0).toUpperCase() + str.slice(1);
-}
+
 
 // Run the generator
 if (require.main === module) {

@@ -2009,17 +2009,20 @@ export class ExpressRouter {
                 }
 
                 // 메타데이터 생성
-                const meta = {
-                    total: total,
-                    count: items.length,
-                    ...(queryParams.page && {
-                        page: {
-                            current: queryParams.page.number || 1,
-                            size: queryParams.page.size || 10,
-                            total: Math.ceil(total / (queryParams.page.size || 10))
-                        }
-                    })
+                const meta: any = {
+                    timestamp: new Date().toISOString(),
+                    total: total,  // 전체 레코드 수
+                    count: items.length  // 현재 페이지의 레코드 수
                 };
+
+                // 페이지네이션이 활성화된 경우에만 페이지 정보 추가
+                if (queryParams.page) {
+                    meta.page = {
+                        current: queryParams.page.number || 1,
+                        size: queryParams.page.size || 10,
+                        total: Math.ceil(total / (queryParams.page.size || 10))  // 전체 페이지 수
+                    };
+                }
 
                 // JSON:API 응답 생성
                 const response: JsonApiResponse = JsonApiTransformer.createJsonApiResponse(

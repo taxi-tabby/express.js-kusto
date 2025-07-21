@@ -1205,7 +1205,7 @@ export class JsonApiTransformer {
     // 링크 추가
     if (baseUrl) {
       resource.links = {
-        self: `${baseUrl}/${resourceType.toLowerCase()}/${resourceId}`
+        self: `${baseUrl}/${resourceId}`
       };
     }
 

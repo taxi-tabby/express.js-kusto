@@ -9,7 +9,6 @@
   },
   "files.exclude": {
     "**/.git": true,
-    "src/app/db/*/client": true
   },
   "search.exclude": {
     "**/node_modules": true,
@@ -23,4 +22,5 @@
     "editor.semanticHighlighting.enabled": true,
     "editor.suggest.showWords": false
   },
+  "prisma.enableDiagnostics": true,
 }

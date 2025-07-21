@@ -3292,8 +3292,8 @@ export class ExpressRouter {
             if (Array.isArray(value) || (value && typeof value === 'object' && value.id)) {
                 relationships[key] = {
                     links: {
-                        self: `${baseUrl}/${resourceType}/${id}/relationships/${key}`,
-                        related: `${baseUrl}/${resourceType}/${id}/${key}`
+                        self: `${baseUrl}/${id}/relationships/${key}`,
+                        related: `${baseUrl}/${id}/${key}`
                     }
                 };
                 
@@ -3319,7 +3319,7 @@ export class ExpressRouter {
             id: String(id),
             attributes: resourceAttributes,
             links: {
-                self: `${baseUrl}/${resourceType}/${id}`
+                self: `${baseUrl}/${id}`
             }
         };
         

@@ -2577,28 +2577,28 @@ export class ExpressRouter {
         }
 
         // 타입 필드 검증
-        if (!data.type || typeof data.type !== 'string') {
-            const errorResponse = this.formatJsonApiError(
-                new Error('Resource must have a type field'),
-                'MISSING_RESOURCE_TYPE',
-                400,
-                req.path
-            );
-            res.status(400).json(errorResponse);
-            return false;
-        }
+        // if (!data.type || typeof data.type !== 'string') {
+        //     const errorResponse = this.formatJsonApiError(
+        //         new Error('Resource must have a type field'),
+        //         'MISSING_RESOURCE_TYPE',
+        //         400,
+        //         req.path
+        //     );
+        //     res.status(400).json(errorResponse);
+        //     return false;
+        // }
 
         // 타입 일치 검증
-        if (data.type !== expectedType) {
-            const errorResponse = this.formatJsonApiError(
-                new Error(`Resource type "${data.type}" does not match expected type "${expectedType}"`),
-                'INVALID_RESOURCE_TYPE',
-                409,
-                req.path
-            );
-            res.status(409).json(errorResponse);
-            return false;
-        }
+        // if (data.type !== expectedType) {
+        //     const errorResponse = this.formatJsonApiError(
+        //         new Error(`Resource type "${data.type}" does not match expected type "${expectedType}"`),
+        //         'INVALID_RESOURCE_TYPE',
+        //         409,
+        //         req.path
+        //     );
+        //     res.status(409).json(errorResponse);
+        //     return false;
+        // }
 
         // 업데이트 시 ID 필드 검증
         if (isUpdate) {

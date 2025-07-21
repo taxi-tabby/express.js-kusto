@@ -11,7 +11,7 @@ import { repositoryManager } from '@lib/repositoryManager'
 import { kustoManager } from '@lib/kustoManager'
 import { CrudQueryParser, PrismaQueryBuilder, CrudResponseFormatter, JsonApiTransformer, JsonApiResponse, JsonApiResource, JsonApiRelationship, JsonApiErrorResponse } from './crudHelpers';
 import { ErrorFormatter } from './errorFormatter';
-import { serializeBigInt } from './serializer';
+import { serializeBigInt, serialize } from './serializer';
 import './types/express-extensions';
 
 
@@ -2042,8 +2042,8 @@ export class ExpressRouter {
                     }
                 );
                 
-                // BigInt 직렬화 처리
-                const serializedResponse = serializeBigInt(response);
+                // BigInt와 DATE 타입 직렬화 처리
+                const serializedResponse = serialize(response);
                 
                 res.json(serializedResponse);
                 
@@ -2196,8 +2196,8 @@ export class ExpressRouter {
                     }
                 );
                 
-                // BigInt 직렬화 처리
-                const serializedResponse = serializeBigInt(response);
+                // BigInt와 DATE 타입 직렬화 처리
+                const serializedResponse = serialize(response);
                 
                 res.json(serializedResponse);
                 
@@ -2350,8 +2350,8 @@ export class ExpressRouter {
                     }
                 );
                 
-                // BigInt 직렬화 처리
-                const serializedResponse = serializeBigInt(response);
+                // BigInt와 DATE 타입 직렬화 처리
+                const serializedResponse = serialize(response);
                 
                 res.status(201).json(serializedResponse);
                 
@@ -2881,8 +2881,8 @@ export class ExpressRouter {
                     }
                 );
                 
-                // BigInt 직렬화 처리
-                const serializedResponse = serializeBigInt(response);
+                // BigInt와 DATE 타입 직렬화 처리
+                const serializedResponse = serialize(response);
                 
                 res.json(serializedResponse);
                 
@@ -3193,8 +3193,8 @@ export class ExpressRouter {
                     }
                 };
                 
-                // BigInt 직렬화 처리
-                const serializedResponse = serializeBigInt(response);
+                // BigInt와 DATE 타입 직렬화 처리
+                const serializedResponse = serialize(response);
                 
                 res.json(serializedResponse);
                 
@@ -3705,7 +3705,7 @@ export class ExpressRouter {
                     }
                 );
 
-                res.json(serializeBigInt(response));
+                res.json(serialize(response));
 
             } catch (error: any) {
                 console.error(`Related Resource Error for ${modelName}:`, error);
@@ -3773,7 +3773,7 @@ export class ExpressRouter {
                     }
                 };
 
-                res.json(serializeBigInt(response));
+                res.json(serialize(response));
 
             } catch (error: any) {
                 console.error(`Relationship Error for ${modelName}:`, error);
@@ -4023,7 +4023,7 @@ export class ExpressRouter {
                     }
                 );
 
-                res.json(serializeBigInt(response));
+                res.json(serialize(response));
 
             } catch (error: any) {
                 console.error(`Related Resource Error for ${modelName}:`, error);

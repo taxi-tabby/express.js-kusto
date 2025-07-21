@@ -3364,37 +3364,47 @@ export class ExpressRouter {
     }
 
     /**
+     * 공통 JSON:API 기본 구조 생성 헬퍼
+     */
+    private createBaseJsonApiStructure(): any {
+        return {
+            jsonapi: {
+                version: "1.1",
+                // ext: ["https://jsonapi.org/ext/atomic"],
+                // profile: ["https://jsonapi.org/profiles/ethanresnick/cursor-pagination/"],
+                meta: {
+                    implementation: "express.js-kusto v2.0",
+                    // implementedFeatures: [
+                    //     "sparse-fieldsets",
+                    //     "compound-documents", 
+                    //     "resource-relationships",
+                    //     "pagination",
+                    //     "sorting",
+                    //     "filtering",
+                    //     "atomic-operations",
+                    //     "content-negotiation",
+                    //     "resource-identification"
+                    // ],
+                    // supportedExtensions: [
+                    //     "https://jsonapi.org/ext/atomic"
+                    // ],
+                    // supportedProfiles: [
+                    //     "https://jsonapi.org/profiles/ethanresnick/cursor-pagination/"
+                    // ]
+                }
+            }
+        };
+    }
+
+    /**
      * JSON:API 에러 형식으로 포맷하는 헬퍼 메서드 - 완전한 스펙 준수
      */
     private formatJsonApiError(error: any, code: string, status: number, path: string): JsonApiErrorResponse {
         const errorId = `error_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        const baseStructure = this.createBaseJsonApiStructure();
         
         return {
-            jsonapi: {
-                version: "1.1",
-                ext: ["https://jsonapi.org/ext/atomic"],
-                profile: ["https://jsonapi.org/profiles/ethanresnick/cursor-pagination/"],
-                meta: {
-                    implementation: "express.js-kusto v2.0",
-                    implementedFeatures: [
-                        "sparse-fieldsets",
-                        "compound-documents", 
-                        "resource-relationships",
-                        "pagination",
-                        "sorting",
-                        "filtering",
-                        "atomic-operations",
-                        "content-negotiation",
-                        "resource-identification"
-                    ],
-                    supportedExtensions: [
-                        "https://jsonapi.org/ext/atomic"
-                    ],
-                    supportedProfiles: [
-                        "https://jsonapi.org/profiles/ethanresnick/cursor-pagination/"
-                    ]
-                }
-            },
+            ...baseStructure,
             errors: [
                 {
                     id: errorId,

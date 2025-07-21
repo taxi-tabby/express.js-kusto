@@ -1330,6 +1330,39 @@ export class JsonApiTransformer {
   }
 
   /**
+   * 공통 JSON:API 기본 구조 생성 헬퍼
+   */
+  private static createBaseJsonApiStructure(): any {
+    return {
+      jsonapi: {
+        version: "1.1",
+        // ext: ["https://jsonapi.org/ext/atomic"],
+        // profile: ["https://jsonapi.org/profiles/ethanresnick/cursor-pagination/"],
+        meta: {
+          implementation: "express.js-kusto v2.0",
+          // implementedFeatures: [
+          //   "sparse-fieldsets",
+          //   "compound-documents", 
+          //   "resource-relationships",
+          //   "pagination",
+          //   "sorting",
+          //   "filtering",
+          //   "atomic-operations",
+          //   "content-negotiation",
+          //   "resource-identification"
+          // ],
+          // supportedExtensions: [
+          //   "https://jsonapi.org/ext/atomic"
+          // ],
+          // supportedProfiles: [
+          //   "https://jsonapi.org/profiles/ethanresnick/cursor-pagination/"
+          // ]
+        }
+      }
+    };
+  }
+
+  /**
    * 완전한 JSON:API 응답 객체 생성 - Meta 정보 개선
    */
   static createJsonApiResponse(
@@ -1381,33 +1414,10 @@ export class JsonApiTransformer {
       );
     }
 
+    const baseStructure = this.createBaseJsonApiStructure();
     const response: JsonApiResponse = {
-      data: jsonApiData,
-      jsonapi: {
-        version: "1.1",
-        ext: ["https://jsonapi.org/ext/atomic"],
-        profile: ["https://jsonapi.org/profiles/ethanresnick/cursor-pagination/"],
-        meta: {
-          implementation: "express.js-kusto v2.0",
-          implementedFeatures: [
-            "sparse-fieldsets",
-            "compound-documents", 
-            "resource-relationships",
-            "pagination",
-            "sorting",
-            "filtering",
-            "atomic-operations",
-            "content-negotiation",
-            "resource-identification"
-          ],
-          supportedExtensions: [
-            "https://jsonapi.org/ext/atomic"
-          ],
-          supportedProfiles: [
-            "https://jsonapi.org/profiles/ethanresnick/cursor-pagination/"
-          ]
-        }
-      }
+      ...baseStructure,
+      data: jsonApiData
     };
 
     // 선택적 필드들 추가

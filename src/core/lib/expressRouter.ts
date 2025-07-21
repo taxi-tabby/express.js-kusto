@@ -2008,19 +2008,23 @@ export class ExpressRouter {
                     }
                 }
 
-                // 메타데이터 생성
+                // 메타데이터 생성 (JSON:API 스펙 준수)
                 const meta: any = {
                     timestamp: new Date().toISOString(),
-                    total: total,  // 전체 레코드 수
-                    count: items.length  // 현재 페이지의 레코드 수
+                    total: total,  // 전체 레코드 수 (JSON:API에서 일반적으로 사용)
+                    count: items.length  // 현재 응답의 레코드 수
                 };
 
                 // 페이지네이션이 활성화된 경우에만 페이지 정보 추가
                 if (queryParams.page) {
+                    const pageSize = queryParams.page.size || 10;
+                    const currentPage = queryParams.page.number || 1;
+                    const totalPages = Math.ceil(total / pageSize);
+                    
                     meta.page = {
-                        current: queryParams.page.number || 1,
-                        size: queryParams.page.size || 10,
-                        total: Math.ceil(total / (queryParams.page.size || 10))  // 전체 페이지 수
+                        current: currentPage,
+                        size: pageSize,
+                        total: totalPages  // 전체 페이지 수
                     };
                 }
 

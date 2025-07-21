@@ -2274,9 +2274,9 @@ export class ExpressRouter {
                 res.setHeader('Vary', 'Accept');
                 
                 // Content Negotiation 검증
-                if (!this.validateJsonApiContentType(req, res)) {
-                    return;
-                }
+                // if (!this.validateJsonApiContentType(req, res)) {
+                //     return;
+                // }
                 
                 // JSON:API 요청 형식 검증
                 if (!req.body || !req.body.data) {
@@ -2427,16 +2427,16 @@ export class ExpressRouter {
                 res.setHeader('Content-Type', 'application/vnd.api+json; ext="https://jsonapi.org/ext/atomic"');
                 
                 // Content-Type 검증 (atomic extension 필요)
-                const contentType = req.get('Content-Type');
-                if (!contentType || !contentType.includes('application/vnd.api+json') || !contentType.includes('ext="https://jsonapi.org/ext/atomic"')) {
-                    const errorResponse = this.formatJsonApiError(
-                        new Error('Content-Type must include atomic extension'),
-                        'INVALID_CONTENT_TYPE',
-                        415,
-                        req.path
-                    );
-                    return res.status(415).json(errorResponse);
-                }
+                // const contentType = req.get('Content-Type');
+                // if (!contentType || !contentType.includes('application/vnd.api+json') || !contentType.includes('ext="https://jsonapi.org/ext/atomic"')) {
+                //     const errorResponse = this.formatJsonApiError(
+                //         new Error('Content-Type must include atomic extension'),
+                //         'INVALID_CONTENT_TYPE',
+                //         415,
+                //         req.path
+                //     );
+                //     return res.status(415).json(errorResponse);
+                // }
 
                 // 요청 구조 검증
                 if (!req.body || !req.body['atomic:operations']) {
@@ -2656,39 +2656,39 @@ export class ExpressRouter {
     /**
      * Content Negotiation 헬퍼 - JSON:API 스펙 준수
      */
-    private validateJsonApiContentType(req: any, res: any): boolean {
-        const contentType = req.get('Content-Type');
+    // private validateJsonApiContentType(req: any, res: any): boolean {
+    //     const contentType = req.get('Content-Type');
         
-        if (contentType && !contentType.includes('application/vnd.api+json')) {
-            const errorResponse = this.formatJsonApiError(
-                new Error('Content-Type must be application/vnd.api+json'),
-                'INVALID_CONTENT_TYPE',
-                415,
-                req.path
-            );
-            res.status(415).json(errorResponse);
-            return false;
-        }
+    //     if (contentType && !contentType.includes('application/vnd.api+json')) {
+    //         const errorResponse = this.formatJsonApiError(
+    //             new Error('Content-Type must be application/vnd.api+json'),
+    //             'INVALID_CONTENT_TYPE',
+    //             415,
+    //             req.path
+    //         );
+    //         res.status(415).json(errorResponse);
+    //         return false;
+    //     }
 
-        // 지원하지 않는 미디어 타입 파라미터 검증
-        if (contentType) {
-            const mediaTypeParams = this.parseMediaTypeParameters(contentType);
-            for (const param of Object.keys(mediaTypeParams)) {
-                if (param !== 'ext' && param !== 'profile') {
-                    const errorResponse = this.formatJsonApiError(
-                        new Error(`Unsupported media type parameter: ${param}`),
-                        'UNSUPPORTED_MEDIA_TYPE_PARAMETER',
-                        415,
-                        req.path
-                    );
-                    res.status(415).json(errorResponse);
-                    return false;
-                }
-            }
-        }
+    //     // 지원하지 않는 미디어 타입 파라미터 검증
+    //     if (contentType) {
+    //         const mediaTypeParams = this.parseMediaTypeParameters(contentType);
+    //         for (const param of Object.keys(mediaTypeParams)) {
+    //             if (param !== 'ext' && param !== 'profile') {
+    //                 const errorResponse = this.formatJsonApiError(
+    //                     new Error(`Unsupported media type parameter: ${param}`),
+    //                     'UNSUPPORTED_MEDIA_TYPE_PARAMETER',
+    //                     415,
+    //                     req.path
+    //                 );
+    //                 res.status(415).json(errorResponse);
+    //                 return false;
+    //             }
+    //         }
+    //     }
         
-        return true;
-    }
+    //     return true;
+    // }
 
     /**
      * 미디어 타입 파라미터 파싱
@@ -2789,9 +2789,9 @@ export class ExpressRouter {
                 res.setHeader('Content-Type', 'application/vnd.api+json');
                 
                 // Content Negotiation 검증
-                if (!this.validateJsonApiContentType(req, res)) {
-                    return;
-                }
+                // if (!this.validateJsonApiContentType(req, res)) {
+                //     return;
+                // }
                 
                 // 파라미터 추출 및 검증
                 const extractResult = this.extractAndParsePrimaryKey(req, res, primaryKey, primaryKeyParser, modelName);
@@ -2988,9 +2988,9 @@ export class ExpressRouter {
                 
                 // Content Negotiation 검증 (DELETE 요청에 본문이 있는 경우)
                 if (req.body && Object.keys(req.body).length > 0) {
-                    if (!this.validateJsonApiContentType(req, res)) {
-                        return;
-                    }
+                    // if (!this.validateJsonApiContentType(req, res)) {
+                    //     return;
+                    // }
                 }
                 
                 // 파라미터 추출 및 파싱

@@ -1,6 +1,6 @@
 {
   "name": "kusto-server",
-  "version": "0.1.11",
+  "version": "0.1.12",
   "description": "Express based custom server for simple backend service",
   "main": "index.js",
   "bin": {

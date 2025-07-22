@@ -2789,6 +2789,7 @@ export class ExpressRouter {
     /**
      * JSON:API 관계 데이터 처리 - 완전한 JSON:API 명세 준수
      * 생성/수정 시 관계 데이터를 Prisma 형식으로 변환
+     * 기존 리소스 연결과 새 리소스 생성을 모두 지원
      */
     private async processRelationships(
         data: any, 
@@ -2820,60 +2821,106 @@ export class ExpressRouter {
                             };
                         }
                     } else {
-                        // 관계 식별자 배열
-                        const relationIds = [];
+                        // 관계 데이터 처리
+                        const connectIds = [];
+                        const createData = [];
+                        
                         for (const item of relationshipData.data) {
-                            if (!item.type || !item.id) {
-                                throw new Error(`Invalid relationship data: missing type or id in ${relationName}`);
+                            console.log(`Processing relationship item in ${relationName}:`, JSON.stringify(item, null, 2));
+                            
+                            if (!item.type) {
+                                throw new Error(`Invalid relationship data: missing type in ${relationName}`);
                             }
                             
-                            // 관계 리소스가 실제로 존재하는지 검증 (선택적)
-                            // const relatedModel = this.getModelNameFromResourceType(item.type);
-                            // if (relatedModel) {
-                            //     const exists = await client[relatedModel].findUnique({
-                            //         where: { id: item.id }
-                            //     });
-                            //     if (!exists) {
-                            //         throw new Error(`Related resource ${item.type}:${item.id} not found`);
-                            //     }
-                            // }
-                            
-                            relationIds.push({ id: item.id });
+                            // 기존 리소스 연결 (id가 있는 경우)
+                            if (item.id) {
+                                // 관계 리소스가 실제로 존재하는지 검증 (선택적)
+                                const relatedModel = this.getModelNameFromResourceType(item.type);
+                                if (relatedModel) {
+                                    try {
+                                        const exists = await client[relatedModel].findUnique({
+                                            where: { id: item.id }
+                                        });
+                                        if (!exists) {
+                                            throw new Error(`Related resource ${item.type}:${item.id} not found`);
+                                        }
+                                    } catch (error) {
+                                        console.warn(`Could not verify existence of ${item.type}:${item.id}`, error);
+                                    }
+                                }
+                                
+                                connectIds.push({ id: item.id });
+                            }
+                            // 새 리소스 생성 (attributes가 있는 경우)
+                            else if (this.hasAttributes(item)) {
+                                console.log(`Creating new resource for ${relationName} with attributes:`, item.attributes);
+                                createData.push(item.attributes);
+                            } else {
+                                console.log(`Invalid relationship item in ${relationName}:`, JSON.stringify(item, null, 2));
+                                throw new Error(`Invalid relationship data: item must have either id (for connecting) or attributes (for creating) in ${relationName}`);
+                            }
                         }
                         
-                        if (isUpdate) {
-                            // 업데이트 시에는 기존 관계를 교체
+                        // Prisma 관계 데이터 구성
+                        const relationshipConfig: any = {};
+                        
+                        if (connectIds.length > 0) {
+                            if (isUpdate) {
+                                relationshipConfig.connect = connectIds;
+                            } else {
+                                relationshipConfig.connect = connectIds;
+                            }
+                        }
+                        
+                        if (createData.length > 0) {
+                            relationshipConfig.create = createData;
+                        }
+                        
+                        // set 작업은 업데이트 시에만 사용 (기존 관계를 완전히 대체)
+                        if (isUpdate && connectIds.length > 0 && createData.length === 0) {
                             processedData[relationName] = {
-                                set: relationIds
+                                set: connectIds
                             };
                         } else {
-                            // 생성 시에는 새로운 관계 연결
-                            processedData[relationName] = {
-                                connect: relationIds
-                            };
+                            processedData[relationName] = relationshipConfig;
                         }
                     }
                 }
                 // 단일 객체인 경우 - 일대일 관계
                 else if (typeof relationshipData.data === 'object') {
-                    if (!relationshipData.data.type || !relationshipData.data.id) {
-                        throw new Error(`Invalid relationship data: missing type or id in ${relationName}`);
+                    if (!relationshipData.data.type) {
+                        throw new Error(`Invalid relationship data: missing type in ${relationName}`);
                     }
                     
-                    // 관계 리소스가 실제로 존재하는지 검증 (선택적)
-                    // const relatedModel = this.getModelNameFromResourceType(relationshipData.data.type);
-                    // if (relatedModel) {
-                    //     const exists = await client[relatedModel].findUnique({
-                    //         where: { id: relationshipData.data.id }
-                    //     });
-                    //     if (!exists) {
-                    //         throw new Error(`Related resource ${relationshipData.data.type}:${relationshipData.data.id} not found`);
-                    //     }
-                    // }
-                    
-                    processedData[relationName] = {
-                        connect: { id: relationshipData.data.id }
-                    };
+                    // 기존 리소스 연결
+                    if (relationshipData.data.id) {
+                        // 관계 리소스가 실제로 존재하는지 검증 (선택적)
+                        const relatedModel = this.getModelNameFromResourceType(relationshipData.data.type);
+                        if (relatedModel) {
+                            try {
+                                const exists = await client[relatedModel].findUnique({
+                                    where: { id: relationshipData.data.id }
+                                });
+                                if (!exists) {
+                                    throw new Error(`Related resource ${relationshipData.data.type}:${relationshipData.data.id} not found`);
+                                }
+                            } catch (error) {
+                                console.warn(`Could not verify existence of ${relationshipData.data.type}:${relationshipData.data.id}`, error);
+                            }
+                        }
+                        
+                        processedData[relationName] = {
+                            connect: { id: relationshipData.data.id }
+                        };
+                    }
+                    // 새 리소스 생성
+                    else if (this.hasAttributes(relationshipData.data)) {
+                        processedData[relationName] = {
+                            create: relationshipData.data.attributes
+                        };
+                    } else {
+                        throw new Error(`Invalid relationship data: item must have either id (for connecting) or attributes (for creating) in ${relationName}`);
+                    }
                 }
             }
         }
@@ -2882,16 +2929,32 @@ export class ExpressRouter {
     }
 
     /**
+     * 객체가 attributes를 가지고 있는지 확인하는 타입 가드
+     */
+    private hasAttributes(obj: any): obj is JsonApiResource {
+        const result = obj && typeof obj === 'object' && 'attributes' in obj && obj.attributes != null;
+        console.log(`hasAttributes check for:`, JSON.stringify(obj, null, 2), `Result: ${result}`);
+        return result;
+    }
+
+    /**
      * 리소스 타입에서 모델명을 추론하는 헬퍼 메서드
      */
     private getModelNameFromResourceType(resourceType: string): string | null {
-        // 간단한 변환 규칙 (복수형 -> 단수형)
-        if (resourceType.endsWith('ies')) {
-            return resourceType.slice(0, -3) + 'y'; // categories -> category
-        } else if (resourceType.endsWith('s')) {
-            return resourceType.slice(0, -1); // users -> user
+        // 캐멀케이스로 변환 (orderItem -> OrderItem)
+        const pascalCase = resourceType
+            .split(/[-_]/)
+            .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+            .join('');
+        
+        // 복수형 -> 단수형 변환
+        if (pascalCase.endsWith('ies')) {
+            return pascalCase.slice(0, -3) + 'y'; // Categories -> Category
+        } else if (pascalCase.endsWith('s') && !pascalCase.endsWith('ss')) {
+            return pascalCase.slice(0, -1); // Users -> User, Orders -> Order
         }
-        return resourceType;
+        
+        return pascalCase; // OrderItem -> OrderItem (단수형 그대로)
     }
 
     /**

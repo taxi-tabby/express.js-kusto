@@ -54,10 +54,16 @@ export interface JsonApiObject {
 }
 
 /**
+ * JSON:API 관계 데이터 - 리소스 식별자 또는 완전한 리소스 객체
+ * 새로운 리소스 생성 시에는 attributes를 포함한 완전한 리소스 객체 사용
+ */
+export type JsonApiRelationshipData = JsonApiResourceIdentifier | JsonApiResource;
+
+/**
  * JSON:API 관계 객체 인터페이스
  */
 export interface JsonApiRelationship {
-  data?: JsonApiResourceIdentifier | JsonApiResourceIdentifier[] | null;
+  data?: JsonApiRelationshipData | JsonApiRelationshipData[] | null;
   links?: JsonApiRelationshipLinks;
   meta?: Record<string, any>;
 }

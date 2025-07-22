@@ -167,8 +167,8 @@ function scanDirectory(dirPath: string, fileList: string[] = [], baseDir?: strin
                 // 상대 경로로 변환하여 src/app 경로인지 확인
                 const relativePath = path.relative(base, fullPath).replace(/\\/g, '/');
 
-                // node_modules, .git 등 제외할 디렉토리 및 src/app, updater 폴더 제외
-                const shouldSkip = ['node_modules', '.git', '.vscode', 'dist', 'build'].includes(item) ||
+                // node_modules, .git, .github 등 제외할 디렉토리 및 src/app, updater 폴더 제외
+                const shouldSkip = ['node_modules', '.git', '.github', '.vscode', 'dist', 'build'].includes(item) ||
                     relativePath === 'src/app' ||
                     relativePath.startsWith('src/app/') ||
                     relativePath === 'updater' ||

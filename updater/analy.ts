@@ -132,6 +132,56 @@ function shouldIgnoreFile(filePath: string, patterns: string[]): boolean {
 }
 
 /**
+ * 배포에서 제외할 파일인지 확인합니다.
+ * @param fileName 파일명
+ * @param relativePath 상대 경로
+ * @returns 제외해야 하는 파일이면 true
+ */
+function shouldExcludeFromDeployment(fileName: string, relativePath: string): boolean {
+    // npm 관련 파일들
+    const npmFiles = [
+        'package.json',
+        'package-lock.json',
+        'npm-shrinkwrap.json',
+        '.npmrc',
+        '.npmignore'
+    ];
+    
+    // 개발 도구 관련 파일들
+    const devFiles = [
+        'tsconfig.json',
+        'tsconfig.*.json',
+        'jest.config.js',
+        'webpack.config.js',
+        'nodemon.json',
+        'nodemon.*.json',
+        '.gitignore',
+        '.gitattributes',
+        'README.md',
+        'CHANGELOG.md',
+        'LICENSE',
+        'LICENSE.md',
+        'LICENSE.txt'
+    ];
+    
+    // 파일명 직접 매치
+    if (npmFiles.includes(fileName) || devFiles.includes(fileName)) {
+        return true;
+    }
+    
+    // 패턴 매치 (tsconfig.*.json 등)
+    if (fileName.startsWith('tsconfig.') && fileName.endsWith('.json')) {
+        return true;
+    }
+    
+    if (fileName.startsWith('nodemon.') && fileName.endsWith('.json')) {
+        return true;
+    }
+    
+    return false;
+}
+
+/**
  * 파일의 체크섬을 계산합니다.
  * @param filePath 파일 경로
  * @returns MD5 해시 체크섬
@@ -218,10 +268,20 @@ export function generateFileMap(outputDir: string = './updater/map'): string {
                 const relativePath = path.relative(parentDir, filePath);
                 // 윈도우 경로 구분자를 슬래시로 변환
                 const normalizedPath = relativePath.replace(/\\/g, '/');
+                
+                // 파일명 추출
+                const fileName = path.basename(filePath);
 
                 // .gitignore 패턴에 매치되는지 확인
                 if (shouldIgnoreFile(normalizedPath, gitignorePatterns)) {
                     ignoredCount++;
+                    continue;
+                }
+                
+                // 배포 제외 파일인지 확인
+                if (shouldExcludeFromDeployment(fileName, normalizedPath)) {
+                    ignoredCount++;
+                    console.log(`Excluded from deployment: ${normalizedPath}`);
                     continue;
                 }
 

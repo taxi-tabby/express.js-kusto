@@ -961,6 +961,32 @@ export class ExpressRouter {
         this.router.use(this.convertSlugsToPath(slug), createProxyMiddleware(options));
     }
 
+    /**
+     * # STATIC
+     * @param staticPath - 정적 파일을 서비스할 물리적 경로
+     * @param options - express.static 옵션
+     * @description
+     * - Express의 정적 파일 서비스 미들웨어를 라우터 루트(/)에 추가합니다.
+     */
+    public STATIC(staticPath: string, options?: any): ExpressRouter {
+        this.router.use('/', static_(staticPath, options));
+        return this;
+    }
+
+    /**
+     * # STATIC_SLUG
+     * @param slug - 슬러그 배열 (URL 경로)
+     * @param staticPath - 정적 파일을 서비스할 물리적 경로
+     * @param options - express.static 옵션
+     * @description
+     * - Express의 정적 파일 서비스 미들웨어를 특정 경로에 추가합니다.
+     */
+    public STATIC_SLUG(slug: string[], staticPath: string, options?: any): ExpressRouter {
+        const slugPath = this.convertSlugsToPath(slug);
+        this.router.use(slugPath, static_(staticPath, options));
+        return this;
+    }
+
 
     /**
      * # GET_VALIDATED
@@ -4045,6 +4071,9 @@ export class ExpressRouter {
     }
 
     
+
+
+
     public build(): Router {
         const router = this.router;
 

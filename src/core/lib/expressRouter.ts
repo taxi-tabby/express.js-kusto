@@ -2341,12 +2341,23 @@ export class ExpressRouter {
 
                 // 관계 데이터 처리 (relationships가 있는 경우)
                 if (requestData.relationships) {
-                    data = await this.processRelationships(
-                        data, 
-                        requestData.relationships, 
-                        client, 
-                        modelName
-                    );
+                    try {
+                        data = await this.processRelationships(
+                            data, 
+                            requestData.relationships, 
+                            client, 
+                            modelName,
+                            false // 생성 모드
+                        );
+                    } catch (relationshipError: any) {
+                        const errorResponse = this.formatJsonApiError(
+                            relationshipError,
+                            'INVALID_RELATIONSHIP',
+                            422,
+                            req.path
+                        );
+                        return res.status(422).json(errorResponse);
+                    }
                 }
 
                 // Before hook 실행
@@ -2419,15 +2430,21 @@ export class ExpressRouter {
                 body: {
                     type: 'object',
                     required: true,
-                    description: 'JSON:API resource object',
+                    description: 'JSON:API resource object with optional relationships',
                     properties: {
                         data: {
                             type: 'object',
                             required: true,
                             properties: {
                                 type: { type: 'string', required: true, description: 'Resource type' },
+                                id: { type: 'string', required: false, description: 'Client-generated ID (optional)' },
                                 attributes: options?.validation?.create?.body || 
-                                          { type: 'object', required: true, description: `${modelName} attributes` }
+                                          { type: 'object', required: true, description: `${modelName} attributes` },
+                                relationships: { 
+                                    type: 'object', 
+                                    required: false, 
+                                    description: 'JSON:API relationships object with data containing resource identifiers' 
+                                }
                             }
                         }
                     }
@@ -2439,6 +2456,9 @@ export class ExpressRouter {
                 },
                 400: {
                     errors: { type: 'array', required: true, description: 'JSON:API error objects' }
+                },
+                422: {
+                    errors: { type: 'array', required: true, description: 'JSON:API validation errors including relationship errors' }
                 }
             }
         });
@@ -2767,26 +2787,90 @@ export class ExpressRouter {
     }
 
     /**
-     * JSON:API 관계 데이터 처리
+     * JSON:API 관계 데이터 처리 - 완전한 JSON:API 명세 준수
      * 생성/수정 시 관계 데이터를 Prisma 형식으로 변환
      */
     private async processRelationships(
         data: any, 
         relationships: Record<string, JsonApiRelationship>, 
         client: any, 
-        modelName: string
+        modelName: string,
+        isUpdate: boolean = false
     ): Promise<any> {
         const processedData = { ...data };
         
         for (const [relationName, relationshipData] of Object.entries(relationships)) {
-            if (relationshipData.data) {
-                if (Array.isArray(relationshipData.data)) {
-                    // 일대다 관계 처리
-                    processedData[relationName] = {
-                        connect: relationshipData.data.map((item: any) => ({ id: item.id }))
-                    };
-                } else if (relationshipData.data) {
-                    // 일대일 관계 처리
+            if (relationshipData.data !== undefined) {
+                // null인 경우 - 관계 제거 (업데이트 시에만)
+                if (relationshipData.data === null) {
+                    if (isUpdate) {
+                        processedData[relationName] = {
+                            disconnect: true
+                        };
+                    }
+                    // 생성 시에는 null 관계를 무시
+                }
+                // 배열인 경우 - 일대다 관계
+                else if (Array.isArray(relationshipData.data)) {
+                    if (relationshipData.data.length === 0) {
+                        // 빈 배열 - 모든 관계 제거 (업데이트 시에만)
+                        if (isUpdate) {
+                            processedData[relationName] = {
+                                set: []
+                            };
+                        }
+                    } else {
+                        // 관계 식별자 배열
+                        const relationIds = [];
+                        for (const item of relationshipData.data) {
+                            if (!item.type || !item.id) {
+                                throw new Error(`Invalid relationship data: missing type or id in ${relationName}`);
+                            }
+                            
+                            // 관계 리소스가 실제로 존재하는지 검증 (선택적)
+                            // const relatedModel = this.getModelNameFromResourceType(item.type);
+                            // if (relatedModel) {
+                            //     const exists = await client[relatedModel].findUnique({
+                            //         where: { id: item.id }
+                            //     });
+                            //     if (!exists) {
+                            //         throw new Error(`Related resource ${item.type}:${item.id} not found`);
+                            //     }
+                            // }
+                            
+                            relationIds.push({ id: item.id });
+                        }
+                        
+                        if (isUpdate) {
+                            // 업데이트 시에는 기존 관계를 교체
+                            processedData[relationName] = {
+                                set: relationIds
+                            };
+                        } else {
+                            // 생성 시에는 새로운 관계 연결
+                            processedData[relationName] = {
+                                connect: relationIds
+                            };
+                        }
+                    }
+                }
+                // 단일 객체인 경우 - 일대일 관계
+                else if (typeof relationshipData.data === 'object') {
+                    if (!relationshipData.data.type || !relationshipData.data.id) {
+                        throw new Error(`Invalid relationship data: missing type or id in ${relationName}`);
+                    }
+                    
+                    // 관계 리소스가 실제로 존재하는지 검증 (선택적)
+                    // const relatedModel = this.getModelNameFromResourceType(relationshipData.data.type);
+                    // if (relatedModel) {
+                    //     const exists = await client[relatedModel].findUnique({
+                    //         where: { id: relationshipData.data.id }
+                    //     });
+                    //     if (!exists) {
+                    //         throw new Error(`Related resource ${relationshipData.data.type}:${relationshipData.data.id} not found`);
+                    //     }
+                    // }
+                    
                     processedData[relationName] = {
                         connect: { id: relationshipData.data.id }
                     };
@@ -2795,6 +2879,19 @@ export class ExpressRouter {
         }
         
         return processedData;
+    }
+
+    /**
+     * 리소스 타입에서 모델명을 추론하는 헬퍼 메서드
+     */
+    private getModelNameFromResourceType(resourceType: string): string | null {
+        // 간단한 변환 규칙 (복수형 -> 단수형)
+        if (resourceType.endsWith('ies')) {
+            return resourceType.slice(0, -3) + 'y'; // categories -> category
+        } else if (resourceType.endsWith('s')) {
+            return resourceType.slice(0, -1); // users -> user
+        }
+        return resourceType;
     }
 
     /**
@@ -2868,12 +2965,23 @@ export class ExpressRouter {
 
                 // 관계 데이터 처리 (relationships가 있는 경우)
                 if (requestData.relationships) {
-                    data = await this.processRelationships(
-                        data, 
-                        requestData.relationships, 
-                        client, 
-                        modelName
-                    );
+                    try {
+                        data = await this.processRelationships(
+                            data, 
+                            requestData.relationships, 
+                            client, 
+                            modelName,
+                            true // 업데이트 모드
+                        );
+                    } catch (relationshipError: any) {
+                        const errorResponse = this.formatJsonApiError(
+                            relationshipError,
+                            'INVALID_RELATIONSHIP',
+                            422,
+                            req.path
+                        );
+                        return res.status(422).json(errorResponse);
+                    }
                 }
 
                 // 빈 값이나 null 값들 정리만 수행
@@ -2959,7 +3067,7 @@ export class ExpressRouter {
                     body: {
                         type: 'object',
                         required: true,
-                        description: 'JSON:API resource object',
+                        description: 'JSON:API resource object with optional relationships',
                         properties: {
                             data: {
                                 type: 'object',
@@ -2968,7 +3076,12 @@ export class ExpressRouter {
                                     type: { type: 'string', required: true, description: 'Resource type' },
                                     id: { type: 'string', required: false, description: 'Resource ID (must match URL parameter)' },
                                     attributes: options?.validation?.update?.body || 
-                                              { type: 'object', required: true, description: `${modelName} attributes to update` }
+                                              { type: 'object', required: true, description: `${modelName} attributes to update` },
+                                    relationships: { 
+                                        type: 'object', 
+                                        required: false, 
+                                        description: 'JSON:API relationships object for updating related resources (set/connect/disconnect)' 
+                                    }
                                 }
                             }
                         }
@@ -2983,6 +3096,9 @@ export class ExpressRouter {
                     },
                     400: {
                         errors: { type: 'array', required: true, description: 'JSON:API error objects' }
+                    },
+                    422: {
+                        errors: { type: 'array', required: true, description: 'JSON:API validation errors including relationship errors' }
                     }
                 }
             });

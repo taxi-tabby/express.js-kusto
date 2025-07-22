@@ -1501,46 +1501,49 @@ export class JsonApiTransformer {
     baseUrl?: string
   ): void {
     const pathParts = includePath.split('.');
-    let currentData = item;
+    
+    // 재귀적으로 중첩된 관계 처리
+    this.processNestedIncludes(item, pathParts, 0, included, processedResources, fieldsParams, baseUrl);
+  }
 
-    for (let i = 0; i < pathParts.length; i++) {
-      const relationName = pathParts[i];
-      const relationData = currentData[relationName];
+  /**
+   * 중첩된 include 경로를 재귀적으로 처리
+   */
+  private static processNestedIncludes(
+    currentData: any,
+    pathParts: string[],
+    currentIndex: number,
+    included: JsonApiResource[],
+    processedResources: Set<string>,
+    fieldsParams?: Record<string, string[]>,
+    baseUrl?: string
+  ): void {
+    if (currentIndex >= pathParts.length || !currentData) {
+      return;
+    }
 
-      if (!relationData) break;
+    const relationName = pathParts[currentIndex];
+    const relationData = currentData[relationName];
 
-      const resourceType = this.inferResourceTypeFromRelationship(relationName, Array.isArray(relationData));
-      const resourceFields = fieldsParams?.[resourceType];
+    if (!relationData) {
+      return;
+    }
 
-      if (Array.isArray(relationData)) {
-        relationData.forEach(relItem => {
-          const resourceKey = `${resourceType}:${relItem.id || relItem.uuid || relItem._id}`;
-          
-          if (!processedResources.has(resourceKey)) {
-            processedResources.add(resourceKey);
-            included.push(this.transformToResource(
-              relItem, 
-              resourceType, 
-              'id', 
-              resourceFields, 
-              baseUrl
-            ));
-          }
-        });
+    const resourceType = this.inferResourceTypeFromRelationship(relationName, Array.isArray(relationData));
+    const resourceFields = fieldsParams?.[resourceType];
+    const isLastPart = currentIndex === pathParts.length - 1;
 
-        // 중첩된 관계를 위해 첫 번째 항목으로 계속 진행
-        if (relationData.length > 0) {
-          currentData = relationData[0];
-        } else {
-          break;
-        }
-      } else {
-        const resourceKey = `${resourceType}:${relationData.id || relationData.uuid || relationData._id}`;
+    if (Array.isArray(relationData)) {
+      relationData.forEach(relItem => {
+        if (!relItem) return;
+
+        const resourceKey = `${resourceType}:${relItem.id || relItem.uuid || relItem._id}`;
         
+        // 현재 레벨의 리소스를 included에 추가
         if (!processedResources.has(resourceKey)) {
           processedResources.add(resourceKey);
           included.push(this.transformToResource(
-            relationData, 
+            relItem, 
             resourceType, 
             'id', 
             resourceFields, 
@@ -1548,7 +1551,45 @@ export class JsonApiTransformer {
           ));
         }
 
-        currentData = relationData;
+        // 마지막 부분이 아니면 재귀적으로 다음 레벨 처리
+        if (!isLastPart) {
+          this.processNestedIncludes(
+            relItem, 
+            pathParts, 
+            currentIndex + 1, 
+            included, 
+            processedResources, 
+            fieldsParams, 
+            baseUrl
+          );
+        }
+      });
+    } else {
+      const resourceKey = `${resourceType}:${relationData.id || relationData.uuid || relationData._id}`;
+      
+      // 현재 레벨의 리소스를 included에 추가
+      if (!processedResources.has(resourceKey)) {
+        processedResources.add(resourceKey);
+        included.push(this.transformToResource(
+          relationData, 
+          resourceType, 
+          'id', 
+          resourceFields, 
+          baseUrl
+        ));
+      }
+
+      // 마지막 부분이 아니면 재귀적으로 다음 레벨 처리
+      if (!isLastPart) {
+        this.processNestedIncludes(
+          relationData, 
+          pathParts, 
+          currentIndex + 1, 
+          included, 
+          processedResources, 
+          fieldsParams, 
+          baseUrl
+        );
       }
     }
   }

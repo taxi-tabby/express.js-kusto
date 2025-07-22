@@ -1324,15 +1324,19 @@ export class JsonApiTransformer {
    * 관계 이름에서 리소스 타입 추론 (public 메서드로 변경)
    */
   static inferResourceTypeFromRelationship(relationshipName: string, isArray: boolean): string {
+    let resourceType = relationshipName;
+    
     if (isArray) {
       // 복수형에서 단수형으로 변환 (간단한 규칙)
       if (relationshipName.endsWith('ies')) {
-        return relationshipName.slice(0, -3) + 'y'; // categories -> category
+        resourceType = relationshipName.slice(0, -3) + 'y'; // categories -> category
       } else if (relationshipName.endsWith('s')) {
-        return relationshipName.slice(0, -1); // orderItems -> orderItem
+        resourceType = relationshipName.slice(0, -1); // orderItems -> orderItem
       }
     }
-    return relationshipName;
+    
+    // JSON:API 스펙에 따라 소문자로 변환
+    return resourceType.toLowerCase();
   }
 
   /**

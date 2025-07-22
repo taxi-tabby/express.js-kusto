@@ -1329,7 +1329,7 @@ export class JsonApiTransformer {
       if (relationshipName.endsWith('ies')) {
         return relationshipName.slice(0, -3) + 'y'; // categories -> category
       } else if (relationshipName.endsWith('s')) {
-        return relationshipName.slice(0, -1); // posts -> post
+        return relationshipName.slice(0, -1); // orderItems -> orderItem
       }
     }
     return relationshipName;

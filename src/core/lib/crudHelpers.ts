@@ -480,12 +480,103 @@ export class CrudQueryParser {
         return String(value);
       
       default:
-        // Try to parse as number if possible
-        if (typeof value === 'string' && !isNaN(Number(value))) {
-          return Number(value);
-        }
-        return value;
+        // 스마트 타입 변환: 특정 패턴에 따라 자동 변환
+        return this.smartTypeConversion(value);
     }
+  }
+
+  /**
+   * 스마트 타입 변환: 값의 패턴을 분석하여 적절한 타입으로 변환
+   */
+  private static smartTypeConversion(value: any): any {
+    if (value === null || value === undefined) return value;
+    if (typeof value !== 'string') return value;
+
+    // 날짜 패턴 감지 및 변환
+    if (this.isDatePattern(value)) {
+      return this.convertToDate(value);
+    }
+
+    // 숫자 패턴 감지 (순수 숫자만)
+    if (this.isPureNumber(value)) {
+      return Number(value);
+    }
+
+    // boolean 패턴
+    if (value.toLowerCase() === 'true') return true;
+    if (value.toLowerCase() === 'false') return false;
+
+    // 기본값: 문자열 그대로 반환
+    return value;
+  }
+
+  /**
+   * 날짜 패턴인지 확인
+   */
+  private static isDatePattern(value: string): boolean {
+    // YYYYMMDD 형식 (8자리 숫자)
+    if (/^\d{8}$/.test(value)) return true;
+    
+    // YYYY-MM-DD 형식
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return true;
+    
+    // ISO 8601 형식
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(value)) return true;
+    
+    // MM/DD/YYYY 또는 DD/MM/YYYY 형식
+    if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(value)) return true;
+
+    return false;
+  }
+
+  /**
+   * 문자열을 Date 객체로 변환
+   */
+  private static convertToDate(value: string): Date {
+    // YYYYMMDD 형식 처리
+    if (/^\d{8}$/.test(value)) {
+      const year = parseInt(value.substring(0, 4), 10);
+      const month = parseInt(value.substring(4, 6), 10) - 1; // JavaScript Date는 0-based month
+      const day = parseInt(value.substring(6, 8), 10);
+      return new Date(year, month, day);
+    }
+
+    // 다른 형식들은 Date 생성자가 처리
+    const date = new Date(value);
+    
+    // 유효하지 않은 날짜인 경우 원본 문자열 반환
+    if (isNaN(date.getTime())) {
+      return value as any;
+    }
+
+    return date;
+  }
+
+  /**
+   * 순수 숫자인지 확인 (ID나 코드가 아닌)
+   */
+  private static isPureNumber(value: string): boolean {
+    // 빈 문자열이면 false
+    if (!value.trim()) return false;
+    
+    // 숫자로 변환 가능하지만 특정 패턴은 제외
+    if (!isNaN(Number(value))) {
+      // 전화번호 패턴 (010으로 시작하는 11자리)
+      if (/^010\d{8}$/.test(value)) return false;
+      
+      // 주민등록번호 앞자리 (6자리 숫자)
+      if (/^\d{6}$/.test(value)) return false;
+      
+      // 8자리 날짜 형식 (YYYYMMDD)
+      if (/^\d{8}$/.test(value)) return false;
+      
+      // 매우 긴 숫자 (ID로 추정)
+      if (value.length > 10) return false;
+      
+      return true;
+    }
+    
+    return false;
   }
 }
 

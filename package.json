@@ -1,6 +1,6 @@
 {
   "name": "kusto-server",
-  "version": "0.1.17",
+  "version": "0.1.18",
   "description": "Express based custom server for simple backend service",
   "main": "index.js",
   "bin": {
@@ -10,7 +10,7 @@
     "start": "ts-node ./src/index.ts",
     "dev": "nodemon",
     "dev:serve": "nodemon --config nodemon.serve.json",
-    "build": "npm run generate-injectables && npm run generate-repositories && npm run generate-db-types && npm run generate-routes-map && npm run build-routes && webpack --mode production && npm run clean:tmp",
+    "build": "npm run db -- generate --all && npm run generate-injectables && npm run generate-repositories && npm run generate-db-types && npm run generate-routes-map && npm run build-routes && webpack --mode production && npm run clean:tmp",
     "build:dev": "npm run generate-injectables && npm run generate-repositories && npm run generate-db-types && npm run generate-routes-map && npm run build-routes && webpack --mode development && npm run clean:tmp",
     "build-routes": "node src/core/scripts/build-routes.js",
     "generate-routes-map": "node src/core/scripts/generate-routes-map.js",

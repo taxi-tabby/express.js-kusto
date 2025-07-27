@@ -23,4 +23,21 @@
     "editor.suggest.showWords": false
   },
   "prisma.enableDiagnostics": true,
+  "github.copilot.chat.instructionFiles": [
+    {
+      "file": ".copilot-instructions.md",
+      "enabled": true
+    },
+    {
+      "file": ".vscode/copilot-patterns.md",
+      "enabled": true
+    }
+  ],
+  "github.copilot.enable": {
+    "*": true,
+    "yaml": false,
+    "plaintext": false
+  },
+  "github.copilot.chat.welcomeMessage": "always",
+  "github.copilot.chat.localeOverride": "ko"
 }

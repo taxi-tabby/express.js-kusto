@@ -105,41 +105,92 @@ jobs:
         FILE_COUNT=$(jq 'length' "$MAP_FILE")
         echo "file_count=${FILE_COUNT}" >> $GITHUB_OUTPUT
     
-    - name: Generate release notes
+    - name: Generate release notes with Copilot
       id: notes
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        # 릴리즈 노트 생성
-        cat > release_notes.md << 'EOF'
-        # Express.js Kusto Framework Update
+        # 이전 릴리즈 태그 찾기
+        PREVIOUS_TAG=$(git tag --sort=-version:refname | grep "framework-v" | head -1 || echo "")
         
-        ## Package Information
+        if [ -z "$PREVIOUS_TAG" ]; then
+          echo "No previous release found, using initial commit"
+          COMMIT_RANGE="$(git rev-list --max-parents=0 HEAD)..HEAD"
+        else
+          echo "Previous release: $PREVIOUS_TAG"
+          COMMIT_RANGE="${PREVIOUS_TAG}..HEAD"
+        fi
+        
+        # 커밋 로그 가져오기
+        COMMITS=$(git log --pretty=format:"- %s (%h)" $COMMIT_RANGE)
+        
+        # 변경된 파일 목록
+        CHANGED_FILES=$(git diff --name-only $COMMIT_RANGE | head -10)
+        
+        # GitHub CLI를 사용하여 AI 기반 릴리즈 노트 생성 시도
+        AI_SUMMARY=""
+        if command -v gh copilot >/dev/null 2>&1; then
+          echo "Generating AI summary with GitHub Copilot..."
+          AI_SUMMARY=$(echo "다음 커밋들을 기반으로 Express.js Kusto 프레임워크의 릴리즈 노트를 한국어로 작성해주세요:\n\n$COMMITS\n\n변경된 파일들:\n$CHANGED_FILES" | gh copilot suggest --type shell 2>/dev/null | grep -v "^>" | head -20 || echo "")
+        fi
+        
+        # 릴리즈 노트 생성
+        cat > release_notes.md << EOF
+        # Express.js Kusto Framework Update v${{ steps.version.outputs.package_version }}
+        
+        ## 🤖 AI Generated Summary
+        ${AI_SUMMARY:-"AI 요약을 생성할 수 없습니다. 수동으로 작성된 릴리즈 노트를 확인하세요."}
+        
+        ## 📦 Package Information
         - **Framework Version**: v${{ steps.version.outputs.package_version }}
         - **Build Timestamp**: ${{ steps.version.outputs.timestamp }}
         - **Package Size**: ${{ steps.package.outputs.package_size }}
         - **Files Included**: ${{ steps.mapfile.outputs.file_count }} files
         
+        ## 📝 Recent Changes
+        ${COMMITS:-"변경 사항이 없습니다."}
+        
+        ## 🔧 Changed Files (Top 10)
+        \`\`\`
+        ${CHANGED_FILES:-"변경된 파일이 없습니다."}
+        \`\`\`
+        
         ---
+        **Generated on**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")  
+        **Commit**: ${{ github.sha }}  
+        **Workflow**: ${{ github.workflow }}
         EOF
         
-        # 추가 정보 추가
-        echo "**Generated on**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")" >> release_notes.md
-        echo "**Commit**: ${{ github.sha }}" >> release_notes.md
-        echo "**Workflow**: ${{ github.workflow }}" >> release_notes.md
-        
-        echo "Release notes generated"
+        echo "Release notes generated with AI assistance"
     
     - name: Create Release
       id: create_release
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        # GitHub CLI를 사용하여 릴리즈 생성
-        gh release create "${{ steps.version.outputs.tag_name }}" \
-          --title "Framework v${{ steps.version.outputs.package_version }} (${{ steps.version.outputs.timestamp }})" \
-          --notes-file release_notes.md \
-          --target main \
-          "${{ steps.package.outputs.package_file }}#express-kusto-framework-v${{ steps.version.outputs.package_version }}-${{ steps.version.outputs.timestamp }}.zip" \
-          "${{ steps.mapfile.outputs.map_file }}#file-map-v${{ steps.version.outputs.package_version }}-${{ steps.version.outputs.timestamp }}.json"
+        # GitHub의 자동 릴리즈 노트 생성 기능 활용
+        PREVIOUS_TAG=$(git tag --sort=-version:refname | grep "framework-v" | head -1 || echo "")
+        
+        # GitHub CLI를 사용하여 릴리즈 생성 (자동 릴리즈 노트 포함)
+        if [ -n "$PREVIOUS_TAG" ]; then
+          echo "Creating release with auto-generated notes from $PREVIOUS_TAG"
+          gh release create "${{ steps.version.outputs.tag_name }}" \
+            --title "🚀 Framework v${{ steps.version.outputs.package_version }} (${{ steps.version.outputs.timestamp }})" \
+            --notes-file release_notes.md \
+            --generate-notes \
+            --notes-start-tag "$PREVIOUS_TAG" \
+            --target main \
+            "${{ steps.package.outputs.package_file }}#express-kusto-framework-v${{ steps.version.outputs.package_version }}-${{ steps.version.outputs.timestamp }}.zip" \
+            "${{ steps.mapfile.outputs.map_file }}#file-map-v${{ steps.version.outputs.package_version }}-${{ steps.version.outputs.timestamp }}.json"
+        else
+          echo "Creating first release with custom notes"
+          gh release create "${{ steps.version.outputs.tag_name }}" \
+            --title "🚀 Framework v${{ steps.version.outputs.package_version }} (${{ steps.version.outputs.timestamp }})" \
+            --notes-file release_notes.md \
+            --target main \
+            "${{ steps.package.outputs.package_file }}#express-kusto-framework-v${{ steps.version.outputs.package_version }}-${{ steps.version.outputs.timestamp }}.zip" \
+            "${{ steps.mapfile.outputs.map_file }}#file-map-v${{ steps.version.outputs.package_version }}-${{ steps.version.outputs.timestamp }}.json"
+        fi
         
         # 릴리즈 URL 가져오기
         RELEASE_URL=$(gh release view "${{ steps.version.outputs.tag_name }}" --json url --jq .url)

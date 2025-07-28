@@ -1770,6 +1770,12 @@ export class ExpressRouter {
             resourceType?: string;
 
 
+            /**
+             * includeMerge: true면 included 대신 attributes에 관계명으로 병합 (기본값: false)
+             */
+            includeMerge?: boolean;
+
+
             /** Soft Delete 설정 */
             softDelete?: {
                 enabled: boolean;
@@ -2826,7 +2832,7 @@ export class ExpressRouter {
                         const createData = [];
                         
                         for (const item of relationshipData.data) {
-                            console.log(`Processing relationship item in ${relationName}:`, JSON.stringify(item, null, 2));
+                            // console.log(`Processing relationship item in ${relationName}:`, JSON.stringify(item, null, 2));
                             
                             if (!item.type) {
                                 throw new Error(`Invalid relationship data: missing type in ${relationName}`);
@@ -2853,10 +2859,10 @@ export class ExpressRouter {
                             }
                             // 새 리소스 생성 (attributes가 있는 경우)
                             else if (this.hasAttributes(item)) {
-                                console.log(`Creating new resource for ${relationName} with attributes:`, item.attributes);
+                                // console.log(`Creating new resource for ${relationName} with attributes:`, item.attributes);
                                 createData.push(item.attributes);
                             } else {
-                                console.log(`Invalid relationship item in ${relationName}:`, JSON.stringify(item, null, 2));
+                                // console.log(`Invalid relationship item in ${relationName}:`, JSON.stringify(item, null, 2));
                                 throw new Error(`Invalid relationship data: item must have either id (for connecting) or attributes (for creating) in ${relationName}`);
                             }
                         }
@@ -2933,7 +2939,7 @@ export class ExpressRouter {
      */
     private hasAttributes(obj: any): obj is JsonApiResource {
         const result = obj && typeof obj === 'object' && 'attributes' in obj && obj.attributes != null;
-        console.log(`hasAttributes check for:`, JSON.stringify(obj, null, 2), `Result: ${result}`);
+        // console.log(`hasAttributes check for:`, JSON.stringify(obj, null, 2), `Result: ${result}`);
         return result;
     }
 

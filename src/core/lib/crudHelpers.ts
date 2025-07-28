@@ -1268,7 +1268,8 @@ export class JsonApiTransformer {
     primaryKey: string = 'id',
     fields?: string[],
     baseUrl?: string,
-    id?: string
+    id?: string,
+    includeMerge: boolean = false
   ): JsonApiResource {
     const resourceId = id || item[primaryKey] || item.id || item.uuid || item._id;
     
@@ -1286,7 +1287,8 @@ export class JsonApiTransformer {
     const { attributes, relationships } = this.separateAttributesAndRelationships(
       item, 
       primaryKey, 
-      fields
+      fields,
+      includeMerge
     );
 
     // attributes가 있는 경우에만 추가
@@ -1294,8 +1296,8 @@ export class JsonApiTransformer {
       resource.attributes = attributes;
     }
 
-    // relationships가 있는 경우에만 추가
-    if (Object.keys(relationships).length > 0) {
+    // includeMerge가 false인 경우에만 relationships 추가
+    if (!includeMerge && Object.keys(relationships).length > 0) {
       resource.relationships = relationships;
     }
 
@@ -1317,10 +1319,11 @@ export class JsonApiTransformer {
     resourceType: string, 
     primaryKey: string = 'id',
     fields?: string[],
-    baseUrl?: string
+    baseUrl?: string,
+    includeMerge: boolean = false
   ): JsonApiResource[] {
     return items.map(item => 
-      this.transformToResource(item, resourceType, primaryKey, fields, baseUrl)
+      this.transformToResource(item, resourceType, primaryKey, fields, baseUrl, undefined, includeMerge)
     );
   }
 
@@ -1330,7 +1333,8 @@ export class JsonApiTransformer {
   private static separateAttributesAndRelationships(
     item: any, 
     primaryKey: string, 
-    fields?: string[]
+    fields?: string[],
+    includeMerge: boolean = false
   ): { attributes: Record<string, any>, relationships: Record<string, JsonApiRelationship> } {
     const attributes: Record<string, any> = {};
     const relationships: Record<string, JsonApiRelationship> = {};
@@ -1354,8 +1358,20 @@ export class JsonApiTransformer {
       
       // 관계 데이터인지 확인
       if (this.isRelationshipData(value)) {
-        relationships[key] = this.transformToRelationship(value, key);
+        if (includeMerge) {
+          // includeMerge가 true면 관계 데이터를 attributes에 병합
+          attributes[key] = value;
+        } else {
+          // includeMerge가 false면 relationships에 추가 (표준 JSON:API 방식)
+          relationships[key] = this.transformToRelationship(value, key);
+        }
       } else {
+        // 관계 데이터가 아니면 attributes에 추가
+        // 빈 배열이면 JSON:API 일관성을 위해 attributes에 추가하지 않음
+        if (Array.isArray(value) && value.length === 0) {
+          // 빈 배열은 제외하여 일관성 유지
+          return;
+        }
         attributes[key] = value;
       }
     });
@@ -1372,7 +1388,8 @@ export class JsonApiTransformer {
       return false;
     }
     
-    // 배열인 경우: 첫 번째 요소가 객체이고 id를 가지고 있으면 관계
+    // 배열인 경우: 빈 배열이면 관계 데이터가 아님 (일관성을 위해)
+    // 요소가 있고, 첫 번째 요소가 객체이며 id를 가지고 있으면 관계
     if (Array.isArray(value)) {
       return value.length > 0 && 
              typeof value[0] === 'object' && 
@@ -1478,6 +1495,7 @@ export class JsonApiTransformer {
       meta?: Record<string, any>;
       included?: JsonApiResource[];
       query?: any; // 요청 쿼리 정보 추가
+      includeMerge?: boolean; // includeMerge 옵션 추가
     } = {}
   ): JsonApiResponse {
     const {
@@ -1487,7 +1505,8 @@ export class JsonApiTransformer {
       links,
       meta,
       included,
-      query
+      query,
+      includeMerge = false // 기본값: false (표준 JSON:API 방식)
     } = options;
 
     // 현재 리소스 타입의 필드 제한
@@ -1503,7 +1522,8 @@ export class JsonApiTransformer {
         resourceType, 
         primaryKey, 
         resourceFields, 
-        baseUrl
+        baseUrl,
+        includeMerge
       );
     } else {
       jsonApiData = this.transformToResource(
@@ -1511,7 +1531,9 @@ export class JsonApiTransformer {
         resourceType, 
         primaryKey, 
         resourceFields, 
-        baseUrl
+        baseUrl,
+        undefined, // id 파라미터
+        includeMerge
       );
     }
 
@@ -1521,8 +1543,8 @@ export class JsonApiTransformer {
       data: jsonApiData
     };
 
-    // 선택적 필드들 추가
-    if (included && included.length > 0) {
+    // includeMerge가 false인 경우에만 included 필드 추가
+    if (!includeMerge && included && included.length > 0) {
       response.included = included;
     }
 

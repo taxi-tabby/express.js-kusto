@@ -2010,7 +2010,7 @@ export class ExpressRouter {
                 
                 // 포함된 리소스 생성 (include 파라미터가 있는 경우)
                 let included: JsonApiResource[] | undefined;
-                if (queryParams.include && queryParams.include.length > 0) {
+                if (queryParams.include && queryParams.include.length > 0 && !options?.includeMerge) {
                     included = JsonApiTransformer.createIncludedResources(
                         items,
                         queryParams.include,
@@ -2070,7 +2070,8 @@ export class ExpressRouter {
                         baseUrl,
                         links,
                         meta,
-                        included
+                        included,
+                        includeMerge: options?.includeMerge || false
                     }
                 );
                 
@@ -2207,7 +2208,7 @@ export class ExpressRouter {
                 
                 // 포함된 리소스 생성 (include 파라미터가 있는 경우)
                 let included: JsonApiResource[] | undefined;
-                if (queryParams.include && queryParams.include.length > 0) {
+                if (queryParams.include && queryParams.include.length > 0 && !options?.includeMerge) {
                     included = JsonApiTransformer.createIncludedResources(
                         [item],
                         queryParams.include,
@@ -2224,7 +2225,8 @@ export class ExpressRouter {
                         primaryKey,
                         fields: queryParams.fields,
                         baseUrl,
-                        included
+                        included,
+                        includeMerge: options?.includeMerge || false
                     }
                 );
                 
@@ -2389,7 +2391,8 @@ export class ExpressRouter {
                     modelName,
                     {
                         primaryKey,
-                        baseUrl
+                        baseUrl,
+                        includeMerge: options?.includeMerge || false
                     }
                 );
                 
@@ -3080,7 +3083,8 @@ export class ExpressRouter {
                     modelName,
                     {
                         primaryKey,
-                        baseUrl
+                        baseUrl,
+                        includeMerge: options?.includeMerge || false
                     }
                 );
                 

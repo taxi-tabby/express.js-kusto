@@ -36,18 +36,6 @@ jobs:
     - name: Install dependencies
       run: npm install
     
-    - name: Install GitHub Copilot CLI
-      run: |
-        # GitHub CLI Copilot 확장 설치
-        gh extension install github/gh-copilot || echo "Copilot extension already installed or failed to install"
-        
-        # 설치 확인
-        if gh copilot --help >/dev/null 2>&1; then
-          echo "✅ GitHub Copilot CLI successfully installed"
-        else
-          echo "❌ GitHub Copilot CLI installation failed"
-        fi
-    
     - name: Get current version
       id: version_info
       run: |
@@ -117,10 +105,8 @@ jobs:
         FILE_COUNT=$(jq 'length' "$MAP_FILE")
         echo "file_count=${FILE_COUNT}" >> $GITHUB_OUTPUT
     
-    - name: Generate release notes with AI
+    - name: Generate smart release notes
       id: notes
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         # 이전 릴리즈 태그 찾기
         PREVIOUS_TAG=$(git tag --sort=-version:refname | grep "framework-v" | head -1 || echo "")
@@ -139,65 +125,70 @@ jobs:
         # 변경된 파일 목록
         CHANGED_FILES=$(git diff --name-only $COMMIT_RANGE | head -10)
         
-        # GitHub Copilot을 사용한 AI 요약 생성
+        # 스마트 AI 요약 생성 (커밋 메시지 분석 기반)
         AI_SUMMARY=""
-        if command -v gh copilot >/dev/null 2>&1; then
-          echo "🤖 Generating AI summary with GitHub Copilot..."
-          
-          # 다양한 Copilot 명령어 시도
-          PROMPT="다음 Express.js Kusto 프레임워크 변경사항을 한국어로 간단히 요약해주세요: $COMMITS"
-          
-          # 첫 번째 시도: explain 명령어
-          AI_SUMMARY=$(echo "$PROMPT" | gh copilot explain 2>/dev/null | head -3 | tr '\n' ' ' || echo "")
-          
-          # 두 번째 시도: suggest 명령어 (다른 타입)
-          if [ -z "$AI_SUMMARY" ]; then
-            AI_SUMMARY=$(echo "$PROMPT" | gh copilot suggest --type shell 2>/dev/null | head -3 | tr '\n' ' ' || echo "")
-          fi
-          
-          # 세 번째 시도: 직접 프롬프트
-          if [ -z "$AI_SUMMARY" ]; then
-            AI_SUMMARY=$(gh copilot suggest "이 커밋들을 요약해주세요: $COMMITS" 2>/dev/null | head -3 | tr '\n' ' ' || echo "")
-          fi
-          
-          if [ -n "$AI_SUMMARY" ] && [ "$AI_SUMMARY" != " " ]; then
-            echo "✅ AI summary generated successfully: $AI_SUMMARY"
-          else
-            echo "⚠️ AI summary generation failed, using smart fallback"
-            # 커밋 메시지에서 키워드 추출하여 스마트 요약 생성
-            if echo "$COMMITS" | grep -qi "fix\|bug\|error"; then
-              AI_SUMMARY="🐛 버그 수정 및 안정성 개선"
-            elif echo "$COMMITS" | grep -qi "add\|new\|feature"; then
-              AI_SUMMARY="✨ 새로운 기능 추가 및 개선사항 적용"
-            elif echo "$COMMITS" | grep -qi "update\|upgrade\|improve"; then
-              AI_SUMMARY="🔄 시스템 업데이트 및 성능 개선"
-            elif echo "$COMMITS" | grep -qi "refactor\|clean\|optimize"; then
-              AI_SUMMARY="🔧 코드 리팩토링 및 최적화 작업"
-            else
-              AI_SUMMARY="📦 프레임워크 업데이트 및 유지보수 작업"
-            fi
-          fi
+        echo "🤖 Generating smart summary from commit analysis..."
+        
+        # 커밋 메시지 키워드 분석 및 스마트 요약 생성
+        COMMIT_TEXT=$(echo "$COMMITS" | tr '[:upper:]' '[:lower:]')
+        
+        # 버그 수정 관련
+        if echo "$COMMIT_TEXT" | grep -qE "(fix|bug|error|crash|issue|problem|resolve)"; then
+          AI_SUMMARY="🐛 버그 수정 및 안정성 개선 - 시스템 오류 해결 및 안정성 강화"
+        
+        # 새 기능 추가
+        elif echo "$COMMIT_TEXT" | grep -qE "(add|new|feature|implement|create|introduce)"; then
+          AI_SUMMARY="✨ 새로운 기능 추가 - 프레임워크 기능 확장 및 사용자 경험 개선"
+        
+        # 업데이트 및 개선
+        elif echo "$COMMIT_TEXT" | grep -qE "(update|upgrade|improve|enhance|optimize|performance)"; then
+          AI_SUMMARY="🔄 시스템 업데이트 및 성능 개선 - 최신 기술 적용 및 효율성 향상"
+        
+        # 리팩토링
+        elif echo "$COMMIT_TEXT" | grep -qE "(refactor|clean|restructure|reorganize|simplify)"; then
+          AI_SUMMARY="🔧 코드 리팩토링 및 구조 개선 - 유지보수성 향상 및 코드 품질 개선"
+        
+        # 문서화
+        elif echo "$COMMIT_TEXT" | grep -qE "(doc|readme|comment|guide|manual)"; then
+          AI_SUMMARY="📚 문서화 개선 - 사용자 가이드 및 코드 문서 업데이트"
+        
+        # 테스트
+        elif echo "$COMMIT_TEXT" | grep -qE "(test|spec|coverage|unit|integration)"; then
+          AI_SUMMARY="🧪 테스트 강화 - 품질 보증 및 안정성 검증 개선"
+        
+        # 설정 및 환경
+        elif echo "$COMMIT_TEXT" | grep -qE "(config|setup|env|deploy|build|ci|cd)"; then
+          AI_SUMMARY="⚙️ 설정 및 배포 환경 개선 - 개발 및 운영 환경 최적화"
+        
+        # 의존성 관리
+        elif echo "$COMMIT_TEXT" | grep -qE "(dependency|deps|package|npm|yarn|version)"; then
+          AI_SUMMARY="� 의존성 관리 및 패키지 업데이트 - 라이브러리 최신화 및 보안 강화"
+        
+        # 릴리즈 관련
+        elif echo "$COMMIT_TEXT" | grep -qE "(release|version|tag|publish|deploy)"; then
+          AI_SUMMARY="� 릴리즈 준비 및 배포 - 새 버전 출시 및 배포 프로세스 개선"
+        
+        # 기본값 (커밋 수에 따른 동적 메시지)
         else
-          echo "❌ GitHub Copilot CLI not available, using smart fallback"
-          # 커밋 메시지 분석 기반 스마트 요약
-          if echo "$COMMITS" | grep -qi "fix\|bug\|error"; then
-            AI_SUMMARY="🐛 버그 수정 및 안정성 개선"
-          elif echo "$COMMITS" | grep -qi "add\|new\|feature"; then
-            AI_SUMMARY="✨ 새로운 기능 추가 및 개선사항 적용"
-          elif echo "$COMMITS" | grep -qi "update\|upgrade\|improve"; then
-            AI_SUMMARY="🔄 시스템 업데이트 및 성능 개선"
-          elif echo "$COMMITS" | grep -qi "refactor\|clean\|optimize"; then
-            AI_SUMMARY="🔧 코드 리팩토링 및 최적화 작업"
+          COMMIT_COUNT=$(echo "$COMMITS" | wc -l)
+          if [ "$COMMIT_COUNT" -gt 10 ]; then
+            AI_SUMMARY="� 대규모 업데이트 - 다양한 개선사항 및 기능 업데이트 ($COMMIT_COUNT개 변경사항)"
+          elif [ "$COMMIT_COUNT" -gt 5 ]; then
+            AI_SUMMARY="� 중간 규모 업데이트 - 여러 기능 개선 및 최적화 작업 ($COMMIT_COUNT개 변경사항)"
+          elif [ "$COMMIT_COUNT" -gt 0 ]; then
+            AI_SUMMARY="🔧 소규모 업데이트 - 프레임워크 유지보수 및 개선 작업 ($COMMIT_COUNT개 변경사항)"
           else
-            AI_SUMMARY="📦 Express.js Kusto 프레임워크 정기 업데이트"
+            AI_SUMMARY="📦 Express.js Kusto 프레임워크 정기 릴리즈"
           fi
         fi
+        
+        echo "✅ Smart summary generated: $AI_SUMMARY"
         
         # 릴리즈 노트 생성
         {
           echo "# 🚀 Express.js Kusto Framework v${{ steps.version.outputs.package_version }}"
           echo ""
-          echo "## 🤖 AI Generated Summary"
+          echo "## 🤖 Smart AI Summary"
           echo "${AI_SUMMARY}"
           echo ""
           echo "## 📦 Package Information"
@@ -228,7 +219,7 @@ jobs:
           echo "**Workflow**: ${{ github.workflow }}"
         } > release_notes.md
         
-        echo "✅ Release notes generated with AI assistance"
+        echo "✅ Smart release notes generated"
     
     - name: Create Release
       id: create_release

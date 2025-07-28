@@ -172,9 +172,9 @@ jobs:
         else
           COMMIT_COUNT=$(echo "$COMMITS" | wc -l)
           if [ "$COMMIT_COUNT" -gt 10 ]; then
-            AI_SUMMARY="� 대규모 업데이트 - 다양한 개선사항 및 기능 업데이트 ($COMMIT_COUNT개 변경사항)"
+            AI_SUMMARY="🔧 대규모 업데이트 - 다양한 개선사항 및 기능 업데이트 ($COMMIT_COUNT개 변경사항)"
           elif [ "$COMMIT_COUNT" -gt 5 ]; then
-            AI_SUMMARY="� 중간 규모 업데이트 - 여러 기능 개선 및 최적화 작업 ($COMMIT_COUNT개 변경사항)"
+            AI_SUMMARY="🔧 중간 규모 업데이트 - 여러 기능 개선 및 최적화 작업 ($COMMIT_COUNT개 변경사항)"
           elif [ "$COMMIT_COUNT" -gt 0 ]; then
             AI_SUMMARY="🔧 소규모 업데이트 - 프레임워크 유지보수 및 개선 작업 ($COMMIT_COUNT개 변경사항)"
           else
@@ -188,7 +188,7 @@ jobs:
         {
           echo "# 🚀 Express.js Kusto Framework v${{ steps.version.outputs.package_version }}"
           echo ""
-          echo "## 🤖 Smart AI Summary"
+          echo "## Summary"
           echo "${AI_SUMMARY}"
           echo ""
           echo "## 📦 Package Information"

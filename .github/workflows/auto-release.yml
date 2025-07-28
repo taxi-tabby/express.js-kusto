@@ -144,19 +144,53 @@ jobs:
         if command -v gh copilot >/dev/null 2>&1; then
           echo "🤖 Generating AI summary with GitHub Copilot..."
           
-          # Copilot CLI를 사용하여 요약 생성
-          PROMPT="다음 Express.js Kusto 프레임워크 변경사항을 한국어로 요약해주세요: $COMMITS"
-          AI_SUMMARY=$(echo "$PROMPT" | gh copilot suggest --type git 2>/dev/null | sed '/^$/d' | head -5 | tr '\n' ' ' || echo "")
+          # 다양한 Copilot 명령어 시도
+          PROMPT="다음 Express.js Kusto 프레임워크 변경사항을 한국어로 간단히 요약해주세요: $COMMITS"
           
-          if [ -n "$AI_SUMMARY" ]; then
-            echo "✅ AI summary generated successfully"
+          # 첫 번째 시도: explain 명령어
+          AI_SUMMARY=$(echo "$PROMPT" | gh copilot explain 2>/dev/null | head -3 | tr '\n' ' ' || echo "")
+          
+          # 두 번째 시도: suggest 명령어 (다른 타입)
+          if [ -z "$AI_SUMMARY" ]; then
+            AI_SUMMARY=$(echo "$PROMPT" | gh copilot suggest --type shell 2>/dev/null | head -3 | tr '\n' ' ' || echo "")
+          fi
+          
+          # 세 번째 시도: 직접 프롬프트
+          if [ -z "$AI_SUMMARY" ]; then
+            AI_SUMMARY=$(gh copilot suggest "이 커밋들을 요약해주세요: $COMMITS" 2>/dev/null | head -3 | tr '\n' ' ' || echo "")
+          fi
+          
+          if [ -n "$AI_SUMMARY" ] && [ "$AI_SUMMARY" != " " ]; then
+            echo "✅ AI summary generated successfully: $AI_SUMMARY"
           else
-            echo "⚠️ AI summary generation failed, using fallback"
-            AI_SUMMARY="GitHub Copilot을 통한 자동 요약을 생성할 수 없었습니다. 아래 변경사항을 확인해주세요."
+            echo "⚠️ AI summary generation failed, using smart fallback"
+            # 커밋 메시지에서 키워드 추출하여 스마트 요약 생성
+            if echo "$COMMITS" | grep -qi "fix\|bug\|error"; then
+              AI_SUMMARY="🐛 버그 수정 및 안정성 개선"
+            elif echo "$COMMITS" | grep -qi "add\|new\|feature"; then
+              AI_SUMMARY="✨ 새로운 기능 추가 및 개선사항 적용"
+            elif echo "$COMMITS" | grep -qi "update\|upgrade\|improve"; then
+              AI_SUMMARY="🔄 시스템 업데이트 및 성능 개선"
+            elif echo "$COMMITS" | grep -qi "refactor\|clean\|optimize"; then
+              AI_SUMMARY="🔧 코드 리팩토링 및 최적화 작업"
+            else
+              AI_SUMMARY="📦 프레임워크 업데이트 및 유지보수 작업"
+            fi
           fi
         else
-          echo "❌ GitHub Copilot CLI not available"
-          AI_SUMMARY="GitHub Copilot CLI가 설치되지 않았습니다."
+          echo "❌ GitHub Copilot CLI not available, using smart fallback"
+          # 커밋 메시지 분석 기반 스마트 요약
+          if echo "$COMMITS" | grep -qi "fix\|bug\|error"; then
+            AI_SUMMARY="🐛 버그 수정 및 안정성 개선"
+          elif echo "$COMMITS" | grep -qi "add\|new\|feature"; then
+            AI_SUMMARY="✨ 새로운 기능 추가 및 개선사항 적용"
+          elif echo "$COMMITS" | grep -qi "update\|upgrade\|improve"; then
+            AI_SUMMARY="🔄 시스템 업데이트 및 성능 개선"
+          elif echo "$COMMITS" | grep -qi "refactor\|clean\|optimize"; then
+            AI_SUMMARY="🔧 코드 리팩토링 및 최적화 작업"
+          else
+            AI_SUMMARY="📦 Express.js Kusto 프레임워크 정기 업데이트"
+          fi
         fi
         
         # 릴리즈 노트 생성

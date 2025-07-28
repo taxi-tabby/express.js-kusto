@@ -36,18 +36,6 @@ jobs:
     - name: Install dependencies
       run: npm install
     
-    - name: Install GitHub Copilot CLI
-      run: |
-        # GitHub CLI Copilot 확장 설치
-        gh extension install github/gh-copilot || echo "Copilot extension already installed or failed to install"
-        
-        # 설치 확인
-        if gh copilot --help >/dev/null 2>&1; then
-          echo "✅ GitHub Copilot CLI successfully installed"
-        else
-          echo "❌ GitHub Copilot CLI installation failed"
-        fi
-    
     - name: Get current version
       id: version_info
       run: |
@@ -117,10 +105,8 @@ jobs:
         FILE_COUNT=$(jq 'length' "$MAP_FILE")
         echo "file_count=${FILE_COUNT}" >> $GITHUB_OUTPUT
     
-    - name: Generate release notes with Copilot
+    - name: Generate release notes
       id: notes
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         # 이전 릴리즈 태그 찾기
         PREVIOUS_TAG=$(git tag --sort=-version:refname | grep "framework-v" | head -1 || echo "")
@@ -139,19 +125,9 @@ jobs:
         # 변경된 파일 목록
         CHANGED_FILES=$(git diff --name-only $COMMIT_RANGE | head -10)
         
-        # GitHub CLI를 사용하여 AI 기반 릴리즈 노트 생성 시도
-        AI_SUMMARY=""
-        if command -v gh copilot >/dev/null 2>&1; then
-          echo "Generating AI summary with GitHub Copilot..."
-          AI_SUMMARY=$(echo "다음 커밋들을 기반으로 Express.js Kusto 프레임워크의 릴리즈 노트를 한국어로 작성해주세요:\n\n$COMMITS\n\n변경된 파일들:\n$CHANGED_FILES" | gh copilot suggest --type shell 2>/dev/null | grep -v "^>" | head -20 || echo "")
-        fi
-        
-        # 릴리즈 노트 생성
+        # 기본 릴리즈 노트 생성 (GitHub 자동 생성과 함께 사용)
         cat > release_notes.md << EOF
         # Express.js Kusto Framework Update v${{ steps.version.outputs.package_version }}
-        
-        ## 🤖 AI Generated Summary
-        ${AI_SUMMARY:-"AI 요약을 생성할 수 없습니다. 수동으로 작성된 릴리즈 노트를 확인하세요."}
         
         ## 📦 Package Information
         - **Framework Version**: v${{ steps.version.outputs.package_version }}
@@ -173,7 +149,7 @@ jobs:
         **Workflow**: ${{ github.workflow }}
         EOF
         
-        echo "Release notes generated with AI assistance"
+        echo "Release notes generated"
     
     - name: Create Release
       id: create_release
@@ -187,7 +163,7 @@ jobs:
         if [ -n "$PREVIOUS_TAG" ]; then
           echo "Creating release with auto-generated notes from $PREVIOUS_TAG"
           gh release create "${{ steps.version.outputs.tag_name }}" \
-            --title "Framework v${{ steps.version.outputs.package_version }} (${{ steps.version.outputs.timestamp }})" \
+            --title "🚀 Framework v${{ steps.version.outputs.package_version }} (${{ steps.version.outputs.timestamp }})" \
             --notes-file release_notes.md \
             --generate-notes \
             --notes-start-tag "$PREVIOUS_TAG" \
@@ -197,7 +173,7 @@ jobs:
         else
           echo "Creating first release with custom notes"
           gh release create "${{ steps.version.outputs.tag_name }}" \
-            --title "Framework v${{ steps.version.outputs.package_version }} (${{ steps.version.outputs.timestamp }})" \
+            --title "🚀 Framework v${{ steps.version.outputs.package_version }} (${{ steps.version.outputs.timestamp }})" \
             --notes-file release_notes.md \
             --target main \
             "${{ steps.package.outputs.package_file }}#express-kusto-framework-v${{ steps.version.outputs.package_version }}-${{ steps.version.outputs.timestamp }}.zip" \

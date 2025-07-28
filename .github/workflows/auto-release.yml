@@ -36,6 +36,18 @@ jobs:
     - name: Install dependencies
       run: npm install
     
+    - name: Install GitHub Copilot CLI
+      run: |
+        # GitHub CLI Copilot 확장 설치
+        gh extension install github/gh-copilot || echo "Copilot extension already installed or failed to install"
+        
+        # 설치 확인
+        if gh copilot --help >/dev/null 2>&1; then
+          echo "✅ GitHub Copilot CLI successfully installed"
+        else
+          echo "❌ GitHub Copilot CLI installation failed"
+        fi
+    
     - name: Get current version
       id: version_info
       run: |
@@ -105,8 +117,10 @@ jobs:
         FILE_COUNT=$(jq 'length' "$MAP_FILE")
         echo "file_count=${FILE_COUNT}" >> $GITHUB_OUTPUT
     
-    - name: Generate release notes
+    - name: Generate release notes with AI
       id: notes
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         # 이전 릴리즈 태그 찾기
         PREVIOUS_TAG=$(git tag --sort=-version:refname | grep "framework-v" | head -1 || echo "")
@@ -125,31 +139,62 @@ jobs:
         # 변경된 파일 목록
         CHANGED_FILES=$(git diff --name-only $COMMIT_RANGE | head -10)
         
-        # 기본 릴리즈 노트 생성 (GitHub 자동 생성과 함께 사용)
-        cat > release_notes.md << EOF
-        # Express.js Kusto Framework Update v${{ steps.version.outputs.package_version }}
+        # GitHub Copilot을 사용한 AI 요약 생성
+        AI_SUMMARY=""
+        if command -v gh copilot >/dev/null 2>&1; then
+          echo "🤖 Generating AI summary with GitHub Copilot..."
+          
+          # Copilot CLI를 사용하여 요약 생성
+          PROMPT="다음 Express.js Kusto 프레임워크 변경사항을 한국어로 요약해주세요: $COMMITS"
+          AI_SUMMARY=$(echo "$PROMPT" | gh copilot suggest --type git 2>/dev/null | sed '/^$/d' | head -5 | tr '\n' ' ' || echo "")
+          
+          if [ -n "$AI_SUMMARY" ]; then
+            echo "✅ AI summary generated successfully"
+          else
+            echo "⚠️ AI summary generation failed, using fallback"
+            AI_SUMMARY="GitHub Copilot을 통한 자동 요약을 생성할 수 없었습니다. 아래 변경사항을 확인해주세요."
+          fi
+        else
+          echo "❌ GitHub Copilot CLI not available"
+          AI_SUMMARY="GitHub Copilot CLI가 설치되지 않았습니다."
+        fi
         
-        ## 📦 Package Information
-        - **Framework Version**: v${{ steps.version.outputs.package_version }}
-        - **Build Timestamp**: ${{ steps.version.outputs.timestamp }}
-        - **Package Size**: ${{ steps.package.outputs.package_size }}
-        - **Files Included**: ${{ steps.mapfile.outputs.file_count }} files
+        # 릴리즈 노트 생성
+        {
+          echo "# 🚀 Express.js Kusto Framework v${{ steps.version.outputs.package_version }}"
+          echo ""
+          echo "## 🤖 AI Generated Summary"
+          echo "${AI_SUMMARY}"
+          echo ""
+          echo "## 📦 Package Information"
+          echo "- **Framework Version**: v${{ steps.version.outputs.package_version }}"
+          echo "- **Build Timestamp**: ${{ steps.version.outputs.timestamp }}"
+          echo "- **Package Size**: ${{ steps.package.outputs.package_size }}"
+          echo "- **Files Included**: ${{ steps.mapfile.outputs.file_count }} files"
+          echo ""
+          echo "## 📝 Recent Changes"
+          if [ -n "$COMMITS" ]; then
+            echo "$COMMITS"
+          else
+            echo "변경 사항이 없습니다."
+          fi
+          echo ""
+          echo "## 🔧 Changed Files (Top 10)"
+          echo '```'
+          if [ -n "$CHANGED_FILES" ]; then
+            echo "$CHANGED_FILES"
+          else
+            echo "변경된 파일이 없습니다."
+          fi
+          echo '```'
+          echo ""
+          echo "---"
+          echo "**Generated on**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")"
+          echo "**Commit**: ${{ github.sha }}"
+          echo "**Workflow**: ${{ github.workflow }}"
+        } > release_notes.md
         
-        ## 📝 Recent Changes
-        ${COMMITS:-"변경 사항이 없습니다."}
-        
-        ## 🔧 Changed Files (Top 10)
-        \`\`\`
-        ${CHANGED_FILES:-"변경된 파일이 없습니다."}
-        \`\`\`
-        
-        ---
-        **Generated on**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")  
-        **Commit**: ${{ github.sha }}  
-        **Workflow**: ${{ github.workflow }}
-        EOF
-        
-        echo "Release notes generated"
+        echo "✅ Release notes generated with AI assistance"
     
     - name: Create Release
       id: create_release
@@ -191,4 +236,4 @@ jobs:
         echo "🏷️ Tag: ${{ steps.version.outputs.tag_name }}"
         echo "📁 Package: ${{ steps.package.outputs.package_file }} (${{ steps.package.outputs.package_size }})"
         echo "📋 Map File: ${{ steps.mapfile.outputs.map_file }} (${{ steps.mapfile.outputs.file_count }} files)"
-        echo "� Version: v${{ steps.version.outputs.package_version }}"
+        echo "📊 Version: v${{ steps.version.outputs.package_version }}"

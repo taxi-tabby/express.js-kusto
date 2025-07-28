@@ -36,6 +36,18 @@ jobs:
     - name: Install dependencies
       run: npm install
     
+    - name: Install GitHub Copilot CLI
+      run: |
+        # GitHub CLI Copilot 확장 설치
+        gh extension install github/gh-copilot || echo "Copilot extension already installed or failed to install"
+        
+        # 설치 확인
+        if gh copilot --help >/dev/null 2>&1; then
+          echo "✅ GitHub Copilot CLI successfully installed"
+        else
+          echo "❌ GitHub Copilot CLI installation failed"
+        fi
+    
     - name: Get current version
       id: version_info
       run: |
@@ -175,7 +187,7 @@ jobs:
         if [ -n "$PREVIOUS_TAG" ]; then
           echo "Creating release with auto-generated notes from $PREVIOUS_TAG"
           gh release create "${{ steps.version.outputs.tag_name }}" \
-            --title "🚀 Framework v${{ steps.version.outputs.package_version }} (${{ steps.version.outputs.timestamp }})" \
+            --title "Framework v${{ steps.version.outputs.package_version }} (${{ steps.version.outputs.timestamp }})" \
             --notes-file release_notes.md \
             --generate-notes \
             --notes-start-tag "$PREVIOUS_TAG" \
@@ -185,7 +197,7 @@ jobs:
         else
           echo "Creating first release with custom notes"
           gh release create "${{ steps.version.outputs.tag_name }}" \
-            --title "🚀 Framework v${{ steps.version.outputs.package_version }} (${{ steps.version.outputs.timestamp }})" \
+            --title "Framework v${{ steps.version.outputs.package_version }} (${{ steps.version.outputs.timestamp }})" \
             --notes-file release_notes.md \
             --target main \
             "${{ steps.package.outputs.package_file }}#express-kusto-framework-v${{ steps.version.outputs.package_version }}-${{ steps.version.outputs.timestamp }}.zip" \

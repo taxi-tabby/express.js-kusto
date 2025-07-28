@@ -208,7 +208,7 @@ jobs:
         if [ -n "$PREVIOUS_TAG" ]; then
           echo "Creating release with auto-generated notes from $PREVIOUS_TAG"
           gh release create "${{ steps.version.outputs.tag_name }}" \
-            --title "🚀 Framework v${{ steps.version.outputs.package_version }} (${{ steps.version.outputs.timestamp }})" \
+            --title "Framework v${{ steps.version.outputs.package_version }} (${{ steps.version.outputs.timestamp }})" \
             --notes-file release_notes.md \
             --generate-notes \
             --notes-start-tag "$PREVIOUS_TAG" \
@@ -218,7 +218,7 @@ jobs:
         else
           echo "Creating first release with custom notes"
           gh release create "${{ steps.version.outputs.tag_name }}" \
-            --title "🚀 Framework v${{ steps.version.outputs.package_version }} (${{ steps.version.outputs.timestamp }})" \
+            --title "Framework v${{ steps.version.outputs.package_version }} (${{ steps.version.outputs.timestamp }})" \
             --notes-file release_notes.md \
             --target main \
             "${{ steps.package.outputs.package_file }}#express-kusto-framework-v${{ steps.version.outputs.package_version }}-${{ steps.version.outputs.timestamp }}.zip" \

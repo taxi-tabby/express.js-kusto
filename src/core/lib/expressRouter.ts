@@ -3313,6 +3313,19 @@ export class ExpressRouter {
                         await options.hooks.afterDestroy(parsedIdentifier, req);
                     }
 
+                    // metadata 객체 생성 - 기존 헬퍼 함수 사용
+                    const metadata = CrudResponseFormatter.createPaginationMeta(
+                        [result], // 삭제된 단일 항목을 배열로 감싸서 전달
+                        1,        // total count는 1
+                        undefined, // page 파라미터 없음 (단일 삭제)
+                        'soft_delete',
+                        undefined, // includedRelations 없음
+                        undefined  // queryParams 없음
+                    );
+                    
+                    // soft delete 전용 필드 추가
+                    metadata.wasSoftDeleted = false; // 이전에는 삭제되지 않았음
+
                     // JSON:API 준수 - 성공적인 soft delete 응답 (200 OK with meta)
                     const response = {
                         jsonapi: {
@@ -3320,15 +3333,10 @@ export class ExpressRouter {
                         },
                         meta: {
                             operation: 'soft_delete',
-                            timestamp: new Date().toISOString(),
+                            timestamp: metadata.timestamp,
                             [softDeleteField]: result[softDeleteField]
                         },
-                        metadata: {
-                            operation: 'soft_delete',
-                            timestamp: new Date().toISOString(),
-                            affectedCount: 1,
-                            wasSoftDeleted: false
-                        }
+                        metadata
                     };
                     
                     res.status(200).json(response);

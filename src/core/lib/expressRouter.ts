@@ -2075,8 +2075,41 @@ export class ExpressRouter {
                     }
                 );
                 
+                // metadata 생성
+                const metadata: any = {
+                    operation: 'index',
+                    timestamp: meta.timestamp,
+                    affectedCount: items.length,
+                    ...(queryParams.include && queryParams.include.length > 0 ? { includedRelations: queryParams.include } : {}),
+                };
+                
+                // 페이지네이션 정보 추가
+                if (queryParams.page && queryParams.page.cursor) {
+                    const limit = queryParams.page.size || 10;
+                    const totalPages = Math.ceil(total / limit);
+                    metadata.pagination = {
+                        type: 'cursor',
+                        total: total,
+                        limit: limit,
+                        totalPages: totalPages,
+                        nextCursor: null // 실제 커서 값 필요시 구현
+                    };
+                } else if (queryParams.page) {
+                    const pageSize = queryParams.page.size || 10;
+                    const currentPage = queryParams.page.number || 1;
+                    const totalPages = Math.ceil(total / pageSize);
+                    metadata.pagination = {
+                        type: 'offset',
+                        total: total,
+                        page: currentPage,
+                        pages: totalPages,
+                        offset: (currentPage - 1) * pageSize,
+                        nextCursor: null // 필요시 커서 기반 구현
+                    };
+                }
+                
                 // BigInt와 DATE 타입 직렬화 처리
-                const serializedResponse = serialize(response);
+                const serializedResponse = serialize({ ...response, metadata });
                 
                 res.json(serializedResponse);
                 
@@ -2230,8 +2263,17 @@ export class ExpressRouter {
                     }
                 );
                 
+                // metadata 객체 생성
+                const metadata = {
+                    operation: "show",
+                    timestamp: new Date().toISOString(),
+                    affectedCount: 1,
+                    includedRelations: queryParams.include ? (Array.isArray(queryParams.include) ? queryParams.include : [queryParams.include]) : [],
+                    excludedFields: queryParams.fields ? Object.keys(queryParams.fields[modelName] || {}) : []
+                };
+                
                 // BigInt와 DATE 타입 직렬화 처리
-                const serializedResponse = serialize(response);
+                const serializedResponse = serialize({ ...response, metadata });
                 
                 res.json(serializedResponse);
                 
@@ -2396,8 +2438,15 @@ export class ExpressRouter {
                     }
                 );
                 
+                // metadata 객체 생성
+                const metadata = {
+                    operation: "create",
+                    timestamp: new Date().toISOString(),
+                    affectedCount: 1
+                };
+                
                 // BigInt와 DATE 타입 직렬화 처리
-                const serializedResponse = serialize(response);
+                const serializedResponse = serialize({ ...response, metadata });
                 
                 res.status(201).json(serializedResponse);
                 
@@ -3088,8 +3137,15 @@ export class ExpressRouter {
                     }
                 );
                 
+                // metadata 객체 생성
+                const metadata = {
+                    operation: "update",
+                    timestamp: new Date().toISOString(),
+                    affectedCount: 1
+                };
+                
                 // BigInt와 DATE 타입 직렬화 처리
-                const serializedResponse = serialize(response);
+                const serializedResponse = serialize({ ...response, metadata });
                 
                 res.json(serializedResponse);
                 
@@ -3240,6 +3296,12 @@ export class ExpressRouter {
                             operation: 'soft_delete',
                             timestamp: new Date().toISOString(),
                             [softDeleteField]: result[softDeleteField]
+                        },
+                        metadata: {
+                            operation: 'soft_delete',
+                            timestamp: new Date().toISOString(),
+                            affectedCount: 1,
+                            wasSoftDeleted: false
                         }
                     };
                     
@@ -3405,6 +3467,12 @@ export class ExpressRouter {
                     meta: {
                         operation: 'recover',
                         timestamp: new Date().toISOString()
+                    },
+                    metadata: {
+                        operation: 'recover',
+                        timestamp: new Date().toISOString(),
+                        affectedCount: 1,
+                        wasSoftDeleted: true
                     }
                 };
                 

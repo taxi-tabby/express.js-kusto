@@ -2108,38 +2108,15 @@ export class ExpressRouter {
                     }
                 );
                 
-                // metadata 생성
-                const metadata: any = {
-                    operation: 'index',
-                    timestamp: meta.timestamp,
-                    affectedCount: items.length,
-                    ...(queryParams.include && queryParams.include.length > 0 ? { includedRelations: queryParams.include } : {}),
-                };
-                
-                // 페이지네이션 정보 추가
-                if (queryParams.page && queryParams.page.cursor) {
-                    const limit = queryParams.page.size || 10;
-                    const totalPages = Math.ceil(total / limit);
-                    metadata.pagination = {
-                        type: 'cursor',
-                        total: total,
-                        limit: limit,
-                        totalPages: totalPages,
-                        nextCursor: null // 실제 커서 값 필요시 구현
-                    };
-                } else if (queryParams.page) {
-                    const pageSize = queryParams.page.size || 10;
-                    const currentPage = queryParams.page.number || 1;
-                    const totalPages = Math.ceil(total / pageSize);
-                    metadata.pagination = {
-                        type: 'offset',
-                        total: total,
-                        page: currentPage,
-                        pages: totalPages,
-                        offset: (currentPage - 1) * pageSize,
-                        nextCursor: null // 필요시 커서 기반 구현
-                    };
-                }
+                // metadata 생성 - 기존 헬퍼 함수 사용
+                const metadata = CrudResponseFormatter.createPaginationMeta(
+                    items,
+                    total,
+                    queryParams.page,
+                    'index',
+                    queryParams.include,
+                    queryParams
+                );
                 
                 // BigInt와 DATE 타입 직렬화 처리
                 const serializedResponse = serialize({ ...response, metadata });
@@ -2300,14 +2277,20 @@ export class ExpressRouter {
                     }
                 );
                 
-                // metadata 객체 생성
-                const metadata = {
-                    operation: "show",
-                    timestamp: new Date().toISOString(),
-                    affectedCount: 1,
-                    includedRelations: queryParams.include ? (Array.isArray(queryParams.include) ? queryParams.include : [queryParams.include]) : [],
-                    excludedFields: queryParams.fields ? Object.keys(queryParams.fields[modelName] || {}) : []
-                };
+                // metadata 객체 생성 - 기존 헬퍼 함수 사용
+                const metadata = CrudResponseFormatter.createPaginationMeta(
+                    [item], // 단일 항목을 배열로 감싸서 전달
+                    1,      // total count는 1
+                    undefined, // page 파라미터 없음 (단일 조회)
+                    'show',
+                    queryParams.include,
+                    queryParams
+                );
+                
+                // excludedFields 추가 (show 전용)
+                if (queryParams.fields) {
+                    metadata.excludedFields = Object.keys(queryParams.fields[modelName] || {});
+                }
                 
                 // BigInt와 DATE 타입 직렬화 처리
                 const serializedResponse = serialize({ ...response, metadata });
@@ -2475,12 +2458,15 @@ export class ExpressRouter {
                     }
                 );
                 
-                // metadata 객체 생성
-                const metadata = {
-                    operation: "create",
-                    timestamp: new Date().toISOString(),
-                    affectedCount: 1
-                };
+                // metadata 객체 생성 - 기존 헬퍼 함수 사용
+                const metadata = CrudResponseFormatter.createPaginationMeta(
+                    [result], // 생성된 단일 항목을 배열로 감싸서 전달
+                    1,        // total count는 1
+                    undefined, // page 파라미터 없음 (단일 생성)
+                    'create',
+                    undefined, // includedRelations 없음
+                    undefined  // queryParams 없음
+                );
                 
                 // BigInt와 DATE 타입 직렬화 처리
                 const serializedResponse = serialize({ ...response, metadata });
@@ -3174,12 +3160,15 @@ export class ExpressRouter {
                     }
                 );
                 
-                // metadata 객체 생성
-                const metadata = {
-                    operation: "update",
-                    timestamp: new Date().toISOString(),
-                    affectedCount: 1
-                };
+                // metadata 객체 생성 - 기존 헬퍼 함수 사용
+                const metadata = CrudResponseFormatter.createPaginationMeta(
+                    [result], // 수정된 단일 항목을 배열로 감싸서 전달
+                    1,        // total count는 1
+                    undefined, // page 파라미터 없음 (단일 수정)
+                    'update',
+                    undefined, // includedRelations 없음
+                    undefined  // queryParams 없음
+                );
                 
                 // BigInt와 DATE 타입 직렬화 처리
                 const serializedResponse = serialize({ ...response, metadata });
@@ -3495,6 +3484,19 @@ export class ExpressRouter {
                     await options.hooks.afterRecover(result, req);
                 }
 
+                // metadata 객체 생성 - 기존 헬퍼 함수 사용
+                const metadata = CrudResponseFormatter.createPaginationMeta(
+                    [result], // 복구된 단일 항목을 배열로 감싸서 전달
+                    1,        // total count는 1
+                    undefined, // page 파라미터 없음 (단일 복구)
+                    'recover',
+                    undefined, // includedRelations 없음
+                    undefined  // queryParams 없음
+                );
+                
+                // recover 전용 필드 추가
+                metadata.wasSoftDeleted = true;
+
                 // JSON:API 응답 포맷
                 const response = {
                     data: this.transformToJsonApiResource(result, modelName, req, primaryKey),
@@ -3503,14 +3505,9 @@ export class ExpressRouter {
                     },
                     meta: {
                         operation: 'recover',
-                        timestamp: new Date().toISOString()
+                        timestamp: metadata.timestamp
                     },
-                    metadata: {
-                        operation: 'recover',
-                        timestamp: new Date().toISOString(),
-                        affectedCount: 1,
-                        wasSoftDeleted: true
-                    }
+                    metadata
                 };
                 
                 // BigInt와 DATE 타입 직렬화 처리

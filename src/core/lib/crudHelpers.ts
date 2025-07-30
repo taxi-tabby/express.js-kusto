@@ -678,15 +678,22 @@ export class PrismaQueryBuilder {
    */
   private static buildOrderByOptions(sorts: SortParam[]) {
     return sorts.map(sort => {
+      // JSON:API relationships 접두사 제거
+      let cleanFieldPath = sort.field;
+      if (cleanFieldPath.startsWith('relationships.')) {
+        cleanFieldPath = cleanFieldPath.replace('relationships.', '');
+      }
+
       // 관계 필드 정렬 처리 (author.name, category.title 등)
-      if (sort.field.includes('.')) {
-        return this.buildNestedOrderBy(sort.field, sort.direction);
+      if (cleanFieldPath.includes('.')) {
+        return this.buildNestedOrderBy(cleanFieldPath, sort.direction);
       } else {
         // 일반 필드 정렬
-        return { [sort.field]: sort.direction };
+        return { [cleanFieldPath]: sort.direction };
       }
     });
   }
+
 
   /**
    * 중첩된 관계 정렬 조건 빌드

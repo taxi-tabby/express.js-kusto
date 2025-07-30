@@ -1970,6 +1970,39 @@ export class ExpressRouter {
                 // 쿼리 파라미터 파싱
                 const queryParams = CrudQueryParser.parseQuery(req);
                 
+                // 페이지네이션 방식 검증 - 반드시 지정되어야 함
+                if (!queryParams.page) {
+                    const errorResponse = this.formatJsonApiError(
+                        new Error('Pagination is required. You must specify either page-based pagination (page[number] & page[size]) or cursor-based pagination (page[cursor] & page[size])'),
+                        'PAGINATION_REQUIRED',
+                        400,
+                        req.path
+                    );
+                    return res.status(400).json(errorResponse);
+                }
+                
+                // 페이지네이션 파라미터 상세 검증
+                if (!queryParams.page.number && !queryParams.page.cursor) {
+                    const errorResponse = this.formatJsonApiError(
+                        new Error('Invalid pagination parameters. Specify either page[number] for offset-based pagination or page[cursor] for cursor-based pagination'),
+                        'INVALID_PAGINATION_PARAMS',
+                        400,
+                        req.path
+                    );
+                    return res.status(400).json(errorResponse);
+                }
+                
+                // 페이지 크기 검증
+                if (!queryParams.page.size || queryParams.page.size <= 0) {
+                    const errorResponse = this.formatJsonApiError(
+                        new Error('page[size] parameter is required and must be greater than 0'),
+                        'INVALID_PAGE_SIZE',
+                        400,
+                        req.path
+                    );
+                    return res.status(400).json(errorResponse);
+                }
+                
                 // Prisma 쿼리 옵션 빌드
                 const findManyOptions = PrismaQueryBuilder.buildFindManyOptions(queryParams);
                 
@@ -2135,8 +2168,9 @@ export class ExpressRouter {
             include: { type: 'string', required: false, description: 'Related resources to include (comma-separated). Example: author,comments.author' },
             'fields[type]': { type: 'string', required: false, description: 'Sparse fieldsets - specify which fields to include for each resource type. Example: fields[posts]=title,content&fields[users]=name,email' },
             sort: { type: 'string', required: false, description: 'Sort fields (prefix with - for desc). Example: -createdAt,title' },
-            'page[number]': { type: 'number', required: false, description: 'Page number for pagination' },
-            'page[size]': { type: 'number', required: false, description: 'Page size for pagination' },
+            'page[number]': { type: 'number', required: true, description: 'Page number for offset-based pagination (required with page[size])' },
+            'page[cursor]': { type: 'string', required: false, description: 'Cursor for cursor-based pagination (alternative to page[number])' },
+            'page[size]': { type: 'number', required: true, description: 'Page size for pagination (required)' },
             'filter[field_op]': { type: 'string', required: false, description: 'Filter conditions. Operators: eq, ne, gt, gte, lt, lte, like, in, etc. Example: filter[status_eq]=active&filter[age_gte]=18' }
         };
         
@@ -2150,7 +2184,7 @@ export class ExpressRouter {
         }
         
         this.registerDocumentation('GET', '/', {
-            summary: `Get ${modelName} list with filtering, sorting, and pagination`,
+            summary: `Get ${modelName} list with required pagination, optional filtering and sorting`,
             parameters: {
                 query: queryParams
             },
@@ -2158,6 +2192,9 @@ export class ExpressRouter {
                 200: {
                     data: { type: 'array', required: true, description: `Array of ${modelName} items` },
                     meta: { type: 'object', required: true, description: 'Pagination metadata' }
+                },
+                400: {
+                    error: { type: 'object', required: true, description: 'Bad request - pagination parameters are required' }
                 }
             }
         });

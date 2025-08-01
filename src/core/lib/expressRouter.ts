@@ -819,12 +819,54 @@ export class ExpressRouter {
      * HandlerFunction 타입의 미들웨어를 적용하는 메서드
      * @param middleware HandlerFunction 타입의 미들웨어 함수 또는 배열
      * @returns ExpressRouter 인스턴스
+     * @deprecated 보통의 경우 USE_MIDDLEWARE를 사용합니다. 이걸 사용하는 경우는 없습니다. (미들웨어로 쓰는데 NEXT 함수가 없으면 다음으로 넘어가질 못해요)
      */
     public USE_HANDLER(middleware: HandlerFunction | HandlerFunction[]): ExpressRouter {
         if (Array.isArray(middleware)) {
             middleware.forEach((mw) => this.router.use(this.wrapHandler(mw)));
         } else {
             this.router.use(this.wrapHandler(middleware));
+        }
+        return this; // 메소드 체인을 위해 인스턴스 반환
+    }
+    
+
+
+    
+    /**
+     * MiddlewareHandlerFunction 타입의 미들웨어를 적용하는 메서드
+     * @param middleware MiddlewareHandlerFunction 타입의 미들웨어 함수 또는 배열
+     * @returns ExpressRouter 인스턴스
+     * 
+     * @example
+     * ```typescript
+     * // 일반 함수 (타입 힌트 지원)
+     * router.MIDDLEWARE(function(req, res, next, injected, repo, db) {
+     *     // 미들웨어 로직
+     * });
+     * 
+     * // 화살표 함수 (타입 힌트 미지원)
+     * router.MIDDLEWARE((req, res, next, injected, repo, db) => {
+     *     // 미들웨어 로직
+     * } as MiddlewareHandlerFunction);
+     * 
+     * // 배열로 여러 개의 미들웨어를 적용할 수도 있습니다. 이 경우는 화살표 함수도 타입 힌트를 지원합니다.
+     * router.MIDDLEWARE([
+     *  (req, res, next, injected, repo, db) => {
+     *  
+     *  }
+     * ])
+     * 
+     * 
+     * ```
+     */
+    public MIDDLEWARE(middleware: MiddlewareHandlerFunction): ExpressRouter;
+    public MIDDLEWARE(middleware: MiddlewareHandlerFunction[]): ExpressRouter;
+    public MIDDLEWARE(middleware: MiddlewareHandlerFunction | MiddlewareHandlerFunction[]): ExpressRouter {
+        if (Array.isArray(middleware)) {
+            middleware.forEach((mw) => this.router.use(this.wrapMiddleware(mw)));
+        } else {
+            this.router.use(this.wrapMiddleware(middleware));
         }
         return this; // 메소드 체인을 위해 인스턴스 반환
     }    
@@ -882,51 +924,64 @@ export class ExpressRouter {
                 // 미들웨어 객체의 메서드들을 확인하고 Express 미들웨어로 래핑
                 Object.keys(middlewareInstance).forEach(methodName => {
                     const method = (middlewareInstance as any)[methodName];
-                    if (typeof method === 'function') {                        // 각 메서드를 Express 미들웨어로 래핑하여 라우터에 적용
-                        this.router.use((req: Request, res: Response, next: NextFunction) => {
-                            try {
-
-                                // Kusto 매니저를 Request 객체에 설정
-                                req.kusto = kustoManager;
-                                
-                                // 파라미터가 있다면 req 객체에 추가
-                                if (params) {
-                                    const parameterKey = getParameterKey(middlewareName);
-                                    (req as any).with = { 
-                                        ...(req as any).with, 
-                                        [parameterKey]: params 
-                                    };
+                    if (typeof method === 'function') {
+                        // 각 메서드를 미들웨어로 래핑하여 라우터에 적용
+                        // 미들웨어 함수의 매개변수 개수로 판단 (req, res, next, injected, repo, db = 6개)
+                        if (method.length >= 6) {
+                            // MiddlewareHandlerFunction 타입으로 판단되면 wrapMiddleware 사용
+                            this.router.use(this.wrapMiddleware(method));
+                        } else {
+                            // 일반 Express 미들웨어
+                            this.router.use((req: Request, res: Response, next: NextFunction) => {
+                                try {
+                                    // Kusto 매니저를 Request 객체에 설정
+                                    req.kusto = kustoManager;
+                                    
+                                    // 파라미터가 있다면 req 객체에 추가
+                                    if (params) {
+                                        const parameterKey = getParameterKey(middlewareName);
+                                        (req as any).with = { 
+                                            ...(req as any).with, 
+                                            [parameterKey]: params 
+                                        };
+                                    }
+                                    method(req, res, next);
+                                } catch (error) {
+                                    next(error);
                                 }
-                                method(req, res, next);
-                            } catch (error) {
-                                next(error);
-                            }
-                        });
+                            });
+                        }
                     }
                 });            
             
             } else if (typeof middlewareInstance === 'function') {
                
                 // 미들웨어가 직접 함수인 경우
-                this.router.use((req: Request, res: Response, next: NextFunction) => {
-                    try {
-
-                        // Kusto 매니저를 Request 객체에 설정
-                        req.kusto = kustoManager;
-                        
-                        // 파라미터가 있다면 req 객체에 추가
-                        if (params) {
-                            const parameterKey = getParameterKey(middlewareName);
-                            (req as any).with = { 
-                                ...(req as any).with, 
-                                [parameterKey]: params 
-                            };
+                // 매개변수 개수로 MiddlewareHandlerFunction인지 판단
+                if ((middlewareInstance as Function).length >= 6) {
+                    // MiddlewareHandlerFunction 타입으로 판단되면 wrapMiddleware 사용
+                    this.router.use(this.wrapMiddleware(middlewareInstance as MiddlewareHandlerFunction));
+                } else {
+                    // 일반 Express 미들웨어
+                    this.router.use((req: Request, res: Response, next: NextFunction) => {
+                        try {
+                            // Kusto 매니저를 Request 객체에 설정
+                            req.kusto = kustoManager;
+                            
+                            // 파라미터가 있다면 req 객체에 추가
+                            if (params) {
+                                const parameterKey = getParameterKey(middlewareName);
+                                (req as any).with = { 
+                                    ...(req as any).with, 
+                                    [parameterKey]: params 
+                                };
+                            }
+                            (middlewareInstance as any)(req, res, next);
+                        } catch (error) {
+                            next(error);
                         }
-                        (middlewareInstance as any)(req, res, next);
-                    } catch (error) {
-                        next(error);
-                    }
-                });
+                    });
+                }
             }
 
             return this;

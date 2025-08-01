@@ -10,7 +10,7 @@
   ],
   "exec": "npm run generate-injectables && npm run generate-repositories && npm run generate-db-types && ts-node ./src/index.ts",
   "env": {
-    "NODE_ENV": "development"
+    "NODE_ENV": "production"
   },
   "delay": 1000
 }

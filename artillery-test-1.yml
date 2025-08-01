@@ -1,0 +1,10 @@
+# artillery run --output artillery-test-1.html artillery-test-1.yml --record --key a9_k86i2s5vb8zd562mov854i1sdiwaofap
+config:
+  target: 'http://localhost:3000'  # 로컬 서버 주소
+  phases:
+    - duration: 60  # 테스트 시간 (60초)
+      arrivalRate: 1000  # 초당 10명의 요청을 보냄
+scenarios:
+  - flow:
+      - get:
+          url: "/example?page[number]=1"  # 로컬 서버의 API 엔드포인트

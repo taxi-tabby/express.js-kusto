@@ -1,206 +1,115 @@
-# Artillery READ-ONLY Performance Test for Example API
-# 실행 명령어: artillery run --output artillery-test-1.html artillery-test-1.yml --record --key a9_k86i2s5vb8zd562mov854i1sdiwaofap
+# Artillery Extreme Load Performance Test for Pagination API
+# 실행 명령어: artillery run artillery-test-1.yml --output report.json
+# HTML 리포트: artillery report report.json
+# 경고: 이는 극한 부하 테스트입니다. 프로덕션 환경에서 실행하지 마세요!
 
 config:
-  target: 'http://localhost:3000'
-  # 안전한 읽기 전용 성능 테스트 시나리오
+  target: 'http://127.0.0.1:3000'
+  # 극단적 부하 테스트 - 점진적 증가 후 감소 패턴 (Duration 30% 축소, 부하 극대화)
   phases:
-    # 워밍업 단계 - JIT 컴파일러 최적화
+    # 1단계: 시스템 워밍업 - JIT 컴파일러 최적화
     - name: "warmup"
-      duration: 60
-      arrivalRate: 10
+      duration: 21  # 30 -> 21 (30% 감소)
+      arrivalRate: 5
       rampTo: 50
-    # 점진적 부하 증가 - 실제 트래픽 시뮬레이션
-    - name: "ramp-up"
-      duration: 120
+    # 2단계: 가벼운 부하 - 기본 성능 측정  
+    - name: "light-load"
+      duration: 42  # 60 -> 42 (30% 감소)
       arrivalRate: 50
       rampTo: 200
-    # 고부하 테스트 - 시스템 한계 확인
-    - name: "high-load"
-      duration: 180
+    # 3단계: 보통 부하 - 일반적인 사용량
+    - name: "normal-load"
+      duration: 63  # 90 -> 63 (30% 감소)
       arrivalRate: 200
       rampTo: 500
-    # 최대 부하 테스트 - 극한 상황
-    - name: "peak-load"
-      duration: 60
+    # 4단계: 중간 높은 부하 - 스케일링 시작
+    - name: "medium-high-load"
+      duration: 50  # 새로운 단계
       arrivalRate: 500
       rampTo: 800
-    # 안정화 단계 - 부하 감소
-    - name: "stabilization"
-      duration: 90
+    # 5단계: 높은 부하 - 피크 준비
+    - name: "high-load"
+      duration: 84  # 120 -> 84 (30% 감소)
       arrivalRate: 800
-      rampTo: 50
+      rampTo: 1200
+    # 6단계: 극한 부하 1 - 시스템 스트레스 테스트
+    - name: "extreme-load-1"
+      duration: 63  # 90 -> 63 (30% 감소)
+      arrivalRate: 1200
+      rampTo: 2000
+    # 7단계: 극한 부하 2 - 최대 임계점 테스트
+    - name: "extreme-load-2"
+      duration: 45  # 새로운 단계
+      arrivalRate: 2000
+      rampTo: 3000
+    # 8단계: 최대 부하 - 시스템 한계 돌파 시도
+    - name: "peak-load"
+      duration: 40  # 새로운 단계
+      arrivalRate: 3000
+      rampTo: 4000
+    # 9단계: 급격한 부하 감소 시작 - 안정화 과정
+    - name: "scale-down-1"
+      duration: 53  # 75 -> 53 (30% 감소)
+      arrivalRate: 4000
+      rampTo: 1500
+    # 10단계: 중간 감소 - 시스템 회복
+    - name: "scale-down-2"
+      duration: 35  # 새로운 단계
+      arrivalRate: 1500
+      rampTo: 800
+    # 11단계: 지속적 감소 - 정상화
+    - name: "scale-down-3"  
+      duration: 42  # 60 -> 42 (30% 감소)
+      arrivalRate: 800
+      rampTo: 300
+    # 12단계: 최종 안정화 - 시스템 복구
+    - name: "cooldown"
+      duration: 32  # 45 -> 32 (30% 감소)
+      arrivalRate: 300
+      rampTo: 10
   
-  # 성능 메트릭 설정
-  metrics:
-    - name: "response_time_95th"
-      summary: "95th percentile response time"
-    - name: "error_rate"
-      summary: "Error rate percentage"
-    
-  # 환경별 변수
+  # HTTP 엔진 설정 (극한 부하 테스트용)
+  http:
+    timeout: 60  # 타임아웃 증가 (극한 부하 상황 고려)
+    pool: 200   # 커넥션 풀 증가 (고동시성 지원)
+    extendedMetrics: true
+  
+  # 환경 변수 설정
   variables:
-    userAgent: "Artillery-LoadTest/1.0"
-    contentType: "application/json"
+    testSuite: "Extreme-Load-Performance-Analysis"
+    apiVersion: "v1"
+    maxConcurrency: "4000"
+    
+  # 성능 임계값 설정 (ensure 플러그인) - 극한 부하 테스트용
+  ensure:
+    p99: 5000  # 99%의 요청이 5초 이내 (극한 상황 고려)
+    p95: 3000  # 95%의 요청이 3초 이내 (고부하 상황 고려)
+    maxErrorRate: 15  # 최대 15% 오류율 (극한 테스트이므로 높은 허용치)
 
-# 플러그인 설정
+
+
+# 공식 플러그인 설정 (Artillery 문서 기준)
 plugins:
-  # 메트릭 수집 플러그인
+  # 엔드포인트별 메트릭 수집
   metrics-by-endpoint:
     useOnlyRequestNames: true
-  # 예상 성능 검증
+  # SLO 체크 (ensure 플러그인)
+  ensure: {}
+  # 성능 데이터 출력 형식
   expect:
     outputFormat: json
     
-# 시나리오 정의
-scenarios:
-  # CRUD vs 일반 라우터 성능 비교 시나리오 (40% 비중)
-  - name: "crud_vs_normal_comparison"
-    weight: 40
-    flow:
-      # 일반 라우터 헬스체크 (DB 요청 없음)
-      - get:
-          url: "/example/example-normal"
-          name: "normal_router_health"
-          expect:
-            - statusCode: 200
-      
-      # CRUD 라우터 헬스체크 (오버헤드 있음)
-      - get:
-          url: "/example"
-          name: "crud_router_health"
-          expect:
-            - statusCode: 200
-            - hasProperty: "data"
-      
-      # 처리 시간 차이 측정을 위한 반복 테스트
-      - get:
-          url: "/example/example-normal"
-          name: "normal_router_test_1"
-          expect:
-            - statusCode: 200
-      - get:
-          url: "/example"
-          name: "crud_router_test_1"
-          expect:
-            - statusCode: 200
-      - get:
-          url: "/example/example-normal"
-          name: "normal_router_test_2"
-          expect:
-            - statusCode: 200
-      - get:
-          url: "/example"
-          name: "crud_router_test_2"
-          expect:
-            - statusCode: 200
-      - get:
-          url: "/example/example-normal"
-          name: "normal_router_test_3"
-          expect:
-            - statusCode: 200
-      - get:
-          url: "/example"
-          name: "crud_router_test_3"
-          expect:
-            - statusCode: 200
 
-  # CRUD 읽기 전용 성능 테스트 (45% 비중)
-  - name: "crud_read_performance"
-    weight: 45
+
+# 단일 페이징 성능 테스트 시나리오
+scenarios:
+  - name: "pagination_test"
+    weight: 100
     flow:
-      # 기본 목록 조회
-      - get:
-          url: "/example"
-          name: "list_all_users"
-          expect:
-            - statusCode: 200
-            - hasProperty: "data"
-      
-      # 페이징 테스트 - 다양한 페이지 크기
       - get:
           url: "/example?page[number]=1&page[size]=10"
-          name: "paginated_small"
+          name: "pagination_test"
           expect:
             - statusCode: 200
             - hasProperty: "data"
-            - hasProperty: "meta.pagination"
-      
-      - get:
-          url: "/example?page[number]=2&page[size]=25"
-          name: "paginated_medium"
-          expect:
-            - statusCode: 200
-            - hasProperty: "meta.pagination"
-      
-      - get:
-          url: "/example?page[number]=1&page[size]=50"
-          name: "paginated_large"
-          expect:
-            - statusCode: 200
-      
-      # 필터링 성능 테스트
-      - get:
-          url: "/example?filter[name]=김철수"
-          name: "filter_by_name"
-          expect:
-            - statusCode: 200
-      
-      - get:
-          url: "/example?filter[age]=gte:25"
-          name: "filter_by_age_range"
-          expect:
-            - statusCode: 200
-      
-      # 정렬 성능 테스트
-      - get:
-          url: "/example?sort=name&page[size]=20"
-          name: "sort_by_name"
-          expect:
-            - statusCode: 200
-      
-      - get:
-          url: "/example?sort=-createdAt&page[size]=20"
-          name: "sort_by_date_desc"
-          expect:
-            - statusCode: 200
-      
-      # 복합 쿼리 성능 테스트
-      - get:
-          url: "/example?filter[age]=gte:20&sort=name&page[number]=1&page[size]=15"
-          name: "complex_query"
-          expect:
-            - statusCode: 200
-
-  # 고부하 읽기 시나리오 (15% 비중)
-  - name: "high_load_read_scenario"
-    weight: 15
-    flow:
-      # 대량 조회 테스트
-      - get:
-          url: "/example?page[size]=100"
-          name: "bulk_read_100"
-          expect:
-            - statusCode: 200
-            - contentType: json
-      
-      # 검색 성능 테스트
-      - get:
-          url: "/example?search=김철수&page[size]=30"
-          name: "search_performance"
-          expect:
-            - statusCode: 200
-      
-      # 복잡한 필터링 조합
-      - get:
-          url: "/example?filter[age]=between:20,40&filter[name]=like:%김철수%&sort=-createdAt&page[size]=25"
-          name: "complex_filtering"
-          expect:
-            - statusCode: 200
-      
-      # 최대 페이지 크기 테스트
-      - get:
-          url: "/example?page[size]=200&sort=uuid"
-          name: "max_page_size"
-          expect:
-            - statusCode: 200
+            - hasProperty: "metadata"

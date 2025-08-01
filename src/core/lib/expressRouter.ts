@@ -12,6 +12,7 @@ import { kustoManager } from '@lib/kustoManager'
 import { CrudQueryParser, PrismaQueryBuilder, CrudResponseFormatter, JsonApiTransformer, JsonApiResponse, JsonApiResource, JsonApiRelationship, JsonApiErrorResponse } from './crudHelpers';
 import { ErrorFormatter } from './errorFormatter';
 import { serializeBigInt, serialize } from './serializer';
+import { ERROR_CODES, getHttpStatusForErrorCode } from './errorCodes';
 import './types/express-extensions';
 
 
@@ -49,6 +50,8 @@ export {
 
 
 
+
+import { ErrorHandler, ErrorResponseFormat } from './errorHandler';
 
 export class ExpressRouter {
     public router = Router();
@@ -2029,7 +2032,7 @@ export class ExpressRouter {
                 if (!queryParams.page) {
                     const errorResponse = this.formatJsonApiError(
                         new Error('Pagination is required. You must specify either page-based pagination (page[number] & page[size]) or cursor-based pagination (page[cursor] & page[size])'),
-                        'PAGINATION_REQUIRED',
+                        ERROR_CODES.PAGINATION_REQUIRED,
                         400,
                         req.path
                     );
@@ -2040,7 +2043,7 @@ export class ExpressRouter {
                 if (!queryParams.page.number && !queryParams.page.cursor) {
                     const errorResponse = this.formatJsonApiError(
                         new Error('Invalid pagination parameters. Specify either page[number] for offset-based pagination or page[cursor] for cursor-based pagination'),
-                        'INVALID_PAGINATION_PARAMS',
+                        ERROR_CODES.INVALID_PAGINATION_PARAMS,
                         400,
                         req.path
                     );
@@ -2051,7 +2054,7 @@ export class ExpressRouter {
                 if (!queryParams.page.size || queryParams.page.size <= 0) {
                     const errorResponse = this.formatJsonApiError(
                         new Error('page[size] parameter is required and must be greater than 0'),
-                        'INVALID_PAGE_SIZE',
+                        ERROR_CODES.INVALID_PAGE_SIZE,
                         400,
                         req.path
                     );
@@ -3777,164 +3780,27 @@ export class ExpressRouter {
     }
 
     /**
-     * JSON:API 에러 형식으로 포맷하는 헬퍼 메서드 - 완전한 스펙 준수 (보안 강화)
+     * JSON:API 에러 형식으로 포맷하는 헬퍼 메서드 (통합 ErrorHandler 사용)
      */
-    private formatJsonApiError(error: any, code: string, status: number, path: string): JsonApiErrorResponse {
-        const errorId = `error_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        const baseStructure = this.createBaseJsonApiStructure();
-        const isDevelopment = process.env.NODE_ENV === 'development';
-        
-        // 에러 정보 보안 처리
-        const sanitizedError = this.sanitizeErrorForJsonApi(error, {
-            isDevelopment,
-            sanitizeDetails: !isDevelopment,
-            maxDetailLength: 500
-        });
-        
-        return {
-            ...baseStructure,
-            errors: [
-                {
-                    id: errorId,
-                    links: {
-                        about: `https://docs.api.com/errors/${code}`,
-                        type: `https://docs.api.com/error-types/${status}`
-                    },
-                    status: String(status),
-                    code: code,
-                    title: this.getErrorTitle(status),
-                    detail: sanitizedError.detail,
-                    source: {
-                        pointer: path,
-                        ...(error.parameter && { parameter: error.parameter }),
-                        ...(error.header && { header: error.header })
-                    },
-                    meta: {
-                        timestamp: new Date().toISOString(),
-                        requestId: errorId,
-                        ...sanitizedError.meta
-                    }
-                }
-            ],
-            meta: {
-                timestamp: new Date().toISOString(),
-                errorCount: 1,
-                requestInfo: {
-                    path: path,
-                    method: error.method || 'UNKNOWN'
+    private formatJsonApiError(error: Error | unknown, code: string, status: number, path: string): JsonApiErrorResponse {
+        return ErrorHandler.handleError(error, {
+            format: ErrorResponseFormat.JSON_API,
+            context: {
+                code,
+                status,
+                path,
+                source: {
+                    pointer: path
                 }
             },
-            links: {
-                self: path
+            security: {
+                isDevelopment: process.env.NODE_ENV === 'development',
+                sanitizeDetails: process.env.NODE_ENV !== 'development',
+                maxDetailLength: 500
             }
-        };
+        });
     }
 
-    /**
-     * Express Router용 에러 정보 보안 처리
-     */
-    private sanitizeErrorForJsonApi(
-        error: any,
-        options: {
-            isDevelopment: boolean;
-            sanitizeDetails: boolean;
-            maxDetailLength: number;
-        }
-    ): { detail: string; meta: Record<string, any> } {
-        const errorMessage = error?.message || 'An error occurred while processing the request';
-        
-        // 개발 모드에서는 더 상세한 정보 포함 (단, Prisma 에러도 적절히 처리)
-        if (options.isDevelopment && !options.sanitizeDetails) {
-            // 개발 모드에서도 민감한 정보는 제거
-            const developmentDetail = this.sanitizeSensitiveInfoOnly(errorMessage);
-            
-            return {
-                detail: this.truncateMessage(developmentDetail, options.maxDetailLength),
-                meta: {
-                    ...(error.code && { errorCode: error.code }),
-                    ...(error.name && { errorType: error.name }),
-                    ...(error.stack && { 
-                        stack: error.stack.split('\n').slice(0, 5).map((line: string) => line.trim())
-                    }),
-                    ...(error.meta && { originalError: error.meta }),
-                    environment: 'development'
-                }
-            };
-        }
-
-        // 프로덕션 모드에서는 보안을 위해 정보 제한
-        const sanitizedMessage = CrudResponseFormatter.sanitizePrismaError(errorMessage);
-        const sanitizedMeta: Record<string, any> = {};
-
-        // 안전한 메타 정보만 포함
-        if (error.code) {
-            sanitizedMeta.errorType = CrudResponseFormatter.mapPrismaErrorCode(error.code);
-        }
-
-        if (error.name) {
-            sanitizedMeta.category = this.categorizeErrorType(error.name);
-        }
-
-        sanitizedMeta.environment = 'production';
-
-        return {
-            detail: this.truncateMessage(sanitizedMessage, options.maxDetailLength),
-            meta: Object.keys(sanitizedMeta).length > 0 ? sanitizedMeta : {}
-        };
-    }
-
-    /**
-     * 개발 모드에서도 민감한 정보만 제거 (전체 에러 정보는 유지)
-     */
-    private sanitizeSensitiveInfoOnly(message: string): string {
-        // 민감한 정보만 선별적으로 제거 (전체 에러 구조는 유지)
-        const sensitivePatterns = [
-            /postgres:\/\/[^\s]+/gi,          // PostgreSQL 연결 문자열
-            /mysql:\/\/[^\s]+/gi,             // MySQL 연결 문자열
-            /mongodb:\/\/[^\s]+/gi,           // MongoDB 연결 문자열
-            /sqlite:[^\s]+/gi,                // SQLite 파일 경로
-            /password=[^\s&]+/gi,             // 패스워드 파라미터
-            /token=[^\s&]+/gi,                // 토큰 파라미터
-            /api[_-]?key=[^\s&]+/gi,         // API 키
-            /secret=[^\s&]+/gi,               // 시크릿 키
-        ];
-
-        let sanitizedMessage = message;
-        for (const pattern of sensitivePatterns) {
-            sanitizedMessage = sanitizedMessage.replace(pattern, '[REDACTED]');
-        }
-
-        return sanitizedMessage;
-    }
-
-    /**
-     * 에러 타입 분류
-     */
-    private categorizeErrorType(errorName: string): string {
-        const typeMap: Record<string, string> = {
-            'PrismaClientValidationError': 'VALIDATION_ERROR',
-            'PrismaClientKnownRequestError': 'DATABASE_ERROR',
-            'PrismaClientUnknownRequestError': 'DATABASE_ERROR',
-            'PrismaClientRustPanicError': 'INTERNAL_ERROR',
-            'PrismaClientInitializationError': 'CONNECTION_ERROR',
-            'ValidationError': 'VALIDATION_ERROR',
-            'TypeError': 'TYPE_ERROR',
-            'ReferenceError': 'REFERENCE_ERROR',
-            'SyntaxError': 'SYNTAX_ERROR'
-        };
-
-        return typeMap[errorName] || 'UNKNOWN_ERROR';
-    }
-
-    /**
-     * 메시지 길이 제한
-     */
-    private truncateMessage(message: string, maxLength: number): string {
-        if (message.length <= maxLength) {
-            return message;
-        }
-        return message.substring(0, maxLength - 3) + '...';
-    }
 
     /**
      * 빈 값들 정리 (undefined, 빈 객체, 빈 배열 등)

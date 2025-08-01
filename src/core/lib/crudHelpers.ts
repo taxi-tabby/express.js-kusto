@@ -1,5 +1,8 @@
 import { Request } from 'express';
 
+import { ErrorHandler, ErrorResponseFormat } from './errorHandler';
+import { ERROR_CODES, PRISMA_ERROR_CODES } from './errorCodes';
+
 /**
  * CRUD 쿼리 파싱 및 필터링을 위한 헬퍼 유틸리티
  */
@@ -1195,7 +1198,7 @@ export class CrudResponseFormatter {
   }
 
   /**
-   * 에러 응답 포맷
+   * 에러 응답 포맷 (통합 ErrorHandler 사용)
    */
   static formatError(
     message: string, 
@@ -1204,26 +1207,18 @@ export class CrudResponseFormatter {
     operation: string = 'unknown',
     securityOptions?: ErrorSecurityOptions
   ) {
-    const isDevelopment = securityOptions?.isDevelopment ?? (process.env.NODE_ENV !== 'production');
-    const sanitizedDetail = this.sanitizeErrorDetail(message, details, {
-      isDevelopment,
-      sanitizeDetails: securityOptions?.sanitizeDetails ?? !isDevelopment,
-      maxDetailLength: securityOptions?.maxDetailLength ?? 500
-    });
+    const error = new Error(message);
+    (error as any).code = code;
+    (error as any).meta = details;
 
-    return {
-      error: {
-        message: sanitizedDetail.message,
-        code: code || 'UNKNOWN_ERROR',
-        details: sanitizedDetail.details
-      },
-      metadata: {
+    return ErrorHandler.handleError(error, {
+      format: ErrorResponseFormat.CRUD,
+      context: {
         operation,
-        timestamp: new Date().toISOString(),
-        affectedCount: 0
+        code: code || 'UNKNOWN_ERROR'
       },
-      success: false
-    };
+      security: securityOptions
+    });
   }
 
   /**
@@ -1257,174 +1252,456 @@ export class CrudResponseFormatter {
   }
 
   /**
-   * Prisma 에러 메시지 보안 처리 (public static으로 변경)
+   * 에러 메시지 보안 처리 (구조적 접근법)
    */
   static sanitizePrismaError(message: string): string {
-    // Prisma 관련 에러 패턴 감지 및 일반화
-    const prismaErrorPatterns = [
-      {
-        pattern: /PrismaClientValidationError/gi,
-        replacement: 'Validation error occurred'
-      },
-      {
-        pattern: /PrismaClientKnownRequestError/gi,
-        replacement: 'Database operation failed'
-      },
-      {
-        pattern: /PrismaClientUnknownRequestError/gi,
-        replacement: 'Database request failed'
-      },
-      {
-        pattern: /PrismaClientRustPanicError/gi,
-        replacement: 'Database engine error'
-      },
-      {
-        pattern: /PrismaClientInitializationError/gi,
-        replacement: 'Database connection error'
-      },
-      {
-        pattern: /Invalid.*invocation/gi,
-        replacement: 'Invalid request parameters'
-      },
-      {
-        pattern: /Argument `[^`]+` is missing/gi,
-        replacement: 'Required parameter is missing'
-      },
-      {
-        pattern: /Unknown argument `[^`]+`/gi,
-        replacement: 'Invalid parameter provided'
-      },
-      {
-        pattern: /Unique constraint failed on the fields: \(`[^`]+`\)/gi,
-        replacement: 'Duplicate entry detected'
-      },
-      {
-        pattern: /Foreign key constraint failed/gi,
-        replacement: 'Related record not found'
-      },
-      {
-        pattern: /Record to (update|delete) does not exist/gi,
-        replacement: 'Record not found'
-      },
-      {
-        pattern: /Database connection string is invalid/gi,
-        replacement: 'Database configuration error'
-      },
-      {
-        pattern: /Query interpretation error/gi,
-        replacement: 'Query processing error'
-      }
-    ];
-
-    let sanitizedMessage = message;
-
-    // 패턴별로 메시지 치환
-    for (const { pattern, replacement } of prismaErrorPatterns) {
-      sanitizedMessage = sanitizedMessage.replace(pattern, replacement);
-    }
-
-    // 추가 보안 처리: 민감한 정보 패턴 제거
-    const sensitivePatterns = [
-      /postgres:\/\/[^\s]+/gi,          // PostgreSQL 연결 문자열
-      /mysql:\/\/[^\s]+/gi,             // MySQL 연결 문자열
-      /mongodb:\/\/[^\s]+/gi,           // MongoDB 연결 문자열
-      /sqlite:[^\s]+/gi,                // SQLite 파일 경로
-      /password=[^\s&]+/gi,             // 패스워드 파라미터
-      /token=[^\s&]+/gi,                // 토큰 파라미터
-      /api[_-]?key=[^\s&]+/gi,         // API 키
-      /secret=[^\s&]+/gi,               // 시크릿 키
-      /\/[a-zA-Z]:[^\s]*\.db/gi,       // 윈도우 파일 경로
-      /\/home\/[^\s]*/gi,               // 리눅스 홈 디렉토리 경로
-      /\/Users\/[^\s]*/gi,              // macOS 사용자 디렉토리 경로
-      /C:\\Users\\[^\s]*/gi,            // 윈도우 사용자 디렉토리 경로
-      /at .+:\d+:\d+/gi,                // 스택 트레이스 위치 정보
-      /\s+at\s+[^\n]+/gi                // 스택 트레이스 라인
-    ];
-
-    for (const pattern of sensitivePatterns) {
-      sanitizedMessage = sanitizedMessage.replace(pattern, '[REDACTED]');
-    }
-
+    // 1. 라이브러리별 에러 처리기 적용
+    let sanitizedMessage = this.applyLibrarySpecificSanitizers(message);
+    
+    // 2. 일반적인 민감한 정보 제거
+    sanitizedMessage = this.removeSensitiveInformation(sanitizedMessage);
+    
     return sanitizedMessage;
   }
 
   /**
-   * 에러 상세 정보 보안 처리 (public static으로 변경)
+   * 라이브러리별 에러 처리기 적용
+   */
+  private static applyLibrarySpecificSanitizers(message: string): string {
+    const sanitizers = [
+      this.sanitizePrismaSpecificErrors
+    ];
+
+    let result = message;
+    for (const sanitizer of sanitizers) {
+      result = sanitizer(result);
+    }
+
+    return result;
+  }
+
+  /**
+   * Prisma 특화 에러 처리
+   */
+  private static sanitizePrismaSpecificErrors(message: string): string {
+    // Prisma 에러인지 확인
+    if (!message.includes('Prisma') && !message.includes('prisma')) {
+      return message;
+    }
+
+    const prismaErrorMappings = new Map([
+      ['PrismaClientValidationError', 'Validation error occurred'],
+      ['PrismaClientKnownRequestError', 'Database operation failed'],
+      ['PrismaClientUnknownRequestError', 'Database request failed'],
+      ['PrismaClientRustPanicError', 'Database engine error'],
+      ['PrismaClientInitializationError', 'Database connection error'],
+      ['Invalid.*invocation', 'Invalid request parameters'],
+      ['Argument `[^`]+` is missing', 'Required parameter is missing'],
+      ['Unknown argument `[^`]+`', 'Invalid parameter provided'],
+      ['Unique constraint failed on the fields: \\(`[^`]+`\\)', 'Duplicate entry detected'],
+      ['Foreign key constraint failed', 'Related record not found'],
+      ['Record to (update|delete) does not exist', 'Record not found'],
+      ['Database connection string is invalid', 'Database configuration error'],
+      ['Query interpretation error', 'Query processing error']
+    ]);
+
+    let sanitized = message;
+    for (const [pattern, replacement] of prismaErrorMappings) {
+      const regex = new RegExp(pattern, 'gi');
+      sanitized = sanitized.replace(regex, replacement);
+    }
+
+    return sanitized;
+  }
+
+  /**
+   * 일반적인 민감한 정보 제거
+   */
+  private static removeSensitiveInformation(message: string): string {
+    const sensitivePatternCategories = {
+      // 데이터베이스 연결 문자열
+      connectionStrings: [
+        /postgres:\/\/[^\s]+/gi,
+        /mysql:\/\/[^\s]+/gi,
+        /mongodb:\/\/[^\s]+/gi,
+        /sqlite:[^\s]+/gi,
+        /mssql:\/\/[^\s]+/gi,
+        /oracle:\/\/[^\s]+/gi
+      ],
+      
+      // 인증 정보
+      credentials: [
+        /password=[^\s&]+/gi,
+        /pwd=[^\s&]+/gi,
+        /token=[^\s&]+/gi,
+        /api[_-]?key=[^\s&]+/gi,
+        /secret=[^\s&]+/gi,
+        /bearer\s+[^\s]+/gi,
+        /authorization:\s*[^\s]+/gi
+      ],
+      
+      // 파일 경로
+      filePaths: [
+        /\/[a-zA-Z]:[^\s]*\.(db|sqlite|mdb)/gi,  // 윈도우 DB 파일
+        /\/home\/[^\s]*/gi,                       // 리눅스 홈 디렉토리
+        /\/Users\/[^\s]*/gi,                      // macOS 사용자 디렉토리
+        /C:\\Users\\[^\s]*/gi,                    // 윈도우 사용자 디렉토리
+        /\/var\/lib\/[^\s]*/gi,                   // 시스템 라이브러리 경로
+        /\/opt\/[^\s]*/gi                         // 옵셔널 소프트웨어 경로
+      ],
+      
+      // 스택 트레이스 (프로덕션에서만)
+      stackTrace: process.env.NODE_ENV === 'production' ? [
+        /at .+:\d+:\d+/gi,
+        /\s+at\s+[^\n]+/gi,
+        /\(\/.+:\d+:\d+\)/gi
+      ] : [],
+      
+      // IP 주소 및 포트
+      networkInfo: [
+        /\b(?:\d{1,3}\.){3}\d{1,3}:\d+\b/gi,     // IP:Port
+        /localhost:\d+/gi,                        // localhost:port
+        /127\.0\.0\.1:\d+/gi                      // 127.0.0.1:port
+      ]
+    };
+
+    let sanitized = message;
+    
+    // 각 카테고리별로 민감한 정보 제거
+    Object.entries(sensitivePatternCategories).forEach(([category, patterns]) => {
+      patterns.forEach(pattern => {
+        sanitized = sanitized.replace(pattern, `[${category.toUpperCase()}_REDACTED]`);
+      });
+    });
+
+    return sanitized;
+  }
+
+  /**
+   * 에러 상세 정보 보안 처리 (구조적 접근법)
    */
   static sanitizeDetails(details: any): any {
     if (!details || typeof details !== 'object') {
       return null;
     }
 
-    // 허용되는 상세 정보 필드
-    const allowedDetailFields = [
-      'type',
-      'field',
-      'constraint',
-      'table',
-      'model',
-      'operation',
-      'count',
-      'affected'
+    // 라이브러리별 상세 정보 처리기
+    const detailsSanitizers = [
+      this.sanitizePrismaDetails,
+      this.sanitizeSequelizeDetails,
+      this.sanitizeMongooseDetails,
+      this.sanitizeTypeORMDetails
     ];
 
-    const sanitizedDetails: any = {};
+    let sanitizedDetails = { ...details };
 
-    for (const field of allowedDetailFields) {
-      if (details[field] !== undefined) {
-        sanitizedDetails[field] = details[field];
-      }
+    // 각 라이브러리별 처리기 적용
+    for (const sanitizer of detailsSanitizers) {
+      sanitizedDetails = sanitizer(sanitizedDetails);
     }
 
-    // 에러 타입별 특별 처리
-    if (details.code) {
-      sanitizedDetails.errorCode = this.mapPrismaErrorCode(details.code);
-    }
+    // 일반적인 보안 처리 적용
+    sanitizedDetails = this.applyGenericDetailsSecurity(sanitizedDetails);
 
     // 빈 객체인 경우 null 반환
     return Object.keys(sanitizedDetails).length > 0 ? sanitizedDetails : null;
   }
 
   /**
-   * Prisma 에러 코드를 일반적인 설명으로 매핑 (public static으로 변경)
+   * Prisma 상세 정보 보안 처리
+   */
+  private static sanitizePrismaDetails(details: any): any {
+    const allowedPrismaFields = [
+      'type', 'field', 'constraint', 'table', 'model', 
+      'operation', 'count', 'affected', 'target'
+    ];
+
+    const sanitized: any = {};
+
+    // Prisma 관련 필드만 허용
+    for (const field of allowedPrismaFields) {
+      if (details[field] !== undefined) {
+        sanitized[field] = details[field];
+      }
+    }
+
+    // Prisma 에러 코드 매핑
+    if (details.code) {
+      sanitized.errorCode = this.mapPrismaSpecificCodes(details.code);
+    }
+
+    // Prisma 메타 정보 처리
+    if (details.meta && typeof details.meta === 'object') {
+      sanitized.meta = this.sanitizePrismaMetaInfo(details.meta);
+    }
+
+    return sanitized;
+  }
+
+  /**
+   * Prisma 메타 정보 보안 처리
+   */
+  private static sanitizePrismaMetaInfo(meta: any): any {
+    const allowedMetaFields = [
+      'target', 'field_name', 'constraint_type', 
+      'database_error', 'table_name', 'column_name'
+    ];
+
+    const sanitizedMeta: any = {};
+
+    for (const field of allowedMetaFields) {
+      if (meta[field] !== undefined) {
+        // 민감한 정보 제거 후 추가
+        sanitizedMeta[field] = this.sanitizeMetaValue(meta[field]);
+      }
+    }
+
+    return Object.keys(sanitizedMeta).length > 0 ? sanitizedMeta : undefined;
+  }
+
+  /**
+   * Sequelize 상세 정보 보안 처리
+   */
+  private static sanitizeSequelizeDetails(details: any): any {
+    const allowedSequelizeFields = [
+      'name', 'message', 'type', 'sql', 'errno', 'sqlState', 
+      'index', 'parent', 'original', 'fields'
+    ];
+
+    const sanitized: any = {};
+
+    for (const field of allowedSequelizeFields) {
+      if (details[field] !== undefined) {
+        // SQL 쿼리는 민감한 정보 제거 후 추가
+        if (field === 'sql') {
+          sanitized[field] = this.sanitizeSqlQuery(details[field]);
+        } else {
+          sanitized[field] = details[field];
+        }
+      }
+    }
+
+    return sanitized;
+  }
+
+  /**
+   * Mongoose 상세 정보 보안 처리
+   */
+  private static sanitizeMongooseDetails(details: any): any {
+    const allowedMongooseFields = [
+      'name', 'message', 'kind', 'path', 'value', 
+      'reason', 'properties', 'errors'
+    ];
+
+    const sanitized: any = {};
+
+    for (const field of allowedMongooseFields) {
+      if (details[field] !== undefined) {
+        sanitized[field] = details[field];
+      }
+    }
+
+    return sanitized;
+  }
+
+  /**
+   * TypeORM 상세 정보 보안 처리
+   */
+  private static sanitizeTypeORMDetails(details: any): any {
+    const allowedTypeORMFields = [
+      'name', 'message', 'query', 'parameters', 'driverError',
+      'length', 'severity', 'code', 'detail', 'hint', 'position',
+      'internalQuery', 'where', 'table', 'constraint'
+    ];
+
+    const sanitized: any = {};
+
+    for (const field of allowedTypeORMFields) {
+      if (details[field] !== undefined) {
+        // 쿼리 관련 필드는 민감한 정보 제거
+        if (['query', 'internalQuery'].includes(field)) {
+          sanitized[field] = this.sanitizeSqlQuery(details[field]);
+        } else {
+          sanitized[field] = details[field];
+        }
+      }
+    }
+
+    return sanitized;
+  }
+
+  /**
+   * 일반적인 상세 정보 보안 처리
+   */
+  private static applyGenericDetailsSecurity(details: any): any {
+    const sanitized = { ...details };
+
+    // 민감한 필드 제거
+    const sensitiveFields = [
+      'password', 'pwd', 'token', 'apiKey', 'secret', 'authorization',
+      'connectionString', 'host', 'port', 'username', 'user',
+      'stack', 'stackTrace', 'trace'
+    ];
+
+    for (const field of sensitiveFields) {
+      delete sanitized[field];
+    }
+
+    // 중첩된 객체 처리
+    Object.keys(sanitized).forEach(key => {
+      if (typeof sanitized[key] === 'object' && sanitized[key] !== null) {
+        if (Array.isArray(sanitized[key])) {
+          // 배열인 경우: 각 요소 처리
+          sanitized[key] = sanitized[key].map((item: any) => 
+            typeof item === 'object' ? this.applyGenericDetailsSecurity(item) : item
+          );
+        } else {
+          // 객체인 경우: 재귀적 처리
+          sanitized[key] = this.applyGenericDetailsSecurity(sanitized[key]);
+        }
+      }
+    });
+
+    return sanitized;
+  }
+
+  /**
+   * SQL 쿼리 민감한 정보 제거
+   */
+  private static sanitizeSqlQuery(sql: string): string {
+    if (typeof sql !== 'string') {
+      return sql;
+    }
+
+    // SQL에서 민감한 정보 패턴 제거
+    const sqlPatterns = [
+      /password\s*=\s*['"][^'"]*['"]/gi,
+      /pwd\s*=\s*['"][^'"]*['"]/gi,
+      /token\s*=\s*['"][^'"]*['"]/gi,
+      /secret\s*=\s*['"][^'"]*['"]/gi,
+      /'[^']*password[^']*'/gi,
+      /"[^"]*password[^"]*"/gi
+    ];
+
+    let sanitizedSql = sql;
+    for (const pattern of sqlPatterns) {
+      sanitizedSql = sanitizedSql.replace(pattern, '[REDACTED_SQL_VALUE]');
+    }
+
+    return sanitizedSql;
+  }
+
+  /**
+   * 메타 값 민감한 정보 제거
+   */
+  private static sanitizeMetaValue(value: any): any {
+    if (typeof value === 'string') {
+      return this.removeSensitiveInformation(value);
+    }
+    
+    if (typeof value === 'object' && value !== null) {
+      return this.applyGenericDetailsSecurity(value);
+    }
+
+    return value;
+  }
+
+  /**
+   * 에러 코드를 일반적인 설명으로 매핑 (구조적 접근법)
    */
   static mapPrismaErrorCode(code: string): string {
-    const codeMap: Record<string, string> = {
-      'P2001': 'RECORD_NOT_FOUND',
-      'P2002': 'UNIQUE_CONSTRAINT_VIOLATION',
-      'P2003': 'FOREIGN_KEY_CONSTRAINT_VIOLATION',
-      'P2004': 'CONSTRAINT_VIOLATION',
-      'P2005': 'INVALID_VALUE',
-      'P2006': 'INVALID_VALUE',
-      'P2007': 'DATA_VALIDATION_ERROR',
-      'P2008': 'QUERY_PARSING_ERROR',
-      'P2009': 'QUERY_VALIDATION_ERROR',
-      'P2010': 'RAW_QUERY_ERROR',
-      'P2011': 'NULL_CONSTRAINT_VIOLATION',
-      'P2012': 'MISSING_REQUIRED_VALUE',
-      'P2013': 'MISSING_REQUIRED_ARGUMENT',
-      'P2014': 'RELATION_VIOLATION',
-      'P2015': 'RELATED_RECORD_NOT_FOUND',
-      'P2016': 'QUERY_INTERPRETATION_ERROR',
-      'P2017': 'RECORDS_NOT_CONNECTED',
-      'P2018': 'REQUIRED_CONNECTED_RECORDS_NOT_FOUND',
-      'P2019': 'INPUT_ERROR',
-      'P2020': 'VALUE_OUT_OF_RANGE',
-      'P2021': 'TABLE_NOT_FOUND',
-      'P2022': 'COLUMN_NOT_FOUND',
-      'P2023': 'INCONSISTENT_COLUMN_DATA',
-      'P2024': 'CONNECTION_TIMEOUT',
-      'P2025': 'OPERATION_FAILED',
-      'P2026': 'UNSUPPORTED_FEATURE',
-      'P2027': 'MULTIPLE_ERRORS',
-      'P2028': 'TRANSACTION_API_ERROR',
-      'P2030': 'FULLTEXT_INDEX_NOT_FOUND',
-      'P2031': 'MONGODB_REPLICA_SET_REQUIRED',
-      'P2033': 'NUMBER_OUT_OF_RANGE',
-      'P2034': 'TRANSACTION_CONFLICT'
-    };
 
-    return codeMap[code] || 'DATABASE_ERROR';
+    // 라이브러리별 에러 코드 매핑
+    const errorCodeMappers = [
+      this.mapPrismaSpecificCodes,
+    ];
+
+    for (const mapper of errorCodeMappers) {
+      const mapped = mapper(code);
+      if (mapped !== code) {
+        return mapped; // 매핑이 성공한 경우
+      }
+    }
+
+    // 일반적인 HTTP 상태 코드 처리
+    return this.mapGenericErrorCodes(code);
+  }
+
+
+  /**
+   * Prisma 특화 에러 코드 매핑
+   */
+  private static mapPrismaSpecificCodes(code: string): string {
+    const prismaCodeMap = new Map([
+      // 데이터 관련 에러
+      ['P2001', PRISMA_ERROR_CODES.RECORD_NOT_FOUND],
+      ['P2002', PRISMA_ERROR_CODES.UNIQUE_CONSTRAINT_VIOLATION],
+      ['P2003', PRISMA_ERROR_CODES.FOREIGN_KEY_CONSTRAINT_VIOLATION],
+      ['P2004', PRISMA_ERROR_CODES.CONSTRAINT_VIOLATION],
+      ['P2005', PRISMA_ERROR_CODES.INVALID_VALUE],
+      ['P2006', PRISMA_ERROR_CODES.INVALID_VALUE],
+      ['P2007', PRISMA_ERROR_CODES.DATA_VALIDATION_ERROR],
+      
+      // 쿼리 관련 에러
+      ['P2008', PRISMA_ERROR_CODES.QUERY_PARSING_ERROR],
+      ['P2009', PRISMA_ERROR_CODES.QUERY_VALIDATION_ERROR],
+      ['P2010', PRISMA_ERROR_CODES.RAW_QUERY_ERROR],
+      ['P2016', PRISMA_ERROR_CODES.QUERY_INTERPRETATION_ERROR],
+      
+      // 제약 조건 에러
+      ['P2011', PRISMA_ERROR_CODES.NULL_CONSTRAINT_VIOLATION],
+      ['P2012', ERROR_CODES.MISSING_REQUIRED_FIELD],
+      ['P2013', ERROR_CODES.MISSING_REQUIRED_FIELD],
+      ['P2014', PRISMA_ERROR_CODES.RELATIONSHIP_VIOLATION],
+      ['P2015', ERROR_CODES.RELATIONSHIP_NOT_FOUND],
+      ['P2017', PRISMA_ERROR_CODES.RELATIONSHIP_VIOLATION],
+      ['P2018', ERROR_CODES.RELATIONSHIP_NOT_FOUND],
+      
+      // 입력 관련 에러
+      ['P2019', ERROR_CODES.VALIDATION_ERROR],
+      ['P2020', PRISMA_ERROR_CODES.VALUE_OUT_OF_RANGE],
+      ['P2033', PRISMA_ERROR_CODES.VALUE_OUT_OF_RANGE],
+      
+      // 스키마 관련 에러
+      ['P2021', PRISMA_ERROR_CODES.TABLE_NOT_FOUND],
+      ['P2022', PRISMA_ERROR_CODES.COLUMN_NOT_FOUND],
+      ['P2023', PRISMA_ERROR_CODES.INCONSISTENT_COLUMN_DATA],
+      
+      // 연결 및 성능 에러
+      ['P2024', PRISMA_ERROR_CODES.CONNECTION_TIMEOUT],
+      ['P2025', ERROR_CODES.OPERATION_FAILED],
+      ['P2026', ERROR_CODES.OPERATION_NOT_ALLOWED],
+      ['P2027', ERROR_CODES.OPERATION_FAILED],
+      ['P2028', PRISMA_ERROR_CODES.TRANSACTION_API_ERROR],
+      ['P2034', 'TRANSACTION_CONFLICT'],
+      
+      // 특수 기능 에러
+      ['P2030', 'FULLTEXT_INDEX_NOT_FOUND'],
+      ['P2031', 'MONGODB_REPLICA_SET_REQUIRED']
+    ]);
+
+    return prismaCodeMap.get(code) || code;
+  }
+
+  
+  /**
+   * 일반적인 에러 코드 매핑
+   */
+  private static mapGenericErrorCodes(code: string): string {
+    const genericCodeMap = new Map([
+      ['400', 'BAD_REQUEST'],
+      ['401', 'UNAUTHORIZED'],
+      ['403', 'FORBIDDEN'],
+      ['404', 'NOT_FOUND'],
+      ['409', 'CONFLICT'],
+      ['422', 'UNPROCESSABLE_ENTITY'],
+      ['500', 'INTERNAL_SERVER_ERROR'],
+      ['502', 'BAD_GATEWAY'],
+      ['503', 'SERVICE_UNAVAILABLE'],
+      ['504', 'GATEWAY_TIMEOUT']
+    ]);
+
+    return genericCodeMap.get(code) || 'UNKNOWN_ERROR';
   }
 
   /**
@@ -1564,7 +1841,7 @@ export class JsonApiTransformer {
   }
 
   /**
-   * JSON:API 에러 응답 생성 (보안 강화)
+   * JSON:API 에러 응답 생성 (통합 ErrorHandler 사용)
    */
   static createJsonApiErrorResponse(
     error: any,
@@ -1580,169 +1857,18 @@ export class JsonApiTransformer {
       securityOptions?: ErrorSecurityOptions;
     } = {}
   ): JsonApiErrorResponse {
-    const {
-      code = 'INTERNAL_ERROR',
-      status = 500,
-      title,
-      source,
-      securityOptions
-    } = options;
-
-    const isDevelopment = securityOptions?.isDevelopment ?? (process.env.NODE_ENV !== 'production');
-    const errorId = `error_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-
-    // 에러 메시지 및 상세 정보 보안 처리
-    const sanitizedError = this.sanitizeErrorForJsonApi(error, {
-      isDevelopment,
-      sanitizeDetails: securityOptions?.sanitizeDetails ?? !isDevelopment,
-      maxDetailLength: securityOptions?.maxDetailLength ?? 500
-    });
-
-    const jsonApiError: JsonApiError = {
-      id: errorId,
-      links: {
-        about: `https://docs.api.com/errors/${code}`,
-        type: `https://docs.api.com/error-types/${status}`
+    return ErrorHandler.handleError(error, {
+      format: ErrorResponseFormat.JSON_API,
+      context: {
+        code: options.code || 'INTERNAL_ERROR',
+        status: options.status || 500,
+        title: options.title,
+        source: options.source
       },
-      status: String(status),
-      code: code,
-      title: title || this.getErrorTitle(status),
-      detail: sanitizedError.detail,
-      source: source,
-      meta: {
-        timestamp: new Date().toISOString(),
-        requestId: errorId,
-        ...sanitizedError.meta
-      }
-    };
-
-    return {
-      ...this.createBaseJsonApiStructure(),
-      errors: [jsonApiError],
-      meta: {
-        timestamp: new Date().toISOString(),
-        errorCount: 1
-      }
-    };
+      security: options.securityOptions
+    });
   }
 
-  /**
-   * JSON:API용 에러 정보 보안 처리
-   */
-  private static sanitizeErrorForJsonApi(
-    error: any,
-    options: {
-      isDevelopment: boolean;
-      sanitizeDetails: boolean;
-      maxDetailLength: number;
-    }
-  ): { detail: string; meta: Record<string, any> } {
-    const errorMessage = error?.message || 'An error occurred';
-    
-    // 개발 모드에서는 더 상세한 정보 포함 (단, Prisma 에러도 적절히 처리)
-    if (options.isDevelopment && !options.sanitizeDetails) {
-      // 개발 모드에서도 Prisma 에러의 민감한 정보는 제거
-      const developmentDetail = this.sanitizeSensitiveInfoOnly(errorMessage);
-      
-      return {
-        detail: CrudResponseFormatter.truncateMessage(developmentDetail, options.maxDetailLength),
-        meta: {
-          ...(error.code && { errorCode: error.code }),
-          ...(error.name && { errorType: error.name }),
-          ...(error.stack && { 
-            stack: error.stack.split('\n').slice(0, 5).map((line: string) => line.trim())
-          }),
-          ...(error.meta && { originalError: error.meta }),
-          environment: 'development'
-        }
-      };
-    }
-
-    // 프로덕션 모드에서는 보안을 위해 정보 제한
-    const sanitizedMessage = CrudResponseFormatter.sanitizePrismaError(errorMessage);
-    const sanitizedMeta: Record<string, any> = {};
-
-    // 안전한 메타 정보만 포함
-    if (error.code) {
-      sanitizedMeta.errorType = CrudResponseFormatter.mapPrismaErrorCode(error.code);
-    }
-
-    if (error.name) {
-      sanitizedMeta.category = this.categorizeErrorType(error.name);
-    }
-
-    sanitizedMeta.environment = 'production';
-
-    return {
-      detail: CrudResponseFormatter.truncateMessage(sanitizedMessage, options.maxDetailLength),
-      meta: Object.keys(sanitizedMeta).length > 0 ? sanitizedMeta : {}
-    };
-  }
-
-  /**
-   * 개발 모드에서도 민감한 정보만 제거 (전체 에러 정보는 유지)
-   */
-  private static sanitizeSensitiveInfoOnly(message: string): string {
-    // 민감한 정보만 선별적으로 제거 (전체 에러 구조는 유지)
-    const sensitivePatterns = [
-      /postgres:\/\/[^\s]+/gi,          // PostgreSQL 연결 문자열
-      /mysql:\/\/[^\s]+/gi,             // MySQL 연결 문자열
-      /mongodb:\/\/[^\s]+/gi,           // MongoDB 연결 문자열
-      /sqlite:[^\s]+/gi,                // SQLite 파일 경로
-      /password=[^\s&]+/gi,             // 패스워드 파라미터
-      /token=[^\s&]+/gi,                // 토큰 파라미터
-      /api[_-]?key=[^\s&]+/gi,         // API 키
-      /secret=[^\s&]+/gi,               // 시크릿 키
-    ];
-
-    let sanitizedMessage = message;
-    for (const pattern of sensitivePatterns) {
-      sanitizedMessage = sanitizedMessage.replace(pattern, '[REDACTED]');
-    }
-
-    return sanitizedMessage;
-  }
-
-  /**
-   * 에러 타입 분류
-   */
-  private static categorizeErrorType(errorName: string): string {
-    const typeMap: Record<string, string> = {
-      'PrismaClientValidationError': 'VALIDATION_ERROR',
-      'PrismaClientKnownRequestError': 'DATABASE_ERROR',
-      'PrismaClientUnknownRequestError': 'DATABASE_ERROR',
-      'PrismaClientRustPanicError': 'INTERNAL_ERROR',
-      'PrismaClientInitializationError': 'CONNECTION_ERROR',
-      'ValidationError': 'VALIDATION_ERROR',
-      'TypeError': 'TYPE_ERROR',
-      'ReferenceError': 'REFERENCE_ERROR',
-      'SyntaxError': 'SYNTAX_ERROR'
-    };
-
-    return typeMap[errorName] || 'UNKNOWN_ERROR';
-  }
-
-  /**
-   * HTTP 상태 코드에 따른 에러 제목 생성
-   */
-  private static getErrorTitle(status: number): string {
-    const titleMap: Record<number, string> = {
-      400: 'Bad Request',
-      401: 'Unauthorized',
-      403: 'Forbidden',
-      404: 'Not Found',
-      405: 'Method Not Allowed',
-      409: 'Conflict',
-      422: 'Unprocessable Entity',
-      429: 'Too Many Requests',
-      500: 'Internal Server Error',
-      502: 'Bad Gateway',
-      503: 'Service Unavailable',
-      504: 'Gateway Timeout'
-    };
-
-    return titleMap[status] || 'Error';
-  }
 
   /**
    * attributes와 relationships 분리

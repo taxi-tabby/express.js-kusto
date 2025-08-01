@@ -144,6 +144,16 @@ export interface JsonApiError {
 }
 
 /**
+ * 에러 정보 보안 처리 옵션
+ */
+export interface ErrorSecurityOptions {
+  isDevelopment?: boolean;
+  sanitizeDetails?: boolean;
+  includeStackTrace?: boolean;
+  maxDetailLength?: number;
+}
+
+/**
  * JSON:API 에러 응답 인터페이스
  */
 export interface JsonApiErrorResponse {
@@ -1191,13 +1201,21 @@ export class CrudResponseFormatter {
     message: string, 
     code?: string, 
     details?: any,
-    operation: string = 'unknown'
+    operation: string = 'unknown',
+    securityOptions?: ErrorSecurityOptions
   ) {
+    const isDevelopment = securityOptions?.isDevelopment ?? (process.env.NODE_ENV !== 'production');
+    const sanitizedDetail = this.sanitizeErrorDetail(message, details, {
+      isDevelopment,
+      sanitizeDetails: securityOptions?.sanitizeDetails ?? !isDevelopment,
+      maxDetailLength: securityOptions?.maxDetailLength ?? 500
+    });
+
     return {
       error: {
-        message,
+        message: sanitizedDetail.message,
         code: code || 'UNKNOWN_ERROR',
-        details: details || null
+        details: sanitizedDetail.details
       },
       metadata: {
         operation,
@@ -1206,6 +1224,217 @@ export class CrudResponseFormatter {
       },
       success: false
     };
+  }
+
+  /**
+   * 에러 세부 정보 보안 처리
+   */
+  private static sanitizeErrorDetail(
+    message: string,
+    details: any,
+    options: {
+      isDevelopment: boolean;
+      sanitizeDetails: boolean;
+      maxDetailLength: number;
+    }
+  ): { message: string; details: any } {
+    // 개발 모드에서는 원본 정보 그대로 반환
+    if (options.isDevelopment && !options.sanitizeDetails) {
+      return {
+        message: CrudResponseFormatter.truncateMessage(message, options.maxDetailLength),
+        details: details || null
+      };
+    }
+
+    // 프로덕션 모드에서는 보안을 위해 정보 제한
+    const sanitizedMessage = CrudResponseFormatter.sanitizePrismaError(message);
+    const sanitizedDetails = CrudResponseFormatter.sanitizeDetails(details);
+
+    return {
+      message: CrudResponseFormatter.truncateMessage(sanitizedMessage, options.maxDetailLength),
+      details: sanitizedDetails
+    };
+  }
+
+  /**
+   * Prisma 에러 메시지 보안 처리 (public static으로 변경)
+   */
+  static sanitizePrismaError(message: string): string {
+    // Prisma 관련 에러 패턴 감지 및 일반화
+    const prismaErrorPatterns = [
+      {
+        pattern: /PrismaClientValidationError/gi,
+        replacement: 'Validation error occurred'
+      },
+      {
+        pattern: /PrismaClientKnownRequestError/gi,
+        replacement: 'Database operation failed'
+      },
+      {
+        pattern: /PrismaClientUnknownRequestError/gi,
+        replacement: 'Database request failed'
+      },
+      {
+        pattern: /PrismaClientRustPanicError/gi,
+        replacement: 'Database engine error'
+      },
+      {
+        pattern: /PrismaClientInitializationError/gi,
+        replacement: 'Database connection error'
+      },
+      {
+        pattern: /Invalid.*invocation/gi,
+        replacement: 'Invalid request parameters'
+      },
+      {
+        pattern: /Argument `[^`]+` is missing/gi,
+        replacement: 'Required parameter is missing'
+      },
+      {
+        pattern: /Unknown argument `[^`]+`/gi,
+        replacement: 'Invalid parameter provided'
+      },
+      {
+        pattern: /Unique constraint failed on the fields: \(`[^`]+`\)/gi,
+        replacement: 'Duplicate entry detected'
+      },
+      {
+        pattern: /Foreign key constraint failed/gi,
+        replacement: 'Related record not found'
+      },
+      {
+        pattern: /Record to (update|delete) does not exist/gi,
+        replacement: 'Record not found'
+      },
+      {
+        pattern: /Database connection string is invalid/gi,
+        replacement: 'Database configuration error'
+      },
+      {
+        pattern: /Query interpretation error/gi,
+        replacement: 'Query processing error'
+      }
+    ];
+
+    let sanitizedMessage = message;
+
+    // 패턴별로 메시지 치환
+    for (const { pattern, replacement } of prismaErrorPatterns) {
+      sanitizedMessage = sanitizedMessage.replace(pattern, replacement);
+    }
+
+    // 추가 보안 처리: 민감한 정보 패턴 제거
+    const sensitivePatterns = [
+      /postgres:\/\/[^\s]+/gi,          // PostgreSQL 연결 문자열
+      /mysql:\/\/[^\s]+/gi,             // MySQL 연결 문자열
+      /mongodb:\/\/[^\s]+/gi,           // MongoDB 연결 문자열
+      /sqlite:[^\s]+/gi,                // SQLite 파일 경로
+      /password=[^\s&]+/gi,             // 패스워드 파라미터
+      /token=[^\s&]+/gi,                // 토큰 파라미터
+      /api[_-]?key=[^\s&]+/gi,         // API 키
+      /secret=[^\s&]+/gi,               // 시크릿 키
+      /\/[a-zA-Z]:[^\s]*\.db/gi,       // 윈도우 파일 경로
+      /\/home\/[^\s]*/gi,               // 리눅스 홈 디렉토리 경로
+      /\/Users\/[^\s]*/gi,              // macOS 사용자 디렉토리 경로
+      /C:\\Users\\[^\s]*/gi,            // 윈도우 사용자 디렉토리 경로
+      /at .+:\d+:\d+/gi,                // 스택 트레이스 위치 정보
+      /\s+at\s+[^\n]+/gi                // 스택 트레이스 라인
+    ];
+
+    for (const pattern of sensitivePatterns) {
+      sanitizedMessage = sanitizedMessage.replace(pattern, '[REDACTED]');
+    }
+
+    return sanitizedMessage;
+  }
+
+  /**
+   * 에러 상세 정보 보안 처리 (public static으로 변경)
+   */
+  static sanitizeDetails(details: any): any {
+    if (!details || typeof details !== 'object') {
+      return null;
+    }
+
+    // 허용되는 상세 정보 필드
+    const allowedDetailFields = [
+      'type',
+      'field',
+      'constraint',
+      'table',
+      'model',
+      'operation',
+      'count',
+      'affected'
+    ];
+
+    const sanitizedDetails: any = {};
+
+    for (const field of allowedDetailFields) {
+      if (details[field] !== undefined) {
+        sanitizedDetails[field] = details[field];
+      }
+    }
+
+    // 에러 타입별 특별 처리
+    if (details.code) {
+      sanitizedDetails.errorCode = this.mapPrismaErrorCode(details.code);
+    }
+
+    // 빈 객체인 경우 null 반환
+    return Object.keys(sanitizedDetails).length > 0 ? sanitizedDetails : null;
+  }
+
+  /**
+   * Prisma 에러 코드를 일반적인 설명으로 매핑 (public static으로 변경)
+   */
+  static mapPrismaErrorCode(code: string): string {
+    const codeMap: Record<string, string> = {
+      'P2001': 'RECORD_NOT_FOUND',
+      'P2002': 'UNIQUE_CONSTRAINT_VIOLATION',
+      'P2003': 'FOREIGN_KEY_CONSTRAINT_VIOLATION',
+      'P2004': 'CONSTRAINT_VIOLATION',
+      'P2005': 'INVALID_VALUE',
+      'P2006': 'INVALID_VALUE',
+      'P2007': 'DATA_VALIDATION_ERROR',
+      'P2008': 'QUERY_PARSING_ERROR',
+      'P2009': 'QUERY_VALIDATION_ERROR',
+      'P2010': 'RAW_QUERY_ERROR',
+      'P2011': 'NULL_CONSTRAINT_VIOLATION',
+      'P2012': 'MISSING_REQUIRED_VALUE',
+      'P2013': 'MISSING_REQUIRED_ARGUMENT',
+      'P2014': 'RELATION_VIOLATION',
+      'P2015': 'RELATED_RECORD_NOT_FOUND',
+      'P2016': 'QUERY_INTERPRETATION_ERROR',
+      'P2017': 'RECORDS_NOT_CONNECTED',
+      'P2018': 'REQUIRED_CONNECTED_RECORDS_NOT_FOUND',
+      'P2019': 'INPUT_ERROR',
+      'P2020': 'VALUE_OUT_OF_RANGE',
+      'P2021': 'TABLE_NOT_FOUND',
+      'P2022': 'COLUMN_NOT_FOUND',
+      'P2023': 'INCONSISTENT_COLUMN_DATA',
+      'P2024': 'CONNECTION_TIMEOUT',
+      'P2025': 'OPERATION_FAILED',
+      'P2026': 'UNSUPPORTED_FEATURE',
+      'P2027': 'MULTIPLE_ERRORS',
+      'P2028': 'TRANSACTION_API_ERROR',
+      'P2030': 'FULLTEXT_INDEX_NOT_FOUND',
+      'P2031': 'MONGODB_REPLICA_SET_REQUIRED',
+      'P2033': 'NUMBER_OUT_OF_RANGE',
+      'P2034': 'TRANSACTION_CONFLICT'
+    };
+
+    return codeMap[code] || 'DATABASE_ERROR';
+  }
+
+  /**
+   * 메시지 길이 제한 (public static으로 변경)
+   */
+  static truncateMessage(message: string, maxLength: number): string {
+    if (message.length <= maxLength) {
+      return message;
+    }
+    return message.substring(0, maxLength - 3) + '...';
   }
 
   /**
@@ -1332,6 +1561,187 @@ export class JsonApiTransformer {
     return items.map(item => 
       this.transformToResource(item, resourceType, primaryKey, fields, baseUrl, undefined, includeMerge)
     );
+  }
+
+  /**
+   * JSON:API 에러 응답 생성 (보안 강화)
+   */
+  static createJsonApiErrorResponse(
+    error: any,
+    options: {
+      code?: string;
+      status?: number;
+      title?: string;
+      source?: {
+        pointer?: string;
+        parameter?: string;
+        header?: string;
+      };
+      securityOptions?: ErrorSecurityOptions;
+    } = {}
+  ): JsonApiErrorResponse {
+    const {
+      code = 'INTERNAL_ERROR',
+      status = 500,
+      title,
+      source,
+      securityOptions
+    } = options;
+
+    const isDevelopment = securityOptions?.isDevelopment ?? (process.env.NODE_ENV !== 'production');
+    const errorId = `error_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+    // 에러 메시지 및 상세 정보 보안 처리
+    const sanitizedError = this.sanitizeErrorForJsonApi(error, {
+      isDevelopment,
+      sanitizeDetails: securityOptions?.sanitizeDetails ?? !isDevelopment,
+      maxDetailLength: securityOptions?.maxDetailLength ?? 500
+    });
+
+    const jsonApiError: JsonApiError = {
+      id: errorId,
+      links: {
+        about: `https://docs.api.com/errors/${code}`,
+        type: `https://docs.api.com/error-types/${status}`
+      },
+      status: String(status),
+      code: code,
+      title: title || this.getErrorTitle(status),
+      detail: sanitizedError.detail,
+      source: source,
+      meta: {
+        timestamp: new Date().toISOString(),
+        requestId: errorId,
+        ...sanitizedError.meta
+      }
+    };
+
+    return {
+      ...this.createBaseJsonApiStructure(),
+      errors: [jsonApiError],
+      meta: {
+        timestamp: new Date().toISOString(),
+        errorCount: 1
+      }
+    };
+  }
+
+  /**
+   * JSON:API용 에러 정보 보안 처리
+   */
+  private static sanitizeErrorForJsonApi(
+    error: any,
+    options: {
+      isDevelopment: boolean;
+      sanitizeDetails: boolean;
+      maxDetailLength: number;
+    }
+  ): { detail: string; meta: Record<string, any> } {
+    const errorMessage = error?.message || 'An error occurred';
+    
+    // 개발 모드에서는 더 상세한 정보 포함 (단, Prisma 에러도 적절히 처리)
+    if (options.isDevelopment && !options.sanitizeDetails) {
+      // 개발 모드에서도 Prisma 에러의 민감한 정보는 제거
+      const developmentDetail = this.sanitizeSensitiveInfoOnly(errorMessage);
+      
+      return {
+        detail: CrudResponseFormatter.truncateMessage(developmentDetail, options.maxDetailLength),
+        meta: {
+          ...(error.code && { errorCode: error.code }),
+          ...(error.name && { errorType: error.name }),
+          ...(error.stack && { 
+            stack: error.stack.split('\n').slice(0, 5).map((line: string) => line.trim())
+          }),
+          ...(error.meta && { originalError: error.meta }),
+          environment: 'development'
+        }
+      };
+    }
+
+    // 프로덕션 모드에서는 보안을 위해 정보 제한
+    const sanitizedMessage = CrudResponseFormatter.sanitizePrismaError(errorMessage);
+    const sanitizedMeta: Record<string, any> = {};
+
+    // 안전한 메타 정보만 포함
+    if (error.code) {
+      sanitizedMeta.errorType = CrudResponseFormatter.mapPrismaErrorCode(error.code);
+    }
+
+    if (error.name) {
+      sanitizedMeta.category = this.categorizeErrorType(error.name);
+    }
+
+    sanitizedMeta.environment = 'production';
+
+    return {
+      detail: CrudResponseFormatter.truncateMessage(sanitizedMessage, options.maxDetailLength),
+      meta: Object.keys(sanitizedMeta).length > 0 ? sanitizedMeta : {}
+    };
+  }
+
+  /**
+   * 개발 모드에서도 민감한 정보만 제거 (전체 에러 정보는 유지)
+   */
+  private static sanitizeSensitiveInfoOnly(message: string): string {
+    // 민감한 정보만 선별적으로 제거 (전체 에러 구조는 유지)
+    const sensitivePatterns = [
+      /postgres:\/\/[^\s]+/gi,          // PostgreSQL 연결 문자열
+      /mysql:\/\/[^\s]+/gi,             // MySQL 연결 문자열
+      /mongodb:\/\/[^\s]+/gi,           // MongoDB 연결 문자열
+      /sqlite:[^\s]+/gi,                // SQLite 파일 경로
+      /password=[^\s&]+/gi,             // 패스워드 파라미터
+      /token=[^\s&]+/gi,                // 토큰 파라미터
+      /api[_-]?key=[^\s&]+/gi,         // API 키
+      /secret=[^\s&]+/gi,               // 시크릿 키
+    ];
+
+    let sanitizedMessage = message;
+    for (const pattern of sensitivePatterns) {
+      sanitizedMessage = sanitizedMessage.replace(pattern, '[REDACTED]');
+    }
+
+    return sanitizedMessage;
+  }
+
+  /**
+   * 에러 타입 분류
+   */
+  private static categorizeErrorType(errorName: string): string {
+    const typeMap: Record<string, string> = {
+      'PrismaClientValidationError': 'VALIDATION_ERROR',
+      'PrismaClientKnownRequestError': 'DATABASE_ERROR',
+      'PrismaClientUnknownRequestError': 'DATABASE_ERROR',
+      'PrismaClientRustPanicError': 'INTERNAL_ERROR',
+      'PrismaClientInitializationError': 'CONNECTION_ERROR',
+      'ValidationError': 'VALIDATION_ERROR',
+      'TypeError': 'TYPE_ERROR',
+      'ReferenceError': 'REFERENCE_ERROR',
+      'SyntaxError': 'SYNTAX_ERROR'
+    };
+
+    return typeMap[errorName] || 'UNKNOWN_ERROR';
+  }
+
+  /**
+   * HTTP 상태 코드에 따른 에러 제목 생성
+   */
+  private static getErrorTitle(status: number): string {
+    const titleMap: Record<number, string> = {
+      400: 'Bad Request',
+      401: 'Unauthorized',
+      403: 'Forbidden',
+      404: 'Not Found',
+      405: 'Method Not Allowed',
+      409: 'Conflict',
+      422: 'Unprocessable Entity',
+      429: 'Too Many Requests',
+      500: 'Internal Server Error',
+      502: 'Bad Gateway',
+      503: 'Service Unavailable',
+      504: 'Gateway Timeout'
+    };
+
+    return titleMap[status] || 'Error';
   }
 
   /**

@@ -85,6 +85,20 @@ ISC
 
 ---
 
+## 성능
+
+
+[CRUD - INDEX : https://app.artillery.io/share/sh_7bceb339dff363ef0a79ded0b8a63c29d43d8f49bc683a62f199d253467aadd4](https://app.artillery.io/share/sh_7bceb339dff363ef0a79ded0b8a63c29d43d8f49bc683a62f199d253467aadd4)
+
+```text
+OS: WINDOW 11
+CPU: RYZEN 5600X
+RAM: samsung ddr4 2666 8gb * 4 
+```
+
+
+---
+
 <div align="center">
 
 **Express.js-Kusto Framework**  

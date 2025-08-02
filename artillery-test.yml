@@ -1,5 +1,5 @@
 # Artillery Extreme Load Performance Test for Pagination API
-# 실행 명령어: artillery run artillery-test-1.yml --output report.json
+# 실행 명령어: artillery run artillery-test.yml --output report.json
 # HTML 리포트: artillery report report.json
 # 경고: 이는 극한 부하 테스트입니다. 프로덕션 환경에서 실행하지 마세요!
 

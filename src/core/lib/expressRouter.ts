@@ -23,7 +23,7 @@ export type ValidatedMiddlewareHandlerFunction = (req: ValidatedRequest, res: Re
 
 /**
  * Extract model names from a Prisma client type
- * (prisma client 에서 사전에 정의 것들)
+ * (prisma client ?�서 ?�전???�의 것들)
  */
 type ExtractModelNames<T> = T extends { [K in keyof T]: any }
   ? Exclude<keyof T, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends' | '$executeRaw' | '$executeRawUnsafe' | '$queryRaw' | '$queryRawUnsafe'> & string
@@ -32,7 +32,7 @@ type ExtractModelNames<T> = T extends { [K in keyof T]: any }
   
 /**
  * Get available model names for a specific database
- * (Prisma 에서 정적으로 모델명만 추출하기 위한 타입)
+ * (Prisma ?�서 ?�적?�로 모델명만 추출?�기 ?�한 ?�??
  */
 type ModelNamesFor<T extends DatabaseNamesUnion> = T extends keyof DatabaseClientMap
   ? ExtractModelNames<DatabaseClientMap[T]>
@@ -65,15 +65,15 @@ export class ExpressRouter {
     
 
     /**
-     * MiddlewareHandlerFunction을 Express 호환 미들웨어로 래핑하는 헬퍼 메서드
+     * MiddlewareHandlerFunction??Express ?�환 미들?�어�??�핑?�는 ?�퍼 메서??
      */
     private wrapMiddleware(handler: MiddlewareHandlerFunction): RequestHandler {
         return (req: Request, res: Response, next: NextFunction) => {
             try {
-                // Kusto 매니저를 Request 객체에 설정
+                // Kusto 매니?��?Request 객체???�정
                 req.kusto = kustoManager;
                 
-                // Dependency injector에서 모든 injectable 모듈 가져오기
+                // Dependency injector?�서 모든 injectable 모듈 가?�오�?
                 const injected = DependencyInjector.getInstance().getInjectedModules();
                 handler(req, res, next, injected, repositoryManager, prismaManager);
             } catch (error) {
@@ -83,12 +83,12 @@ export class ExpressRouter {
     }
 
     /**
-     * HandlerFunction을 Express 호환 핸들러로 래핑하는 헬퍼 메서드
+     * HandlerFunction??Express ?�환 ?�들?�로 ?�핑?�는 ?�퍼 메서??
      */    
     private wrapHandler(handler: HandlerFunction): RequestHandler {
         return (req: Request, res: Response, next) => {
             try {
-                // Dependency injector에서 모든 injectable 모듈 가져오기
+                // Dependency injector?�서 모든 injectable 모듈 가?�오�?
                 const injected = DependencyInjector.getInstance().getInjectedModules();
                 handler(req, res, injected, repositoryManager, prismaManager);
             } catch (error) {
@@ -98,21 +98,21 @@ export class ExpressRouter {
     }
 
     /**
-     * 스택 트레이스를 이용하여 호출자의 파일 위치 정보를 추출하는 헬퍼 메서드
-     * @returns 파일 경로와 라인 번호 정보가 포함된 객체
+     * ?�택 ?�레?�스�??�용?�여 ?�출?�의 ?�일 ?�치 ?�보�?추출?�는 ?�퍼 메서??
+     * @returns ?�일 경로?� ?�인 번호 ?�보가 ?�함??객체
      */
     private getCallerSourceInfo(): { filePath: string; lineNumber?: number } {
         const stack = new Error().stack;
         let filePath = 'Unknown';
         let lineNumber: number | undefined;
 
-        // 스택 추적에서 호출자 파일 경로 추출
+        // ?�택 추적?�서 ?�출???�일 경로 추출
         if (stack) {
             const stackLines = stack.split('\n');
-            // 첫 번째 줄은 현재 함수, 두 번째 줄은 이 함수를 호출한 메서드, 세 번째 줄이 실제 사용자 코드의 호출자
+            // �?번째 줄�? ?�재 ?�수, ??번째 줄�? ???�수�??�출??메서?? ??번째 줄이 ?�제 ?�용??코드???�출??
             const callerLine = stackLines[3] || '';
 
-            // Windows 경로(드라이브 문자 포함)와 일반 경로 모두 처리할 수 있는 정규식
+            // Windows 경로(?�라?�브 문자 ?�함)?� ?�반 경로 모두 처리?????�는 ?�규??
             const fileMatch = callerLine.match(/\(([a-zA-Z]:\\[^:]+|\/?[^:]+):(\d+):(\d+)\)/) ||
                 callerLine.match(/at\s+([a-zA-Z]:\\[^:]+|\/?[^:]+):(\d+):(\d+)/);
 
@@ -131,7 +131,7 @@ export class ExpressRouter {
     public setBasePath(path: string): ExpressRouter {
         this.basePath = path.endsWith('/') ? path.slice(0, -1) : path;
 
-        // 지연된 문서들을 올바른 경로로 등록
+        // 지?�된 문서?�을 ?�바�?경로�??�록
         this.registerPendingDocumentation();
 
         return this;
@@ -155,7 +155,7 @@ export class ExpressRouter {
                 responses: doc.responseConfig
             });
         }
-        // 등록 완료 후 임시 저장소 비우기
+        // ?�록 ?�료 ???�시 ?�?�소 비우�?
         this.pendingDocumentation = [];
     }
 
@@ -170,10 +170,10 @@ export class ExpressRouter {
     }
 
     /**
-     * # convertSlugsToPath - 슬러그를 경로로 변환하는 헬퍼
-     * 슬러그 배열을 Express 경로 형식으로 변환
-     * @param slugs - 슬러그 배열
-     * @returns 변환된 경로 문자열
+     * # convertSlugsToPath - ?�러그�? 경로�?변?�하???�퍼
+     * ?�러�?배열??Express 경로 ?�식?�로 변??
+     * @param slugs - ?�러�?배열
+     * @returns 변?�된 경로 문자??
      */
     private convertSlugsToPath(slugs: string[]): string {
         const pathSegments = slugs.map(slug => slug === "*" ? "*" : `/:${slug}`);
@@ -182,13 +182,13 @@ export class ExpressRouter {
     }
 
     /**
-     * # convertSlugsToExactPath - 정확한 경로 매칭용 헬퍼
-     * 하위 경로 매칭을 방지하기 위한 정확한 경로 생성
+     * # convertSlugsToExactPath - ?�확??경로 매칭???�퍼
+     * ?�위 경로 매칭??방�??�기 ?�한 ?�확??경로 ?�성
      */
     // private convertSlugsToExactPath(slugs: string[]): string {
     //     const pathSegments = slugs.map(slug => slug === "*" ? "*" : `/:${slug}`);
     //     const path = pathSegments.join('');
-    //     // 끝에 추가 경로가 오는 것을 방지하기 위해 '(?=/|$)' 사용
+    //     // ?�에 추�? 경로가 ?�는 것을 방�??�기 ?�해 '(?=/|$)' ?�용
     //     return path + '(?=/|$)';
     // }
 
@@ -202,9 +202,9 @@ export class ExpressRouter {
     public GET(handler: HandlerFunction, options?: object): ExpressRouter {
         this.router.get('/', this.wrapHandler(handler));
 
-        // 문서화 등록을 지연시켜 setBasePath 호출 후 올바른 경로로 등록되도록 함
+        // 문서???�록??지?�시�?setBasePath ?�출 ???�바�?경로�??�록?�도�???
         if (this.basePath) {
-            // basePath가 이미 설정된 경우 즉시 등록
+            // basePath가 ?��? ?�정??경우 즉시 ?�록
             DocumentationGenerator.registerRoute({
                 method: 'GET',
                 path: this.getFullPath('/'),
@@ -212,7 +212,7 @@ export class ExpressRouter {
                 responses: { 200: { data: { type: 'object' as const, required: false } } }
             });
         } else {
-            // basePath가 아직 설정되지 않은 경우 지연 등록
+            // basePath가 ?�직 ?�정?��? ?��? 경우 지???�록
             this.pendingDocumentation.push({
                 method: 'GET',
                 path: '/',
@@ -220,7 +220,7 @@ export class ExpressRouter {
             });
         }
 
-        return this; // 메소드 체인을 위해 인스턴스 반환
+        return this; // 메소??체인???�해 ?�스?�스 반환
     }
 
     /**
@@ -230,7 +230,7 @@ export class ExpressRouter {
      * @param options 
      * @returns
      * @description
-     * - 라우터로 선언된 slug 직접 주워 담아야 합니다. 
+     * - ?�우?�로 ?�언??slug 직접 주워 ?�아???�니?? 
      * @example
      * ```typescript
      * router.GET_SLUG(["slug1", "slug2"],(req, res) => {
@@ -242,9 +242,9 @@ export class ExpressRouter {
         const slugPath = this.convertSlugsToPath(slug);
         this.router.get(slugPath, this.wrapHandler(handler));
 
-        // 문서화 등록을 지연시켜 setBasePath 호출 후 올바른 경로로 등록되도록 함
+        // 문서???�록??지?�시�?setBasePath ?�출 ???�바�?경로�??�록?�도�???
         if (this.basePath) {
-            // basePath가 이미 설정된 경우 즉시 등록
+            // basePath가 ?��? ?�정??경우 즉시 ?�록
             DocumentationGenerator.registerRoute({
                 method: 'GET',
                 path: this.getFullPath(slugPath),
@@ -252,7 +252,7 @@ export class ExpressRouter {
                 responses: { 200: { data: { type: 'object' as const, required: false } } }
             });
         } else {
-            // basePath가 아직 설정되지 않은 경우 지연 등록
+            // basePath가 ?�직 ?�정?��? ?��? 경우 지???�록
             this.pendingDocumentation.push({
                 method: 'GET',
                 path: slugPath,
@@ -260,7 +260,7 @@ export class ExpressRouter {
             });
         }
 
-        return this; // 메소드 체인을 위해 인스턴스 반환
+        return this; // 메소??체인???�해 ?�스?�스 반환
     }
 
 
@@ -273,9 +273,9 @@ export class ExpressRouter {
     public POST(handler: HandlerFunction, options?: object): ExpressRouter {
         this.router.post('/', this.wrapHandler(handler));
 
-        // 문서화 등록을 지연시켜 setBasePath 호출 후 올바른 경로로 등록되도록 함
+        // 문서???�록??지?�시�?setBasePath ?�출 ???�바�?경로�??�록?�도�???
         if (this.basePath) {
-            // basePath가 이미 설정된 경우 즉시 등록
+            // basePath가 ?��? ?�정??경우 즉시 ?�록
             DocumentationGenerator.registerRoute({
                 method: 'POST',
                 path: this.getFullPath('/'),
@@ -283,7 +283,7 @@ export class ExpressRouter {
                 responses: { 200: { data: { type: 'object' as const, required: false } } }
             });
         } else {
-            // basePath가 아직 설정되지 않은 경우 지연 등록
+            // basePath가 ?�직 ?�정?��? ?��? 경우 지???�록
             this.pendingDocumentation.push({
                 method: 'POST',
                 path: '/',
@@ -291,7 +291,7 @@ export class ExpressRouter {
             });
         }
 
-        return this; // 메소드 체인을 위해 인스턴스 반환
+        return this; // 메소??체인???�해 ?�스?�스 반환
     }
 
 
@@ -302,15 +302,15 @@ export class ExpressRouter {
      * @param options 
      * @returns 
      * @description
-     * - 라우터로 선언된 slug 직접 주워 담아야 합니다. 
+     * - ?�우?�로 ?�언??slug 직접 주워 ?�아???�니?? 
      */
     public POST_SLUG(slug: string[], handler: HandlerFunction, options?: object): ExpressRouter {
         const slugPath = this.convertSlugsToPath(slug);
         this.router.post(slugPath, this.wrapHandler(handler));
 
-        // 문서화 등록을 지연시켜 setBasePath 호출 후 올바른 경로로 등록되도록 함
+        // 문서???�록??지?�시�?setBasePath ?�출 ???�바�?경로�??�록?�도�???
         if (this.basePath) {
-            // basePath가 이미 설정된 경우 즉시 등록
+            // basePath가 ?��? ?�정??경우 즉시 ?�록
             DocumentationGenerator.registerRoute({
                 method: 'POST',
                 path: this.getFullPath(slugPath),
@@ -318,7 +318,7 @@ export class ExpressRouter {
                 responses: { 200: { data: { type: 'object' as const, required: false } } }
             });
         } else {
-            // basePath가 아직 설정되지 않은 경우 지연 등록
+            // basePath가 ?�직 ?�정?��? ?��? 경우 지???�록
             this.pendingDocumentation.push({
                 method: 'POST',
                 path: slugPath,
@@ -326,15 +326,15 @@ export class ExpressRouter {
             });
         }
 
-        return this; // 메소드 체인을 위해 인스턴스 반환
+        return this; // 메소??체인???�해 ?�스?�스 반환
     }
 
 
 
     /**
      * ```
-     * - multer 라이브러리
-     * 파일 업로드를 위한 라우터 기능
+     * - multer ?�이브러�?
+     * ?�일 ?�로?��? ?�한 ?�우??기능
      * ```
      * @param multerStorageEngine 
      * @param keyName 
@@ -350,9 +350,9 @@ export class ExpressRouter {
         const accpetFileType = upload.single(keyName);
         this.router.post('/', accpetFileType, this.wrapHandler(handler));
 
-        // 문서화 등록을 지연시켜 setBasePath 호출 후 올바른 경로로 등록되도록 함
+        // 문서???�록??지?�시�?setBasePath ?�출 ???�바�?경로�??�록?�도�???
         if (this.basePath) {
-            // basePath가 이미 설정된 경우 즉시 등록
+            // basePath가 ?��? ?�정??경우 즉시 ?�록
             DocumentationGenerator.registerRoute({
                 method: 'POST',
                 path: this.getFullPath('/'),
@@ -361,7 +361,7 @@ export class ExpressRouter {
                 responses: { 200: { data: { type: 'object' as const, required: false } } }
             });
         } else {
-            // basePath가 아직 설정되지 않은 경우 지연 등록
+            // basePath가 ?�직 ?�정?��? ?��? 경우 지???�록
             this.pendingDocumentation.push({
                 method: 'POST',
                 path: '/',
@@ -376,8 +376,8 @@ export class ExpressRouter {
 
     /**
      * ```
-     * - multer 라이브러리
-     * 파일 업로드를 위한 라우터 기능
+     * - multer ?�이브러�?
+     * ?�일 ?�로?��? ?�한 ?�우??기능
      * ```
      * @param multerStorageEngine 
      * @param keyName 
@@ -392,9 +392,9 @@ export class ExpressRouter {
         const accpetFileType = upload.array(keyName, maxFileCount);
         this.router.post('/', accpetFileType, this.wrapHandler(handler));
 
-        // 문서화 등록을 지연시켜 setBasePath 호출 후 올바른 경로로 등록되도록 함
+        // 문서???�록??지?�시�?setBasePath ?�출 ???�바�?경로�??�록?�도�???
         if (this.basePath) {
-            // basePath가 이미 설정된 경우 즉시 등록
+            // basePath가 ?��? ?�정??경우 즉시 ?�록
             DocumentationGenerator.registerRoute({
                 method: 'POST',
                 path: this.getFullPath('/'),
@@ -403,7 +403,7 @@ export class ExpressRouter {
                 responses: { 200: { data: { type: 'object' as const, required: false } } }
             });
         } else {
-            // basePath가 아직 설정되지 않은 경우 지연 등록
+            // basePath가 ?�직 ?�정?��? ?��? 경우 지???�록
             this.pendingDocumentation.push({
                 method: 'POST',
                 path: '/',
@@ -417,8 +417,8 @@ export class ExpressRouter {
 
     /**
      * ```
-     * - multer 라이브러리
-     * 파일 업로드를 위한 라우터 기능
+     * - multer ?�이브러�?
+     * ?�일 ?�로?��? ?�한 ?�우??기능
      * ```
      * @param multerStorageEngine 
      * @param keyName 
@@ -433,9 +433,9 @@ export class ExpressRouter {
         const upload = multer({ storage: multerStorageEngine, limits: { fileSize: fileSize } }); const accpetFileType = upload.fields(fields);
         this.router.post('/', accpetFileType, this.wrapHandler(handler));
 
-        // 문서화 등록을 지연시켜 setBasePath 호출 후 올바른 경로로 등록되도록 함
+        // 문서???�록??지?�시�?setBasePath ?�출 ???�바�?경로�??�록?�도�???
         if (this.basePath) {
-            // basePath가 이미 설정된 경우 즉시 등록
+            // basePath가 ?��? ?�정??경우 즉시 ?�록
             DocumentationGenerator.registerRoute({
                 method: 'POST',
                 path: this.getFullPath('/'),
@@ -444,7 +444,7 @@ export class ExpressRouter {
                 responses: { 200: { data: { type: 'object' as const, required: false } } }
             });
         } else {
-            // basePath가 아직 설정되지 않은 경우 지연 등록
+            // basePath가 ?�직 ?�정?��? ?��? 경우 지???�록
             this.pendingDocumentation.push({
                 method: 'POST',
                 path: '/',
@@ -458,8 +458,8 @@ export class ExpressRouter {
 
     /**
      * ```
-     * - multer 라이브러리
-     * 파일 업로드를 위한 라우터 기능
+     * - multer ?�이브러�?
+     * ?�일 ?�로?��? ?�한 ?�우??기능
      * ```
      * @param multerStorageEngine 
      * @param keyName 
@@ -488,9 +488,9 @@ export class ExpressRouter {
     public PUT(handler: HandlerFunction, options?: object): ExpressRouter {
         this.router.put('/', this.wrapHandler(handler));
 
-        // 문서화 등록을 지연시켜 setBasePath 호출 후 올바른 경로로 등록되도록 함
+        // 문서???�록??지?�시�?setBasePath ?�출 ???�바�?경로�??�록?�도�???
         if (this.basePath) {
-            // basePath가 이미 설정된 경우 즉시 등록
+            // basePath가 ?��? ?�정??경우 즉시 ?�록
             DocumentationGenerator.registerRoute({
                 method: 'PUT',
                 path: this.getFullPath('/'),
@@ -499,7 +499,7 @@ export class ExpressRouter {
             });
 
         } else {
-            // basePath가 아직 설정되지 않은 경우 지연 등록
+            // basePath가 ?�직 ?�정?��? ?��? 경우 지???�록
             this.pendingDocumentation.push({
                 method: 'PUT',
                 path: '/',
@@ -513,8 +513,8 @@ export class ExpressRouter {
 
     /**
      * ```
-     * - multer 라이브러리
-     * 파일 업로드를 위한 라우터 기능
+     * - multer ?�이브러�?
+     * ?�일 ?�로?��? ?�한 ?�우??기능
      * ```
      * @param multerStorageEngine 
      * @param keyName 
@@ -535,8 +535,8 @@ export class ExpressRouter {
 
     /**
      * ```
-     * - multer 라이브러리
-     * 파일 업로드를 위한 라우터 기능
+     * - multer ?�이브러�?
+     * ?�일 ?�로?��? ?�한 ?�우??기능
      * ```
      * @param multerStorageEngine 
      * @param keyName 
@@ -558,8 +558,8 @@ export class ExpressRouter {
 
     /**
      * ```
-     * - multer 라이브러리
-     * 파일 업로드를 위한 라우터 기능
+     * - multer ?�이브러�?
+     * ?�일 ?�로?��? ?�한 ?�우??기능
      * ```
      * @param multerStorageEngine 
      * @param keyName 
@@ -583,8 +583,8 @@ export class ExpressRouter {
 
     /**
      * ```
-     * - multer 라이브러리
-     * 파일 업로드를 위한 라우터 기능
+     * - multer ?�이브러�?
+     * ?�일 ?�로?��? ?�한 ?�우??기능
      * ```
      * @param multerStorageEngine 
      * @param keyName 
@@ -612,15 +612,15 @@ export class ExpressRouter {
      * @param options 
      * @returns 
      * @description
-     * - 라우터로 선언된 slug 직접 주워 담아야 합니다. 
+     * - ?�우?�로 ?�언??slug 직접 주워 ?�아???�니?? 
      */
     public PUT_SLUG(slug: string[], handler: HandlerFunction, options?: object): ExpressRouter {
         const slugPath = this.convertSlugsToPath(slug);
         this.router.put(slugPath, this.wrapHandler(handler));
 
-        // 문서화 등록을 지연시켜 setBasePath 호출 후 올바른 경로로 등록되도록 함
+        // 문서???�록??지?�시�?setBasePath ?�출 ???�바�?경로�??�록?�도�???
         if (this.basePath) {
-            // basePath가 이미 설정된 경우 즉시 등록
+            // basePath가 ?��? ?�정??경우 즉시 ?�록
             DocumentationGenerator.registerRoute({
                 method: 'PUT',
                 path: this.getFullPath(slugPath),
@@ -628,7 +628,7 @@ export class ExpressRouter {
                 responses: { 200: { data: { type: 'object' as const, required: false } } }
             });
         } else {
-            // basePath가 아직 설정되지 않은 경우 지연 등록
+            // basePath가 ?�직 ?�정?��? ?��? 경우 지???�록
             this.pendingDocumentation.push({
                 method: 'PUT',
                 path: slugPath,
@@ -647,14 +647,14 @@ export class ExpressRouter {
      * @param handler 
      * @param options 
      * @returns
-     * - http delete 요청을 처리하는 메서드입니다. 
+     * - http delete ?�청??처리?�는 메서?�입?�다. 
      */
     public DELETE(handler: HandlerFunction, options?: object): ExpressRouter {
         this.router.delete('/', this.wrapHandler(handler));
 
-        // 문서화 등록을 지연시켜 setBasePath 호출 후 올바른 경로로 등록되도록 함
+        // 문서???�록??지?�시�?setBasePath ?�출 ???�바�?경로�??�록?�도�???
         if (this.basePath) {
-            // basePath가 이미 설정된 경우 즉시 등록
+            // basePath가 ?��? ?�정??경우 즉시 ?�록
             DocumentationGenerator.registerRoute({
                 method: 'DELETE',
                 path: this.getFullPath('/'),
@@ -662,7 +662,7 @@ export class ExpressRouter {
                 responses: { 200: { data: { type: 'object' as const, required: false } } }
             });
         } else {
-            // basePath가 아직 설정되지 않은 경우 지연 등록
+            // basePath가 ?�직 ?�정?��? ?��? 경우 지???�록
             this.pendingDocumentation.push({
                 method: 'DELETE',
                 path: '/',
@@ -683,15 +683,15 @@ export class ExpressRouter {
      * @param options 
      * @returns 
      * @description
-     * - 라우터로 선언된 slug 직접 주워 담아야 합니다. 
+     * - ?�우?�로 ?�언??slug 직접 주워 ?�아???�니?? 
      */
     public DELETE_SLUG(slug: string[], handler: HandlerFunction, options?: object): ExpressRouter {
         const slugPath = this.convertSlugsToPath(slug);
         this.router.delete(slugPath, this.wrapHandler(handler));
 
-        // 문서화 등록을 지연시켜 setBasePath 호출 후 올바른 경로로 등록되도록 함
+        // 문서???�록??지?�시�?setBasePath ?�출 ???�바�?경로�??�록?�도�???
         if (this.basePath) {
-            // basePath가 이미 설정된 경우 즉시 등록
+            // basePath가 ?��? ?�정??경우 즉시 ?�록
             DocumentationGenerator.registerRoute({
                 method: 'DELETE',
                 path: this.getFullPath(slugPath),
@@ -699,7 +699,7 @@ export class ExpressRouter {
                 responses: { 200: { data: { type: 'object' as const, required: false } } }
             });
         } else {
-            // basePath가 아직 설정되지 않은 경우 지연 등록
+            // basePath가 ?�직 ?�정?��? ?��? 경우 지???�록
             this.pendingDocumentation.push({
                 method: 'DELETE',
                 path: slugPath,
@@ -723,9 +723,9 @@ export class ExpressRouter {
     public PATCH(handler: HandlerFunction, options?: object): ExpressRouter {
         this.router.patch('/', this.wrapHandler(handler));
 
-        // 문서화 등록을 지연시켜 setBasePath 호출 후 올바른 경로로 등록되도록 함
+        // 문서???�록??지?�시�?setBasePath ?�출 ???�바�?경로�??�록?�도�???
         if (this.basePath) {
-            // basePath가 이미 설정된 경우 즉시 등록
+            // basePath가 ?��? ?�정??경우 즉시 ?�록
             DocumentationGenerator.registerRoute({
                 method: 'PATCH',
                 path: this.getFullPath('/'),
@@ -733,7 +733,7 @@ export class ExpressRouter {
                 responses: { 200: { data: { type: 'object' as const, required: false } } }
             });
         } else {
-            // basePath가 아직 설정되지 않은 경우 지연 등록
+            // basePath가 ?�직 ?�정?��? ?��? 경우 지???�록
             this.pendingDocumentation.push({
                 method: 'PATCH',
                 path: '/',
@@ -755,15 +755,15 @@ export class ExpressRouter {
      * @param options 
      * @returns 
      * @description
-     * - 라우터로 선언된 slug 직접 주워 담아야 합니다. 
+     * - ?�우?�로 ?�언??slug 직접 주워 ?�아???�니?? 
      */
     public PATCH_SLUG(slug: string[], handler: HandlerFunction, options?: object): ExpressRouter {
         const slugPath = this.convertSlugsToPath(slug);
         this.router.patch(slugPath, this.wrapHandler(handler));
 
-        // 문서화 등록을 지연시켜 setBasePath 호출 후 올바른 경로로 등록되도록 함
+        // 문서???�록??지?�시�?setBasePath ?�출 ???�바�?경로�??�록?�도�???
         if (this.basePath) {
-            // basePath가 이미 설정된 경우 즉시 등록
+            // basePath가 ?��? ?�정??경우 즉시 ?�록
             DocumentationGenerator.registerRoute({
                 method: 'PATCH',
                 path: this.getFullPath(slugPath),
@@ -771,7 +771,7 @@ export class ExpressRouter {
                 responses: { 200: { data: { type: 'object' as const, required: false } } }
             });
         } else {
-            // basePath가 아직 설정되지 않은 경우 지연 등록
+            // basePath가 ?�직 ?�정?��? ?��? 경우 지???�록
             this.pendingDocumentation.push({
                 method: 'PATCH',
                 path: slugPath,
@@ -801,9 +801,9 @@ export class ExpressRouter {
 
 
     /**
-     * 미들웨어를 적용하는 메서드
-     * @param middleware 미들웨어 함수 또는 미들웨어 함수의 배열
-     * @returns ExpressRouter 인스턴스
+     * 미들?�어�??�용?�는 메서??
+     * @param middleware 미들?�어 ?�수 ?�는 미들?�어 ?�수??배열
+     * @returns ExpressRouter ?�스?�스
      */
     public USE(middleware: RequestHandler | RequestHandler[]): ExpressRouter {
         if (Array.isArray(middleware)) {
@@ -811,7 +811,7 @@ export class ExpressRouter {
         } else {
             this.router.use(middleware);
         }
-        return this; // 메소드 체인을 위해 인스턴스 반환
+        return this; // 메소??체인???�해 ?�스?�스 반환
     }    
     
 
@@ -819,10 +819,10 @@ export class ExpressRouter {
 
     
     /**
-     * HandlerFunction 타입의 미들웨어를 적용하는 메서드
-     * @param middleware HandlerFunction 타입의 미들웨어 함수 또는 배열
-     * @returns ExpressRouter 인스턴스
-     * @deprecated 보통의 경우 USE_MIDDLEWARE를 사용합니다. 이걸 사용하는 경우는 없습니다. (미들웨어로 쓰는데 NEXT 함수가 없으면 다음으로 넘어가질 못해요)
+     * HandlerFunction ?�?�의 미들?�어�??�용?�는 메서??
+     * @param middleware HandlerFunction ?�?�의 미들?�어 ?�수 ?�는 배열
+     * @returns ExpressRouter ?�스?�스
+     * @deprecated 보통??경우 USE_MIDDLEWARE�??�용?�니?? ?�걸 ?�용?�는 경우???�습?�다. (미들?�어�??�는??NEXT ?�수가 ?�으�??�음?�로 ?�어가�?못해??
      */
     public USE_HANDLER(middleware: HandlerFunction | HandlerFunction[]): ExpressRouter {
         if (Array.isArray(middleware)) {
@@ -830,30 +830,30 @@ export class ExpressRouter {
         } else {
             this.router.use(this.wrapHandler(middleware));
         }
-        return this; // 메소드 체인을 위해 인스턴스 반환
+        return this; // 메소??체인???�해 ?�스?�스 반환
     }
     
 
 
     
     /**
-     * MiddlewareHandlerFunction 타입의 미들웨어를 적용하는 메서드
-     * @param middleware MiddlewareHandlerFunction 타입의 미들웨어 함수 또는 배열
-     * @returns ExpressRouter 인스턴스
+     * MiddlewareHandlerFunction ?�?�의 미들?�어�??�용?�는 메서??
+     * @param middleware MiddlewareHandlerFunction ?�?�의 미들?�어 ?�수 ?�는 배열
+     * @returns ExpressRouter ?�스?�스
      * 
      * @example
      * ```typescript
-     * // 일반 함수 (타입 힌트 지원)
+     * // ?�반 ?�수 (?�???�트 지??
      * router.MIDDLEWARE(function(req, res, next, injected, repo, db) {
-     *     // 미들웨어 로직
+     *     // 미들?�어 로직
      * });
      * 
-     * // 화살표 함수 (타입 힌트 미지원)
+     * // ?�살???�수 (?�???�트 미�???
      * router.MIDDLEWARE((req, res, next, injected, repo, db) => {
-     *     // 미들웨어 로직
+     *     // 미들?�어 로직
      * } as MiddlewareHandlerFunction);
      * 
-     * // 배열로 여러 개의 미들웨어를 적용할 수도 있습니다. 이 경우는 화살표 함수도 타입 힌트를 지원합니다.
+     * // 배열�??�러 개의 미들?�어�??�용???�도 ?�습?�다. ??경우???�살???�수???�???�트�?지?�합?�다.
      * router.MIDDLEWARE([
      *  (req, res, next, injected, repo, db) => {
      *  
@@ -871,21 +871,21 @@ export class ExpressRouter {
         } else {
             this.router.use(this.wrapMiddleware(middleware));
         }
-        return this; // 메소드 체인을 위해 인스턴스 반환
+        return this; // 메소??체인???�해 ?�스?�스 반환
     }    
     
 
 
     /**
-     * Injectable 미들웨어를 적용하는 메서드
+     * Injectable 미들?�어�??�용?�는 메서??
      * 
-     * 사용 예시:
-     * - 파라미터 없이: router.WITH('authNoLoginOnly')
-     * - 파라미터와 함께: router.WITH('rateLimiterDefault', { repositoryName: 'test', maxRequests: 10, windowMs: 60000 })
+     * ?�용 ?�시:
+     * - ?�라미터 ?�이: router.WITH('authNoLoginOnly')
+     * - ?�라미터?� ?�께: router.WITH('rateLimiterDefault', { repositoryName: 'test', maxRequests: 10, windowMs: 60000 })
      * 
-     * @param middlewareName 미들웨어 이름
-     * @param params 미들웨어에 전달할 파라미터 (미들웨어에 따라 자동 결정)
-     * @returns ExpressRouter 인스턴스
+     * @param middlewareName 미들?�어 ?�름
+     * @param params 미들?�어???�달???�라미터 (미들?�어???�라 ?�동 결정)
+     * @returns ExpressRouter ?�스?�스
      */
 
     public WITH<T extends MiddlewareName>(
@@ -915,32 +915,32 @@ export class ExpressRouter {
                 throw new Error(`Middleware '${middlewareName}' not found in dependency injector`);
             }            
             
-            // 미들웨어 이름을 파라미터 키로 변환하는 함수 (동적 매핑 사용)
+            // 미들?�어 ?�름???�라미터 ?�로 변?�하???�수 (?�적 매핑 ?�용)
             const getParameterKey = (middlewareName: string): string => {
-                // 생성된 매핑에서 파라미터 키 조회
+                // ?�성??매핑?�서 ?�라미터 ??조회
                 return MIDDLEWARE_PARAM_MAPPING[middlewareName as keyof typeof MIDDLEWARE_PARAM_MAPPING] || middlewareName;
             };
 
-            // 미들웨어 인스턴스의 모든 메서드를 Express 미들웨어로 변환하여 적용
+            // 미들?�어 ?�스?�스??모든 메서?��? Express 미들?�어�?변?�하???�용
             if (typeof middlewareInstance === 'object' && middlewareInstance !== null) {
                 
-                // 미들웨어 객체의 메서드들을 확인하고 Express 미들웨어로 래핑
+                // 미들?�어 객체??메서?�들???�인?�고 Express 미들?�어�??�핑
                 Object.keys(middlewareInstance).forEach(methodName => {
                     const method = (middlewareInstance as any)[methodName];
                     if (typeof method === 'function') {
-                        // 각 메서드를 미들웨어로 래핑하여 라우터에 적용
-                        // 미들웨어 함수의 매개변수 개수로 판단 (req, res, next, injected, repo, db = 6개)
+                        // �?메서?��? 미들?�어�??�핑?�여 ?�우?�에 ?�용
+                        // 미들?�어 ?�수??매개변??개수�??�단 (req, res, next, injected, repo, db = 6�?
                         if (method.length >= 6) {
-                            // MiddlewareHandlerFunction 타입으로 판단되면 wrapMiddleware 사용
+                            // MiddlewareHandlerFunction ?�?�으�??�단?�면 wrapMiddleware ?�용
                             this.router.use(this.wrapMiddleware(method));
                         } else {
-                            // 일반 Express 미들웨어
+                            // ?�반 Express 미들?�어
                             this.router.use((req: Request, res: Response, next: NextFunction) => {
                                 try {
-                                    // Kusto 매니저를 Request 객체에 설정
+                                    // Kusto 매니?��?Request 객체???�정
                                     req.kusto = kustoManager;
                                     
-                                    // 파라미터가 있다면 req 객체에 추가
+                                    // ?�라미터가 ?�다�?req 객체??추�?
                                     if (params) {
                                         const parameterKey = getParameterKey(middlewareName);
                                         (req as any).with = { 
@@ -959,19 +959,19 @@ export class ExpressRouter {
             
             } else if (typeof middlewareInstance === 'function') {
                
-                // 미들웨어가 직접 함수인 경우
-                // 매개변수 개수로 MiddlewareHandlerFunction인지 판단
+                // 미들?�어가 직접 ?�수??경우
+                // 매개변??개수�?MiddlewareHandlerFunction?��? ?�단
                 if ((middlewareInstance as Function).length >= 6) {
-                    // MiddlewareHandlerFunction 타입으로 판단되면 wrapMiddleware 사용
+                    // MiddlewareHandlerFunction ?�?�으�??�단?�면 wrapMiddleware ?�용
                     this.router.use(this.wrapMiddleware(middlewareInstance as MiddlewareHandlerFunction));
                 } else {
-                    // 일반 Express 미들웨어
+                    // ?�반 Express 미들?�어
                     this.router.use((req: Request, res: Response, next: NextFunction) => {
                         try {
-                            // Kusto 매니저를 Request 객체에 설정
+                            // Kusto 매니?��?Request 객체???�정
                             req.kusto = kustoManager;
                             
-                            // 파라미터가 있다면 req 객체에 추가
+                            // ?�라미터가 ?�다�?req 객체??추�?
                             if (params) {
                                 const parameterKey = getParameterKey(middlewareName);
                                 (req as any).with = { 
@@ -998,9 +998,9 @@ export class ExpressRouter {
 
     /**
      * # MIDDLE_PROXY_ROUTE
-     * @param options - http-proxy-middleware 옵션
+     * @param options - http-proxy-middleware ?�션
      * @description
-     * - Express 라우터에 프록시 미들웨어를 추가합니다.
+     * - Express ?�우?�에 ?�록??미들?�어�?추�??�니??
      */
     public MIDDLE_PROXY_ROUTE(options: Options) {
         this.router.use("/", createProxyMiddleware(options));
@@ -1010,10 +1010,10 @@ export class ExpressRouter {
 
     /**
      * # MIDDLE_PROXY_ROUTE_SLUG
-     * @param slug - 슬러그 배열
-     * @param options - http-proxy-middleware 옵션
+     * @param slug - ?�러�?배열
+     * @param options - http-proxy-middleware ?�션
      * @description
-     * - Express 라우터에 프록시 미들웨어를 추가합니다.
+     * - Express ?�우?�에 ?�록??미들?�어�?추�??�니??
      */
     public MIDDLE_PROXY_ROUTE_SLUG(slug: string[], options: Options) {
         this.router.use(this.convertSlugsToPath(slug), createProxyMiddleware(options));
@@ -1021,10 +1021,10 @@ export class ExpressRouter {
 
     /**
      * # STATIC
-     * @param staticPath - 정적 파일을 서비스할 물리적 경로
-     * @param options - express.static 옵션
+     * @param staticPath - ?�적 ?�일???�비?�할 물리??경로
+     * @param options - express.static ?�션
      * @description
-     * - Express의 정적 파일 서비스 미들웨어를 라우터 루트(/)에 추가합니다.
+     * - Express???�적 ?�일 ?�비??미들?�어�??�우??루트(/)??추�??�니??
      */
     public STATIC(staticPath: string, options?: any): ExpressRouter {
         this.router.use('/', static_(staticPath, options));
@@ -1033,11 +1033,11 @@ export class ExpressRouter {
 
     /**
      * # STATIC_SLUG
-     * @param slug - 슬러그 배열 (URL 경로)
-     * @param staticPath - 정적 파일을 서비스할 물리적 경로
-     * @param options - express.static 옵션
+     * @param slug - ?�러�?배열 (URL 경로)
+     * @param staticPath - ?�적 ?�일???�비?�할 물리??경로
+     * @param options - express.static ?�션
      * @description
-     * - Express의 정적 파일 서비스 미들웨어를 특정 경로에 추가합니다.
+     * - Express???�적 ?�일 ?�비??미들?�어�??�정 경로??추�??�니??
      */
     public STATIC_SLUG(slug: string[], staticPath: string, options?: any): ExpressRouter {
         const slugPath = this.convertSlugsToPath(slug);
@@ -1048,10 +1048,10 @@ export class ExpressRouter {
 
     /**
      * # GET_VALIDATED
-     * 검증된 GET 요청 처리
-     * @param requestConfig 요청 검증 설정
-     * @param responseConfig 응답 검증 설정
-     * @param handler 핸들러 함수
+     * 검증된 GET ?�청 처리
+     * @param requestConfig ?�청 검�??�정
+     * @param responseConfig ?�답 검�??�정
+     * @param handler ?�들???�수
      * @returns ExpressRouter
      */
 
@@ -1060,7 +1060,7 @@ export class ExpressRouter {
         responseConfig: ResponseConfig,
         handler: ValidatedHandlerFunction
     ): ExpressRouter {
-        // 현재 위치 정보를 얻기 위해 Error 스택 추적
+        // ?�재 ?�치 ?�보�??�기 ?�해 Error ?�택 추적
         const { filePath, lineNumber } = this.getCallerSourceInfo();
 
         const middlewares = CustomRequestHandler.createHandler(
@@ -1073,11 +1073,11 @@ export class ExpressRouter {
         );
         this.router.get('/', ...middlewares);
 
-        // 문서화 등록을 지연시켜 setBasePath 호출 후 올바른 경로로 등록되도록 함
+        // 문서???�록??지?�시�?setBasePath ?�출 ???�바�?경로�??�록?�도�???
         if (this.basePath) {
 
 
-            // basePath가 이미 설정된 경우 즉시 등록
+            // basePath가 ?��? ?�정??경우 즉시 ?�록
             DocumentationGenerator.registerRoute({
                 method: 'GET',
                 path: this.getFullPath('/'),
@@ -1089,7 +1089,7 @@ export class ExpressRouter {
                 responses: responseConfig
             });
         } else {
-            // basePath가 아직 설정되지 않은 경우 지연 등록
+            // basePath가 ?�직 ?�정?��? ?��? 경우 지???�록
             this.pendingDocumentation.push({
                 method: 'GET',
                 path: '/',
@@ -1108,8 +1108,8 @@ export class ExpressRouter {
 
     /**
      * # GET_SLUG_VALIDATED
-     * 검증된 GET 슬러그 요청 처리
-     * @param exact true이면 하위 경로 매칭 방지 (기본값: false)
+     * 검증된 GET ?�러�??�청 처리
+     * @param exact true?�면 ?�위 경로 매칭 방�? (기본�? false)
      */
     public GET_SLUG_VALIDATED(
         slug: string[],
@@ -1118,7 +1118,7 @@ export class ExpressRouter {
         handler: ValidatedHandlerFunction,
         options?: { exact?: boolean }
     ): ExpressRouter {
-        // 헬퍼 메서드를 통해 호출자 위치 정보 획득
+        // ?�퍼 메서?��? ?�해 ?�출???�치 ?�보 ?�득
         const { filePath, lineNumber } = this.getCallerSourceInfo();
 
         const middlewares = CustomRequestHandler.createHandler(
@@ -1131,9 +1131,9 @@ export class ExpressRouter {
         );
         const slugPath = this.convertSlugsToPath(slug);
 
-        // 문서화 등록을 지연시켜 setBasePath 호출 후 올바른 경로로 등록되도록 함
+        // 문서???�록??지?�시�?setBasePath ?�출 ???�바�?경로�??�록?�도�???
         if (this.basePath) {
-            // basePath가 이미 설정된 경우 즉시 등록
+            // basePath가 ?��? ?�정??경우 즉시 ?�록
             DocumentationGenerator.registerRoute({
                 method: 'GET',
                 path: this.getFullPath(slugPath),
@@ -1145,7 +1145,7 @@ export class ExpressRouter {
                 responses: responseConfig
             });
         } else {
-            // basePath가 아직 설정되지 않은 경우 지연 등록
+            // basePath가 ?�직 ?�정?��? ?��? 경우 지???�록
             this.pendingDocumentation.push({
                 method: 'GET',
                 path: slugPath,
@@ -1155,22 +1155,22 @@ export class ExpressRouter {
         }
 
         if (options?.exact) {
-            // 정확한 매칭: 하위 경로에 영향을 주지 않음
+            // ?�확??매칭: ?�위 경로???�향??주�? ?�음
             const exactMiddleware = (req: any, res: any, next: any) => {
-                // 현재 요청 경로가 정확히 패턴과 일치하는지 확인
+                // ?�재 ?�청 경로가 ?�확???�턴�??�치?�는지 ?�인
                 const pathParts = req.path.split('/').filter(Boolean);
                 const expectedParts = slug.length;
 
-                // 경로 세그먼트 수가 정확히 일치해야 함
+                // 경로 ?�그먼트 ?��? ?�확???�치?�야 ??
                 if (pathParts.length === expectedParts) {
                     next();
                 } else {
-                    next('route'); // 이 라우트를 건너뛰고 다음 라우트로
+                    next('route'); // ???�우?��? 건너?�고 ?�음 ?�우?�로
                 }
             };
             this.router.get(slugPath, exactMiddleware, ...middlewares);
         } else {
-            // 기본 동작: 하위 경로도 매칭
+            // 기본 ?�작: ?�위 경로??매칭
             this.router.get(slugPath, ...middlewares);
         }
 
@@ -1184,14 +1184,14 @@ export class ExpressRouter {
 
     /**
      * # POST_VALIDATED
-     * 검증된 POST 요청 처리
+     * 검증된 POST ?�청 처리
      */
     public POST_VALIDATED(
         requestConfig: RequestConfig,
         responseConfig: ResponseConfig,
         handler: ValidatedHandlerFunction
     ): ExpressRouter {
-        // 헬퍼 메서드를 통해 호출자 위치 정보 획득
+        // ?�퍼 메서?��? ?�해 ?�출???�치 ?�보 ?�득
         const { filePath, lineNumber } = this.getCallerSourceInfo();
 
         const middlewares = CustomRequestHandler.createHandler(
@@ -1203,9 +1203,9 @@ export class ExpressRouter {
             handler
         ); this.router.post('/', ...middlewares);
 
-        // 문서화 등록을 지연시켜 setBasePath 호출 후 올바른 경로로 등록되도록 함
+        // 문서???�록??지?�시�?setBasePath ?�출 ???�바�?경로�??�록?�도�???
         if (this.basePath) {
-            // basePath가 이미 설정된 경우 즉시 등록
+            // basePath가 ?��? ?�정??경우 즉시 ?�록
             DocumentationGenerator.registerRoute({
                 method: 'POST',
                 path: this.getFullPath('/'),
@@ -1217,7 +1217,7 @@ export class ExpressRouter {
                 responses: responseConfig
             });
         } else {
-            // basePath가 아직 설정되지 않은 경우 지연 등록
+            // basePath가 ?�직 ?�정?��? ?��? 경우 지???�록
             this.pendingDocumentation.push({
                 method: 'POST',
                 path: '/',
@@ -1236,8 +1236,8 @@ export class ExpressRouter {
 
     /**
      * # POST_SLUG_VALIDATED
-     * 검증된 POST 슬러그 요청 처리
-     * @param exact true이면 하위 경로 매칭 방지 (기본값: false)
+     * 검증된 POST ?�러�??�청 처리
+     * @param exact true?�면 ?�위 경로 매칭 방�? (기본�? false)
      */    
     public POST_SLUG_VALIDATED(
         slug: string[],
@@ -1246,7 +1246,7 @@ export class ExpressRouter {
         handler: ValidatedHandlerFunction,
         options?: { exact?: boolean }
     ): ExpressRouter {
-        // 헬퍼 메서드를 통해 호출자 위치 정보 획득
+        // ?�퍼 메서?��? ?�해 ?�출???�치 ?�보 ?�득
         const { filePath, lineNumber } = this.getCallerSourceInfo();
 
         const middlewares = CustomRequestHandler.createHandler(
@@ -1261,9 +1261,9 @@ export class ExpressRouter {
 
         const slugPath = this.convertSlugsToPath(slug);
 
-        // 문서화 등록을 지연시켜 setBasePath 호출 후 올바른 경로로 등록되도록 함
+        // 문서???�록??지?�시�?setBasePath ?�출 ???�바�?경로�??�록?�도�???
         if (this.basePath) {
-            // basePath가 이미 설정된 경우 즉시 등록
+            // basePath가 ?��? ?�정??경우 즉시 ?�록
             DocumentationGenerator.registerRoute({
                 method: 'POST',
                 path: this.getFullPath(slugPath),
@@ -1275,7 +1275,7 @@ export class ExpressRouter {
                 responses: responseConfig
             });
         } else {
-            // basePath가 아직 설정되지 않은 경우 지연 등록
+            // basePath가 ?�직 ?�정?��? ?��? 경우 지???�록
             this.pendingDocumentation.push({
                 method: 'POST',
                 path: slugPath,
@@ -1310,14 +1310,14 @@ export class ExpressRouter {
 
     /**
      * # PUT_VALIDATED
-     * 검증된 PUT 요청 처리
+     * 검증된 PUT ?�청 처리
      */    
     public PUT_VALIDATED(
         requestConfig: RequestConfig,
         responseConfig: ResponseConfig,
         handler: ValidatedHandlerFunction
     ): ExpressRouter {
-        // 헬퍼 메서드를 통해 호출자 위치 정보 획득
+        // ?�퍼 메서?��? ?�해 ?�출???�치 ?�보 ?�득
         const { filePath, lineNumber } = this.getCallerSourceInfo();
 
         const middlewares = CustomRequestHandler.createHandler(
@@ -1331,9 +1331,9 @@ export class ExpressRouter {
 
         this.router.put('/', ...middlewares);
 
-        // 문서화 등록을 지연시켜 setBasePath 호출 후 올바른 경로로 등록되도록 함
+        // 문서???�록??지?�시�?setBasePath ?�출 ???�바�?경로�??�록?�도�???
         if (this.basePath) {
-            // basePath가 이미 설정된 경우 즉시 등록
+            // basePath가 ?��? ?�정??경우 즉시 ?�록
             DocumentationGenerator.registerRoute({
                 method: 'PUT',
                 path: this.getFullPath('/'),
@@ -1345,7 +1345,7 @@ export class ExpressRouter {
                 responses: responseConfig
             });
         } else {
-            // basePath가 아직 설정되지 않은 경우 지연 등록
+            // basePath가 ?�직 ?�정?��? ?��? 경우 지???�록
             this.pendingDocumentation.push({
                 method: 'PUT',
                 path: '/',
@@ -1364,14 +1364,14 @@ export class ExpressRouter {
 
     /**
      * # DELETE_VALIDATED
-     * 검증된 DELETE 요청 처리
+     * 검증된 DELETE ?�청 처리
      */    
     public DELETE_VALIDATED(
         requestConfig: RequestConfig,
         responseConfig: ResponseConfig,
         handler: ValidatedHandlerFunction
     ): ExpressRouter {
-        // 헬퍼 메서드를 통해 호출자 위치 정보 획득
+        // ?�퍼 메서?��? ?�해 ?�출???�치 ?�보 ?�득
         const { filePath, lineNumber } = this.getCallerSourceInfo();
 
         const middlewares = CustomRequestHandler.createHandler(
@@ -1383,9 +1383,9 @@ export class ExpressRouter {
             handler
         ); this.router.delete('/', ...middlewares);
 
-        // 문서화 등록을 지연시켜 setBasePath 호출 후 올바른 경로로 등록되도록 함
+        // 문서???�록??지?�시�?setBasePath ?�출 ???�바�?경로�??�록?�도�???
         if (this.basePath) {
-            // basePath가 이미 설정된 경우 즉시 등록
+            // basePath가 ?��? ?�정??경우 즉시 ?�록
             DocumentationGenerator.registerRoute({
                 method: 'DELETE',
                 path: this.getFullPath('/'),
@@ -1397,7 +1397,7 @@ export class ExpressRouter {
                 responses: responseConfig
             });
         } else {
-            // basePath가 아직 설정되지 않은 경우 지연 등록
+            // basePath가 ?�직 ?�정?��? ?��? 경우 지???�록
             this.pendingDocumentation.push({
                 method: 'DELETE',
                 path: '/',
@@ -1416,14 +1416,14 @@ export class ExpressRouter {
 
     /**
      * # PATCH_VALIDATED
-     * 검증된 PATCH 요청 처리
+     * 검증된 PATCH ?�청 처리
      */    
     public PATCH_VALIDATED(
         requestConfig: RequestConfig,
         responseConfig: ResponseConfig,
         handler: ValidatedHandlerFunction
     ): ExpressRouter {
-        // 헬퍼 메서드를 통해 호출자 위치 정보 획득
+        // ?�퍼 메서?��? ?�해 ?�출???�치 ?�보 ?�득
         const { filePath, lineNumber } = this.getCallerSourceInfo();
 
         const middlewares = CustomRequestHandler.createHandler(
@@ -1438,9 +1438,9 @@ export class ExpressRouter {
 
         this.router.patch('/', ...middlewares);
 
-        // 문서화 등록을 지연시켜 setBasePath 호출 후 올바른 경로로 등록되도록 함
+        // 문서???�록??지?�시�?setBasePath ?�출 ???�바�?경로�??�록?�도�???
         if (this.basePath) {
-            // basePath가 이미 설정된 경우 즉시 등록
+            // basePath가 ?��? ?�정??경우 즉시 ?�록
             DocumentationGenerator.registerRoute({
                 method: 'PATCH',
                 path: this.getFullPath('/'),
@@ -1452,7 +1452,7 @@ export class ExpressRouter {
                 responses: responseConfig
             });
         } else {
-            // basePath가 아직 설정되지 않은 경우 지연 등록
+            // basePath가 ?�직 ?�정?��? ?��? 경우 지???�록
             this.pendingDocumentation.push({
                 method: 'PATCH',
                 path: '/',
@@ -1468,7 +1468,7 @@ export class ExpressRouter {
 
     /**
      * # GET_WITH_VALIDATION
-     * 요청 검증만 있는 GET
+     * ?�청 검증만 ?�는 GET
      */
     public GET_WITH_VALIDATION(
         requestConfig: RequestConfig,
@@ -1478,9 +1478,9 @@ export class ExpressRouter {
 
         this.router.get('/', ...middlewares);
 
-        // 문서화 등록을 지연시켜 setBasePath 호출 후 올바른 경로로 등록되도록 함
+        // 문서???�록??지?�시�?setBasePath ?�출 ???�바�?경로�??�록?�도�???
         if (this.basePath) {
-            // basePath가 이미 설정된 경우 즉시 등록
+            // basePath가 ?��? ?�정??경우 즉시 ?�록
             DocumentationGenerator.registerRoute({
                 method: 'GET',
                 path: this.getFullPath('/'),
@@ -1493,7 +1493,7 @@ export class ExpressRouter {
             });
 
         } else {
-            // basePath가 아직 설정되지 않은 경우 지연 등록
+            // basePath가 ?�직 ?�정?��? ?��? 경우 지???�록
             this.pendingDocumentation.push({
                 method: 'GET',
                 path: '/',
@@ -1509,7 +1509,7 @@ export class ExpressRouter {
 
     /**
      * # POST_WITH_VALIDATION
-     * 요청 검증만 있는 POST
+     * ?�청 검증만 ?�는 POST
      */
     public POST_WITH_VALIDATION(
         requestConfig: RequestConfig,
@@ -1519,10 +1519,10 @@ export class ExpressRouter {
         const middlewares = CustomRequestHandler.withValidation(requestConfig, handler);
         this.router.post('/', ...middlewares);
 
-        // 문서화 등록을 지연시켜 setBasePath 호출 후 올바른 경로로 등록되도록 함
+        // 문서???�록??지?�시�?setBasePath ?�출 ???�바�?경로�??�록?�도�???
         if (this.basePath) {
 
-            // basePath가 이미 설정된 경우 즉시 등록
+            // basePath가 ?��? ?�정??경우 즉시 ?�록
             DocumentationGenerator.registerRoute({
                 method: 'POST',
                 path: this.getFullPath('/'),
@@ -1534,7 +1534,7 @@ export class ExpressRouter {
                 responses: { 200: { data: { type: 'object' as const, required: false } } }
             });
         } else {
-            // basePath가 아직 설정되지 않은 경우 지연 등록
+            // basePath가 ?�직 ?�정?��? ?��? 경우 지???�록
             this.pendingDocumentation.push({
                 method: 'POST',
                 path: '/',
@@ -1549,8 +1549,8 @@ export class ExpressRouter {
 
     /**
      * # GET_SLUG_VALIDATED_EXACT
-     * 검증된 GET 슬러그 요청 처리 (정확한 경로 매칭만)
-     * 하위 라우터에 영향을 주지 않음
+     * 검증된 GET ?�러�??�청 처리 (?�확??경로 매칭�?
+     * ?�위 ?�우?�에 ?�향??주�? ?�음
      */
     public GET_SLUG_VALIDATED_EXACT(
         slug: string[],
@@ -1564,13 +1564,13 @@ export class ExpressRouter {
             handler
         );
 
-        // 정확한 경로 매칭을 위해 '$' 앵커 사용하는 대신 정규식 패턴으로 처리
+        // ?�확??경로 매칭???�해 '$' ?�커 ?�용?�는 ?�???�규???�턴?�로 처리
         const exactPath = this.convertSlugsToPath(slug);
         this.router.get(new RegExp(`^${exactPath.replace(/:\w+/g, '([^/]+)')}$`), ...middlewares);
 
-        // 문서화 등록을 지연시켜 setBasePath 호출 후 올바른 경로로 등록되도록 함
+        // 문서???�록??지?�시�?setBasePath ?�출 ???�바�?경로�??�록?�도�???
         if (this.basePath) {
-            // basePath가 이미 설정된 경우 즉시 등록
+            // basePath가 ?��? ?�정??경우 즉시 ?�록
             DocumentationGenerator.registerRoute({
                 method: 'GET',
                 path: this.getFullPath(exactPath),
@@ -1583,7 +1583,7 @@ export class ExpressRouter {
             });
         } else {
 
-            // basePath가 아직 설정되지 않은 경우 지연 등록
+            // basePath가 ?�직 ?�정?��? ?��? 경우 지???�록
             this.pendingDocumentation.push({
                 method: 'GET',
                 path: exactPath,
@@ -1603,7 +1603,7 @@ export class ExpressRouter {
 
     /**
      * # POST_SLUG_VALIDATED_EXACT
-     * 검증된 POST 슬러그 요청 처리 (정확한 경로 매칭만)
+     * 검증된 POST ?�러�??�청 처리 (?�확??경로 매칭�?
      */
     public POST_SLUG_VALIDATED_EXACT(
         slug: string[],
@@ -1620,10 +1620,10 @@ export class ExpressRouter {
 
         this.router.post(new RegExp(`^${exactPath.replace(/:\w+/g, '([^/]+)')}$`), ...middlewares);
 
-        // 문서화 등록을 지연시켜 setBasePath 호출 후 올바른 경로로 등록되도록 함
+        // 문서???�록??지?�시�?setBasePath ?�출 ???�바�?경로�??�록?�도�???
         if (this.basePath) {
 
-            // basePath가 이미 설정된 경우 즉시 등록
+            // basePath가 ?��? ?�정??경우 즉시 ?�록
             DocumentationGenerator.registerRoute({
                 method: 'POST',
                 path: this.getFullPath(exactPath),
@@ -1636,7 +1636,7 @@ export class ExpressRouter {
             });
         } else {
 
-            // basePath가 아직 설정되지 않은 경우 지연 등록
+            // basePath가 ?�직 ?�정?��? ?��? 경우 지???�록
             this.pendingDocumentation.push({
                 method: 'POST',
                 path: exactPath,
@@ -1656,7 +1656,7 @@ export class ExpressRouter {
 
     /**
      * # PUT_SLUG_VALIDATED_EXACT
-     * 검증된 PUT 슬러그 요청 처리 (정확한 경로 매칭만)
+     * 검증된 PUT ?�러�??�청 처리 (?�확??경로 매칭�?
      */
     public PUT_SLUG_VALIDATED_EXACT(
         slug: string[],
@@ -1673,9 +1673,9 @@ export class ExpressRouter {
         const exactPath = this.convertSlugsToPath(slug);
         this.router.put(new RegExp(`^${exactPath.replace(/:\w+/g, '([^/]+)')}$`), ...middlewares);
 
-        // 문서화 등록을 지연시켜 setBasePath 호출 후 올바른 경로로 등록되도록 함
+        // 문서???�록??지?�시�?setBasePath ?�출 ???�바�?경로�??�록?�도�???
         if (this.basePath) {
-            // basePath가 이미 설정된 경우 즉시 등록
+            // basePath가 ?��? ?�정??경우 즉시 ?�록
             DocumentationGenerator.registerRoute({
                 method: 'PUT',
                 path: this.getFullPath(exactPath),
@@ -1687,7 +1687,7 @@ export class ExpressRouter {
                 responses: responseConfig
             });
         } else {
-            // basePath가 아직 설정되지 않은 경우 지연 등록
+            // basePath가 ?�직 ?�정?��? ?��? 경우 지???�록
             this.pendingDocumentation.push({
                 method: 'PUT',
                 path: exactPath,
@@ -1703,7 +1703,7 @@ export class ExpressRouter {
 
     // /**
     //  * # DELETE_SLUG_VALIDATED_EXACT
-    //  * 검증된 DELETE 슬러그 요청 처리 (정확한 경로 매칭만)
+    //  * 검증된 DELETE ?�러�??�청 처리 (?�확??경로 매칭�?
     //  */
     // public DELETE_SLUG_VALIDATED_EXACT(
     //     slug: string[],
@@ -1719,9 +1719,9 @@ export class ExpressRouter {
     //     const exactPath = this.convertSlugsToPath(slug);
     //     this.router.delete(new RegExp(`^${exactPath.replace(/:\w+/g, '([^/]+)')}$`), ...middlewares);
 
-    //     // 문서화 등록을 지연시켜 setBasePath 호출 후 올바른 경로로 등록되도록 함
+    //     // 문서???�록??지?�시�?setBasePath ?�출 ???�바�?경로�??�록?�도�???
     //     if (this.basePath) {
-    //         // basePath가 이미 설정된 경우 즉시 등록
+    //         // basePath가 ?��? ?�정??경우 즉시 ?�록
     //         DocumentationGenerator.registerRoute({
     //             method: 'DELETE',
     //             path: this.getFullPath(exactPath),
@@ -1734,7 +1734,7 @@ export class ExpressRouter {
     //         });
 
     //     } else {
-    //         // basePath가 아직 설정되지 않은 경우 지연 등록
+    //         // basePath가 ?�직 ?�정?��? ?��? 경우 지???�록
     //         this.pendingDocumentation.push({
     //             method: 'DELETE',
     //             path: exactPath,
@@ -1747,8 +1747,8 @@ export class ExpressRouter {
     // }
 
     // /**
-    //  * # GET_SLUG_VALIDATED (개선된 버전)
-    //  * 하위 라우터 영향 방지 옵션 추가
+    //  * # GET_SLUG_VALIDATED (개선??버전)
+    //  * ?�위 ?�우???�향 방�? ?�션 추�?
     //  */
     // public GET_SLUG_VALIDATED_IMPROVED(
     //     slug: string[],
@@ -1764,25 +1764,25 @@ export class ExpressRouter {
     //     );
 
     //     if (options?.exact) {
-    //         // 정확한 매칭: 하위 경로 방지
+    //         // ?�확??매칭: ?�위 경로 방�?
     //         const exactPath = this.convertSlugsToPath(slug);
 
-    //         // Express에서 정확한 매칭을 위해 미들웨어에서 경로 체크
+    //         // Express?�서 ?�확??매칭???�해 미들?�어?�서 경로 체크
     //         const exactMiddleware = (req: any, res: any, next: any) => {
-    //             // URL이 정확히 일치하는지 확인
+    //             // URL???�확???�치?�는지 ?�인
     //             const pathPattern = exactPath.replace(/:\w+/g, '[^/]+');
     //             const regex = new RegExp(`^${pathPattern}$`);
     //             if (regex.test(req.path)) {
     //                 next();
     //             } else {
-    //                 next('route'); // 다른 라우트로 패스
+    //                 next('route'); // ?�른 ?�우?�로 ?�스
     //             }
     //         };
 
     //         this.router.get(exactPath, exactMiddleware, ...middlewares);
 
     //     } else {
-    //         // 기본 동작: 하위 경로도 매칭
+    //         // 기본 ?�작: ?�위 경로??매칭
     //         this.router.get(this.convertSlugsToPath(slug), ...middlewares);
     //     }
 
@@ -1791,56 +1791,56 @@ export class ExpressRouter {
 
     
     /**
-     * CRUD 자동 생성 메서드
-     * 표준 REST API CRUD 엔드포인트를 자동으로 생성합니다.
+     * CRUD ?�동 ?�성 메서??
+     * ?��? REST API CRUD ?�드?�인?��? ?�동?�로 ?�성?�니??
      * 
-     * 생성되는 라우트:
-     * - GET / (index) - 리스트 조회 with 필터링, 정렬, 페이지네이션
-     * - GET /:identifier (show) - 단일 항목 조회
-     * - POST / (create) - 새 항목 생성
-     * - PUT /:identifier (update) - 항목 전체 수정
-     * - PATCH /:identifier (update) - 항목 부분 수정  
-     * - DELETE /:identifier (destroy) - 항목 삭제
+     * ?�성?�는 ?�우??
+     * - GET / (index) - 리스??조회 with ?�터�? ?�렬, ?�이지?�이??
+     * - GET /:identifier (show) - ?�일 ??�� 조회
+     * - POST / (create) - ????�� ?�성
+     * - PUT /:identifier (update) - ??�� ?�체 ?�정
+     * - PATCH /:identifier (update) - ??�� 부�??�정  
+     * - DELETE /:identifier (destroy) - ??�� ??��
      * 
-     * @param databaseName 사용할 데이터베이스 이름
-     * @param modelName 대상 모델 이름 (타입 안전성을 위해 제네릭 사용)
-     * @param options CRUD 옵션 설정
+     * @param databaseName ?�용???�이?�베?�스 ?�름
+     * @param modelName ?�??모델 ?�름 (?�???�전?�을 ?�해 ?�네�??�용)
+     * @param options CRUD ?�션 ?�정
      */
     public CRUD<T extends DatabaseNamesUnion>(
         databaseName: T, 
         modelName: ModelNamesFor<T>,
         options?: {
 
-            /** CRUD 액션 활성화 설정 */
+            /** CRUD ?�션 ?�성???�정 */
             only?: ('index' | 'show' | 'create' | 'update' | 'destroy' | 'recover')[];
             except?: ('index' | 'show' | 'create' | 'update' | 'destroy' | 'recover')[];
 
 
-            /** Primary key 필드명 지정 (기본값: 'id') */
+            /** Primary key ?�드�?지??(기본�? 'id') */
             primaryKey?: string;
 
 
-            /** Primary key 타입 변환 함수 */
+            /** Primary key ?�??변???�수 */
             primaryKeyParser?: (value: string) => any;
 
 
-            /** JSON:API 리소스 타입 (기본값: modelName.toLowerCase()) */
+            /** JSON:API 리소???�??(기본�? modelName.toLowerCase()) */
             resourceType?: string;
 
 
             /**
-             * includeMerge: true면 included 대신 attributes에 관계명으로 병합 (기본값: false)
+             * includeMerge: true�?included ?�??attributes??관계명?�로 병합 (기본�? false)
              */
             includeMerge?: boolean;
 
 
-            /** Soft Delete 설정 */
+            /** Soft Delete ?�정 */
             softDelete?: {
                 enabled: boolean;
                 field: string;
             };
 
-            /** 미들웨어 */
+            /** 미들?�어 */
             middleware?: {
                 index?: HandlerFunction[];
                 show?: HandlerFunction[];
@@ -1850,14 +1850,14 @@ export class ExpressRouter {
                 recover?: HandlerFunction[];
             };
 
-            /** 요청 검증 설정 */
+            /** ?�청 검�??�정 */
             validation?: {
                 create?: RequestConfig;
                 update?: RequestConfig;
                 recover?: RequestConfig;
             };
 
-            /** 응답 검증 설정 */
+            /** ?�답 검�??�정 */
             hooks?: {
                 beforeCreate?: (data: any, req: Request) => Promise<any> | any;
                 afterCreate?: (result: any, req: Request) => Promise<any> | any;
@@ -1878,7 +1878,7 @@ export class ExpressRouter {
         const enabledActions = this.getEnabledActions(options);
         const client = prismaManager.getWrap(databaseName);
         
-        // Primary key 설정 및 자동 파서 선택
+        // Primary key ?�정 �??�동 ?�서 ?�택
         const primaryKey = options?.primaryKey || 'id';
         const primaryKeyParser = options?.primaryKeyParser || this.getSmartPrimaryKeyParser(databaseName, modelName, primaryKey);
         
@@ -1887,27 +1887,27 @@ export class ExpressRouter {
             this.setupIndexRoute(client, modelName, options, primaryKey);
         }
 
-        // SHOW - GET /:identifier (단일 조회)
+        // SHOW - GET /:identifier (?�일 조회)
         if (enabledActions.includes('show')) {
             this.setupShowRoute(client, modelName, options, primaryKey, primaryKeyParser);
         }
 
-        // CREATE - POST / (생성)
+        // CREATE - POST / (?�성)
         if (enabledActions.includes('create')) {
             this.setupCreateRoute(client, modelName, options, primaryKey);
         }
 
-        // UPDATE - PUT /:identifier, PATCH /:identifier (수정)
+        // UPDATE - PUT /:identifier, PATCH /:identifier (?�정)
         if (enabledActions.includes('update')) {
             this.setupUpdateRoute(client, modelName, options, primaryKey, primaryKeyParser);
         }
 
-        // DESTROY - DELETE /:identifier (삭제)
+        // DESTROY - DELETE /:identifier (??��)
         if (enabledActions.includes('destroy')) {
             this.setupDestroyRoute(client, modelName, options, primaryKey, primaryKeyParser);
         }
 
-        // ATOMIC OPERATIONS - POST /atomic (원자적 작업)
+        // ATOMIC OPERATIONS - POST /atomic (?�자???�업)
         this.setupAtomicOperationsRoute(client, modelName, options);
 
         // RECOVER - POST /:identifier/recover (복구)
@@ -1915,27 +1915,27 @@ export class ExpressRouter {
             this.setupRecoverRoute(client, modelName, options, primaryKey, primaryKeyParser);
         }
 
-        // JSON:API Relationship 라우트 추가
+        // JSON:API Relationship ?�우??추�?
         this.setupRelationshipRoutes(client, modelName, options, primaryKey, primaryKeyParser);
 
         return this;
     }
 
     /**
-     * Primary key 타입을 자동으로 감지하고 적절한 파서를 반환하는 헬퍼 메서드
+     * Primary key ?�?�을 ?�동?�로 감�??�고 ?�절???�서�?반환?�는 ?�퍼 메서??
      */
     private getSmartPrimaryKeyParser(databaseName: string, modelName: string, primaryKey: string): (value: string) => any {
         try {
-            // 간단한 타입 추론 로직
-            // 실제로는 Prisma 스키마나 메타데이터를 읽어서 판단할 수 있지만,
-            // 여기서는 일반적인 패턴을 기반으로 추론
+            // 간단???�??추론 로직
+            // ?�제로는 Prisma ?�키마나 메�??�이?��? ?�어???�단?????��?�?
+            // ?�기?�는 ?�반?�인 ?�턴??기반?�로 추론
             
-            // primaryKey 이름 기반 추론
+            // primaryKey ?�름 기반 추론
             if (primaryKey === 'uuid' || primaryKey.includes('uuid') || primaryKey.endsWith('_uuid')) {
                 return ExpressRouter.parseUuid;
             }
             
-            // 기본적으로 스마트 파서 사용 (숫자인지 UUID인지 자동 판단)
+            // 기본?�으�??�마???�서 ?�용 (?�자?��? UUID?��? ?�동 ?�단)
             return this.parseIdSmart;
         } catch (error) {
             console.warn(`Failed to determine primary key type for ${modelName}.${primaryKey}, using string parser`);
@@ -1944,22 +1944,22 @@ export class ExpressRouter {
     }
 
     /**
-     * 스마트 ID 파서 - 입력값을 보고 적절한 타입으로 변환
-     * UUID 형식이 아닌 경우 숫자나 문자열로 안전하게 처리
+     * ?�마??ID ?�서 - ?�력값을 보고 ?�절???�?�으�?변??
+     * UUID ?�식???�닌 경우 ?�자??문자?�로 ?�전?�게 처리
      */
     private parseIdSmart = (id: string): any => {
-        // 먼저 입력값 검증
+        // 먼�? ?�력�?검�?
         if (!id || typeof id !== 'string') {
             throw new Error('Invalid ID format: ID must be a non-empty string');
         }
 
-        // UUID 패턴 체크 (엄격한 검증)
+        // UUID ?�턴 체크 (?�격??검�?
         const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
         if (uuidRegex.test(id)) {
-            return id; // 유효한 UUID 그대로 반환
+            return id; // ?�효??UUID 그�?�?반환
         }
         
-        // 순수 숫자인 경우 정수로 변환
+        // ?�수 ?�자??경우 ?�수�?변??
         if (/^\d+$/.test(id)) {
             const numValue = parseInt(id, 10);
             if (!isNaN(numValue) && numValue > 0) {
@@ -1967,28 +1967,28 @@ export class ExpressRouter {
             }
         }
         
-        // 유효한 문자열 ID인 경우 (알파벳, 숫자, 하이픈, 언더스코어 허용)
+        // ?�효??문자??ID??경우 (?�파�? ?�자, ?�이?? ?�더?�코???�용)
         if (/^[a-zA-Z0-9_-]+$/.test(id)) {
             return id;
         }
         
-        // 그 외의 경우 에러 발생
+        // �??�의 경우 ?�러 발생
         throw new Error(`Invalid ID format: '${id}' is not a valid UUID, number, or string identifier`);
     };
 
     /**
-     * 활성화된 액션 목록 계산
+     * ?�성?�된 ?�션 목록 계산
      * 
-     * 우선순위:
-     * 1. only와 except가 둘 다 지정된 경우: only를 우선으로 하되, 경고 로그를 출력
-     * 2. only만 지정된 경우: only에 포함된 액션들만 활성화
-     * 3. except만 지정된 경우: 전체 액션에서 except에 포함된 것들을 제외
-     * 4. 둘 다 없는 경우: 모든 액션 활성화
+     * ?�선?�위:
+     * 1. only?� except가 ????지?�된 경우: only�??�선?�로 ?�되, 경고 로그�?출력
+     * 2. only�?지?�된 경우: only???�함???�션?�만 ?�성??
+     * 3. except�?지?�된 경우: ?�체 ?�션?�서 except???�함??것들???�외
+     * 4. ?????�는 경우: 모든 ?�션 ?�성??
      */
     private getEnabledActions(options?: any): string[] {
         const allActions = ['index', 'show', 'create', 'update', 'destroy', 'recover'];
         
-        // only와 except가 둘 다 지정된 경우 경고
+        // only?� except가 ????지?�된 경우 경고
         if (options?.only && options?.except) {
             console.warn(
                 '[CRUD Warning] Both "only" and "except" options are specified. ' +
@@ -1997,22 +1997,22 @@ export class ExpressRouter {
             return options.only;
         }
         
-        // only만 지정된 경우
+        // only�?지?�된 경우
         if (options?.only) {
             return options.only;
         }
         
-        // except만 지정된 경우
+        // except�?지?�된 경우
         if (options?.except) {
             return allActions.filter(action => !options.except.includes(action));
         }
         
-        // 기본값: 모든 액션
+        // 기본�? 모든 ?�션
         return allActions;
     }
 
     /**
-     * INDEX 라우트 설정 (GET /) - JSON:API 준수
+     * INDEX ?�우???�정 (GET /) - JSON:API 준??
      */
     private setupIndexRoute(client: any, modelName: string, options?: any, primaryKey: string = 'id'): void {
         const middlewares = options?.middleware?.index || [];
@@ -2021,14 +2021,14 @@ export class ExpressRouter {
         
         const handler: HandlerFunction = async (req, res, injected, repo, db) => {
             try {
-                // JSON:API Content-Type 헤더 설정
+                // JSON:API Content-Type ?�더 ?�정
                 res.setHeader('Content-Type', 'application/vnd.api+json');
                 res.setHeader('Vary', 'Accept');
                 
-                // 쿼리 파라미터 파싱
+                // 쿼리 ?�라미터 ?�싱
                 const queryParams = CrudQueryParser.parseQuery(req);
                 
-                // 페이지네이션 방식 검증 - 반드시 지정되어야 함
+                // ?�이지?�이??방식 검�?- 반드??지?�되?�야 ??
                 if (!queryParams.page) {
                     const errorResponse = this.formatJsonApiError(
                         new Error('Pagination is required. You must specify either page-based pagination (page[number] & page[size]) or cursor-based pagination (page[cursor] & page[size])'),
@@ -2040,7 +2040,7 @@ export class ExpressRouter {
                     return res.status(400).json(errorResponse);
                 }
                 
-                // 페이지네이션 파라미터 상세 검증
+                // ?�이지?�이???�라미터 ?�세 검�?
                 if (!queryParams.page.number && !queryParams.page.cursor) {
                     const errorResponse = this.formatJsonApiError(
                         new Error('Invalid pagination parameters. Specify either page[number] for offset-based pagination or page[cursor] for cursor-based pagination'),
@@ -2052,7 +2052,7 @@ export class ExpressRouter {
                     return res.status(400).json(errorResponse);
                 }
                 
-                // 페이지 크기 검증
+                // ?�이지 ?�기 검�?
                 if (!queryParams.page.size || queryParams.page.size <= 0) {
                     const errorResponse = this.formatJsonApiError(
                         new Error('page[size] parameter is required and must be greater than 0'),
@@ -2064,16 +2064,16 @@ export class ExpressRouter {
                     return res.status(400).json(errorResponse);
                 }
                 
-                // Prisma 쿼리 옵션 빌드
+                // Prisma 쿼리 ?�션 빌드
                 const findManyOptions = PrismaQueryBuilder.buildFindManyOptions(queryParams);
                 
-                // Soft Delete 필터 추가 (기존 where 조건과 병합)
+                // Soft Delete ?�터 추�? (기존 where 조건�?병합)
                 if (isSoftDelete) {
-                    // include_deleted 쿼리 파라미터가 true가 아닌 경우 삭제된 항목 제외
+                    // include_deleted 쿼리 ?�라미터가 true가 ?�닌 경우 ??��????�� ?�외
                     const includeDeleted = req.query.include_deleted === 'true';
                     
                     if (!includeDeleted) {
-                        // 기존 where 조건이 있는 경우 AND 조건으로 추가
+                        // 기존 where 조건???�는 경우 AND 조건?�로 추�?
                         if (findManyOptions.where) {
                             findManyOptions.where = {
                                 AND: [
@@ -2082,13 +2082,13 @@ export class ExpressRouter {
                                 ]
                             };
                         } else {
-                            // where 조건이 없는 경우 새로 생성
+                            // where 조건???�는 경우 ?�로 ?�성
                             findManyOptions.where = { [softDeleteField]: null };
                         }
                     }
                 }
                 
-                // 총 개수 조회 (페이지네이션용)
+                // �?개수 조회 (?�이지?�이?�용)
                 const totalCountOptions = { ...findManyOptions };
                 delete totalCountOptions.skip;
                 delete totalCountOptions.take;
@@ -2099,10 +2099,10 @@ export class ExpressRouter {
                     client[modelName].count({ where: totalCountOptions.where })
                 ]);
 
-                // Base URL 생성
+                // Base URL ?�성
                 const baseUrl = `${req.protocol}://${req.get('host')}${req.baseUrl}`;
                 
-                // 포함된 리소스 생성 (include 파라미터가 있는 경우)
+                // ?�함??리소???�성 (include ?�라미터가 ?�는 경우)
                 let included: JsonApiResource[] | undefined;
                 if (queryParams.include && queryParams.include.length > 0 && !options?.includeMerge) {
                     included = JsonApiTransformer.createIncludedResources(
@@ -2113,7 +2113,7 @@ export class ExpressRouter {
                     );
                 }
 
-                // 페이지네이션 링크 생성
+                // ?�이지?�이??링크 ?�성
                 let links: any;
                 if (queryParams.page) {
                     const pageSize = queryParams.page.size || 10;
@@ -2134,14 +2134,14 @@ export class ExpressRouter {
                     }
                 }
 
-                // 메타데이터 생성 (JSON:API 스펙 준수)
+                // 메�??�이???�성 (JSON:API ?�펙 준??
                 const meta: any = {
                     timestamp: new Date().toISOString(),
-                    total: total,  // 전체 레코드 수 (JSON:API에서 일반적으로 사용)
-                    count: items.length  // 현재 응답의 레코드 수
+                    total: total,  // ?�체 ?�코????(JSON:API?�서 ?�반?�으�??�용)
+                    count: items.length  // ?�재 ?�답???�코????
                 };
 
-                // 페이지네이션이 활성화된 경우에만 페이지 정보 추가
+                // ?�이지?�이?�이 ?�성?�된 경우?�만 ?�이지 ?�보 추�?
                 if (queryParams.page) {
                     const pageSize = queryParams.page.size || 10;
                     const currentPage = queryParams.page.number || 1;
@@ -2150,11 +2150,11 @@ export class ExpressRouter {
                     meta.page = {
                         current: currentPage,
                         size: pageSize,
-                        total: totalPages  // 전체 페이지 수
+                        total: totalPages  // ?�체 ?�이지 ??
                     };
                 }
 
-                // JSON:API 응답 생성
+                // JSON:API ?�답 ?�성
                 const response: JsonApiResponse = JsonApiTransformer.createJsonApiResponse(
                     items,
                     modelName,
@@ -2169,7 +2169,7 @@ export class ExpressRouter {
                     }
                 );
                 
-                // metadata 생성 - 기존 헬퍼 함수 사용
+                // metadata ?�성 - 기존 ?�퍼 ?�수 ?�용
                 const metadata = CrudResponseFormatter.createPaginationMeta(
                     items,
                     total,
@@ -2179,7 +2179,7 @@ export class ExpressRouter {
                     queryParams
                 );
                 
-                // BigInt와 DATE 타입 직렬화 처리
+                // BigInt?� DATE ?�??직렬??처리
                 const serializedResponse = serialize({ ...response, metadata });
                 
                 res.json(serializedResponse);
@@ -2194,14 +2194,14 @@ export class ExpressRouter {
             }
         };
 
-        // 미들웨어 등록
+        // 미들?�어 ?�록
         if (middlewares.length > 0) {
             this.router.get('/', ...middlewares, this.wrapHandler(handler));
         } else {
             this.router.get('/', this.wrapHandler(handler));
         }
 
-        // 문서화 등록
+        // 문서???�록
         const queryParams: any = {
             include: { type: 'string', required: false, description: 'Related resources to include (comma-separated). Example: author,comments.author' },
             'fields[type]': { type: 'string', required: false, description: 'Sparse fieldsets - specify which fields to include for each resource type. Example: fields[posts]=title,content&fields[users]=name,email' },
@@ -2212,7 +2212,7 @@ export class ExpressRouter {
             'filter[field_op]': { type: 'string', required: false, description: 'Filter conditions. Operators: eq, ne, gt, gte, lt, lte, like, in, etc. Example: filter[status_eq]=active&filter[age_gte]=18' }
         };
         
-        // Soft delete가 활성화된 경우 include_deleted 파라미터 추가
+        // Soft delete가 ?�성?�된 경우 include_deleted ?�라미터 추�?
         if (isSoftDelete) {
             queryParams.include_deleted = { 
                 type: 'boolean', 
@@ -2239,7 +2239,7 @@ export class ExpressRouter {
     }
 
     /**
-     * SHOW 라우트 설정 (GET /:identifier) - JSON:API 준수
+     * SHOW ?�우???�정 (GET /:identifier) - JSON:API 준??
      */
     private setupShowRoute(
         client: any, 
@@ -2254,23 +2254,23 @@ export class ExpressRouter {
         
         const handler: HandlerFunction = async (req, res, injected, repo, db) => {
             try {
-                // JSON:API Content-Type 헤더 설정
+                // JSON:API Content-Type ?�더 ?�정
                 res.setHeader('Content-Type', 'application/vnd.api+json');
                 res.setHeader('Vary', 'Accept');
                 
-                // 파라미터 추출 및 파싱
+                // ?�라미터 추출 �??�싱
                 const { success, parsedIdentifier } = this.extractAndParsePrimaryKey(
                     req, res, primaryKey, primaryKeyParser, modelName
                 );
-                if (!success) return; // 에러 응답은 이미 헬퍼에서 처리됨
+                if (!success) return; // ?�러 ?�답?� ?��? ?�퍼?�서 처리??
                 
-                // 쿼리 파라미터에서 include 파싱
+                // 쿼리 ?�라미터?�서 include ?�싱
                 const queryParams = CrudQueryParser.parseQuery(req);
                 const includeOptions = queryParams.include 
                     ? PrismaQueryBuilder['buildIncludeOptions'](queryParams.include)
                     : undefined;
 
-                // Soft Delete 필터 추가 (include_deleted가 true가 아닌 경우)
+                // Soft Delete ?�터 추�? (include_deleted가 true가 ?�닌 경우)
                 const includeDeleted = req.query.include_deleted === 'true';
                 const whereClause: any = { [primaryKey]: parsedIdentifier };
                 
@@ -2284,14 +2284,14 @@ export class ExpressRouter {
                 });
 
                 if (!item) {
-                    // Soft delete된 항목인지 확인 (include_deleted=false 상태에서)
+                    // Soft delete????��?��? ?�인 (include_deleted=false ?�태?�서)
                     if (isSoftDelete && !includeDeleted) {
                         const deletedItem = await client[modelName].findUnique({
                             where: { [primaryKey]: parsedIdentifier }
                         });
                         
                         if (deletedItem && deletedItem[softDeleteField]) {
-                            // Soft delete된 항목에 대한 410 Gone 응답 (JSON:API 확장)
+                            // Soft delete????��???�??410 Gone ?�답 (JSON:API ?�장)
                             const errorResponse = this.formatJsonApiError(
                                 new Error(`${modelName} has been deleted`),
                                 'RESOURCE_DELETED',
@@ -2313,10 +2313,10 @@ export class ExpressRouter {
                     return res.status(404).json(errorResponse);
                 }
 
-                // Base URL 생성
+                // Base URL ?�성
                 const baseUrl = `${req.protocol}://${req.get('host')}${req.baseUrl}`;
                 
-                // 포함된 리소스 생성 (include 파라미터가 있는 경우)
+                // ?�함??리소???�성 (include ?�라미터가 ?�는 경우)
                 let included: JsonApiResource[] | undefined;
                 if (queryParams.include && queryParams.include.length > 0 && !options?.includeMerge) {
                     included = JsonApiTransformer.createIncludedResources(
@@ -2327,7 +2327,7 @@ export class ExpressRouter {
                     );
                 }
 
-                // JSON:API 응답 생성
+                // JSON:API ?�답 ?�성
                 const response: JsonApiResponse = JsonApiTransformer.createJsonApiResponse(
                     item,
                     modelName,
@@ -2340,22 +2340,22 @@ export class ExpressRouter {
                     }
                 );
                 
-                // metadata 객체 생성 - 기존 헬퍼 함수 사용
+                // metadata 객체 ?�성 - 기존 ?�퍼 ?�수 ?�용
                 const metadata = CrudResponseFormatter.createPaginationMeta(
-                    [item], // 단일 항목을 배열로 감싸서 전달
-                    1,      // total count는 1
-                    undefined, // page 파라미터 없음 (단일 조회)
+                    [item], // ?�일 ??��??배열�?감싸???�달
+                    1,      // total count??1
+                    undefined, // page ?�라미터 ?�음 (?�일 조회)
                     'show',
                     queryParams.include,
                     queryParams
                 );
                 
-                // excludedFields 추가 (show 전용)
+                // excludedFields 추�? (show ?�용)
                 if (queryParams.fields) {
                     metadata.excludedFields = Object.keys(queryParams.fields[modelName] || {});
                 }
                 
-                // BigInt와 DATE 타입 직렬화 처리
+                // BigInt?� DATE ?�??직렬??처리
                 const serializedResponse = serialize({ ...response, metadata });
                 
                 res.json(serializedResponse);
@@ -2370,7 +2370,7 @@ export class ExpressRouter {
             }
         };
 
-        // 미들웨어 등록 - 동적 경로 사용
+        // 미들?�어 ?�록 - ?�적 경로 ?�용
         const routePath = `/:${primaryKey}`;
         if (middlewares.length > 0) {
             this.router.get(routePath, ...middlewares, this.wrapHandler(handler));
@@ -2378,12 +2378,12 @@ export class ExpressRouter {
             this.router.get(routePath, this.wrapHandler(handler));
         }
 
-        // 문서화 등록
+        // 문서???�록
         const queryParams: any = {
             include: { type: 'string', required: false, description: 'Related resources to include' }
         };
         
-        // Soft delete가 활성화된 경우 include_deleted 파라미터 추가
+        // Soft delete가 ?�성?�된 경우 include_deleted ?�라미터 추�?
         if (isSoftDelete) {
             queryParams.include_deleted = { 
                 type: 'boolean', 
@@ -2401,7 +2401,7 @@ export class ExpressRouter {
             }
         };
         
-        // Soft delete가 활성화된 경우 410 Gone 응답 추가
+        // Soft delete가 ?�성?�된 경우 410 Gone ?�답 추�?
         if (isSoftDelete) {
             responses[410] = {
                 error: { type: 'object', required: true, description: 'Resource has been soft deleted' }
@@ -2421,23 +2421,23 @@ export class ExpressRouter {
     }
 
     /**
-     * CREATE 라우트 설정 (POST /) - JSON:API 준수
+     * CREATE ?�우???�정 (POST /) - JSON:API 준??
      */
     private setupCreateRoute(client: any, modelName: string, options?: any, primaryKey: string = 'id'): void {
         const middlewares = options?.middleware?.create || [];
         
         const handler: HandlerFunction = async (req, res, injected, repo, db) => {
             try {
-                // JSON:API Content-Type 헤더 설정
+                // JSON:API Content-Type ?�더 ?�정
                 res.setHeader('Content-Type', 'application/vnd.api+json');
                 res.setHeader('Vary', 'Accept');
                 
-                // Content Negotiation 검증
+                // Content Negotiation 검�?
                 // if (!this.validateJsonApiContentType(req, res)) {
                 //     return;
                 // }
                 
-                // JSON:API 요청 형식 검증
+                // JSON:API ?�청 ?�식 검�?
                 if (!req.body || !req.body.data) {
                     const errorResponse = this.formatJsonApiError(
                         new Error('Request must contain a data object'),
@@ -2451,21 +2451,21 @@ export class ExpressRouter {
 
                 const { data: requestData } = req.body;
                 
-                // 리소스 타입 검증 (라우트 경로에서 추출 또는 옵션 사용)
+                // 리소???�??검�?(?�우??경로?�서 추출 ?�는 ?�션 ?�용)
                 const routeResourceType = req.baseUrl.split('/').filter(Boolean).pop() || modelName.toLowerCase();
                 const expectedType = options?.resourceType || routeResourceType;
                 
-                // JSON:API 리소스 구조 검증
+                // JSON:API 리소??구조 검�?
                 if (!this.validateJsonApiResource(requestData, expectedType, req, res, false)) {
                     return;
                 }
 
-                // attributes에서 데이터 추출
+                // attributes?�서 ?�이??추출
                 let data = requestData.attributes || {};
 
-                // 클라이언트 생성 ID 지원 (JSON:API 스펙)
+                // ?�라?�언???�성 ID 지??(JSON:API ?�펙)
                 if (requestData.id) {
-                    // 클라이언트가 ID를 제공한 경우
+                    // ?�라?�언?��? ID�??�공??경우
                     if (primaryKey === 'id') {
                         data.id = requestData.id;
                     } else {
@@ -2473,7 +2473,7 @@ export class ExpressRouter {
                     }
                 }
 
-                // 관계 데이터 처리 (relationships가 있는 경우)
+                // 관�??�이??처리 (relationships가 ?�는 경우)
                 if (requestData.relationships) {
                     try {
                         data = await this.processRelationships(
@@ -2481,7 +2481,7 @@ export class ExpressRouter {
                             requestData.relationships, 
                             client, 
                             modelName,
-                            false // 생성 모드
+                            false // ?�성 모드
                         );
                     } catch (relationshipError: any) {
                         const errorResponse = this.formatJsonApiError(
@@ -2495,7 +2495,7 @@ export class ExpressRouter {
                     }
                 }
 
-                // Before hook 실행
+                // Before hook ?�행
                 if (options?.hooks?.beforeCreate) {
                     data = await options.hooks.beforeCreate(data, req);
                 }
@@ -2504,15 +2504,15 @@ export class ExpressRouter {
                     data
                 });
 
-                // After hook 실행
+                // After hook ?�행
                 if (options?.hooks?.afterCreate) {
                     await options.hooks.afterCreate(result, req);
                 }
 
-                // Base URL 생성
+                // Base URL ?�성
                 const baseUrl = `${req.protocol}://${req.get('host')}${req.baseUrl}`;
 
-                // JSON:API 응답 생성
+                // JSON:API ?�답 ?�성
                 const response: JsonApiResponse = JsonApiTransformer.createJsonApiResponse(
                     result,
                     modelName,
@@ -2523,17 +2523,17 @@ export class ExpressRouter {
                     }
                 );
                 
-                // metadata 객체 생성 - 기존 헬퍼 함수 사용
+                // metadata 객체 ?�성 - 기존 ?�퍼 ?�수 ?�용
                 const metadata = CrudResponseFormatter.createPaginationMeta(
-                    [result], // 생성된 단일 항목을 배열로 감싸서 전달
-                    1,        // total count는 1
-                    undefined, // page 파라미터 없음 (단일 생성)
+                    [result], // ?�성???�일 ??��??배열�?감싸???�달
+                    1,        // total count??1
+                    undefined, // page ?�라미터 ?�음 (?�일 ?�성)
                     'create',
-                    undefined, // includedRelations 없음
-                    undefined  // queryParams 없음
+                    undefined, // includedRelations ?�음
+                    undefined  // queryParams ?�음
                 );
                 
-                // BigInt와 DATE 타입 직렬화 처리
+                // BigInt?� DATE ?�??직렬??처리
                 const serializedResponse = serialize({ ...response, metadata });
                 
                 res.status(201).json(serializedResponse);
@@ -2548,7 +2548,7 @@ export class ExpressRouter {
             }
         };
 
-        // Validation이 있는 경우
+        // Validation???�는 경우
         if (options?.validation?.create) {
             const validationMiddlewares = CustomRequestHandler.withValidation(
                 options.validation.create,
@@ -2561,7 +2561,7 @@ export class ExpressRouter {
                 this.router.post('/', ...validationMiddlewares);
             }
         } else {
-            // 일반 핸들러
+            // ?�반 ?�들??
             if (middlewares.length > 0) {
                 this.router.post('/', ...middlewares, this.wrapHandler(handler));
             } else {
@@ -2569,7 +2569,7 @@ export class ExpressRouter {
             }
         }
 
-        // 문서화 등록
+        // 문서???�록
         this.registerDocumentation('POST', '/', {
             summary: `Create new ${modelName} (JSON:API)`,
             parameters: {
@@ -2611,14 +2611,14 @@ export class ExpressRouter {
     }
 
     /**
-     * Atomic Operations 엔드포인트 설정 (JSON:API Extension)
+     * Atomic Operations ?�드?�인???�정 (JSON:API Extension)
      */
     private setupAtomicOperationsRoute(client: any, modelName: string, options?: any): void {
         const handler: HandlerFunction = async (req, res, injected, repo, db) => {
             try {
                 res.setHeader('Content-Type', 'application/vnd.api+json; ext="https://jsonapi.org/ext/atomic"');
                 
-                // Content-Type 검증 (atomic extension 필요)
+                // Content-Type 검�?(atomic extension ?�요)
                 // const contentType = req.get('Content-Type');
                 // if (!contentType || !contentType.includes('application/vnd.api+json') || !contentType.includes('ext="https://jsonapi.org/ext/atomic"')) {
                 //     const errorResponse = this.formatJsonApiError(
@@ -2630,13 +2630,14 @@ export class ExpressRouter {
                 //     return res.status(415).json(errorResponse);
                 // }
 
-                // 요청 구조 검증
+                // ?�청 구조 검�?
                 if (!req.body || !req.body['atomic:operations']) {
                     const errorResponse = this.formatJsonApiError(
                         new Error('Request must contain atomic:operations'),
                         'INVALID_REQUEST',
                         400,
-                        req.path
+                        req.path,
+                        req.method
                     );
                     return res.status(400).json(errorResponse);
                 }
@@ -2644,7 +2645,7 @@ export class ExpressRouter {
                 const operations = req.body['atomic:operations'];
                 const results: (any | null)[] = [];
 
-                // 트랜잭션으로 모든 작업 실행
+                // ?�랜??��?�로 모든 ?�업 ?�행
                 await client.$transaction(async (tx: any) => {
                     for (const operation of operations) {
                         const result = await this.executeAtomicOperation(tx, operation, modelName, options, req);
@@ -2674,7 +2675,7 @@ export class ExpressRouter {
     }
 
     /**
-     * 단일 원자적 작업 실행
+     * ?�일 ?�자???�업 ?�행
      */
     private async executeAtomicOperation(
         tx: any, 
@@ -2731,7 +2732,7 @@ export class ExpressRouter {
                 }
 
                 if (operation.ref.relationship) {
-                    // 관계 제거
+                    // 관�??�거
                     const relationshipData: any = {};
                     relationshipData[operation.ref.relationship] = { disconnect: true };
                     
@@ -2740,7 +2741,7 @@ export class ExpressRouter {
                         data: relationshipData
                     });
                 } else {
-                    // 리소스 제거
+                    // 리소???�거
                     await tx[modelName].delete({
                         where: { id: operation.ref.id }
                     });
@@ -2753,10 +2754,10 @@ export class ExpressRouter {
     }
 
     /**
-     * JSON:API 고급 에러 검증
+     * JSON:API 고급 ?�러 검�?
      */
     private validateJsonApiResource(data: any, expectedType: string, req: any, res: any, isUpdate: boolean = false): boolean {
-        // 리소스 객체 구조 검증
+        // 리소??객체 구조 검�?
         if (!data || typeof data !== 'object') {
             const errorResponse = this.formatJsonApiError(
                 new Error('Resource must be an object'),
@@ -2768,7 +2769,7 @@ export class ExpressRouter {
             return false;
         }
 
-        // 타입 필드 검증
+        // ?�???�드 검�?
         // if (!data.type || typeof data.type !== 'string') {
         //     const errorResponse = this.formatJsonApiError(
         //         new Error('Resource must have a type field'),
@@ -2780,7 +2781,7 @@ export class ExpressRouter {
         //     return false;
         // }
 
-        // 타입 일치 검증
+        // ?�???�치 검�?
         // if (data.type !== expectedType) {
         //     const errorResponse = this.formatJsonApiError(
         //         new Error(`Resource type "${data.type}" does not match expected type "${expectedType}"`),
@@ -2792,7 +2793,7 @@ export class ExpressRouter {
         //     return false;
         // }
 
-        // 업데이트 시 ID 필드 검증
+        // ?�데?�트 ??ID ?�드 검�?
         if (isUpdate) {
             if (!data.id) {
                 const errorResponse = this.formatJsonApiError(
@@ -2805,7 +2806,7 @@ export class ExpressRouter {
                 return false;
             }
 
-            // URL의 ID와 본문의 ID 일치 검증
+            // URL??ID?� 본문??ID ?�치 검�?
             const urlId = req.params.id || req.params.identifier;
             if (urlId && data.id !== urlId) {
                 const errorResponse = this.formatJsonApiError(
@@ -2819,7 +2820,7 @@ export class ExpressRouter {
             }
         }
 
-        // attributes와 relationships 검증
+        // attributes?� relationships 검�?
         if (data.attributes && typeof data.attributes !== 'object') {
             const errorResponse = this.formatJsonApiError(
                 new Error('Resource attributes must be an object'),
@@ -2846,7 +2847,7 @@ export class ExpressRouter {
     }
 
     /**
-     * Content Negotiation 헬퍼 - JSON:API 스펙 준수
+     * Content Negotiation ?�퍼 - JSON:API ?�펙 준??
      */
     // private validateJsonApiContentType(req: any, res: any): boolean {
     //     const contentType = req.get('Content-Type');
@@ -2862,7 +2863,7 @@ export class ExpressRouter {
     //         return false;
     //     }
 
-    //     // 지원하지 않는 미디어 타입 파라미터 검증
+    //     // 지?�하지 ?�는 미디???�???�라미터 검�?
     //     if (contentType) {
     //         const mediaTypeParams = this.parseMediaTypeParameters(contentType);
     //         for (const param of Object.keys(mediaTypeParams)) {
@@ -2883,7 +2884,7 @@ export class ExpressRouter {
     // }
 
     /**
-     * 미디어 타입 파라미터 파싱
+     * 미디???�???�라미터 ?�싱
      */
     private parseMediaTypeParameters(contentType: string): Record<string, string> {
         const params: Record<string, string> = {};
@@ -2900,7 +2901,7 @@ export class ExpressRouter {
     }
 
     /**
-     * PATCH 부분 업데이트 전략 처리
+     * PATCH 부�??�데?�트 ?�략 처리
      */
     private async applyPatchStrategy(
         existingData: any,
@@ -2911,19 +2912,19 @@ export class ExpressRouter {
             return newData;
         }
 
-        // merge 전략: 기존 데이터와 새 데이터를 병합
+        // merge ?�략: 기존 ?�이?��? ???�이?��? 병합
         const mergedData = { ...existingData };
         
         Object.keys(newData).forEach(key => {
             if (newData[key] !== undefined) {
                 if (typeof newData[key] === 'object' && newData[key] !== null && !Array.isArray(newData[key])) {
-                    // 객체인 경우 재귀적으로 병합
+                    // 객체??경우 ?��??�으�?병합
                     mergedData[key] = {
                         ...(mergedData[key] || {}),
                         ...newData[key]
                     };
                 } else {
-                    // 원시값 또는 배열인 경우 교체
+                    // ?�시�??�는 배열??경우 교체
                     mergedData[key] = newData[key];
                 }
             }
@@ -2933,9 +2934,9 @@ export class ExpressRouter {
     }
 
     /**
-     * JSON:API 관계 데이터 처리 - 완전한 JSON:API 명세 준수
-     * 생성/수정 시 관계 데이터를 Prisma 형식으로 변환
-     * 기존 리소스 연결과 새 리소스 생성을 모두 지원
+     * JSON:API 관�??�이??처리 - ?�전??JSON:API 명세 준??
+     * ?�성/?�정 ??관�??�이?��? Prisma ?�식?�로 변??
+     * 기존 리소???�결�???리소???�성??모두 지??
      */
     private async processRelationships(
         data: any, 
@@ -2948,26 +2949,26 @@ export class ExpressRouter {
         
         for (const [relationName, relationshipData] of Object.entries(relationships)) {
             if (relationshipData.data !== undefined) {
-                // null인 경우 - 관계 제거 (업데이트 시에만)
+                // null??경우 - 관�??�거 (?�데?�트 ?�에�?
                 if (relationshipData.data === null) {
                     if (isUpdate) {
                         processedData[relationName] = {
                             disconnect: true
                         };
                     }
-                    // 생성 시에는 null 관계를 무시
+                    // ?�성 ?�에??null 관계�? 무시
                 }
-                // 배열인 경우 - 일대다 관계
+                // 배열??경우 - ?��???관�?
                 else if (Array.isArray(relationshipData.data)) {
                     if (relationshipData.data.length === 0) {
-                        // 빈 배열 - 모든 관계 제거 (업데이트 시에만)
+                        // �?배열 - 모든 관�??�거 (?�데?�트 ?�에�?
                         if (isUpdate) {
                             processedData[relationName] = {
                                 set: []
                             };
                         }
                     } else {
-                        // 관계 데이터 처리
+                        // 관�??�이??처리
                         const connectIds = [];
                         const createData = [];
                         
@@ -2978,9 +2979,9 @@ export class ExpressRouter {
                                 throw new Error(`Invalid relationship data: missing type in ${relationName}`);
                             }
                             
-                            // 기존 리소스 연결 (id가 있는 경우)
+                            // 기존 리소???�결 (id가 ?�는 경우)
                             if (item.id) {
-                                // 관계 리소스가 실제로 존재하는지 검증 (선택적)
+                                // 관�?리소?��? ?�제�?존재?�는지 검�?(?�택??
                                 const relatedModel = this.getModelNameFromResourceType(item.type);
                                 if (relatedModel) {
                                     try {
@@ -2997,7 +2998,7 @@ export class ExpressRouter {
                                 
                                 connectIds.push({ id: item.id });
                             }
-                            // 새 리소스 생성 (attributes가 있는 경우)
+                            // ??리소???�성 (attributes가 ?�는 경우)
                             else if (this.hasAttributes(item)) {
                                 // console.log(`Creating new resource for ${relationName} with attributes:`, item.attributes);
                                 createData.push(item.attributes);
@@ -3007,7 +3008,7 @@ export class ExpressRouter {
                             }
                         }
                         
-                        // Prisma 관계 데이터 구성
+                        // Prisma 관�??�이??구성
                         const relationshipConfig: any = {};
                         
                         if (connectIds.length > 0) {
@@ -3022,7 +3023,7 @@ export class ExpressRouter {
                             relationshipConfig.create = createData;
                         }
                         
-                        // set 작업은 업데이트 시에만 사용 (기존 관계를 완전히 대체)
+                        // set ?�업?� ?�데?�트 ?�에�??�용 (기존 관계�? ?�전???��?
                         if (isUpdate && connectIds.length > 0 && createData.length === 0) {
                             processedData[relationName] = {
                                 set: connectIds
@@ -3032,15 +3033,15 @@ export class ExpressRouter {
                         }
                     }
                 }
-                // 단일 객체인 경우 - 일대일 관계
+                // ?�일 객체??경우 - ?��???관�?
                 else if (typeof relationshipData.data === 'object') {
                     if (!relationshipData.data.type) {
                         throw new Error(`Invalid relationship data: missing type in ${relationName}`);
                     }
                     
-                    // 기존 리소스 연결
+                    // 기존 리소???�결
                     if (relationshipData.data.id) {
-                        // 관계 리소스가 실제로 존재하는지 검증 (선택적)
+                        // 관�?리소?��? ?�제�?존재?�는지 검�?(?�택??
                         const relatedModel = this.getModelNameFromResourceType(relationshipData.data.type);
                         if (relatedModel) {
                             try {
@@ -3059,7 +3060,7 @@ export class ExpressRouter {
                             connect: { id: relationshipData.data.id }
                         };
                     }
-                    // 새 리소스 생성
+                    // ??리소???�성
                     else if (this.hasAttributes(relationshipData.data)) {
                         processedData[relationName] = {
                             create: relationshipData.data.attributes
@@ -3075,7 +3076,7 @@ export class ExpressRouter {
     }
 
     /**
-     * 객체가 attributes를 가지고 있는지 확인하는 타입 가드
+     * 객체가 attributes�?가지�??�는지 ?�인?�는 ?�??가??
      */
     private hasAttributes(obj: any): obj is JsonApiResource {
         const result = obj && typeof obj === 'object' && 'attributes' in obj && obj.attributes != null;
@@ -3084,27 +3085,27 @@ export class ExpressRouter {
     }
 
     /**
-     * 리소스 타입에서 모델명을 추론하는 헬퍼 메서드
+     * 리소???�?�에??모델명을 추론?�는 ?�퍼 메서??
      */
     private getModelNameFromResourceType(resourceType: string): string | null {
-        // 캐멀케이스로 변환 (orderItem -> OrderItem)
+        // 캐�?케?�스�?변??(orderItem -> OrderItem)
         const pascalCase = resourceType
             .split(/[-_]/)
             .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
             .join('');
         
-        // 복수형 -> 단수형 변환
+        // 복수??-> ?�수??변??
         if (pascalCase.endsWith('ies')) {
             return pascalCase.slice(0, -3) + 'y'; // Categories -> Category
         } else if (pascalCase.endsWith('s') && !pascalCase.endsWith('ss')) {
             return pascalCase.slice(0, -1); // Users -> User, Orders -> Order
         }
         
-        return pascalCase; // OrderItem -> OrderItem (단수형 그대로)
+        return pascalCase; // OrderItem -> OrderItem (?�수??그�?�?
     }
 
     /**
-     * UPDATE 라우트 설정 (PUT /:identifier, PATCH /:identifier) - JSON:API 준수
+     * UPDATE ?�우???�정 (PUT /:identifier, PATCH /:identifier) - JSON:API 준??
      */
     private setupUpdateRoute(
         client: any, 
@@ -3117,23 +3118,23 @@ export class ExpressRouter {
         
         const handler: HandlerFunction = async (req, res, injected, repo, db) => {
             try {
-                // JSON:API Content-Type 헤더 설정
+                // JSON:API Content-Type ?�더 ?�정
                 res.setHeader('Content-Type', 'application/vnd.api+json');
                 
-                // Content Negotiation 검증
+                // Content Negotiation 검�?
                 // if (!this.validateJsonApiContentType(req, res)) {
                 //     return;
                 // }
                 
-                // 파라미터 추출 및 검증
+                // ?�라미터 추출 �?검�?
                 const extractResult = this.extractAndParsePrimaryKey(req, res, primaryKey, primaryKeyParser, modelName);
-                if (!extractResult.success) return; // 에러 응답은 헬퍼 메서드에서 처리
+                if (!extractResult.success) return; // ?�러 ?�답?� ?�퍼 메서?�에??처리
 
                 const { parsedIdentifier } = extractResult;
 
-                // JSON:API 요청 형식 검증
+                // JSON:API ?�청 ?�식 검�?
                 if (!req.body || !req.body.data) {
-                    // 리소스 타입을 동적으로 결정
+                    // 리소???�?�을 ?�적?�로 결정
                     const routeResourceType = req.baseUrl.split('/').filter(Boolean).pop() || modelName.toLowerCase();
                     const resourceType = options?.resourceType || routeResourceType;
                     
@@ -3143,7 +3144,7 @@ export class ExpressRouter {
                             id: String(parsedIdentifier),
                             attributes: {
                                 // "fieldName": "fieldValue"
-                                // 예: "email": "user@example.com"
+                                // ?? "email": "user@example.com"
                             }
                         }
                     };
@@ -3160,19 +3161,19 @@ export class ExpressRouter {
 
                 const { data: requestData } = req.body;
                 
-                // 리소스 타입 검증 (라우트 경로에서 추출 또는 옵션 사용)
+                // 리소???�??검�?(?�우??경로?�서 추출 ?�는 ?�션 ?�용)
                 const routeResourceType = req.baseUrl.split('/').filter(Boolean).pop() || modelName.toLowerCase();
                 const expectedType = options?.resourceType || routeResourceType;
 
-                // JSON:API 리소스 구조 검증 (업데이트용)
+                // JSON:API 리소??구조 검�?(?�데?�트??
                 if (!this.validateJsonApiResource(requestData, expectedType, req, res, true)) {
                     return;
                 }
 
-                // attributes에서 데이터 추출
+                // attributes?�서 ?�이??추출
                 let data = requestData.attributes || {};
 
-                // 관계 데이터 처리 (relationships가 있는 경우)
+                // 관�??�이??처리 (relationships가 ?�는 경우)
                 if (requestData.relationships) {
                     try {
                         data = await this.processRelationships(
@@ -3180,7 +3181,7 @@ export class ExpressRouter {
                             requestData.relationships, 
                             client, 
                             modelName,
-                            true // 업데이트 모드
+                            true // ?�데?�트 모드
                         );
                     } catch (relationshipError: any) {
                         const errorResponse = this.formatJsonApiError(
@@ -3193,10 +3194,10 @@ export class ExpressRouter {
                     }
                 }
 
-                // 빈 값이나 null 값들 정리만 수행
+                // �?값이??null 값들 ?�리�??�행
                 data = this.cleanEmptyValues(data);
 
-                // Before hook 실행
+                // Before hook ?�행
                 if (options?.hooks?.beforeUpdate) {
                     data = await options.hooks.beforeUpdate(data, req);
                 }
@@ -3206,15 +3207,15 @@ export class ExpressRouter {
                     data
                 });
 
-                // After hook 실행
+                // After hook ?�행
                 if (options?.hooks?.afterUpdate) {
                     await options.hooks.afterUpdate(result, req);
                 }
 
-                // Base URL 생성
+                // Base URL ?�성
                 const baseUrl = `${req.protocol}://${req.get('host')}${req.baseUrl}`;
 
-                // JSON:API 응답 생성
+                // JSON:API ?�답 ?�성
                 const response: JsonApiResponse = JsonApiTransformer.createJsonApiResponse(
                     result,
                     modelName,
@@ -3225,17 +3226,17 @@ export class ExpressRouter {
                     }
                 );
                 
-                // metadata 객체 생성 - 기존 헬퍼 함수 사용
+                // metadata 객체 ?�성 - 기존 ?�퍼 ?�수 ?�용
                 const metadata = CrudResponseFormatter.createPaginationMeta(
-                    [result], // 수정된 단일 항목을 배열로 감싸서 전달
-                    1,        // total count는 1
-                    undefined, // page 파라미터 없음 (단일 수정)
+                    [result], // ?�정???�일 ??��??배열�?감싸???�달
+                    1,        // total count??1
+                    undefined, // page ?�라미터 ?�음 (?�일 ?�정)
                     'update',
-                    undefined, // includedRelations 없음
-                    undefined  // queryParams 없음
+                    undefined, // includedRelations ?�음
+                    undefined  // queryParams ?�음
                 );
                 
-                // BigInt와 DATE 타입 직렬화 처리
+                // BigInt?� DATE ?�??직렬??처리
                 const serializedResponse = serialize({ ...response, metadata });
                 
                 res.json(serializedResponse);
@@ -3250,7 +3251,7 @@ export class ExpressRouter {
             }
         };
 
-        // PUT과 PATCH 모두 등록
+        // PUT�?PATCH 모두 ?�록
         const routePath = `/:${primaryKey}`;
         const registerMethod = (method: 'put' | 'patch') => {
             if (options?.validation?.update) {
@@ -3276,7 +3277,7 @@ export class ExpressRouter {
         registerMethod('put');
         registerMethod('patch');
 
-        // 문서화 등록 (PUT/PATCH 동일) - JSON:API 형식
+        // 문서???�록 (PUT/PATCH ?�일) - JSON:API ?�식
         ['PUT', 'PATCH'].forEach(method => {
             this.registerDocumentation(method, routePath, {
                 summary: `Update ${modelName} by ${primaryKey} (JSON:API)`,
@@ -3330,7 +3331,7 @@ export class ExpressRouter {
 
 
     /**
-     * DESTROY 라우트 설정 (DELETE /:identifier) - JSON:API 준수
+     * DESTROY ?�우???�정 (DELETE /:identifier) - JSON:API 준??
      */
     private setupDestroyRoute(
         client: any, 
@@ -3345,53 +3346,53 @@ export class ExpressRouter {
         
         const handler: HandlerFunction = async (req, res, injected, repo, db) => {
             try {
-                // JSON:API Content-Type 헤더 설정
+                // JSON:API Content-Type ?�더 ?�정
                 res.setHeader('Content-Type', 'application/vnd.api+json');
                 
-                // Content Negotiation 검증 (DELETE 요청에 본문이 있는 경우)
+                // Content Negotiation 검�?(DELETE ?�청??본문???�는 경우)
                 if (req.body && Object.keys(req.body).length > 0) {
                     // if (!this.validateJsonApiContentType(req, res)) {
                     //     return;
                     // }
                 }
                 
-                // 파라미터 추출 및 파싱
+                // ?�라미터 추출 �??�싱
                 const { success, parsedIdentifier } = this.extractAndParsePrimaryKey(
                     req, res, primaryKey, primaryKeyParser, modelName
                 );
-                if (!success) return; // 에러 응답은 이미 헬퍼에서 처리됨
+                if (!success) return; // ?�러 ?�답?� ?��? ?�퍼?�서 처리??
 
-                // Before hook 실행
+                // Before hook ?�행
                 if (options?.hooks?.beforeDestroy) {
                     await options.hooks.beforeDestroy(parsedIdentifier, req);
                 }
 
                 if (isSoftDelete) {
-                    // Soft Delete: 삭제 시간 설정
+                    // Soft Delete: ??�� ?�간 ?�정
                     const result = await client[modelName].update({
                         where: { [primaryKey]: parsedIdentifier },
                         data: { [softDeleteField]: new Date() }
                     });
 
-                    // After hook 실행
+                    // After hook ?�행
                     if (options?.hooks?.afterDestroy) {
                         await options.hooks.afterDestroy(parsedIdentifier, req);
                     }
 
-                    // metadata 객체 생성 - 기존 헬퍼 함수 사용
+                    // metadata 객체 ?�성 - 기존 ?�퍼 ?�수 ?�용
                     const metadata = CrudResponseFormatter.createPaginationMeta(
-                        [result], // 삭제된 단일 항목을 배열로 감싸서 전달
-                        1,        // total count는 1
-                        undefined, // page 파라미터 없음 (단일 삭제)
+                        [result], // ??��???�일 ??��??배열�?감싸???�달
+                        1,        // total count??1
+                        undefined, // page ?�라미터 ?�음 (?�일 ??��)
                         'soft_delete',
-                        undefined, // includedRelations 없음
-                        undefined  // queryParams 없음
+                        undefined, // includedRelations ?�음
+                        undefined  // queryParams ?�음
                     );
                     
-                    // soft delete 전용 필드 추가
-                    metadata.wasSoftDeleted = false; // 이전에는 삭제되지 않았음
+                    // soft delete ?�용 ?�드 추�?
+                    metadata.wasSoftDeleted = false; // ?�전?�는 ??��?��? ?�았??
 
-                    // JSON:API 준수 - 성공적인 soft delete 응답 (200 OK with meta)
+                    // JSON:API 준??- ?�공?�인 soft delete ?�답 (200 OK with meta)
                     const response = {
                         jsonapi: {
                             version: "1.1"
@@ -3406,7 +3407,7 @@ export class ExpressRouter {
                     
                     res.status(200).json(response);
                 } else {
-                    // 삭제 전 존재 여부 확인 (404 처리를 위해)
+                    // ??�� ??존재 ?��? ?�인 (404 처리�??�해)
                     const existingItem = await client[modelName].findUnique({
                         where: { [primaryKey]: parsedIdentifier },
                     });
@@ -3421,17 +3422,17 @@ export class ExpressRouter {
                         return res.status(404).json(errorResponse);
                     }
 
-                    // Hard Delete: 완전 삭제
+                    // Hard Delete: ?�전 ??��
                     await client[modelName].delete({
                         where: { [primaryKey]: parsedIdentifier }
                     });
 
-                    // After hook 실행
+                    // After hook ?�행
                     if (options?.hooks?.afterDestroy) {
                         await options.hooks.afterDestroy(parsedIdentifier, req);
                     }
 
-                    // JSON:API 삭제 성공 응답 (204 No Content)
+                    // JSON:API ??�� ?�공 ?�답 (204 No Content)
                     res.status(204).end();
                 }
                 
@@ -3445,7 +3446,7 @@ export class ExpressRouter {
             }
         };
 
-        // 미들웨어 등록
+        // 미들?�어 ?�록
         const routePath = `/:${primaryKey}`;
         if (middlewares.length > 0) {
             this.router.delete(routePath, ...middlewares, this.wrapHandler(handler));
@@ -3453,7 +3454,7 @@ export class ExpressRouter {
             this.router.delete(routePath, this.wrapHandler(handler));
         }
 
-        // 문서화 등록 - JSON:API 형식
+        // 문서???�록 - JSON:API ?�식
         const deleteDescription = isSoftDelete ? 
             `Soft delete ${modelName} by ${primaryKey} (JSON:API)` : 
             `Delete ${modelName} by ${primaryKey} (JSON:API)`;
@@ -3486,7 +3487,7 @@ export class ExpressRouter {
     }
 
     /**
-     * RECOVER 라우트 설정 (POST /:identifier/recover) - JSON:API 준수
+     * RECOVER ?�우???�정 (POST /:identifier/recover) - JSON:API 준??
      */
     private setupRecoverRoute(
         client: any, 
@@ -3499,30 +3500,30 @@ export class ExpressRouter {
         
         const handler: HandlerFunction = async (req, res, injected, repo, db) => {
             try {
-                // JSON:API Content-Type 헤더 설정
+                // JSON:API Content-Type ?�더 ?�정
                 res.setHeader('Content-Type', 'application/vnd.api+json');
                 
-                // 파라미터 추출 및 파싱
+                // ?�라미터 추출 �??�싱
                 const { success, parsedIdentifier } = this.extractAndParsePrimaryKey(
                     req, res, primaryKey, primaryKeyParser, modelName
                 );
-                if (!success) return; // 에러 응답은 이미 헬퍼에서 처리됨
+                if (!success) return; // ?�러 ?�답?� ?��? ?�퍼?�서 처리??
 
-                // Before hook 실행
+                // Before hook ?�행
                 if (options?.hooks?.beforeRecover) {
                     await options.hooks.beforeRecover(parsedIdentifier, req);
                 }
 
-                // 먼저 현재 상태 확인 (소프트 삭제된 상태인지 체크)
+                // 먼�? ?�재 ?�태 ?�인 (?�프????��???�태?��? 체크)
                 const existingItem = await client[modelName].findFirst({
                     where: { 
                         [primaryKey]: parsedIdentifier,
-                        deletedAt: { not: null } // 소프트 삭제된 항목만 조회
+                        deletedAt: { not: null } // ?�프????��????���?조회
                     }
                 });
 
                 if (!existingItem) {
-                    // 항목이 없거나 이미 복구된 상태
+                    // ??��???�거???��? 복구???�태
                     const activeItem = await client[modelName].findUnique({
                         where: { [primaryKey]: parsedIdentifier }
                     });
@@ -3546,31 +3547,31 @@ export class ExpressRouter {
                     }
                 }
 
-                // 복구 실행 (deletedAt을 null로 설정)
+                // 복구 ?�행 (deletedAt??null�??�정)
                 const result = await client[modelName].update({
                     where: { [primaryKey]: parsedIdentifier },
                     data: { deletedAt: null }
                 });
 
-                // After hook 실행
+                // After hook ?�행
                 if (options?.hooks?.afterRecover) {
                     await options.hooks.afterRecover(result, req);
                 }
 
-                // metadata 객체 생성 - 기존 헬퍼 함수 사용
+                // metadata 객체 ?�성 - 기존 ?�퍼 ?�수 ?�용
                 const metadata = CrudResponseFormatter.createPaginationMeta(
-                    [result], // 복구된 단일 항목을 배열로 감싸서 전달
-                    1,        // total count는 1
-                    undefined, // page 파라미터 없음 (단일 복구)
+                    [result], // 복구???�일 ??��??배열�?감싸???�달
+                    1,        // total count??1
+                    undefined, // page ?�라미터 ?�음 (?�일 복구)
                     'recover',
-                    undefined, // includedRelations 없음
-                    undefined  // queryParams 없음
+                    undefined, // includedRelations ?�음
+                    undefined  // queryParams ?�음
                 );
                 
-                // recover 전용 필드 추가
+                // recover ?�용 ?�드 추�?
                 metadata.wasSoftDeleted = true;
 
-                // JSON:API 응답 포맷
+                // JSON:API ?�답 ?�맷
                 const response = {
                     data: this.transformToJsonApiResource(result, modelName, req, primaryKey),
                     jsonapi: {
@@ -3583,7 +3584,7 @@ export class ExpressRouter {
                     metadata
                 };
                 
-                // BigInt와 DATE 타입 직렬화 처리
+                // BigInt?� DATE ?�??직렬??처리
                 const serializedResponse = serialize(response);
                 
                 res.json(serializedResponse);
@@ -3598,7 +3599,7 @@ export class ExpressRouter {
             }
         };
 
-        // Validation이 있는 경우
+        // Validation???�는 경우
         const routePath = `/:${primaryKey}/recover`;
         if (options?.validation?.recover) {
             const validationMiddlewares = CustomRequestHandler.withValidation(
@@ -3612,7 +3613,7 @@ export class ExpressRouter {
                 this.router.post(routePath, ...validationMiddlewares);
             }
         } else {
-            // 일반 핸들러
+            // ?�반 ?�들??
             if (middlewares.length > 0) {
                 this.router.post(routePath, ...middlewares, this.wrapHandler(handler));
             } else {
@@ -3620,7 +3621,7 @@ export class ExpressRouter {
             }
         }
 
-        // 문서화 등록 - JSON:API 형식
+        // 문서???�록 - JSON:API ?�식
         this.registerDocumentation('POST', routePath, {
             summary: `Recover soft-deleted ${modelName} by ${primaryKey} (JSON:API)`,
             parameters: {
@@ -3654,31 +3655,31 @@ export class ExpressRouter {
 
 
     /**
-     * JSON:API 리소스 객체로 변환하는 헬퍼 메서드
+     * JSON:API 리소??객체�?변?�하???�퍼 메서??
      */
     private transformToJsonApiResource(item: any, modelName: string, req: any, primaryKey: string = 'id'): any {
         const resourceType = modelName.toLowerCase();
         const baseUrl = `${req.protocol}://${req.get('host')}${req.baseUrl}`;
         
-        // Primary key 값 추출
+        // Primary key �?추출
         const id = item[primaryKey] || item.id || item.uuid || item._id || Object.values(item)[0];
         
-        // attributes에서 primary key와 관계 필드 제외
+        // attributes?�서 primary key?� 관�??�드 ?�외
         const attributes = { ...item };
         delete attributes[primaryKey];
         
-        // primaryKey가 'id'가 아닌 경우, 기존 'id' 필드는 attributes에 유지
-        // 다른 기본 ID 필드들은 제거 (중복 방지)
+        // primaryKey가 'id'가 ?�닌 경우, 기존 'id' ?�드??attributes???��?
+        // ?�른 기본 ID ?�드?��? ?�거 (중복 방�?)
         if (primaryKey !== 'uuid') delete attributes.uuid;
         if (primaryKey !== '_id') delete attributes._id;
         
-        // 관계 필드 분리
+        // 관�??�드 분리
         const relationships: any = {};
         const resourceAttributes: any = {};
         
         Object.keys(attributes).forEach(key => {
             const value = attributes[key];
-            // 배열이거나 객체이면서 id를 가진 경우 관계로 처리
+            // 배열?�거??객체?�면??id�?가�?경우 관계로 처리
             if (Array.isArray(value) || (value && typeof value === 'object' && value.id)) {
                 relationships[key] = {
                     links: {
@@ -3687,10 +3688,10 @@ export class ExpressRouter {
                     }
                 };
                 
-                // 관계 데이터가 포함된 경우
+                // 관�??�이?��? ?�함??경우
                 if (Array.isArray(value)) {
                     relationships[key].data = value.map((relItem: any) => ({
-                        type: key.slice(0, -1), // 복수형에서 단수형으로 (간단한 변환)
+                        type: key.slice(0, -1), // 복수?�에???�수?�으�?(간단??변??
                         id: relItem.id || relItem.uuid || relItem._id
                     }));
                 } else if (value.id) {
@@ -3713,7 +3714,7 @@ export class ExpressRouter {
             }
         };
         
-        // 관계가 있는 경우에만 relationships 필드 추가
+        // 관계�? ?�는 경우?�만 relationships ?�드 추�?
         if (Object.keys(relationships).length > 0) {
             resource.relationships = relationships;
         }
@@ -3722,31 +3723,31 @@ export class ExpressRouter {
     }
 
     /**
-     * 페이지네이션 URL 생성 헬퍼 메서드
+     * ?�이지?�이??URL ?�성 ?�퍼 메서??
      */
     private buildPaginationUrl(baseUrl: string, query: any, page: number, size: number): string {
         const params = new URLSearchParams();
         
-        // 기존 쿼리 파라미터 유지 (page 제외)
+        // 기존 쿼리 ?�라미터 ?��? (page ?�외)
         Object.keys(query).forEach(key => {
             if (!key.startsWith('page[')) {
                 const value = query[key];
-                // 객체나 배열인 경우 JSON.stringify로 직렬화하거나 무시
+                // 객체??배열??경우 JSON.stringify�?직렬?�하거나 무시
                 if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
                     params.append(key, String(value));
                 } else if (Array.isArray(value)) {
-                    // 배열인 경우 각 요소를 개별적으로 추가
+                    // 배열??경우 �??�소�?개별?�으�?추�?
                     value.forEach(item => {
                         if (typeof item === 'string' || typeof item === 'number' || typeof item === 'boolean') {
                             params.append(key, String(item));
                         }
                     });
                 }
-                // 객체인 경우는 무시 (page 객체 등)
+                // 객체??경우??무시 (page 객체 ??
             }
         });
         
-        // 페이지네이션 파라미터 추가
+        // ?�이지?�이???�라미터 추�?
         params.append('page[number]', String(page));
         params.append('page[size]', String(size));
         
@@ -3754,7 +3755,7 @@ export class ExpressRouter {
     }
 
     /**
-     * 공통 JSON:API 기본 구조 생성 헬퍼
+     * 공통 JSON:API 기본 구조 ?�성 ?�퍼
      */
     private createBaseJsonApiStructure(): any {
         return {
@@ -3787,7 +3788,7 @@ export class ExpressRouter {
     }
 
     /**
-     * JSON:API 에러 형식으로 포맷하는 헬퍼 메서드 (통합 ErrorHandler 사용)
+     * JSON:API ?�러 ?�식?�로 ?�맷?�는 ?�퍼 메서??(?�합 ErrorHandler ?�용)
      */
     private formatJsonApiError(error: Error | unknown, code: string, status: number, path: string, method?: string): JsonApiErrorResponse {
         return ErrorHandler.handleError(error, {
@@ -3811,7 +3812,7 @@ export class ExpressRouter {
 
 
     /**
-     * 빈 값들 정리 (undefined, 빈 객체, 빈 배열 등)
+     * �?값들 ?�리 (undefined, �?객체, �?배열 ??
      */
     private cleanEmptyValues(data: any): any {
         const cleanedData = { ...data };
@@ -3819,21 +3820,21 @@ export class ExpressRouter {
         Object.keys(cleanedData).forEach(key => {
             const value = cleanedData[key];
             
-            // undefined 제거
+            // undefined ?�거
             if (value === undefined) {
                 delete cleanedData[key];
                 return;
             }
             
-            // 빈 객체 제거 (null이 아닌 경우)
+            // �?객체 ?�거 (null???�닌 경우)
             if (typeof value === 'object' && value !== null) {
                 if (Array.isArray(value)) {
-                    // 빈 배열 제거 (설정에 따라)
+                    // �?배열 ?�거 (?�정???�라)
                     if (value.length === 0) {
                         delete cleanedData[key];
                     }
                 } else {
-                    // 빈 객체 제거
+                    // �?객체 ?�거
                     if (Object.keys(value).length === 0) {
                         delete cleanedData[key];
                     }
@@ -3845,7 +3846,7 @@ export class ExpressRouter {
     }
 
     /**
-     * HTTP 상태 코드에 따른 에러 제목 반환
+     * HTTP ?�태 코드???�른 ?�러 ?�목 반환
      */
     private getErrorTitle(status: number): string {
         switch (status) {
@@ -3861,7 +3862,7 @@ export class ExpressRouter {
     }
 
     /**
-     * 요청에서 primary key 파라미터를 추출하고 파싱하는 헬퍼 메서드 - JSON:API 대응
+     * ?�청?�서 primary key ?�라미터�?추출?�고 ?�싱?�는 ?�퍼 메서??- JSON:API ?�??
      */
     private extractAndParsePrimaryKey(
         req: any, 
@@ -3870,7 +3871,7 @@ export class ExpressRouter {
         primaryKeyParser: (value: string) => any,
         modelName: string
     ): { success: boolean; parsedIdentifier?: any } {
-        // 파라미터 추출
+        // ?�라미터 추출
         let identifier: string;
         
         if (primaryKey !== 'id' && req.params[primaryKey]) {
@@ -3893,7 +3894,7 @@ export class ExpressRouter {
             }
         }
 
-        // 파라미터 유효성 검사
+        // ?�라미터 ?�효??검??
         if (!identifier || identifier.trim() === '') {
             const errorResponse = this.formatJsonApiError(
                 new Error(`Invalid ${primaryKey} parameter`),
@@ -3905,7 +3906,7 @@ export class ExpressRouter {
             return { success: false };
         }
 
-        // Primary key 파싱 시 에러 처리
+        // Primary key ?�싱 ???�러 처리
         try {
             const parsedIdentifier = primaryKeyParser(identifier);
             return { success: true, parsedIdentifier };
@@ -3923,14 +3924,14 @@ export class ExpressRouter {
 
 
     /**
-     * ID 파싱 헬퍼 (문자열을 숫자로 변환 시도)
+     * ID ?�싱 ?�퍼 (문자?�을 ?�자�?변???�도)
      */
     private parseId = (id: string): any => {
-        // 숫자인 경우 정수로 변환
+        // ?�자??경우 ?�수�?변??
         if (/^\d+$/.test(id)) {
             return parseInt(id, 10);
         }
-        // UUID 등의 경우 문자열 그대로 반환
+        // UUID ?�의 경우 문자??그�?�?반환
         return id;
     };
 
@@ -3939,7 +3940,7 @@ export class ExpressRouter {
 
 
     /**
-     * UUID 전용 파서 (검증 포함)
+     * UUID ?�용 ?�서 (검�??�함)
      */
     public static parseUuid = (uuid: string): string => {
         const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -3954,7 +3955,7 @@ export class ExpressRouter {
 
 
     /**
-     * 문자열 그대로 반환하는 파서
+     * 문자??그�?�?반환?�는 ?�서
      */
     public static parseString = (value: string): string => {
         return value;
@@ -3965,7 +3966,7 @@ export class ExpressRouter {
 
 
     /**
-     * 정수 전용 파서 (검증 포함)
+     * ?�수 ?�용 ?�서 (검�??�함)
      */
     public static parseInt = (value: string): number => {
         const parsed = parseInt(value, 10);
@@ -3976,7 +3977,7 @@ export class ExpressRouter {
     };
 
     /**
-     * 문서화 등록 헬퍼
+     * 문서???�록 ?�퍼
      */
     private registerDocumentation(method: string, path: string, config: any): void {
         if (this.basePath) {
@@ -4000,8 +4001,8 @@ export class ExpressRouter {
     }
 
     /**
-     * JSON:API Relationship 라우트 설정
-     * 관계 자체를 관리하는 라우트와 관련 리소스를 조회하는 라우트를 생성
+     * JSON:API Relationship ?�우???�정
+     * 관�??�체�?관리하???�우?��? 관??리소?��? 조회?�는 ?�우?��? ?�성
      */
     private setupRelationshipRoutes(
         client: any, 
@@ -4010,10 +4011,10 @@ export class ExpressRouter {
         primaryKey: string = 'id', 
         primaryKeyParser: (value: string) => any = ExpressRouter.parseString
     ): void {
-        // 현재는 기본적인 관계 조회 라우트만 구현
-        // 향후 확장 가능: POST, PATCH, DELETE for relationships
+        // ?�재??기본?�인 관�?조회 ?�우?�만 구현
+        // ?�후 ?�장 가?? POST, PATCH, DELETE for relationships
         
-        // GET /:identifier/:relationName - 관련 리소스 직접 조회
+        // GET /:identifier/:relationName - 관??리소??직접 조회
         this.router.get(`/:${primaryKey}/:relationName`, async (req, res) => {
             try {
                 res.setHeader('Content-Type', 'application/vnd.api+json');
@@ -4025,10 +4026,10 @@ export class ExpressRouter {
 
                 const relationName = req.params.relationName;
                 
-                // 쿼리 파라미터 파싱 (include, fields, sort, pagination 지원)
+                // 쿼리 ?�라미터 ?�싱 (include, fields, sort, pagination 지??
                 const queryParams = CrudQueryParser.parseQuery(req);
                 
-                // 기본 리소스 조회
+                // 기본 리소??조회
                 const item = await client[modelName].findUnique({
                     where: { [primaryKey]: parsedIdentifier },
                     include: { [relationName]: true }
@@ -4056,16 +4057,16 @@ export class ExpressRouter {
                     return res.status(404).json(errorResponse);
                 }
 
-                // Base URL 생성
+                // Base URL ?�성
                 const baseUrl = `${req.protocol}://${req.get('host')}${req.baseUrl}`;
                 
-                // 관계 리소스 타입 추론
+                // 관�?리소???�??추론
                 const relationResourceType = JsonApiTransformer.inferResourceTypeFromRelationship(
                     relationName, 
                     Array.isArray(relationData)
                 );
 
-                // JSON:API 응답 생성
+                // JSON:API ?�답 ?�성
                 const response: JsonApiResponse = JsonApiTransformer.createJsonApiResponse(
                     relationData,
                     relationResourceType,
@@ -4085,12 +4086,12 @@ export class ExpressRouter {
             } catch (error: any) {
                 console.error(`Related Resource Error for ${modelName}:`, error);
                 const { code, status } = ErrorFormatter.mapPrismaError(error);
-                const errorResponse = this.formatJsonApiError(error, code, status, req.path);
+                const errorResponse = this.formatJsonApiError(error, code, status, req.path, req.method);
                 res.status(status).json(errorResponse);
             }
         });
 
-        // GET /:identifier/relationships/:relationName - 관계 자체 조회
+        // GET /:identifier/relationships/:relationName - 관�??�체 조회
         this.router.get(`/:${primaryKey}/relationships/:relationName`, async (req, res) => {
             try {
                 res.setHeader('Content-Type', 'application/vnd.api+json');
@@ -4102,7 +4103,7 @@ export class ExpressRouter {
 
                 const relationName = req.params.relationName;
                 
-                // 기본 리소스 조회
+                // 기본 리소??조회
                 const item = await client[modelName].findUnique({
                     where: { [primaryKey]: parsedIdentifier },
                     include: { [relationName]: true }
@@ -4120,7 +4121,7 @@ export class ExpressRouter {
 
                 const relationData = item[relationName];
                 
-                // 관계 데이터를 JSON:API 형식으로 변환
+                // 관�??�이?��? JSON:API ?�식?�로 변??
                 let data = null;
                 if (relationData) {
                     if (Array.isArray(relationData)) {
@@ -4153,17 +4154,17 @@ export class ExpressRouter {
             } catch (error: any) {
                 console.error(`Relationship Error for ${modelName}:`, error);
                 const { code, status } = ErrorFormatter.mapPrismaError(error);
-                const errorResponse = this.formatJsonApiError(error, code, status, req.path);
+                const errorResponse = this.formatJsonApiError(error, code, status, req.path, req.method);
                 res.status(status).json(errorResponse);
             }
         });
 
-        // POST /:identifier/relationships/:relationName - 관계 추가
+        // POST /:identifier/relationships/:relationName - 관�?추�?
         this.router.post(`/:${primaryKey}/relationships/:relationName`, async (req, res) => {
             try {
                 res.setHeader('Content-Type', 'application/vnd.api+json');
                 
-                // Content-Type 검증
+                // Content-Type 검�?
                 const contentType = req.get('Content-Type');
                 if (contentType && !contentType.includes('application/vnd.api+json')) {
                     const errorResponse = this.formatJsonApiError(
@@ -4211,17 +4212,17 @@ export class ExpressRouter {
             } catch (error: any) {
                 console.error(`Relationship Update Error for ${modelName}:`, error);
                 const { code, status } = ErrorFormatter.mapPrismaError(error);
-                const errorResponse = this.formatJsonApiError(error, code, status, req.path);
+                const errorResponse = this.formatJsonApiError(error, code, status, req.path, req.method);
                 res.status(status).json(errorResponse);
             }
         });
 
-        // PATCH /:identifier/relationships/:relationName - 관계 완전 교체
+        // PATCH /:identifier/relationships/:relationName - 관�??�전 교체
         this.router.patch(`/:${primaryKey}/relationships/:relationName`, async (req, res) => {
             try {
                 res.setHeader('Content-Type', 'application/vnd.api+json');
                 
-                // Content-Type 검증
+                // Content-Type 검�?
                 const contentType = req.get('Content-Type');
                 if (contentType && !contentType.includes('application/vnd.api+json')) {
                     const errorResponse = this.formatJsonApiError(
@@ -4254,17 +4255,17 @@ export class ExpressRouter {
                 let updateData;
 
                 if (relationshipData === null) {
-                    // 관계 제거
+                    // 관�??�거
                     updateData = { [relationName]: { disconnect: true } };
                 } else if (Array.isArray(relationshipData)) {
-                    // 일대다 관계 교체
+                    // ?��???관�?교체
                     updateData = { 
                         [relationName]: { 
                             set: relationshipData.map((item: any) => ({ id: item.id })) 
                         } 
                     };
                 } else {
-                    // 일대일 관계 교체
+                    // ?��???관�?교체
                     updateData = { [relationName]: { connect: { id: relationshipData.id } } };
                 }
 
@@ -4278,17 +4279,17 @@ export class ExpressRouter {
             } catch (error: any) {
                 console.error(`Relationship Replace Error for ${modelName}:`, error);
                 const { code, status } = ErrorFormatter.mapPrismaError(error);
-                const errorResponse = this.formatJsonApiError(error, code, status, req.path);
+                const errorResponse = this.formatJsonApiError(error, code, status, req.path, req.method);
                 res.status(status).json(errorResponse);
             }
         });
 
-        // DELETE /:identifier/relationships/:relationName - 관계 제거
+        // DELETE /:identifier/relationships/:relationName - 관�??�거
         this.router.delete(`/:${primaryKey}/relationships/:relationName`, async (req, res) => {
             try {
                 res.setHeader('Content-Type', 'application/vnd.api+json');
                 
-                // Content-Type 검증
+                // Content-Type 검�?
                 const contentType = req.get('Content-Type');
                 if (contentType && !contentType.includes('application/vnd.api+json')) {
                     const errorResponse = this.formatJsonApiError(
@@ -4336,12 +4337,12 @@ export class ExpressRouter {
             } catch (error: any) {
                 console.error(`Relationship Delete Error for ${modelName}:`, error);
                 const { code, status } = ErrorFormatter.mapPrismaError(error);
-                const errorResponse = this.formatJsonApiError(error, code, status, req.path);
+                const errorResponse = this.formatJsonApiError(error, code, status, req.path, req.method);
                 res.status(status).json(errorResponse);
             }
         });
 
-        // GET /:identifier/:relationName - 관련 리소스 조회
+        // GET /:identifier/:relationName - 관??리소??조회
         this.router.get(`/:${primaryKey}/:relationName`, async (req, res) => {
             try {
                 res.setHeader('Content-Type', 'application/vnd.api+json');
@@ -4354,7 +4355,7 @@ export class ExpressRouter {
                 const relationName = req.params.relationName;
                 const queryParams = CrudQueryParser.parseQuery(req);
                 
-                // 기본 리소스 조회
+                // 기본 리소??조회
                 const item = await client[modelName].findUnique({
                     where: { [primaryKey]: parsedIdentifier },
                     include: { [relationName]: true }
@@ -4373,7 +4374,7 @@ export class ExpressRouter {
                 const relationData = item[relationName];
                 
                 if (!relationData) {
-                    // 관계가 없는 경우 빈 데이터 반환
+                    // 관계�? ?�는 경우 �??�이??반환
                     const response = {
                         data: Array.isArray(relationData) ? [] : null,
                         jsonapi: {
@@ -4383,16 +4384,16 @@ export class ExpressRouter {
                     return res.json(response);
                 }
 
-                // Base URL 생성
+                // Base URL ?�성
                 const baseUrl = `${req.protocol}://${req.get('host')}${req.baseUrl}`;
                 const resourceType = JsonApiTransformer.inferResourceTypeFromRelationship(relationName, Array.isArray(relationData));
 
-                // JSON:API 응답 생성
+                // JSON:API ?�답 ?�성
                 const response: JsonApiResponse = JsonApiTransformer.createJsonApiResponse(
                     relationData,
                     resourceType,
                     {
-                        primaryKey: 'id', // 관련 리소스는 기본적으로 id 사용
+                        primaryKey: 'id', // 관??리소?�는 기본?�으�?id ?�용
                         fields: queryParams.fields,
                         baseUrl
                     }
@@ -4403,7 +4404,7 @@ export class ExpressRouter {
             } catch (error: any) {
                 console.error(`Related Resource Error for ${modelName}:`, error);
                 const { code, status } = ErrorFormatter.mapPrismaError(error);
-                const errorResponse = this.formatJsonApiError(error, code, status, req.path);
+                const errorResponse = this.formatJsonApiError(error, code, status, req.path, req.method);
                 res.status(status).json(errorResponse);
             }
         });
@@ -4416,11 +4417,11 @@ export class ExpressRouter {
     public build(): Router {
         const router = this.router;
 
-        // ExpressRouter 인스턴스에 대한 참조를 유지하여 setBasePath 호출이 가능하도록 함
+        // ExpressRouter ?�스?�스???�??참조�??��??�여 setBasePath ?�출??가?�하?�록 ??
         (router as any).setBasePath = (path: string) => {
             this.setBasePath(path);
             return router;
         };
-        return router; // 최종 Express Router 인스턴스 반환
+        return router; // 최종 Express Router ?�스?�스 반환
     }
 }

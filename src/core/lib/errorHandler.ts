@@ -48,6 +48,7 @@ export class ErrorHandler {
         code?: string;
         status?: number;
         title?: string;
+        method?: string;
         source?: {
           pointer?: string;
           parameter?: string;
@@ -512,7 +513,7 @@ export class ErrorHandler {
         errorCount: 1,
         requestInfo: {
           path: context?.path || 'unknown',
-          method: normalizedError.method || 'UNKNOWN'
+          method: context?.method || normalizedError.method || 'UNKNOWN'
         }
       },
       links: {

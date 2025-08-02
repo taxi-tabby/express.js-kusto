@@ -2034,7 +2034,8 @@ export class ExpressRouter {
                         new Error('Pagination is required. You must specify either page-based pagination (page[number] & page[size]) or cursor-based pagination (page[cursor] & page[size])'),
                         ERROR_CODES.PAGINATION_REQUIRED,
                         400,
-                        req.path
+                        req.path,
+                        req.method
                     );
                     return res.status(400).json(errorResponse);
                 }
@@ -2045,7 +2046,8 @@ export class ExpressRouter {
                         new Error('Invalid pagination parameters. Specify either page[number] for offset-based pagination or page[cursor] for cursor-based pagination'),
                         ERROR_CODES.INVALID_PAGINATION_PARAMS,
                         400,
-                        req.path
+                        req.path,
+                        req.method
                     );
                     return res.status(400).json(errorResponse);
                 }
@@ -2056,7 +2058,8 @@ export class ExpressRouter {
                         new Error('page[size] parameter is required and must be greater than 0'),
                         ERROR_CODES.INVALID_PAGE_SIZE,
                         400,
-                        req.path
+                        req.path,
+                        req.method
                     );
                     return res.status(400).json(errorResponse);
                 }
@@ -2185,7 +2188,7 @@ export class ExpressRouter {
                 console.error(`CRUD Index Error for ${modelName}:`, error);
                 
                 const { code, status } = ErrorFormatter.mapPrismaError(error);
-                const errorResponse = this.formatJsonApiError(error, code, status, req.path);
+                const errorResponse = this.formatJsonApiError(error, code, status, req.path, req.method);
                 
                 res.status(status).json(errorResponse);
             }
@@ -2293,7 +2296,8 @@ export class ExpressRouter {
                                 new Error(`${modelName} has been deleted`),
                                 'RESOURCE_DELETED',
                                 410,
-                                req.path
+                                req.path,
+                                req.method
                             );
                             return res.status(410).json(errorResponse);
                         }
@@ -2303,7 +2307,8 @@ export class ExpressRouter {
                         new Error(`${modelName} not found`),
                         'NOT_FOUND',
                         404,
-                        req.path
+                        req.path,
+                        req.method
                     );
                     return res.status(404).json(errorResponse);
                 }
@@ -2359,7 +2364,7 @@ export class ExpressRouter {
                 console.error(`CRUD Show Error for ${modelName}:`, error);
                 
                 const { code, status } = ErrorFormatter.mapPrismaError(error);
-                const errorResponse = this.formatJsonApiError(error, code, status, req.path);
+                const errorResponse = this.formatJsonApiError(error, code, status, req.path, req.method);
                 
                 res.status(status).json(errorResponse);
             }
@@ -2438,7 +2443,8 @@ export class ExpressRouter {
                         new Error('Request must contain a data object'),
                         'INVALID_REQUEST',
                         400,
-                        req.path
+                        req.path,
+                        req.method
                     );
                     return res.status(400).json(errorResponse);
                 }
@@ -2482,7 +2488,8 @@ export class ExpressRouter {
                             relationshipError,
                             'INVALID_RELATIONSHIP',
                             422,
-                            req.path
+                            req.path,
+                            req.method
                         );
                         return res.status(422).json(errorResponse);
                     }
@@ -2535,7 +2542,7 @@ export class ExpressRouter {
                 console.error(`CRUD Create Error for ${modelName}:`, error);
                 
                 const { code, status } = ErrorFormatter.mapPrismaError(error);
-                const errorResponse = this.formatJsonApiError(error, code, status, req.path);
+                const errorResponse = this.formatJsonApiError(error, code, status, req.path, req.method);
                 
                 res.status(status).json(errorResponse);
             }
@@ -2658,7 +2665,7 @@ export class ExpressRouter {
             } catch (error: any) {
                 console.error(`Atomic Operations Error for ${modelName}:`, error);
                 const { code, status } = ErrorFormatter.mapPrismaError(error);
-                const errorResponse = this.formatJsonApiError(error, code, status, req.path);
+                const errorResponse = this.formatJsonApiError(error, code, status, req.path, req.method);
                 res.status(status).json(errorResponse);
             }
         };
@@ -3237,7 +3244,7 @@ export class ExpressRouter {
                 console.error(`CRUD Update Error for ${modelName}:`, error);
                 
                 const { code, status } = ErrorFormatter.mapPrismaError(error);
-                const errorResponse = this.formatJsonApiError(error, code, status, req.path);
+                const errorResponse = this.formatJsonApiError(error, code, status, req.path, req.method);
                 
                 res.status(status).json(errorResponse);
             }
@@ -3432,7 +3439,7 @@ export class ExpressRouter {
                 console.error(`CRUD Destroy Error for ${modelName}:`, error);
                 
                 const { code, status } = ErrorFormatter.mapPrismaError(error);
-                const errorResponse = this.formatJsonApiError(error, code, status, req.path);
+                const errorResponse = this.formatJsonApiError(error, code, status, req.path, req.method);
                 
                 res.status(status).json(errorResponse);
             }
@@ -3585,7 +3592,7 @@ export class ExpressRouter {
                 console.error(`CRUD Recover Error for ${modelName}:`, error);
                 
                 const { code, status } = ErrorFormatter.mapPrismaError(error);
-                const errorResponse = this.formatJsonApiError(error, code, status, req.path);
+                const errorResponse = this.formatJsonApiError(error, code, status, req.path, req.method);
                 
                 res.status(status).json(errorResponse);
             }
@@ -3782,13 +3789,14 @@ export class ExpressRouter {
     /**
      * JSON:API 에러 형식으로 포맷하는 헬퍼 메서드 (통합 ErrorHandler 사용)
      */
-    private formatJsonApiError(error: Error | unknown, code: string, status: number, path: string): JsonApiErrorResponse {
+    private formatJsonApiError(error: Error | unknown, code: string, status: number, path: string, method?: string): JsonApiErrorResponse {
         return ErrorHandler.handleError(error, {
             format: ErrorResponseFormat.JSON_API,
             context: {
                 code,
                 status,
                 path,
+                method: method || 'UNKNOWN',
                 source: {
                     pointer: path
                 }
@@ -3903,7 +3911,7 @@ export class ExpressRouter {
             return { success: true, parsedIdentifier };
         } catch (parseError: any) {
             const { code, status } = ErrorFormatter.mapPrismaError(parseError);
-            const errorResponse = this.formatJsonApiError(parseError, code, status, req.path);
+            const errorResponse = this.formatJsonApiError(parseError, code, status, req.path, req.method);
             res.status(status).json(errorResponse);
             return { success: false };
         }

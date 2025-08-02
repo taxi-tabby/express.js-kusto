@@ -87,13 +87,16 @@ ISC
 
 ## 성능
 
-
+> CRUD 메서드의 INDEX (/example?page[number]=1&page[size]=10) 성능 테스트 입니다.
+> 해당 메서드로 성능 테스트 했을 때 이정도지 일반 메서드로 구현하면 더 성능이 좋아집니다.
 [CRUD - INDEX : https://app.artillery.io/share/sh_7bceb339dff363ef0a79ded0b8a63c29d43d8f49bc683a62f199d253467aadd4](https://app.artillery.io/share/sh_7bceb339dff363ef0a79ded0b8a63c29d43d8f49bc683a62f199d253467aadd4)
 
 ```text
 OS: WINDOW 11
 CPU: RYZEN 5600X
 RAM: samsung ddr4 2666 8gb * 4 
+DB: postgresql
+TestData Row Count: 2,008
 ```
 
 

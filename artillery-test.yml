@@ -1,0 +1,115 @@
+# Artillery Extreme Load Performance Test for Pagination API
+# 실행 명령어: artillery run artillery-test.yml --output report.json
+# HTML 리포트: artillery report report.json
+# 경고: 이는 극한 부하 테스트입니다. 프로덕션 환경에서 실행하지 마세요!
+
+config:
+  target: 'http://127.0.0.1:3000'
+  # 극단적 부하 테스트 - 점진적 증가 후 감소 패턴 (Duration 30% 축소, 부하 극대화)
+  phases:
+    # 1단계: 시스템 워밍업 - JIT 컴파일러 최적화
+    - name: "warmup"
+      duration: 21  # 30 -> 21 (30% 감소)
+      arrivalRate: 5
+      rampTo: 50
+    # 2단계: 가벼운 부하 - 기본 성능 측정  
+    - name: "light-load"
+      duration: 42  # 60 -> 42 (30% 감소)
+      arrivalRate: 50
+      rampTo: 200
+    # 3단계: 보통 부하 - 일반적인 사용량
+    - name: "normal-load"
+      duration: 63  # 90 -> 63 (30% 감소)
+      arrivalRate: 200
+      rampTo: 500
+    # 4단계: 중간 높은 부하 - 스케일링 시작
+    - name: "medium-high-load"
+      duration: 50  # 새로운 단계
+      arrivalRate: 500
+      rampTo: 800
+    # 5단계: 높은 부하 - 피크 준비
+    - name: "high-load"
+      duration: 84  # 120 -> 84 (30% 감소)
+      arrivalRate: 800
+      rampTo: 1200
+    # 6단계: 극한 부하 1 - 시스템 스트레스 테스트
+    - name: "extreme-load-1"
+      duration: 63  # 90 -> 63 (30% 감소)
+      arrivalRate: 1200
+      rampTo: 2000
+    # 7단계: 극한 부하 2 - 최대 임계점 테스트
+    - name: "extreme-load-2"
+      duration: 45  # 새로운 단계
+      arrivalRate: 2000
+      rampTo: 3000
+    # 8단계: 최대 부하 - 시스템 한계 돌파 시도
+    - name: "peak-load"
+      duration: 40  # 새로운 단계
+      arrivalRate: 3000
+      rampTo: 4000
+    # 9단계: 급격한 부하 감소 시작 - 안정화 과정
+    - name: "scale-down-1"
+      duration: 53  # 75 -> 53 (30% 감소)
+      arrivalRate: 4000
+      rampTo: 1500
+    # 10단계: 중간 감소 - 시스템 회복
+    - name: "scale-down-2"
+      duration: 35  # 새로운 단계
+      arrivalRate: 1500
+      rampTo: 800
+    # 11단계: 지속적 감소 - 정상화
+    - name: "scale-down-3"  
+      duration: 42  # 60 -> 42 (30% 감소)
+      arrivalRate: 800
+      rampTo: 300
+    # 12단계: 최종 안정화 - 시스템 복구
+    - name: "cooldown"
+      duration: 32  # 45 -> 32 (30% 감소)
+      arrivalRate: 300
+      rampTo: 10
+  
+  # HTTP 엔진 설정 (극한 부하 테스트용)
+  http:
+    timeout: 60  # 타임아웃 증가 (극한 부하 상황 고려)
+    pool: 200   # 커넥션 풀 증가 (고동시성 지원)
+    extendedMetrics: true
+  
+  # 환경 변수 설정
+  variables:
+    testSuite: "Extreme-Load-Performance-Analysis"
+    apiVersion: "v1"
+    maxConcurrency: "4000"
+    
+  # 성능 임계값 설정 (ensure 플러그인) - 극한 부하 테스트용
+  ensure:
+    p99: 5000  # 99%의 요청이 5초 이내 (극한 상황 고려)
+    p95: 3000  # 95%의 요청이 3초 이내 (고부하 상황 고려)
+    maxErrorRate: 15  # 최대 15% 오류율 (극한 테스트이므로 높은 허용치)
+
+
+
+# 공식 플러그인 설정 (Artillery 문서 기준)
+plugins:
+  # 엔드포인트별 메트릭 수집
+  metrics-by-endpoint:
+    useOnlyRequestNames: true
+  # SLO 체크 (ensure 플러그인)
+  ensure: {}
+  # 성능 데이터 출력 형식
+  expect:
+    outputFormat: json
+    
+
+
+# 단일 페이징 성능 테스트 시나리오
+scenarios:
+  - name: "pagination_test"
+    weight: 100
+    flow:
+      - get:
+          url: "/example?page[number]=1&page[size]=10"
+          name: "pagination_test"
+          expect:
+            - statusCode: 200
+            - hasProperty: "data"
+            - hasProperty: "metadata"

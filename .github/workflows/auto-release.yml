@@ -1,9 +1,6 @@
 name: Auto Release Framework
 
 on:
-  push:
-    branches:
-      - main
   pull_request:
     types:
       - closed

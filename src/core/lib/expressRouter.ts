@@ -69,6 +69,9 @@ export class ExpressRouter {
     private schemaRegistry: CrudSchemaRegistry;
     private schemaAnalyzer: PrismaSchemaAnalyzer | null = null;
 
+    // 데이터베이스별 초기화 상태 추적 (정적 변수)
+    private static initializedDatabases: Set<string> = new Set();
+
     constructor() {
         this.schemaRegistry = CrudSchemaRegistry.getInstance();
         this.initializeSchemaAnalyzer();
@@ -76,6 +79,7 @@ export class ExpressRouter {
 
     /**
      * 스키마 분석기를 초기화합니다 (개발 모드에서만)
+     * 각 데이터베이스별로 1번씩만 실행됩니다.
      */
     private initializeSchemaAnalyzer(): void {
         if (!this.schemaRegistry.isSchemaApiEnabled()) {
@@ -83,7 +87,7 @@ export class ExpressRouter {
         }
 
         try {
-            // 사용 가능한 첫 번째 데이터베이스를 자동으로 감지
+            // 사용 가능한 모든 데이터베이스를 확인
             const availableDatabases = prismaManager.getAvailableDatabases();
             
             if (availableDatabases.length === 0) {
@@ -91,13 +95,33 @@ export class ExpressRouter {
                 return;
             }
 
-            // 첫 번째 사용 가능한 데이터베이스 사용
+            // 각 데이터베이스별로 한 번씩만 초기화
+            for (const databaseName of availableDatabases) {
+                // 이미 초기화된 데이터베이스는 건너뛰기
+                if (ExpressRouter.initializedDatabases.has(databaseName)) {
+                    continue;
+                }
+
+                const prismaClient = prismaManager.getClient(databaseName);
+                if (prismaClient) {
+                    // 각 데이터베이스별로 분석기 생성 (싱글톤이므로 중복 생성되지 않음)
+                    PrismaSchemaAnalyzer.getInstance(prismaClient, databaseName);
+                    
+                    // 초기화 완료 표시
+                    ExpressRouter.initializedDatabases.add(databaseName);
+                    console.log(`🔍 Prisma 스키마 분석기가 초기화되었습니다. (데이터베이스: ${databaseName})`);
+                }
+            }
+
+            // 첫 번째 사용 가능한 데이터베이스를 기본 분석기로 설정
             const firstDatabase = availableDatabases[0];
-            const prismaClient = prismaManager.getClient(firstDatabase);
-            
-            if (prismaClient) {
-                this.schemaAnalyzer = PrismaSchemaAnalyzer.getInstance(prismaClient, firstDatabase);
-                console.log(`🔍 Prisma 스키마 분석기가 초기화되었습니다. (데이터베이스: ${firstDatabase})`);
+            const firstClient = prismaManager.getClient(firstDatabase);
+            if (firstClient && !this.schemaAnalyzer) {
+                this.schemaAnalyzer = PrismaSchemaAnalyzer.getInstance(firstClient, firstDatabase);
+            }
+
+            // 한 번만 출력
+            if (ExpressRouter.initializedDatabases.size === availableDatabases.length) {
                 console.log(`📊 사용 가능한 데이터베이스: ${availableDatabases.join(', ')}`);
             }
         } catch (error) {

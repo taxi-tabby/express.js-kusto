@@ -110,7 +110,7 @@ export interface CrudSchemaInfo {
   primaryKey: string;
   primaryKeyType: string;
   enabledActions: string[];
-  endpoints: CrudEndpointInfo[];
+//   endpoints: CrudEndpointInfo[];
   model: PrismaModelInfo;
   options: {
     softDelete?: {

@@ -133,7 +133,7 @@ export class CrudSchemaRegistry {
         enabledActions.push('recover');
       }
 
-      const endpoints = this.generateEndpoints(basePath, enabledActions, primaryKey);
+    //   const endpoints = this.generateEndpoints(basePath, enabledActions, primaryKey);
 
       const schemaInfo: CrudSchemaInfo = {
         databaseName,
@@ -142,7 +142,7 @@ export class CrudSchemaRegistry {
         primaryKey,
         primaryKeyType,
         enabledActions,
-        endpoints,
+        // endpoints,
         model: modelInfo,
         options: {
           softDelete: options.softDelete,
@@ -250,54 +250,54 @@ export class CrudSchemaRegistry {
   /**
    * 엔드포인트 정보를 생성합니다
    */
-  private generateEndpoints(basePath: string, actions: string[], primaryKey: string): CrudEndpointInfo[] {
-    const endpoints: CrudEndpointInfo[] = [];
+//   private generateEndpoints(basePath: string, actions: string[], primaryKey: string): CrudEndpointInfo[] {
+//     const endpoints: CrudEndpointInfo[] = [];
 
-    const endpointMap = {
-      index: {
-        method: 'GET' as const,
-        path: basePath,
-        description: '리스트 조회 (필터링, 정렬, 페이징 지원)'
-      },
-      show: {
-        method: 'GET' as const,
-        path: `${basePath}/:${primaryKey}`,
-        description: '단일 레코드 조회'
-      },
-      create: {
-        method: 'POST' as const,
-        path: basePath,
-        description: '새 레코드 생성'
-      },
-      update: {
-        method: 'PUT' as const,
-        path: `${basePath}/:${primaryKey}`,
-        description: '레코드 전체 업데이트'
-      },
-      destroy: {
-        method: 'DELETE' as const,
-        path: `${basePath}/:${primaryKey}`,
-        description: '레코드 삭제'
-      },
-      recover: {
-        method: 'POST' as const,
-        path: `${basePath}/:${primaryKey}/recover`,
-        description: '소프트 삭제된 레코드 복구'
-      }
-    };
+//     const endpointMap = {
+//       index: {
+//         method: 'GET' as const,
+//         path: basePath,
+//         description: '리스트 조회 (필터링, 정렬, 페이징 지원)'
+//       },
+//       show: {
+//         method: 'GET' as const,
+//         path: `${basePath}/:${primaryKey}`,
+//         description: '단일 레코드 조회'
+//       },
+//       create: {
+//         method: 'POST' as const,
+//         path: basePath,
+//         description: '새 레코드 생성ㅌㅌ'
+//       },
+//       update: {
+//         method: 'PUT' as const,
+//         path: `${basePath}/:${primaryKey}`,
+//         description: '레코드 전체 업데이트'
+//       },
+//       destroy: {
+//         method: 'DELETE' as const,
+//         path: `${basePath}/:${primaryKey}`,
+//         description: '레코드 삭제'
+//       },
+//       recover: {
+//         method: 'POST' as const,
+//         path: `${basePath}/:${primaryKey}/recover`,
+//         description: '소프트 삭제된 레코드 복구'
+//       }
+//     };
 
-    for (const action of actions) {
-      const template = endpointMap[action as keyof typeof endpointMap];
-      if (template) {
-        endpoints.push({
-          ...template,
-          action: action as any
-        });
-      }
-    }
+//     for (const action of actions) {
+//       const template = endpointMap[action as keyof typeof endpointMap];
+//       if (template) {
+//         endpoints.push({
+//           ...template,
+//           action: action as any
+//         });
+//       }
+//     }
 
-    return endpoints;
-  }
+//     return endpoints;
+//   }
 
   /**
    * 미들웨어 정보를 문자열 배열로 변환합니다
@@ -353,11 +353,20 @@ export class CrudSchemaRegistry {
     // 각 스키마의 모델 정보를 TypeORM 형식으로 변환
     const entities = schemas.map(schema => this.convertSchemaToTypeOrmEntity(schema));
 
+    // 데이터베이스별 통계
+    const databaseStats = schemas.reduce((stats, schema) => {
+      stats[schema.databaseName] = (stats[schema.databaseName] || 0) + 1;
+      return stats;
+    }, {} as Record<string, number>);
+
     return {
       data: entities,
       metadata: {
         timestamp: new Date().toISOString(),
         affectedCount: entities.length,
+        totalDatabases: Object.keys(databaseStats).length,
+        databaseStats,
+        databases: Object.keys(databaseStats),
         pagination: {
           type: "offset",
           total: entities.length,
@@ -414,6 +423,7 @@ export class CrudSchemaRegistry {
       entityName: model.name,
       tableName: model.dbName || model.name.toLowerCase() + 's',
       targetName: model.name,
+      databaseName: schema.databaseName, // 데이터베이스 명칭 추가
       primaryKeys,
       columns,
       relations,
@@ -422,7 +432,15 @@ export class CrudSchemaRegistry {
       uniques,
       foreignKeys: [], // 관계에서 추출 가능
       synchronize: true,
-      withoutRowid: false
+      withoutRowid: false,
+      // 추가 메타데이터
+      metadata: {
+        database: schema.databaseName,
+        modelName: schema.modelName,
+        basePath: schema.basePath,
+        enabledActions: schema.enabledActions,
+        createdAt: schema.createdAt
+      }
     };
   }
 

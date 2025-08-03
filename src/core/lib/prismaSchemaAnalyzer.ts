@@ -16,6 +16,7 @@ export class PrismaSchemaAnalyzer {
   private prismaClient: PrismaClient;
   private modelCache: Map<string, PrismaModelInfo> = new Map();
   private databaseName: string;
+  private loadedEnums: Record<string, any> = {};
 
   constructor(prismaClient: PrismaClient, databaseName: string = 'unknown') {
     this.prismaClient = prismaClient;
@@ -109,31 +110,29 @@ export class PrismaSchemaAnalyzer {
         const runtimeDataModel = (this.prismaClient as any)._runtimeDataModel;
         
         if (runtimeDataModel && runtimeDataModel.models) {
+          // enum 정보도 추출
+          const enums = runtimeDataModel.enums || {};
+          
           // RuntimeDataModel 형식을 DMMF 형식으로 변환
           const models = Object.entries(runtimeDataModel.models).map(([name, model]: [string, any]) => {
-            console.log(`🔍 Processing model: ${name}`, model);
-            
             let fields = [];
             if (model.fields) {
               // fields가 객체인 경우
               if (typeof model.fields === 'object' && !Array.isArray(model.fields)) {
-                fields = Object.entries(model.fields).map(([fieldName, field]: [string, any]) => {
-                  console.log(`🔍 Processing field: ${fieldName}`, field);
-                  return {
-                    name: fieldName,
-                    kind: field.kind || 'scalar',
-                    type: field.type || 'String',
-                    isOptional: field.isOptional || false,
-                    isList: field.isList || false,
-                    isId: field.isId || false,
-                    isUnique: field.isUnique || false,
-                    isUpdatedAt: field.isUpdatedAt || false,
-                    hasDefaultValue: field.hasDefaultValue || false,
-                    relationName: field.relationName,
-                    relationFromFields: field.relationFromFields,
-                    relationToFields: field.relationToFields
-                  };
-                });
+                fields = Object.entries(model.fields).map(([fieldName, field]: [string, any]) => ({
+                  name: fieldName,
+                  kind: field.kind || 'scalar',
+                  type: field.type || 'String',
+                  isOptional: field.isOptional || false,
+                  isList: field.isList || false,
+                  isId: field.isId || false,
+                  isUnique: field.isUnique || false,
+                  isUpdatedAt: field.isUpdatedAt || false,
+                  hasDefaultValue: field.hasDefaultValue || false,
+                  relationName: field.relationName,
+                  relationFromFields: field.relationFromFields,
+                  relationToFields: field.relationToFields
+                }));
               }
               // fields가 배열인 경우 (기존 DMMF 형식)
               else if (Array.isArray(model.fields)) {
@@ -150,7 +149,10 @@ export class PrismaSchemaAnalyzer {
             };
           });
           
-          console.log(`✅ Prisma 스키마 분석 완료 (${this.databaseName}): ${models.length}개 모델 로드됨`);
+          // enum 정보를 클래스 변수에 저장
+          this.loadedEnums = enums;
+          
+          console.log(`✅ Prisma 스키마 분석 완료 (${this.databaseName}): ${models.length}개 모델, ${Object.keys(enums).length}개 enum 로드됨`);
           
           for (const model of models) {
             const modelInfo = this.parseModelFromDMMF(model);
@@ -586,8 +588,22 @@ export class PrismaSchemaAnalyzer {
    * Enum 값들을 반환합니다 (실제로는 Prisma 스키마에서 추출해야 함)
    */
   private getEnumValues(type: string): string[] | undefined {
-    // 실제 구현에서는 Prisma DMMF의 enum 정보를 사용해야 합니다
-    // 지금은 예시 값들을 반환합니다
+    // 실제 로드된 enum에서 값 찾기
+    if (this.loadedEnums[type] && Array.isArray(this.loadedEnums[type].values)) {
+      return this.loadedEnums[type].values;
+    }
+    
+    // 로드된 enum이 다른 형식인 경우 처리
+    if (this.loadedEnums[type] && typeof this.loadedEnums[type] === 'object') {
+      const enumObj = this.loadedEnums[type];
+      if (enumObj.values) {
+        return Array.isArray(enumObj.values) ? enumObj.values : Object.values(enumObj.values);
+      }
+      // enum 객체 자체가 값들을 가지고 있는 경우
+      return Object.values(enumObj).filter(value => typeof value === 'string');
+    }
+    
+    // 폴백: 하드코딩된 enum 매핑 (기존 로직)
     const enumMapping: Record<string, string[]> = {
       'Provider': ['local', 'google', 'apple', 'kakao', 'naver'],
       'Category': ['user', 'admin', 'content', 'system', 'analytics'],

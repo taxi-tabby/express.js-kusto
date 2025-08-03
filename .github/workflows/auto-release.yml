@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   auto-release:
-    if: github.event_name == 'push' || (github.event.pull_request.merged == true)
+    if: (github.event_name == 'push' || (github.event.pull_request.merged == true)) && github.repository == 'taxi-tabby/express.js-kusto'
     runs-on: ubuntu-latest
     
     steps:
@@ -51,11 +51,11 @@ jobs:
         # 현재 버전 사용 (증가시키지 않음)
         PACKAGE_VERSION="${{ steps.version_info.outputs.package_version }}"
         
-        # 현재 날짜와 시간을 버전에 추가
+        # 현재 날짜와 시간 (릴리즈 노트용)
         TIMESTAMP=$(date +"%Y.%m.%d-%H%M")
         
-        # 태그 생성 (framework-v{package_version}-{timestamp})
-        TAG_NAME="framework-v${PACKAGE_VERSION}-${TIMESTAMP}"
+        # 태그 생성 (framework-v{package_version})
+        TAG_NAME="framework-v${PACKAGE_VERSION}"
         
         echo "tag_name=${TAG_NAME}" >> $GITHUB_OUTPUT
         echo "package_version=${PACKAGE_VERSION}" >> $GITHUB_OUTPUT

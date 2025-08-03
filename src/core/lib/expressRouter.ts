@@ -19,9 +19,9 @@ import './types/express-extensions';
 
 
 export type HandlerFunction = (req: Request, res: Response, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => void;
-export type ValidatedHandlerFunction = (req: ValidatedRequest, res: Response, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => Promise<any> | any;
+export type ValidatedHandlerFunction<TConfig extends RequestConfig = RequestConfig> = (req: ValidatedRequest<TConfig>, res: Response, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => Promise<any> | any;
 export type MiddlewareHandlerFunction = (req: Request, res: Response, next: NextFunction, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => void;
-export type ValidatedMiddlewareHandlerFunction = (req: ValidatedRequest, res: Response, next: NextFunction, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => Promise<any> | any;
+export type ValidatedMiddlewareHandlerFunction<TConfig extends RequestConfig = RequestConfig> = (req: ValidatedRequest<TConfig>, res: Response, next: NextFunction, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => Promise<any> | any;
 
 /**
  * Extract model names from a Prisma client type
@@ -120,10 +120,10 @@ export class ExpressRouter {
                 this.schemaAnalyzer = PrismaSchemaAnalyzer.getInstance(firstClient, firstDatabase);
             }
 
-            // 한 번만 출력
-            if (ExpressRouter.initializedDatabases.size === availableDatabases.length) {
-                console.log(`📊 사용 가능한 데이터베이스: ${availableDatabases.join(', ')}`);
-            }
+            // // 한 번만 출력
+            // if (ExpressRouter.initializedDatabases.size === availableDatabases.length) {
+            //     console.log(`📊 사용 가능한 데이터베이스: ${availableDatabases.join(', ')}`);
+            // }
         } catch (error) {
             console.warn('스키마 분석기 초기화 실패:', error instanceof Error ? error.message : String(error));
         }
@@ -1121,10 +1121,14 @@ export class ExpressRouter {
      * @returns ExpressRouter
      */
 
-    public GET_VALIDATED(
-        requestConfig: RequestConfig,
+    /**
+     * # GET_VALIDATED
+     * 검증된 GET ?�청 처리
+     */
+    public GET_VALIDATED<TConfig extends RequestConfig>(
+        requestConfig: TConfig,
         responseConfig: ResponseConfig,
-        handler: ValidatedHandlerFunction
+        handler: ValidatedHandlerFunction<TConfig>
     ): ExpressRouter {
         // 현재 위치 정보를 얻기 위해 Error 스택 추적
         const { filePath, lineNumber } = this.getCallerSourceInfo();
@@ -1177,11 +1181,11 @@ export class ExpressRouter {
      * 검증된 GET ?�러�??�청 처리
      * @param exact true?�면 ?�위 경로 매칭 방�? (기본�? false)
      */
-    public GET_SLUG_VALIDATED(
+    public GET_SLUG_VALIDATED<TConfig extends RequestConfig>(
         slug: string[],
-        requestConfig: RequestConfig,
+        requestConfig: TConfig,
         responseConfig: ResponseConfig,
-        handler: ValidatedHandlerFunction,
+        handler: ValidatedHandlerFunction<TConfig>,
         options?: { exact?: boolean }
     ): ExpressRouter {
         // ?�퍼 메서?��? ?�해 ?�출???�치 ?�보 ?�득
@@ -1252,10 +1256,10 @@ export class ExpressRouter {
      * # POST_VALIDATED
      * 검증된 POST ?�청 처리
      */
-    public POST_VALIDATED(
-        requestConfig: RequestConfig,
+    public POST_VALIDATED<TConfig extends RequestConfig>(
+        requestConfig: TConfig,
         responseConfig: ResponseConfig,
-        handler: ValidatedHandlerFunction
+        handler: ValidatedHandlerFunction<TConfig>
     ): ExpressRouter {
         // ?�퍼 메서?��? ?�해 ?�출???�치 ?�보 ?�득
         const { filePath, lineNumber } = this.getCallerSourceInfo();
@@ -1305,11 +1309,11 @@ export class ExpressRouter {
      * 검증된 POST ?�러�??�청 처리
      * @param exact true?�면 ?�위 경로 매칭 방�? (기본�? false)
      */    
-    public POST_SLUG_VALIDATED(
+    public POST_SLUG_VALIDATED<TConfig extends RequestConfig>(
         slug: string[],
-        requestConfig: RequestConfig,
+        requestConfig: TConfig,
         responseConfig: ResponseConfig,
-        handler: ValidatedHandlerFunction,
+        handler: ValidatedHandlerFunction<TConfig>,
         options?: { exact?: boolean }
     ): ExpressRouter {
         // ?�퍼 메서?��? ?�해 ?�출???�치 ?�보 ?�득
@@ -1378,10 +1382,10 @@ export class ExpressRouter {
      * # PUT_VALIDATED
      * 검증된 PUT ?�청 처리
      */    
-    public PUT_VALIDATED(
-        requestConfig: RequestConfig,
+    public PUT_VALIDATED<TConfig extends RequestConfig>(
+        requestConfig: TConfig,
         responseConfig: ResponseConfig,
-        handler: ValidatedHandlerFunction
+        handler: ValidatedHandlerFunction<TConfig>
     ): ExpressRouter {
         // ?�퍼 메서?��? ?�해 ?�출???�치 ?�보 ?�득
         const { filePath, lineNumber } = this.getCallerSourceInfo();
@@ -1432,10 +1436,10 @@ export class ExpressRouter {
      * # DELETE_VALIDATED
      * 검증된 DELETE ?�청 처리
      */    
-    public DELETE_VALIDATED(
-        requestConfig: RequestConfig,
+    public DELETE_VALIDATED<TConfig extends RequestConfig>(
+        requestConfig: TConfig,
         responseConfig: ResponseConfig,
-        handler: ValidatedHandlerFunction
+        handler: ValidatedHandlerFunction<TConfig>
     ): ExpressRouter {
         // ?�퍼 메서?��? ?�해 ?�출???�치 ?�보 ?�득
         const { filePath, lineNumber } = this.getCallerSourceInfo();
@@ -1484,10 +1488,10 @@ export class ExpressRouter {
      * # PATCH_VALIDATED
      * 검증된 PATCH ?�청 처리
      */    
-    public PATCH_VALIDATED(
-        requestConfig: RequestConfig,
+    public PATCH_VALIDATED<TConfig extends RequestConfig>(
+        requestConfig: TConfig,
         responseConfig: ResponseConfig,
-        handler: ValidatedHandlerFunction
+        handler: ValidatedHandlerFunction<TConfig>
     ): ExpressRouter {
         // ?�퍼 메서?��? ?�해 ?�출???�치 ?�보 ?�득
         const { filePath, lineNumber } = this.getCallerSourceInfo();
@@ -1536,9 +1540,9 @@ export class ExpressRouter {
      * # GET_WITH_VALIDATION
      * ?�청 검증만 ?�는 GET
      */
-    public GET_WITH_VALIDATION(
-        requestConfig: RequestConfig,
-        handler: ValidatedHandlerFunction
+    public GET_WITH_VALIDATION<TConfig extends RequestConfig>(
+        requestConfig: TConfig,
+        handler: ValidatedHandlerFunction<TConfig>
     ): ExpressRouter {
         const middlewares = CustomRequestHandler.withValidation(requestConfig, handler);
 
@@ -1577,9 +1581,9 @@ export class ExpressRouter {
      * # POST_WITH_VALIDATION
      * ?�청 검증만 ?�는 POST
      */
-    public POST_WITH_VALIDATION(
-        requestConfig: RequestConfig,
-        handler: ValidatedHandlerFunction
+    public POST_WITH_VALIDATION<TConfig extends RequestConfig>(
+        requestConfig: TConfig,
+        handler: ValidatedHandlerFunction<TConfig>
     ): ExpressRouter {
 
         const middlewares = CustomRequestHandler.withValidation(requestConfig, handler);
@@ -1618,11 +1622,11 @@ export class ExpressRouter {
      * 검증된 GET ?�러�??�청 처리 (?�확??경로 매칭�?
      * ?�위 ?�우?�에 ?�향??주�? ?�음
      */
-    public GET_SLUG_VALIDATED_EXACT(
+    public GET_SLUG_VALIDATED_EXACT<TConfig extends RequestConfig>(
         slug: string[],
-        requestConfig: RequestConfig,
+        requestConfig: TConfig,
         responseConfig: ResponseConfig,
-        handler: ValidatedHandlerFunction
+        handler: ValidatedHandlerFunction<TConfig>
     ): ExpressRouter {
 
         const middlewares = CustomRequestHandler.createHandler(
@@ -1671,11 +1675,11 @@ export class ExpressRouter {
      * # POST_SLUG_VALIDATED_EXACT
      * 검증된 POST ?�러�??�청 처리 (?�확??경로 매칭�?
      */
-    public POST_SLUG_VALIDATED_EXACT(
+    public POST_SLUG_VALIDATED_EXACT<TConfig extends RequestConfig>(
         slug: string[],
-        requestConfig: RequestConfig,
+        requestConfig: TConfig,
         responseConfig: ResponseConfig,
-        handler: ValidatedHandlerFunction
+        handler: ValidatedHandlerFunction<TConfig>
     ): ExpressRouter {
         const middlewares = CustomRequestHandler.createHandler(
             { request: requestConfig, response: responseConfig },
@@ -1724,11 +1728,11 @@ export class ExpressRouter {
      * # PUT_SLUG_VALIDATED_EXACT
      * 검증된 PUT ?�러�??�청 처리 (?�확??경로 매칭�?
      */
-    public PUT_SLUG_VALIDATED_EXACT(
+    public PUT_SLUG_VALIDATED_EXACT<TConfig extends RequestConfig>(
         slug: string[],
-        requestConfig: RequestConfig,
+        requestConfig: TConfig,
         responseConfig: ResponseConfig,
-        handler: ValidatedHandlerFunction
+        handler: ValidatedHandlerFunction<TConfig>
     ): ExpressRouter {
         const middlewares = CustomRequestHandler.createHandler(
             { request: requestConfig, response: responseConfig },

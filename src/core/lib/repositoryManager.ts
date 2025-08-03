@@ -47,7 +47,14 @@ export class RepositoryManager {
             try {
                 // Dynamic import using the repository registry
                 const repositoryLoader = REPOSITORY_REGISTRY[repositoryName];
-                const repositoryExports = await repositoryLoader();                // Handle different export patterns
+                
+                // Skip if repository loader is not found
+                if (!repositoryLoader) {
+                    log.warn(`⚠️ Repository loader not found for: ${repositoryName}, skipping...`);
+                    continue;
+                }
+                
+                const repositoryExports = await (repositoryLoader as () => Promise<any>)();                // Handle different export patterns
                 const RepositoryClass = this.resolveRepositoryClass(repositoryExports, repositoryName);
                   if (typeof RepositoryClass === 'function') {
                     // Pass the PrismaManager instance to the repository constructor
@@ -139,10 +146,11 @@ export class RepositoryManager {
             }
 
             // Clear module cache to force reload
-            const modulePath = require.resolve(await repositoryLoader.toString());
+            const modulePath = require.resolve(await (repositoryLoader as () => Promise<any>).toString());
             delete require.cache[modulePath];
 
-            const repositoryExports = await repositoryLoader();            const RepositoryClass = this.resolveRepositoryClass(repositoryExports, name);
+            const repositoryExports = await (repositoryLoader as () => Promise<any>)();
+            const RepositoryClass = this.resolveRepositoryClass(repositoryExports, name);
               if (typeof RepositoryClass === 'function') {
                 const repositoryInstance = new RepositoryClass(this.prismaManager);
                 this.repositories[name] = repositoryInstance;

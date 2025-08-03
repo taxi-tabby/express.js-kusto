@@ -1,19 +1,16 @@
 // Auto-generated file - DO NOT EDIT MANUALLY
+// Generated on: 2025-08-03T14:17:08.991Z
 // Source: src/app/repos/
 
-import AccountUserRepository from '@app/repos/account/user.repository';
-
-// Repository type definitions
-type AccountUserRepositoryType = InstanceType<typeof AccountUserRepository>;
-
-// Repository type map for getRepository return types
+// Repository type map for getRepository return types (empty - no repositories found)
 export interface RepositoryTypeMap {
-  'accountUser': AccountUserRepositoryType;
+  // No repository files found
+  // Add TypeScript files ending with .repository.ts to src/app/repos/ and regenerate types
 }
 
-// Repository registry for dynamic loading
+// Repository registry for dynamic loading (empty)
 export const REPOSITORY_REGISTRY = {
-  'accountUser': () => import('@app/repos/account/user.repository'),
+  // No repositories available
 } as const;
 
 // Repository names type

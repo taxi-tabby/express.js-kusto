@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { Validator, Schema, ValidationResult } from './validator';
+import { Validator, Schema, ValidationResult, FieldSchema } from './validator';
 import { log } from '../external/winston';
 import { DependencyInjector } from './dependencyInjector';
 import { Injectable } from './types/generated-injectable-types';
@@ -25,13 +25,36 @@ export interface HandlerConfig {
     };
 }
 
-export interface ValidatedRequest extends Request {
-    validatedData?: {
-        body?: any;
-        query?: any;
-        params?: any;
+export interface ValidatedRequest<TConfig extends RequestConfig = RequestConfig> extends Request {
+    validatedData: {
+        body: TConfig['body'] extends Schema ? InferValidatedData<TConfig['body']> : any;
+        query: TConfig['query'] extends Schema ? InferValidatedData<TConfig['query']> : any;
+        params: TConfig['params'] extends Schema ? InferValidatedData<TConfig['params']> : any;
     };
 }
+
+// Type to infer validated data structure from schema
+type InferValidatedData<T extends Schema> = {
+    [K in keyof T]: T[K] extends { required: true }
+        ? ExtractFieldType<T[K]>
+        : T[K] extends { required: false }
+        ? ExtractFieldType<T[K]> | undefined
+        : ExtractFieldType<T[K]> | undefined;
+};
+
+// Helper type to extract field types based on FieldSchema
+export type ExtractFieldType<T extends FieldSchema> = 
+    T['type'] extends 'string' ? string :
+    T['type'] extends 'number' ? number :
+    T['type'] extends 'boolean' ? boolean :
+    T['type'] extends 'array' ? any[] :
+    T['type'] extends 'object' ? any :
+    T['type'] extends 'email' ? string :
+    T['type'] extends 'url' ? string :
+    T['type'] extends 'file' ? any :
+    T['type'] extends 'binary' ? any :
+    T['type'] extends 'buffer' ? Buffer :
+    any;
 
 export interface ApiResponse {
     success: boolean;

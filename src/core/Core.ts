@@ -12,6 +12,8 @@ import { StaticFileMiddleware } from './lib/staticFileMiddleware';
 import { prismaManager } from './lib/prismaManager';
 import { DependencyInjector } from './lib/dependencyInjector';
 import { repositoryManager } from './lib/repositoryManager';
+import { SchemaApiSetup } from '@core/lib/schemaApiSetup';
+
 
 export interface CoreConfig {
     basePath?: string;
@@ -79,11 +81,21 @@ export class Core {
         
         // Initialize Dependency Injector
         await this.initializeDependencyInjector();
+
+
         
         this.setupExpress();
         this.setupDocumentationRoutes(); // 문서화 라우트를 먼저 등록
         this.loadRoutes();
         this.setupViews();
+
+        // 스키마 API 등록 (개발 모드에서만)
+        try {
+            SchemaApiSetup.registerSchemaApi(this._app, '/api/schema');
+        } catch (error) {
+            log.Warn('스키마 API 등록 중 오류 발생:', error);
+        }
+
 
         this._isInitialized = true;
         log.Info('Core initialized successfully', { config: this._config });

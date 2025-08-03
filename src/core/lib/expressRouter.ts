@@ -13,6 +13,8 @@ import { CrudQueryParser, PrismaQueryBuilder, CrudResponseFormatter, JsonApiTran
 import { ErrorFormatter } from './errorFormatter';
 import { serializeBigInt, serialize } from './serializer';
 import { ERROR_CODES, getHttpStatusForErrorCode } from './errorCodes';
+import { CrudSchemaRegistry } from './crudSchemaRegistry';
+import { PrismaSchemaAnalyzer } from './prismaSchemaAnalyzer';
 import './types/express-extensions';
 
 
@@ -61,7 +63,47 @@ export class ExpressRouter {
         path: string;
         requestConfig?: RequestConfig;
         responseConfig?: ResponseConfig;
-    }> = [];    
+    }> = [];
+    
+    // 스키마 API 관련 인스턴스들 (개발 모드에서만 사용)
+    private schemaRegistry: CrudSchemaRegistry;
+    private schemaAnalyzer: PrismaSchemaAnalyzer | null = null;
+
+    constructor() {
+        this.schemaRegistry = CrudSchemaRegistry.getInstance();
+        this.initializeSchemaAnalyzer();
+    }
+
+    /**
+     * 스키마 분석기를 초기화합니다 (개발 모드에서만)
+     */
+    private initializeSchemaAnalyzer(): void {
+        if (!this.schemaRegistry.isSchemaApiEnabled()) {
+            return; // 개발 모드가 아니면 초기화하지 않음
+        }
+
+        try {
+            // 사용 가능한 첫 번째 데이터베이스를 자동으로 감지
+            const availableDatabases = prismaManager.getAvailableDatabases();
+            
+            if (availableDatabases.length === 0) {
+                console.warn('사용 가능한 Prisma 클라이언트가 없습니다. 스키마 분석기를 초기화할 수 없습니다.');
+                return;
+            }
+
+            // 첫 번째 사용 가능한 데이터베이스 사용
+            const firstDatabase = availableDatabases[0];
+            const prismaClient = prismaManager.getClient(firstDatabase);
+            
+            if (prismaClient) {
+                this.schemaAnalyzer = PrismaSchemaAnalyzer.getInstance(prismaClient, firstDatabase);
+                console.log(`🔍 Prisma 스키마 분석기가 초기화되었습니다. (데이터베이스: ${firstDatabase})`);
+                console.log(`📊 사용 가능한 데이터베이스: ${availableDatabases.join(', ')}`);
+            }
+        } catch (error) {
+            console.warn('스키마 분석기 초기화 실패:', error instanceof Error ? error.message : String(error));
+        }
+    }
     
 
     /**
@@ -1874,6 +1916,8 @@ export class ExpressRouter {
         }
     ): ExpressRouter {
         
+        // 개발 모드에서 스키마 등록
+        this.registerSchemaInDevelopment(databaseName, modelName as string, options);
 
         const enabledActions = this.getEnabledActions(options);
         const client = prismaManager.getWrap(databaseName);
@@ -1915,10 +1959,63 @@ export class ExpressRouter {
             this.setupRecoverRoute(client, modelName, options, primaryKey, primaryKeyParser);
         }
 
-        // JSON:API Relationship ?�우??추�?
+        // JSON:API Relationship 라우트 추가
         this.setupRelationshipRoutes(client, modelName, options, primaryKey, primaryKeyParser);
 
         return this;
+    }
+
+    /**
+     * 개발 모드에서 CRUD 스키마를 등록합니다
+     */
+    private registerSchemaInDevelopment(
+        databaseName: string, 
+        modelName: string, 
+        options?: any
+    ): void {
+        if (!this.schemaRegistry.isSchemaApiEnabled() || !this.schemaAnalyzer) {
+            return; // 개발 모드가 아니거나 스키마 분석기가 없으면 등록하지 않음
+        }
+
+        try {
+            // 현재 스키마 분석기가 요청된 데이터베이스와 다른 경우 새로운 분석기 생성
+            let analyzer = this.schemaAnalyzer;
+            if (this.schemaAnalyzer.getDatabaseName() !== databaseName) {
+                const requestedClient = prismaManager.getClient(databaseName);
+                if (requestedClient) {
+                    analyzer = PrismaSchemaAnalyzer.getInstance(requestedClient, databaseName);
+                } else {
+                    console.warn(`요청된 데이터베이스 '${databaseName}'를 찾을 수 없습니다. 기본 분석기를 사용합니다.`);
+                }
+            }
+
+            // 현재 라우터의 base path를 계산
+            const basePath = this.getBasePath(modelName);
+
+            // 스키마 등록
+            this.schemaRegistry.registerSchema(
+                databaseName,
+                modelName,
+                basePath,
+                options,
+                analyzer
+            );
+        } catch (error) {
+            console.warn(
+                `스키마 등록 실패 (${databaseName}.${modelName}):`, 
+                error instanceof Error ? error.message : String(error)
+            );
+        }
+    }
+
+    /**
+     * 모델명으로부터 base path를 생성합니다
+     */
+    private getBasePath(modelName: string): string {
+        if (this.basePath) {
+            return `${this.basePath}/${modelName.toLowerCase()}`;
+        }
+        return `/${modelName.toLowerCase()}`;
     }
 
     /**

@@ -18,6 +18,7 @@
 | 5 | **[🗂️ 리포지터리 패턴](./05-repository-pattern.md)** | 15분 | ⭐⭐ | Repos 폴더를 통한 데이터 액세스 레이어 구현 |
 | 6 | **[🔄 CRUD 라우터](./06-crud-router.md)** | 20분 | ⭐⭐⭐ | CRUD 자동화 생성 및 관계형 쿼리 최적화 |
 | 7 | **[🔄 업데이트 시스템](./07-update-system.md)** | 5분 | ⭐ | 최신 코드 베이스로 업데이트 |
+| 8 | **[📋 CRUD 스키마 API](./08-crud-schema-api.md)** | 10분 | ⭐⭐ | 개발 모드 전용 스키마 정보 조회 API |
 
 
 
@@ -41,6 +42,7 @@
 - **API 문서**: http://localhost:3000/docs
 - **개발 대시보드**: http://localhost:3000/docs/dev
 - **테스트 리포트**: http://localhost:3000/docs/test-report
+- **CRUD 스키마 API** (개발 모드 전용): http://localhost:3000/api/schema
 
 ## 📞 도움이 필요하다면
 

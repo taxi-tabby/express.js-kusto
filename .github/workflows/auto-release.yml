@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   auto-release:
-    if: github.event_name == 'push' || (github.event.pull_request.merged == true)
+    if: (github.event_name == 'push' || (github.event.pull_request.merged == true)) && github.repository == 'taxi-tabby/express.js-kusto'
     runs-on: ubuntu-latest
     
     steps:

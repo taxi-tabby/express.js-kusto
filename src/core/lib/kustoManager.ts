@@ -2,7 +2,7 @@ import { DependencyInjector } from './dependencyInjector';
 import { repositoryManager } from './repositoryManager';
 import { prismaManager } from './prismaManager';
 import { Injectable } from './types/generated-injectable-types';
-import { RepositoryTypeMap } from './types/generated-repository-types';
+import { RepositoryTypeMap, RepositoryName } from './types/generated-repository-types';
 import { PrismaManagerClientOverloads } from './types/generated-db-types';
 
 
@@ -74,7 +74,7 @@ export class KustoManager {
         const repoProxy = new Proxy({}, {
             get(target, prop) {
                 if (typeof prop === 'string' && loadedRepositories.includes(prop)) {
-                    return repositoryManager.getRepository(prop as any);
+                    return repositoryManager.getRepository(prop as RepositoryName);
                 }
                 return undefined;
             },
@@ -92,7 +92,7 @@ export class KustoManager {
                     return {
                         enumerable: true,
                         configurable: true,
-                        get: () => repositoryManager.getRepository(prop as any)
+                        get: () => repositoryManager.getRepository(prop as RepositoryName)
                     };
                 }
                 return undefined;
@@ -152,7 +152,7 @@ export class KustoManager {
      * 특정 레포지토리 가져오기
      */
     public getRepository<T extends keyof RepositoryTypeMap>(name: T): RepositoryTypeMap[T] {
-        return repositoryManager.getRepository(name);
+        return repositoryManager.getRepository(name as RepositoryName);
     }
 
     /**

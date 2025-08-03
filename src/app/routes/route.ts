@@ -7,7 +7,7 @@ const router = new ExpressRouter();
 router
 .GET(async (req, res, injected, repo, db) => {
     return res.render('index', { 
-        CONST_VERSION_NAME: `1.0.0-kusto`,
+        FRAMEWORK_URL: `https://github.com/taxi-tabby/express.js-kusto`,
     });
 });
 

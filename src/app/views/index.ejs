@@ -136,11 +136,9 @@
             <div class="content">
                 <h1 class="heading">Service</h1>
                 <p class="paragraph">
-                    <% if (typeof CONST_VERSION_NAME !== 'undefined' && CONST_VERSION_NAME) { %>
-                        <%= CONST_VERSION_NAME %>
-                    <% } else { %>
-                        Ver: NoNamed
-                    <% } %>
+                    <% if (typeof FRAMEWORK_URL !== 'undefined' && FRAMEWORK_URL) { %>
+                        <%= FRAMEWORK_URL %>
+                    <% }%>
                 </p>
             </div>
         </main>

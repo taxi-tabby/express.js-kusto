@@ -43,8 +43,15 @@ export class DependencyInjector {
         for (const moduleName of moduleNames) {
             try {
                 // Dynamic import using the module registry
-                const moduleLoader = MODULE_REGISTRY[moduleName];                
-                const moduleExports = await moduleLoader();
+                const moduleLoader = MODULE_REGISTRY[moduleName];
+                
+                // Skip if module loader is not found
+                if (!moduleLoader) {
+                    log.warn(`⚠️ Module loader not found for: ${moduleName}, skipping...`);
+                    continue;
+                }
+                
+                const moduleExports = await (moduleLoader as () => Promise<any>)();
 
                 // Handle different export patterns
                 const ModuleClass = this.resolveModuleClass(moduleExports, moduleName);
@@ -80,8 +87,15 @@ export class DependencyInjector {
                 log.Debug(`Loading middleware: ${middlewareName}`);
                 
                 // Dynamic import using the middleware registry
-                const middlewareLoader = MIDDLEWARE_REGISTRY[middlewareName];                
-                const middlewareExports = await middlewareLoader();
+                const middlewareLoader = MIDDLEWARE_REGISTRY[middlewareName];
+                
+                // Skip if middleware loader is not found
+                if (!middlewareLoader) {
+                    log.warn(`⚠️ Middleware loader not found for: ${middlewareName}, skipping...`);
+                    continue;
+                }
+                
+                const middlewareExports = await (middlewareLoader as () => Promise<any>)();
 
                 log.Debug(`Middleware exports for ${middlewareName}:`, Object.keys(middlewareExports));
 

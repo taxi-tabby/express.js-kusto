@@ -1,80 +1,38 @@
 // Auto-generated file - DO NOT EDIT MANUALLY
+// Generated on: 2025-08-03T14:06:33.475Z
 // Source: src/app/injectable/
 
-import AuthCSRFHelperModule from '@app/injectable/auth/csrf/helper.module';
-import AuthCSRFMiddlewareModule from '@app/injectable/auth/csrf/middleware.module';
-import AuthCSRFReferrerMiddleware from '@app/injectable/auth/csrf/referrer.middleware';
-import { AuthTryMiddlewareParams as AuthGuideAuthTryMiddlewareParamsType } from '@app/injectable/auth/guide.middleware.interface';
-import AuthJsonWebTokenModule from '@app/injectable/auth/jsonWebToken.module';
-import AuthJWTExportModule from '@app/injectable/auth/jwt/export.module';
-import { AuthTryMiddlewareParams as AuthJWTGuideAuthTryMiddlewareParamsType } from '@app/injectable/auth/jwt/guide.middleware.interface';
-import AuthJWTNoLoginOnlyMiddleware from '@app/injectable/auth/jwt/noLoginOnly.middleware';
-import AuthJWTRoleMiddleware from '@app/injectable/auth/jwt/role.middleware';
-import AuthRateLimiterDefaultMiddleware from '@app/injectable/auth/rateLimiter/default.middleware';
-import { RateLimiterOptionMiddlewareParams as AuthRateLimiterOptionRateLimiterOptionMiddlewareParamsType } from '@app/injectable/auth/rateLimiter/option.middleware.interface';
-import AuthTRYMiddleware from '@app/injectable/auth/try.middleware';
-
-// Type definitions
-type AuthCSRFHelperModuleType = InstanceType<typeof AuthCSRFHelperModule>;
-type AuthCSRFMiddlewareModuleType = InstanceType<typeof AuthCSRFMiddlewareModule>;
-type AuthJsonWebTokenModuleType = InstanceType<typeof AuthJsonWebTokenModule>;
-type AuthJWTExportModuleType = InstanceType<typeof AuthJWTExportModule>;
-type AuthCSRFReferrerMiddlewareType = ReturnType<typeof AuthCSRFReferrerMiddleware>;
-type AuthJWTNoLoginOnlyMiddlewareType = ReturnType<typeof AuthJWTNoLoginOnlyMiddleware>;
-type AuthJWTRoleMiddlewareType = ReturnType<typeof AuthJWTRoleMiddleware>;
-type AuthRateLimiterDefaultMiddlewareType = ReturnType<typeof AuthRateLimiterDefaultMiddleware>;
-type AuthTRYMiddlewareType = ReturnType<typeof AuthTRYMiddleware>;
-type authGuideMiddlewareParamsType = AuthGuideAuthTryMiddlewareParamsType;
-type authJwtGuideMiddlewareParamsType = AuthJWTGuideAuthTryMiddlewareParamsType;
-type authRateLimiterOptionMiddlewareParamsType = AuthRateLimiterOptionRateLimiterOptionMiddlewareParamsType;
-
-// Injectable modules interface
+// Injectable modules interface (empty - no modules found)
 export interface Injectable {
-  authCsrfHelper: AuthCSRFHelperModuleType;
-  authCsrfMiddleware: AuthCSRFMiddlewareModuleType;
-  authJsonWebToken: AuthJsonWebTokenModuleType;
-  authJwtExport: AuthJWTExportModuleType;
+  // No injectable modules found
+  // Add TypeScript files to src/app/injectable/ and regenerate types
 }
 
-// Middleware interface
+// Middleware interface (empty - no middlewares found)
 export interface Middleware {
-  authCsrfReferrer: AuthCSRFReferrerMiddlewareType;
-  authJwtNoLoginOnly: AuthJWTNoLoginOnlyMiddlewareType;
-  authJwtRole: AuthJWTRoleMiddlewareType;
-  authRateLimiterDefault: AuthRateLimiterDefaultMiddlewareType;
-  authTry: AuthTRYMiddlewareType;
+  // No middleware modules found
+  // Add *.middleware.ts files to src/app/injectable/ and regenerate types
 }
 
-// Middleware parameters interface
+// Middleware parameters interface (empty - no middleware interfaces found)
 export interface MiddlewareParams {
-  authGuide: authGuideMiddlewareParamsType;
-  authJwtGuide: authJwtGuideMiddlewareParamsType;
-  authRateLimiterOption: authRateLimiterOptionMiddlewareParamsType;
+  // No middleware parameter interfaces found
+  // Add *.middleware.interface.ts files to src/app/injectable/ and regenerate types
 }
 
-// Module registry for dynamic loading
+// Module registry for dynamic loading (empty)
 export const MODULE_REGISTRY = {
-  'authCsrfHelper': () => import('@app/injectable/auth/csrf/helper.module'),
-  'authCsrfMiddleware': () => import('@app/injectable/auth/csrf/middleware.module'),
-  'authJsonWebToken': () => import('@app/injectable/auth/jsonWebToken.module'),
-  'authJwtExport': () => import('@app/injectable/auth/jwt/export.module'),
+  // No modules available
 } as const;
 
-// Middleware registry for dynamic loading
+// Middleware registry for dynamic loading (empty)
 export const MIDDLEWARE_REGISTRY = {
-  'authCsrfReferrer': () => import('@app/injectable/auth/csrf/referrer.middleware'),
-  'authJwtNoLoginOnly': () => import('@app/injectable/auth/jwt/noLoginOnly.middleware'),
-  'authJwtRole': () => import('@app/injectable/auth/jwt/role.middleware'),
-  'authRateLimiterDefault': () => import('@app/injectable/auth/rateLimiter/default.middleware'),
-  'authTry': () => import('@app/injectable/auth/try.middleware'),
+  // No middlewares available
 } as const;
 
-// Middleware parameter mapping
+// Middleware parameter mapping (empty)
 export const MIDDLEWARE_PARAM_MAPPING = {
-  'authJwtNoLoginOnly': 'authJwtGuide',
-  'authJwtRole': 'authJwtGuide',
-  'authRateLimiterDefault': 'authRateLimiterOption',
-  'authTry': 'authGuide',
+  // No middleware parameter mappings found
 } as const;
 
 // Module names type

@@ -412,6 +412,18 @@ async function generateInjectableTypes() {
 		`  ${middlewareInterface.propertyName}: ${middlewareInterface.propertyName}MiddlewareParamsType;`
 	).join('\n');
 
+	// Ensure MiddlewareParams interface is always present (even if empty)
+	const middlewareParamsInterface = middlewareParamProperties 
+		? `// Middleware parameters interface
+export interface MiddlewareParams {
+${middlewareParamProperties}
+}`
+		: `// Middleware parameters interface (empty - no middleware interfaces found)
+export interface MiddlewareParams {
+  // No middleware parameter interfaces found
+  // Add *.middleware.interface.ts files to src/app/injectable/ and regenerate types
+}`;
+
 	// Generate module registry for runtime loading
 	const moduleRegistry = moduleEntries.map(module =>
 		`  '${module.propertyName}': () => import('@app/injectable/${module.importPath}'),`
@@ -442,10 +454,12 @@ async function generateInjectableTypes() {
 		}
 	});
 
-	// Generate middleware parameter mapping export
-	const middlewareParamMappingExport = Object.entries(middlewareParamMapping)
-		.map(([middlewareName, paramName]) => `  '${middlewareName}': '${paramName}',`)
-		.join('\n');
+	// Generate middleware parameter mapping export (always present)
+	const middlewareParamMappingExport = Object.entries(middlewareParamMapping).length > 0
+		? Object.entries(middlewareParamMapping)
+			.map(([middlewareName, paramName]) => `  '${middlewareName}': '${paramName}',`)
+			.join('\n')
+		: '  // No middleware parameter mappings found';
 
 	const typeDefinition = `// Auto-generated file - DO NOT EDIT MANUALLY
 // Source: src/app/injectable/
@@ -465,10 +479,7 @@ export interface Middleware {
 ${middlewareProperties}
 }
 
-// Middleware parameters interface
-export interface MiddlewareParams {
-${middlewareParamProperties}
-}
+${middlewareParamsInterface}
 
 // Module registry for dynamic loading
 export const MODULE_REGISTRY = {
@@ -536,6 +547,12 @@ export interface Middleware {
   // Add *.middleware.ts files to src/app/injectable/ and regenerate types
 }
 
+// Middleware parameters interface (empty - no middleware interfaces found)
+export interface MiddlewareParams {
+  // No middleware parameter interfaces found
+  // Add *.middleware.interface.ts files to src/app/injectable/ and regenerate types
+}
+
 // Module registry for dynamic loading (empty)
 export const MODULE_REGISTRY = {
   // No modules available
@@ -546,17 +563,28 @@ export const MIDDLEWARE_REGISTRY = {
   // No middlewares available
 } as const;
 
+// Middleware parameter mapping (empty)
+export const MIDDLEWARE_PARAM_MAPPING = {
+  // No middleware parameter mappings found
+} as const;
+
 // Module names type
 export type ModuleName = keyof typeof MODULE_REGISTRY;
 
 // Middleware names type
 export type MiddlewareName = keyof typeof MIDDLEWARE_REGISTRY;
 
+// Middleware parameter names type
+export type MiddlewareParamName = keyof MiddlewareParams;
+
 // Helper type for getting module type by name
 export type GetModuleType<T extends ModuleName> = T extends keyof Injectable ? Injectable[T] : never;
 
 // Helper type for getting middleware type by name
 export type GetMiddlewareType<T extends MiddlewareName> = T extends keyof Middleware ? Middleware[T] : never;
+
+// Helper type for getting middleware parameter type by name
+export type GetMiddlewareParamType<T extends MiddlewareParamName> = T extends keyof MiddlewareParams ? MiddlewareParams[T] : never;
 `;
 
 	const outputPath = path.join(process.cwd(), 'src', 'core', 'lib', 'types', 'generated-injectable-types.ts');

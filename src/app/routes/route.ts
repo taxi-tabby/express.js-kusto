@@ -6,6 +6,7 @@ const router = new ExpressRouter();
 
 router
 .GET(async (req, res, injected, repo, db) => {
+    
     return res.render('index', { 
         FRAMEWORK_URL: `https://github.com/taxi-tabby/express.js-kusto`,
     });

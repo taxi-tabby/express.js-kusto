@@ -6,6 +6,7 @@ import {
   AllSchemasResponse
 } from './crudSchemaTypes';
 import { PrismaSchemaAnalyzer } from './prismaSchemaAnalyzer';
+import { RelationshipConfigManager } from './relationshipConfig';
 
 /**
  * CRUD 스키마 정보를 등록하고 관리하는 레지스트리
@@ -15,9 +16,11 @@ export class CrudSchemaRegistry {
   private static instance: CrudSchemaRegistry;
   private schemas: Map<string, CrudSchemaInfo> = new Map();
   private isEnabled: boolean = false;
+  private relationshipManager: RelationshipConfigManager;
 
   private constructor() {
     this.checkEnvironment();
+    this.relationshipManager = new RelationshipConfigManager();
   }
 
   public static getInstance(): CrudSchemaRegistry {
@@ -247,6 +250,25 @@ export class CrudSchemaRegistry {
     return this.schemas.has(schemaKey);
   }
 
+  /**
+   * 모델이 어떤 데이터베이스에서든 등록되어 있는지 확인합니다
+   */
+  public hasModelInAnyDatabase(modelName: string): boolean {
+    for (const schema of this.schemas.values()) {
+      if (schema.modelName === modelName) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * 등록된 모델 이름들을 반환합니다
+   */
+  public getRegisteredModelNames(): string[] {
+    return Array.from(this.schemas.values()).map(schema => schema.modelName);
+  }
+
 
   /**
    * 미들웨어 정보를 문자열 배열로 변환합니다
@@ -355,13 +377,22 @@ export class CrudSchemaRegistry {
   private convertSchemaToTypeOrmEntity(schema: CrudSchemaInfo): any {
     const model = schema.model;
 
+    console.log(`🏗️ [${model.name}] TypeORM 엔티티 변환 시작`);
+    console.log(`   - 필드 수: ${model.fields.length}`);
+    console.log(`   - 관계 수: ${model.relations.length}`);
+    console.log(`   - 관계 목록: ${model.relations.map(r => `${r.name}(${r.type}) -> ${r.model}`).join(', ')}`);
+
     // 컬럼 변환
     const columns = model.fields
       .filter(field => !field.relationName) // 관계 필드 제외
       .map(field => this.convertFieldToTypeOrmColumn(field));
 
+    console.log(`   - 변환된 컬럼 수: ${columns.length}`);
+
     // 관계 변환 - many-to-many 관계를 우선적으로 처리
     const relations = this.convertRelationsToTypeOrmFormat(model.relations, model.name);
+
+    console.log(`   - 변환된 관계 수: ${relations.length}`);
 
     // 인덱스 변환
     const indices = model.indexes.map(index => ({
@@ -392,7 +423,7 @@ export class CrudSchemaRegistry {
     // CRUD 정보 생성
     const crudInfo = this.generateCrudInfo(schema);
 
-    return {
+    const result = {
       entityName: model.name,
       tableName: model.dbName || model.name.toLowerCase() + 's',
       targetName: model.name,
@@ -408,6 +439,9 @@ export class CrudSchemaRegistry {
       withoutRowid: false,
       crudInfo
     };
+
+    console.log(`✅ [${model.name}] TypeORM 엔티티 변환 완료: ${relations.length}개 관계 포함`);
+    return result;
   }
 
   /**
@@ -554,18 +588,28 @@ export class CrudSchemaRegistry {
    * 관계들을 TypeORM 형식으로 변환하며, many-to-many 관계를 특별히 처리합니다
    */
   private convertRelationsToTypeOrmFormat(relations: any[], modelName: string): any[] {
+    console.log(`🔍 [${modelName}] 관계 변환 시작: ${relations.length}개 관계 발견`);
+    
     const convertedRelations: any[] = [];
 
     for (const relation of relations) {
+      console.log(`🔄 [${modelName}] 관계 처리 중: ${relation.name} -> ${relation.model} (타입: ${relation.type})`);
+      
+      // 우선 모든 관계를 변환해보자 (CRUD 등록 여부와 상관없이)
+      
       // many-to-many 관계인지 확인
-      if (this.isManyToManyRelation(relation)) {
-        // User 모델의 roles 관계 -> UserRole을 통해 Role과 연결
-        if (modelName === 'User' && relation.name === 'roles' && relation.model === 'UserRole') {
+      if (this.relationshipManager.isManyToManyRelation(relation, modelName)) {
+        console.log(`🎯 [${modelName}] Many-to-Many 관계 감지: ${relation.name} -> ${relation.model}`);
+        
+        const manyToManyConfig = this.relationshipManager.getManyToManyConfig(relation, modelName);
+        if (manyToManyConfig) {
+          console.log(`✅ [${modelName}] Many-to-Many 설정 적용: ${JSON.stringify(manyToManyConfig)}`);
+          
           convertedRelations.push({
-            name: 'roles',
+            name: manyToManyConfig.relationName,
             type: 'many-to-many',
-            target: 'Role',
-            inverseSide: 'users',
+            target: manyToManyConfig.targetModel,
+            inverseSide: manyToManyConfig.inverseSide,
             isOwner: true,
             isLazy: false,
             isCascade: {
@@ -580,85 +624,53 @@ export class CrudSchemaRegistry {
             nullable: true,
             joinColumns: [
               {
-                name: 'user_id',
+                name: manyToManyConfig.sourceColumn,
                 referencedColumnName: 'id'
               }
             ],
-            joinTable: 'user_roles'
+            joinTable: manyToManyConfig.joinTable
           });
-        }
-        // User 모델의 permissions 관계 -> UserPermission을 통해 Permission과 연결
-        else if (modelName === 'User' && relation.name === 'permissions' && relation.model === 'UserPermission') {
-          convertedRelations.push({
-            name: 'permissions',
-            type: 'many-to-many',
-            target: 'Permission',
-            inverseSide: 'users',
-            isOwner: true,
-            isLazy: false,
-            isCascade: {
-              insert: false,
-              update: false,
-              remove: false,
-              softRemove: false,
-              recover: false
-            },
-            onDelete: 'CASCADE',
-            onUpdate: 'CASCADE',
-            nullable: true,
-            joinColumns: [
-              {
-                name: 'user_id',
-                referencedColumnName: 'id'
-              }
-            ],
-            joinTable: 'user_permissions'
-          });
-        }
-        // 다른 many-to-many 관계들도 비슷하게 처리
-        else {
-          convertedRelations.push(this.convertRelationToTypeOrmRelation(relation));
+        } else {
+          console.log(`❌ [${modelName}] Many-to-Many 설정 실패: ${relation.name} -> ${relation.model}`);
         }
       } 
-      // 일반 관계들 처리 - 중간 테이블과의 직접 관계는 제외
+      // 일반 관계들 처리
       else {
-        // UserRole, UserPermission 등 중간 테이블과의 직접 관계는 숨김
-        if (!this.isIntermediateTableRelation(relation, modelName)) {
-          convertedRelations.push(this.convertRelationToTypeOrmRelation(relation));
+        // 중간 테이블과의 직접 관계가 아닌 경우에만 포함
+        if (!this.relationshipManager.isIntermediateTableRelation(relation, modelName)) {
+          console.log(`🔗 [${modelName}] 일반 관계 처리: ${relation.name} -> ${relation.model}`);
+          
+          const convertedRelation = this.convertRelationToTypeOrmRelation(relation, modelName);
+          if (convertedRelation) {
+            convertedRelations.push(convertedRelation);
+            console.log(`✅ [${modelName}] 일반 관계 추가됨: ${relation.name}`);
+          } else {
+            console.log(`❌ [${modelName}] 일반 관계 변환 실패: ${relation.name}`);
+          }
+        } else {
+          console.log(`🚫 [${modelName}] 중간 테이블 관계 숨김: ${relation.name} -> ${relation.model}`);
         }
       }
     }
 
+    console.log(`✅ [${modelName}] 관계 변환 완료: ${convertedRelations.length}개 관계 변환됨`);
     return convertedRelations;
   }
 
   /**
-   * 중간 테이블과의 관계인지 확인합니다
+   * 중간 테이블과의 관계인지 확인합니다 (동적 패턴 사용)
    */
   private isIntermediateTableRelation(relation: any, modelName: string): boolean {
-    const targetModel = relation.model;
-    
-    // User 모델에서는 중간 테이블들과의 직접 관계를 숨기고 many-to-many로 변환
-    if (modelName === 'User') {
-      const hiddenRelations = ['UserRole', 'UserPermission'];
-      return hiddenRelations.includes(targetModel);
-    }
-
-    // Role 모델에서도 중간 테이블과의 직접 관계 숨김
-    if (modelName === 'Role') {
-      const hiddenRelations = ['UserRole', 'RolePermission'];
-      return hiddenRelations.includes(targetModel);
-    }
-
-    // 중간 테이블 자체(UserRole, RolePermission 등)에서는 모든 관계를 보여줌
-    return false;
+    return this.relationshipManager.isIntermediateTableRelation(relation, modelName);
   }
 
   /**
    * Prisma 관계를 TypeORM 관계 형식으로 변환합니다
    */
-  private convertRelationToTypeOrmRelation(relation: any): any {
-    const isManyToMany = this.isManyToManyRelation(relation);
+  private convertRelationToTypeOrmRelation(relation: any, sourceModel?: string): any {
+    const isManyToMany = sourceModel ? 
+      this.relationshipManager.isManyToManyRelation(relation, sourceModel) : 
+      false;
     
     // 관계 타입을 TypeORM 스타일로 변환
     let typeOrmRelationType = relation.type;
@@ -669,39 +681,17 @@ export class CrudSchemaRegistry {
     // 관계가 외래 키를 소유하는지 확인 (relationFromFields가 있는 경우)
     const isOwner = relation.fields && relation.fields.length > 0;
 
-    // many-to-many 관계인 경우 조인 테이블 정보 생성
+    // many-to-many 관계인 경우 설정 사용
     let joinTable = null;
     let joinColumns: any[] = [];
     
-    if (isManyToMany) {
-      // User의 roles 관계 -> UserRole 테이블의 경우
-      if (relation.name === 'roles' && relation.model === 'UserRole') {
-        joinTable = 'user_roles'; // Prisma 스키마에서 정의된 테이블 이름
+    if (isManyToMany && sourceModel) {
+      const config = this.relationshipManager.getManyToManyConfig(relation, sourceModel);
+      if (config) {
+        joinTable = config.joinTable;
         joinColumns = [
           {
-            name: 'user_id', // 실제로는 userUuid를 user_id로 매핑
-            referencedColumnName: 'id'
-          }
-        ];
-      }
-      // 다른 many-to-many 관계들에 대한 처리
-      else if (relation.name === 'permissions' && relation.model === 'UserPermission') {
-        joinTable = 'user_permissions';
-        joinColumns = [
-          {
-            name: 'user_id',
-            referencedColumnName: 'id'
-          }
-        ];
-      }
-      // 기본 조인 테이블 이름 패턴
-      else {
-        const sourceModel = this.getSourceModelFromRelation(relation);
-        const targetModel = this.getTargetModelFromRelation(relation);
-        joinTable = `${sourceModel.toLowerCase()}_${targetModel.toLowerCase()}`;
-        joinColumns = [
-          {
-            name: `${sourceModel.toLowerCase()}_id`,
+            name: config.sourceColumn,
             referencedColumnName: 'id'
           }
         ];
@@ -715,13 +705,20 @@ export class CrudSchemaRegistry {
         })) : [];
     }
 
-    // 역방향 관계 이름 추정
-    const inverseSide = this.getInverseSideName(relation);
+    // 타겟 모델 결정 - CRUD 등록 여부와 상관없이 모든 관계 허용
+    const targetModel = sourceModel ? 
+      this.relationshipManager.getActualTargetModel(relation, sourceModel) : 
+      relation.model;
+
+    // 역방향 관계 이름 생성
+    const inverseSide = sourceModel ? 
+      this.relationshipManager.generateInverseSideName(relation, sourceModel) : 
+      relation.name;
 
     return {
       name: relation.name,
       type: typeOrmRelationType,
-      target: isManyToMany ? this.getTargetModelFromRelation(relation) : relation.model,
+      target: targetModel,
       inverseSide: inverseSide,
       isOwner: isManyToMany ? true : isOwner, // many-to-many에서는 일반적으로 owner
       isLazy: false,
@@ -1001,5 +998,32 @@ export class CrudSchemaRegistry {
   public clearAllSchemas(): void {
     this.schemas.clear();
     console.log('모든 CRUD 스키마가 삭제되었습니다.');
+  }
+
+  /**
+   * 디버깅용: 등록된 스키마 정보를 출력합니다
+   */
+  public debugRegisteredSchemas(): void {
+    if (!this.isEnabled) {
+      console.log('🚫 스키마 API가 비활성화되어 있습니다.');
+      return;
+    }
+
+    console.log('🔍 등록된 CRUD 스키마 목록:');
+    console.log(`   총 스키마 수: ${this.schemas.size}개`);
+    
+    for (const [key, schema] of this.schemas.entries()) {
+      console.log(`   📋 ${key}: ${schema.basePath} (${schema.enabledActions.join(', ')})`);
+    }
+
+    const registeredModels = this.getRegisteredModelNames();
+    console.log(`📝 등록된 모델들: ${registeredModels.join(', ')}`);
+  }
+
+  /**
+   * 관계 설정 관리자에 액세스할 수 있도록 노출합니다 (고급 사용자용)
+   */
+  public getRelationshipManager(): RelationshipConfigManager {
+    return this.relationshipManager;
   }
 }

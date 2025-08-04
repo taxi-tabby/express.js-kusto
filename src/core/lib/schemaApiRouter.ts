@@ -192,8 +192,18 @@ export class SchemaApiRouter {
   private getSchemaDetail = async (req: Request, res: Response): Promise<void> => {
     try {
       const { databaseName, modelName } = req.params;
-      const result = this.registry.getSchema(databaseName, modelName);
-      res.json(result);
+      const { format } = req.query;
+      
+      // 기본적으로 TypeORM 형식 사용
+      if (format !== 'raw') {
+        // TypeORM 호환 형식으로 단일 엔티티 반환
+        const result = this.registry.getTypeOrmCompatibleSchema(databaseName, modelName);
+        res.json(result);
+      } else {
+        // 원시 형식 (레거시)
+        const result = this.registry.getSchema(databaseName, modelName);
+        res.json(result);
+      }
     } catch (error) {
       this.handleError(res, error);
     }
@@ -320,6 +330,9 @@ export class SchemaApiRouter {
             params: {
               databaseName: '데이터베이스 이름',
               modelName: '모델 이름 (예: User, Role)'
+            },
+            queryParams: {
+              format: 'typeorm (기본값) | raw'
             }
           },
           legacyDetail: {
@@ -329,6 +342,9 @@ export class SchemaApiRouter {
             params: {
               databaseName: '데이터베이스 이름',
               modelName: '모델 이름'
+            },
+            queryParams: {
+              format: 'typeorm (기본값) | raw'
             }
           }
         }
@@ -338,9 +354,10 @@ export class SchemaApiRouter {
         getAllSchemas: 'GET /api/schema/',
         getDatabases: 'GET /api/schema/databases',
         getUserSchemas: 'GET /api/schema/database/user',
-        getUserModel: 'GET /api/schema/database/user/User',
+        getUserModel: 'GET /api/schema/database/default/User (TypeORM 기본)',
         getTypeOrmFormat: 'GET /api/schema/database/user?format=typeorm',
-        getRawFormat: 'GET /api/schema/database/user?format=raw'
+        getRawFormat: 'GET /api/schema/database/user?format=raw',
+        getSingleEntity: 'GET /api/schema/database/default/User (기본: TypeORM)'
       };
 
       res.json({

@@ -105,7 +105,10 @@ export class ExpressRouter {
                 const prismaClient = prismaManager.getClient(databaseName);
                 if (prismaClient) {
                     // 각 데이터베이스별로 분석기 생성 (싱글톤이므로 중복 생성되지 않음)
-                    PrismaSchemaAnalyzer.getInstance(prismaClient, databaseName);
+                    const analyzer = PrismaSchemaAnalyzer.getInstance(prismaClient, databaseName);
+                    
+                    // 모든 모델을 자동으로 등록
+                    this.schemaRegistry.autoRegisterAllModels(analyzer, databaseName);
                     
                     // 초기화 완료 표시
                     ExpressRouter.initializedDatabases.add(databaseName);

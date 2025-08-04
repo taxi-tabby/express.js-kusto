@@ -61,6 +61,111 @@ export class CrudSchemaRegistry {
   }
 
   /**
+   * 모든 모델을 자동으로 스캔하여 등록합니다
+   */
+  public autoRegisterAllModels(analyzer: PrismaSchemaAnalyzer, databaseName?: string): void {
+    if (!this.isEnabled) {
+      return; // 개발 모드가 아니면 등록하지 않음
+    }
+
+    const dbName = databaseName || analyzer.getDatabaseName();
+    const allModels = analyzer.getAllModels();
+
+    console.log(`🔍 [${dbName}] 모든 모델 자동 등록 시작: ${allModels.length}개 모델 발견`);
+
+    for (const model of allModels) {
+      const modelName = model.name;
+      const schemaKey = `${dbName}.${modelName}`;
+
+      // 이미 등록된 모델은 건너뛰기
+      if (this.schemas.has(schemaKey)) {
+        console.log(`⏭️  [${dbName}] 이미 등록된 모델 건너뛰기: ${modelName}`);
+        continue;
+      }
+
+      // 모델을 기본 설정으로 자동 등록
+      this.autoRegisterModel(dbName, modelName, analyzer);
+    }
+
+    console.log(`✅ [${dbName}] 모든 모델 자동 등록 완료: ${this.schemas.size}개 스키마 등록됨`);
+  }
+
+  /**
+   * 개별 모델을 기본 설정으로 자동 등록합니다
+   */
+  private autoRegisterModel(databaseName: string, modelName: string, analyzer: PrismaSchemaAnalyzer): void {
+    try {
+      const modelInfo = analyzer.getModel(modelName);
+      if (!modelInfo) {
+        console.warn(`⚠️  [${databaseName}] 모델 정보를 찾을 수 없음: ${modelName}`);
+        return;
+      }
+
+      const primaryKeyField = analyzer.getPrimaryKeyField(modelName);
+      const primaryKey = primaryKeyField?.name || 'id';
+      const primaryKeyType = primaryKeyField?.jsType || 'string';
+
+      // 기본 경로 생성 (모델명을 소문자 복수형으로)
+      const basePath = this.generateBasePath(modelName);
+
+      // 기본 액션들 (CRUD 미사용 모델도 구조는 제공)
+      const enabledActions = ['index', 'show', 'create', 'update', 'destroy'];
+
+      // 소프트 삭제 필드 확인
+      const softDeleteField = modelInfo.fields.find(field => 
+        field.name === 'deletedAt' || field.name === 'deleted_at'
+      );
+      const softDeleteEnabled = !!softDeleteField;
+
+      if (softDeleteEnabled) {
+        enabledActions.push('recover');
+      }
+
+      const schemaInfo: CrudSchemaInfo = {
+        databaseName,
+        modelName,
+        basePath,
+        primaryKey,
+        primaryKeyType,
+        enabledActions,
+        model: modelInfo,
+        options: {
+          softDelete: softDeleteEnabled ? {
+            enabled: true,
+            field: softDeleteField!.name
+          } : undefined,
+          includeMerge: false,
+          middleware: {},
+          validation: {},
+          hooks: {}
+        },
+        createdAt: new Date(),
+        isAutoRegistered: true // 자동 등록임을 표시
+      };
+
+      const schemaKey = `${databaseName}.${modelName}`;
+      this.schemas.set(schemaKey, schemaInfo);
+
+      console.log(`✅ [${databaseName}] 자동 등록 완료: ${modelName} -> ${basePath}`);
+    } catch (error) {
+      console.error(`❌ [${databaseName}] 자동 등록 실패: ${modelName}`, error);
+    }
+  }
+
+  /**
+   * 모델명으로부터 기본 베이스 경로를 생성합니다
+   */
+  private generateBasePath(modelName: string): string {
+    // PascalCase를 kebab-case로 변환하고 복수형으로 만들기
+    const kebabCase = modelName
+      .replace(/([A-Z])/g, '-$1')
+      .toLowerCase()
+      .replace(/^-/, '');
+    
+    return this.pluralize(kebabCase);
+  }
+
+  /**
    * CRUD 스키마를 등록합니다
    */
   public registerSchema(
@@ -178,6 +283,10 @@ export class CrudSchemaRegistry {
     const models = schemas.map(schema => schema.model);
     const databases = Array.from(new Set(schemas.map(schema => schema.databaseName)));
 
+    // 수동/자동 등록 통계
+    const autoRegisteredCount = schemas.filter(s => s.isAutoRegistered).length;
+    const manualRegisteredCount = schemas.length - autoRegisteredCount;
+
     return {
       success: true,
       data: {
@@ -185,7 +294,12 @@ export class CrudSchemaRegistry {
         models,
         databases,
         totalSchemas: schemas.length,
-        environment: process.env.NODE_ENV || 'unknown'
+        environment: process.env.NODE_ENV || 'unknown',
+        registrationStats: {
+          autoRegistered: autoRegisteredCount,
+          manualRegistered: manualRegisteredCount,
+          total: schemas.length
+        }
       },
       meta: {
         total: schemas.length,
@@ -448,7 +562,43 @@ export class CrudSchemaRegistry {
    * CRUD 정보를 생성합니다
    */
   private generateCrudInfo(schema: CrudSchemaInfo): any {
-    const { basePath, enabledActions, model, options } = schema;
+    const { basePath, enabledActions, model, options, isAutoRegistered } = schema;
+    
+    // 자동 등록된 모델인 경우 기본 구조만 제공
+    if (isAutoRegistered) {
+      return {
+        isConfigured: false, // 실제 CRUD 설정이 되지 않았음을 표시
+        controllerPath: basePath,
+        entityName: model.name,
+        allowedMethods: [], // 실제 사용 가능한 메서드 없음
+        allowedFilters: [], // 필터 사용 불가
+        allowedParams: [], // 파라미터 사용 불가
+        allowedIncludes: [], // 관계 포함 사용 불가
+        routeSettings: {
+          note: 'This model is auto-registered but not configured for CRUD operations',
+          autoRegistered: true
+        },
+        availableEndpoints: [], // 실제 사용 가능한 엔드포인트 없음
+        schemaStructure: {
+          // 하지만 스키마 구조는 제공
+          fields: model.fields.map(field => ({
+            name: field.name,
+            type: field.type,
+            jsType: field.jsType,
+            isOptional: field.isOptional,
+            isId: field.isId,
+            isUnique: field.isUnique
+          })),
+          relations: model.relations.map(relation => ({
+            name: relation.name,
+            type: relation.type,
+            model: relation.model
+          }))
+        }
+      };
+    }
+    
+    // 수동 등록된 모델인 경우 기존 로직 사용
     
     // 허용된 메서드 생성
     const allowedMethods = enabledActions.map(action => {
@@ -1009,15 +1159,77 @@ export class CrudSchemaRegistry {
       return;
     }
 
+    const schemas = Array.from(this.schemas.values());
+    const autoRegistered = schemas.filter(s => s.isAutoRegistered);
+    const manualRegistered = schemas.filter(s => !s.isAutoRegistered);
+
     console.log('🔍 등록된 CRUD 스키마 목록:');
     console.log(`   총 스키마 수: ${this.schemas.size}개`);
+    console.log(`   📝 수동 등록: ${manualRegistered.length}개`);
+    console.log(`   🤖 자동 등록: ${autoRegistered.length}개`);
     
-    for (const [key, schema] of this.schemas.entries()) {
-      console.log(`   📋 ${key}: ${schema.basePath} (${schema.enabledActions.join(', ')})`);
+    if (manualRegistered.length > 0) {
+      console.log('\n📝 수동 등록된 모델들 (CRUD 기능 활성화):');
+      for (const schema of manualRegistered) {
+        const key = `${schema.databaseName}.${schema.modelName}`;
+        console.log(`   ✅ ${key}: ${schema.basePath} (${schema.enabledActions.join(', ')})`);
+      }
+    }
+
+    if (autoRegistered.length > 0) {
+      console.log('\n🤖 자동 등록된 모델들 (스키마 구조만 제공):');
+      for (const schema of autoRegistered) {
+        const key = `${schema.databaseName}.${schema.modelName}`;
+        console.log(`   📋 ${key}: ${schema.basePath} (구조만, CRUD 미활성화)`);
+      }
     }
 
     const registeredModels = this.getRegisteredModelNames();
-    console.log(`📝 등록된 모델들: ${registeredModels.join(', ')}`);
+    console.log(`\n� 등록된 모든 모델들: ${registeredModels.join(', ')}`);
+  }
+
+  /**
+   * 자동 등록된 모델들만 반환합니다
+   */
+  public getAutoRegisteredSchemas(): SchemaApiResponse<CrudSchemaInfo[]> {
+    if (!this.isEnabled) {
+      throw new Error('스키마 API는 개발 환경에서만 사용할 수 있습니다.');
+    }
+
+    const autoRegisteredSchemas = Array.from(this.schemas.values())
+      .filter(schema => schema.isAutoRegistered);
+
+    return {
+      success: true,
+      data: autoRegisteredSchemas,
+      meta: {
+        total: autoRegisteredSchemas.length,
+        timestamp: new Date(),
+        environment: process.env.NODE_ENV || 'unknown'
+      }
+    };
+  }
+
+  /**
+   * 수동 등록된 모델들만 반환합니다
+   */
+  public getManualRegisteredSchemas(): SchemaApiResponse<CrudSchemaInfo[]> {
+    if (!this.isEnabled) {
+      throw new Error('스키마 API는 개발 환경에서만 사용할 수 있습니다.');
+    }
+
+    const manualRegisteredSchemas = Array.from(this.schemas.values())
+      .filter(schema => !schema.isAutoRegistered);
+
+    return {
+      success: true,
+      data: manualRegisteredSchemas,
+      meta: {
+        total: manualRegisteredSchemas.length,
+        timestamp: new Date(),
+        environment: process.env.NODE_ENV || 'unknown'
+      }
+    };
   }
 
   /**

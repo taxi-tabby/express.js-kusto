@@ -74,6 +74,12 @@ export class SchemaApiRouter {
     // 스키마 통계 정보
     this.router.get('/meta/stats', this.getSchemaStats);
 
+    // 자동 등록된 모델들만 조회
+    this.router.get('/auto-registered', this.getAutoRegisteredSchemas);
+
+    // 수동 등록된 모델들만 조회 (실제 CRUD 활성화된 모델들)
+    this.router.get('/manual-registered', this.getManualRegisteredSchemas);
+
     // 데이터베이스 목록 조회
     this.router.get('/databases', this.getDatabases);
 
@@ -97,6 +103,30 @@ export class SchemaApiRouter {
     try {
       // TypeORM 호환 형식으로 응답
       const result = this.registry.getTypeOrmCompatibleSchema();
+      res.json(result);
+    } catch (error) {
+      this.handleError(res, error);
+    }
+  };
+
+  /**
+   * 자동 등록된 모델들만 조회
+   */
+  private getAutoRegisteredSchemas = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const result = this.registry.getAutoRegisteredSchemas();
+      res.json(result);
+    } catch (error) {
+      this.handleError(res, error);
+    }
+  };
+
+  /**
+   * 수동 등록된 모델들만 조회 (실제 CRUD 활성화된 모델들)
+   */
+  private getManualRegisteredSchemas = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const result = this.registry.getManualRegisteredSchemas();
       res.json(result);
     } catch (error) {
       this.handleError(res, error);
@@ -217,10 +247,28 @@ export class SchemaApiRouter {
       const allSchemas = this.registry.getAllSchemas();
       const schemas = allSchemas.data.schemas;
 
+      const autoRegistered = schemas.filter(s => s.isAutoRegistered);
+      const manualRegistered = schemas.filter(s => !s.isAutoRegistered);
+
       const stats = {
         totalSchemas: schemas.length,
+        autoRegisteredSchemas: autoRegistered.length,
+        manualRegisteredSchemas: manualRegistered.length,
         totalDatabases: allSchemas.data.databases.length,
         totalModels: allSchemas.data.models.length,
+        registrationBreakdown: {
+          autoRegistered: autoRegistered.map(s => ({
+            key: `${s.databaseName}.${s.modelName}`,
+            basePath: s.basePath,
+            note: 'Schema structure only, CRUD not enabled'
+          })),
+          manualRegistered: manualRegistered.map(s => ({
+            key: `${s.databaseName}.${s.modelName}`,
+            basePath: s.basePath,
+            enabledActions: s.enabledActions,
+            note: 'Full CRUD functionality enabled'
+          }))
+        },
         actionStats: this.calculateActionStats(schemas),
         databaseStats: this.calculateDatabaseStats(schemas),
         recentlyRegistered: schemas
@@ -229,7 +277,8 @@ export class SchemaApiRouter {
           .map(schema => ({
             key: `${schema.databaseName}.${schema.modelName}`,
             createdAt: schema.createdAt,
-            actionsCount: schema.enabledActions.length
+            actionsCount: schema.enabledActions.length,
+            isAutoRegistered: schema.isAutoRegistered || false
           })),
         environment: process.env.NODE_ENV || 'unknown',
         timestamp: new Date()
@@ -307,6 +356,16 @@ export class SchemaApiRouter {
               format: 'typeorm (기본값) | raw'
             }
           },
+          autoRegistered: {
+            method: 'GET',
+            path: '/api/schema/auto-registered',
+            description: '자동 등록된 모델들만 조회 (스키마 구조만 제공, CRUD 미활성화)'
+          },
+          manualRegistered: {
+            method: 'GET',
+            path: '/api/schema/manual-registered',
+            description: '수동 등록된 모델들만 조회 (실제 CRUD 기능 활성화된 모델들)'
+          },
           databases: {
             method: 'GET',
             path: '/api/schema/databases',
@@ -352,6 +411,8 @@ export class SchemaApiRouter {
 
       const examples = {
         getAllSchemas: 'GET /api/schema/',
+        getAutoRegistered: 'GET /api/schema/auto-registered',
+        getManualRegistered: 'GET /api/schema/manual-registered',
         getDatabases: 'GET /api/schema/databases',
         getUserSchemas: 'GET /api/schema/database/user',
         getUserModel: 'GET /api/schema/database/default/User (TypeORM 기본)',

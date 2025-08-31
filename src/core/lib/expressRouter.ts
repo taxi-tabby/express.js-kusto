@@ -543,6 +543,26 @@ export class ExpressRouter {
         const upload = multer({ storage: multerStorageEngine, limits: { fileSize: fileSize } });
         const accpetFileType = upload.any();
         this.router.post('/', accpetFileType, this.wrapHandler(handler));
+
+        // 문서화 등록을 지연시키거나 setBasePath 호출 후 올바른 경로로 등록하도록 함
+        if (this.basePath) {
+            // basePath가 이미 설정된 경우 즉시 등록
+            DocumentationGenerator.registerRoute({
+                method: 'POST',
+                path: this.getFullPath('/'),
+                summary: `Any file upload`,
+                parameters: {},
+                responses: { 200: { data: { type: 'object' as const, required: false } } }
+            });
+        } else {
+            // basePath가 아직 설정되지 않은 경우 지연 등록
+            this.pendingDocumentation.push({
+                method: 'POST',
+                path: '/',
+                responseConfig: { 200: { data: { type: 'object', required: false } } }
+            });
+        }
+
         return this;
     }
 
@@ -598,6 +618,26 @@ export class ExpressRouter {
         const upload = multer({ storage: multerStorageEngine, limits: { fileSize: fileSize }, });
         const accpetFileType = upload.single(keyName);
         this.router.put('/', accpetFileType, this.wrapHandler(handler));
+
+        // 문서화 등록을 지연시키거나 setBasePath 호출 후 올바른 경로로 등록하도록 함
+        if (this.basePath) {
+            // basePath가 이미 설정된 경우 즉시 등록
+            DocumentationGenerator.registerRoute({
+                method: 'PUT',
+                path: this.getFullPath('/'),
+                summary: `File upload: ${keyName}`,
+                parameters: {},
+                responses: { 200: { data: { type: 'object' as const, required: false } } }
+            });
+        } else {
+            // basePath가 아직 설정되지 않은 경우 지연 등록
+            this.pendingDocumentation.push({
+                method: 'PUT',
+                path: '/',
+                responseConfig: { 200: { data: { type: 'object', required: false } } }
+            });
+        }
+
         return this;
     }
 
@@ -620,6 +660,26 @@ export class ExpressRouter {
         const upload = multer({ storage: multerStorageEngine, limits: { fileSize: fileSize } });
         const accpetFileType = upload.array(keyName, maxFileCount);
         this.router.put('/', accpetFileType, this.wrapHandler(handler));
+
+        // 문서화 등록을 지연시키거나 setBasePath 호출 후 올바른 경로로 등록하도록 함
+        if (this.basePath) {
+            // basePath가 이미 설정된 경우 즉시 등록
+            DocumentationGenerator.registerRoute({
+                method: 'PUT',
+                path: this.getFullPath('/'),
+                summary: `Multiple file upload: ${keyName}${maxFileCount ? ` (max: ${maxFileCount})` : ''}`,
+                parameters: {},
+                responses: { 200: { data: { type: 'object' as const, required: false } } }
+            });
+        } else {
+            // basePath가 아직 설정되지 않은 경우 지연 등록
+            this.pendingDocumentation.push({
+                method: 'PUT',
+                path: '/',
+                responseConfig: { 200: { data: { type: 'object', required: false } } }
+            });
+        }
+
         return this;
     }
 
@@ -643,6 +703,26 @@ export class ExpressRouter {
         const upload = multer({ storage: multerStorageEngine, limits: { fileSize: fileSize } });
         const accpetFileType = upload.fields(fields);
         this.router.put('/', accpetFileType, this.wrapHandler(handler));
+
+        // 문서화 등록을 지연시키거나 setBasePath 호출 후 올바른 경로로 등록하도록 함
+        if (this.basePath) {
+            // basePath가 이미 설정된 경우 즉시 등록
+            DocumentationGenerator.registerRoute({
+                method: 'PUT',
+                path: this.getFullPath('/'),
+                summary: `Multiple fields file upload`,
+                parameters: {},
+                responses: { 200: { data: { type: 'object' as const, required: false } } }
+            });
+        } else {
+            // basePath가 아직 설정되지 않은 경우 지연 등록
+            this.pendingDocumentation.push({
+                method: 'PUT',
+                path: '/',
+                responseConfig: { 200: { data: { type: 'object', required: false } } }
+            });
+        }
+
         return this;
     }
 
@@ -668,6 +748,26 @@ export class ExpressRouter {
         const upload = multer({ storage: multerStorageEngine, limits: { fileSize: fileSize } });
         const accpetFileType = upload.any();
         this.router.put('/', accpetFileType, this.wrapHandler(handler));
+
+        // 문서화 등록을 지연시키거나 setBasePath 호출 후 올바른 경로로 등록하도록 함
+        if (this.basePath) {
+            // basePath가 이미 설정된 경우 즉시 등록
+            DocumentationGenerator.registerRoute({
+                method: 'PUT',
+                path: this.getFullPath('/'),
+                summary: `Any file upload`,
+                parameters: {},
+                responses: { 200: { data: { type: 'object' as const, required: false } } }
+            });
+        } else {
+            // basePath가 아직 설정되지 않은 경우 지연 등록
+            this.pendingDocumentation.push({
+                method: 'PUT',
+                path: '/',
+                responseConfig: { 200: { data: { type: 'object', required: false } } }
+            });
+        }
+
         return this;
     }
 
@@ -1864,20 +1964,20 @@ export class ExpressRouter {
 
     
     /**
-     * CRUD ?�동 ?�성 메서??
+     * CRUD 자동 생성 메서드
      * 완전한 REST API CRUD 엔드포인트를 자동으로 생성합니다
      * 
-     * ?�성?�는 ?�우??
-     * - GET / (index) - 리스??조회 with ?�터�? ?�렬, ?�이지?�이??
-     * - GET /:identifier (show) - ?�일 ??�� 조회
-     * - POST / (create) - ????�� ?�성
-     * - PUT /:identifier (update) - ??�� ?�체 ?�정
-     * - PATCH /:identifier (update) - ??�� 부�??�정  
-     * - DELETE /:identifier (destroy) - ??�� ??��
+     * 생성되는 라우트:
+     * - GET / (index) - 리스트 조회 with 필터링, 정렬, 페이지네이션
+     * - GET /:identifier (show) - 단일 데이터 조회
+     * - POST / (create) - 새로운 데이터 생성
+     * - PUT /:identifier (update) - 데이터 전체 수정
+     * - PATCH /:identifier (update) - 데이터 부분 수정  
+     * - DELETE /:identifier (destroy) - 데이터 삭제
      * 
-     * @param databaseName ?�용???�이?�베?�스 ?�름
-     * @param modelName ?�??모델 ?�름 (?�???�전?�을 ?�해 ?�네�??�용)
-     * @param options CRUD ?�션 ?�정
+     * @param databaseName 사용할 데이터베이스 이름
+     * @param modelName 대상 모델 이름 (복수형 변환을 위해 단수형 사용)
+     * @param options CRUD 옵션 설정
      */
     public CRUD<T extends DatabaseNamesUnion>(
         databaseName: T, 

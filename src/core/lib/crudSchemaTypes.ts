@@ -123,6 +123,7 @@ export interface CrudSchemaInfo {
     hooks?: Record<string, string>;
   };
   createdAt: Date;
+  isAutoRegistered?: boolean; // 자동 등록된 모델인지 표시
 }
 
 /**
@@ -149,4 +150,9 @@ export interface AllSchemasResponse {
   databases: string[];
   totalSchemas: number;
   environment: string;
+  registrationStats?: {
+    autoRegistered: number;
+    manualRegistered: number;
+    total: number;
+  };
 }

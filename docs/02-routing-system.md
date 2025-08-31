@@ -21,7 +21,7 @@ Express.js-Kusto 프레임워크는 **계층적 라우팅 시스템**을 구현�
 
 프레임워크는 두 가지 방법으로 URL 파라미터를 정의할 수 있습니다:
 
-### 방법 1: 폴더명 기반 (권장)
+### 방법: 폴더명 정의
 
 폴더명을 사용하여 자동으로 URL 파라미터를 생성합니다:
 
@@ -50,7 +50,7 @@ src/app/routes/
         └── route.ts
 ```
 
-### 방법 2: 코드 기반
+### 방법: 코드로 받기
 
 코드에서 직접 슬러그를 정의할 수도 있습니다:
 
@@ -61,8 +61,6 @@ router.GET_SLUG(["userId", "postId"], async (req, res, injected, repo, db) => {
     // 처리 로직...
 });
 ```
-
-> **📝 참고**: 폴더명 기반 방식이 더 직관적이고 관리하기 쉽습니다. 파일 구조만으로도 API 엔드포인트를 쉽게 파악할 수 있지만, 사용은 자유입니다. (폴더명으로 쓰는 게 시각적으로 별로일 수 있음)
 
 ## 라우트 파일 (route.ts)
 
@@ -772,53 +770,210 @@ router
 
 
 ## 전체 메소드
-1. ------
-2. ------
-3. ------
-4. ------
-5. ------
-6. ------
-7. ------
-8. ------
-9. ------
-10. ------
-11. ------
-12. ------
-13. ------
-14. ------
-15. ------
-16. ------
-17. ------
-18. ------
-19. ------
-20. ------
-21. ------
-22. ------
-23. ------
-24. ------
-25. ------
-26. ------
-27. ------
-28. ------
-29. ------
-30. ------
-31. ------
-32. ------
-33. ------
-34. ------
-35. ------
-36. ------
-37. ------
-38. ------
-39. ------
-40. ------
-41. ------
-42. ------
-43. ------
-44. ------
-45. ------
-46. ------
 
+### 기본 메서드
+> 라우터를 적용하는 기능입니다.
+```typescript
+import { ExpressRouter } from '@lib/expressRouter'
+const router = new ExpressRouter();
+
+...
+...
+...
+
+// 모든 라우터는 코드의 마지막에 해당 메서드를 사용해서 export default 로 반환해야 합니다.
+export default router.build();
+```
+
+- **`build`** - 라우터를 빌드하여 Express Router 객체를 반환합니다.
+- **`setBasePath`** - 라우터의 기본 경로를 설정합니다.
+
+
+
+### HTTP 메서드 (기본)
+```typescript
+import { ExpressRouter } from '@lib/expressRouter'
+const router = new ExpressRouter();
+
+// Express.js를 사용하는 방법과 거의 동일합니다.
+// req(Request), res(Result) 는 express.js에서 제공하는 함수와 거의 완전 동일합니다.
+// 반환 방법도 동일합니다.
+// 앱 기반 라우터 동작을 지향하므로 path 입력은 없습니다.
+// https://expressjs.com/en/starter/hello-world.html 를 참고하세요
+router
+.GET(async (req, res, injected, repo, db) => {
+    return res.render('index', { 
+        CONST_VERSION_NAME: `1.0.0-kusto`,
+    });
+});
+```
+
+- **`GET`** - HTTP GET 메서드의 동작을 정의합니다.
+- **`GET_SLUG`** - HTTP GET 메서드의 SLUG 동작을 정의합니다.
+```typescript
+router
+.GET_SLUG(['slug1', 'slug2'], async (req, res, injected, repo, db) => {
+    return res.render('index', { 
+        CONST_VERSION_NAME: `1.0.0-kusto`,
+    });
+});
+```
+
+- **`POST`** - HTTP POST 메서드의 동작을 정의합니다.
+- **`POST_SLUG`** - HTTP POST 메서드의 SLUG 동작을 정의합니다.
+- **`PUT`** - HTTP PUT 메서드의 동작을 정의합니다.
+- **`PUT_SLUG`** - HTTP PUT 메서드의 SLUG 동작을 정의합니다.
+- **`DELETE`** - HTTP DELETE 메서드의 동작을 정의합니다.
+- **`DELETE_SLUG`** - HTTP DELETE 메서드의 SLUG 동작을 정의합니다.
+- **`PATCH`** - HTTP PATCH 메서드의 동작을 정의합니다.
+- **`PATCH_SLUG`** - HTTP PATCH 메서드의 SLUG 동작을 정의합니다.
+- **`NOTFOUND`** - 지정된 라우터가 없을 때 동작을 정의합니다.
+
+### 파일 업로드 메서드
+> multer 라이브러리를 사용한 파일 업로드 대응 기능입니다.
+> https://github.com/expressjs/multer 를 참고하세요
+```typescript
+import { ExpressRouter } from '@lib/expressRouter'
+import { memoryStorage } from 'multer'
+const router = new ExpressRouter();
+
+
+const storage = memoryStorage();
+router.POST_FIELD_FILE(storage, [
+    {name: 'attachment', maxCount: 1},
+    {name: 'images', maxCount: 5}
+],(req, res, injected, repo, db) => {
+    
+    // multer를 사용하여 파일 업로드 처리
+    // req.files는 fieldname을 키로 하는 객체입니다.
+    const files = req.files as { [fieldname: string]: Express.Multer.File[] };
+    
+    // attachment 파일 (단일 파일)
+    const attachmentFiles = files['attachment'];
+    if (attachmentFiles && attachmentFiles.length > 0) {
+        const attachment = attachmentFiles[0];
+        console.log('첨부파일:', {
+            originalname: attachment.originalname,
+            mimetype: attachment.mimetype,
+            size: attachment.size,
+            buffer: attachment.buffer // 메모리에 저장된 파일 데이터
+        });
+    }
+    
+    // images 파일들 (복수 파일)
+    const imageFiles = files['images'];
+    if (imageFiles && imageFiles.length > 0) {
+        console.log(`업로드된 이미지 개수: ${imageFiles.length}`);
+        imageFiles.forEach((image, index) => {
+            console.log(`이미지 ${index + 1}:`, {
+                originalname: image.originalname,
+                mimetype: image.mimetype,
+                size: image.size,
+                buffer: image.buffer // 메모리에 저장된 파일 데이터
+            });
+        });
+    }
+    
+    // 응답 반환
+    res.json({
+        success: true,
+        message: '파일 업로드 완료',
+        uploadedFiles: {
+            attachment: attachmentFiles?.length || 0,
+            images: imageFiles?.length || 0
+        }
+    });
+})
+
+```
+
+- **`POST_SINGLE_FILE`** - 단일 파일 업로드를 처리합니다.
+- **`POST_ARRAY_FILE`** - 배열 형태의 다중 파일 업로드를 처리합니다.
+- **`POST_FIELD_FILE`** - 필드별 파일 업로드를 처리합니다.
+- **`POST_ANY_FILE`** - 모든 형태의 파일 업로드를 처리합니다.
+- **`PUT_SINGLE_FILE`** - PUT 방식 단일 파일 업로드를 처리합니다.
+- **`PUT_ARRAY_FILE`** - PUT 방식 배열 형태의 다중 파일 업로드를 처리합니다.
+- **`PUT_FIELD_FILE`** - PUT 방식 필드별 파일 업로드를 처리합니다.
+- **`PUT_ANY_FILE`** - PUT 방식 모든 형태의 파일 업로드를 처리합니다.
+
+### 미들웨어 메서드
+```typescript
+import { ExpressRouter } from '@lib/expressRouter'
+const router = new ExpressRouter();
+
+// 미들웨어 체이닝 예시
+router
+    .WITH('corsHandler')
+    .WITH('authJwtRequired')
+    .MIDDLEWARE(customMiddleware)
+    .GET(handler);
+```
+
+- **`USE`** - Express 기본 미들웨어를 등록합니다.
+- **`MIDDLEWARE`** - 커스텀 미들웨어 함수를 등록합니다.
+- **`WITH`** - Injectable 미들웨어를 등록합니다 (의존성 주입 지원).
+
+### 프록시 및 정적 파일 메서드
+> http-proxy-middleware 라이브러리를 사용한 프록시 처리입니다.
+```typescript
+import { ExpressRouter } from '@lib/expressRouter'
+const router = new ExpressRouter();
+
+// 프록시 설정 예시
+router.MIDDLE_PROXY_ROUTE({
+    target: 'http://localhost:3001',
+    changeOrigin: true
+});
+```
+
+- **`MIDDLE_PROXY_ROUTE`** - 루트 경로에 프록시를 설정합니다.
+- **`MIDDLE_PROXY_ROUTE_SLUG`** - 특정 슬러그 경로에 프록시를 설정합니다.
+
+### 정적 HTTP 파일 제공 메서드
+```typescript
+import { ExpressRouter } from '@lib/expressRouter'
+const router = new ExpressRouter();
+
+// 정적 파일 서빙 예시
+router.STATIC('./public');
+```
+
+- **`STATIC`** - 루트 경로에서 정적 파일을 제공합니다.
+- **`STATIC_SLUG`** - 특정 슬러그 경로에서 정적 파일을 제공합니다.
+
+### 검증된 요청 메서드
+```typescript
+import { ExpressRouter } from '@lib/expressRouter'
+const router = new ExpressRouter();
+
+// 검증된 요청 예시
+router.POST_VALIDATED(
+    { body: { name: { type: 'string', required: true } } },
+    { 200: { success: { type: 'boolean', required: true } } },
+    handler
+);
+```
+
+- **`GET_VALIDATED`** - 검증된 GET 요청을 처리합니다.
+- **`GET_SLUG_VALIDATED`** - 검증된 GET 슬러그 요청을 처리합니다.
+- **`POST_VALIDATED`** - 검증된 POST 요청을 처리합니다.
+- **`POST_SLUG_VALIDATED`** - 검증된 POST 슬러그 요청을 처리합니다.
+- **`PUT_VALIDATED`** - 검증된 PUT 요청을 처리합니다.
+- **`DELETE_VALIDATED`** - 검증된 DELETE 요청을 처리합니다.
+- **`PATCH_VALIDATED`** - 검증된 PATCH 요청을 처리합니다.
+
+### CRUD 메서드
+```typescript
+import { ExpressRouter } from '@lib/expressRouter'
+const router = new ExpressRouter();
+
+// CRUD 자동 생성 예시
+router.CRUD('user', 'User', {
+    only: ['index', 'show', 'create', 'update', 'destroy']
+});
+```
+
+- **`CRUD`** - 완전한 REST API CRUD 엔드포인트를 자동으로 생성합니다.
 
 
 

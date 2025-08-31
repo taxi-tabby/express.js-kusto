@@ -152,7 +152,7 @@ export class KustoManager {
      * 특정 레포지토리 가져오기
      */
     public getRepository<T extends keyof RepositoryTypeMap>(name: T): RepositoryTypeMap[T] {
-        return repositoryManager.getRepository(name as RepositoryName);
+        return repositoryManager.getRepository(name as RepositoryName) as RepositoryTypeMap[T];
     }
 
     /**

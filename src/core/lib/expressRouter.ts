@@ -1637,6 +1637,121 @@ export class ExpressRouter {
         return this;
     }
 
+    /**
+     * # PATCH_SLUG_VALIDATED
+     * 검증된 PATCH 슬러그 요청 처리
+     * @param exact true이면 하위 경로 매칭 방지 (기본값 false)
+     */
+    public PATCH_SLUG_VALIDATED<TConfig extends RequestConfig>(
+        slug: string[],
+        requestConfig: TConfig,
+        responseConfig: ResponseConfig,
+        handler: ValidatedHandlerFunction<TConfig>,
+        options?: { exact?: boolean }
+    ): ExpressRouter {
+        // 헬퍼 메서드를 통해 호출자 위치 정보 획득
+        const { filePath, lineNumber } = this.getCallerSourceInfo();
+
+        const middlewares = CustomRequestHandler.createHandler(
+            {
+                request: requestConfig,
+                response: responseConfig,
+                sourceInfo: { filePath, lineNumber }
+            },
+            handler
+        );
+        const slugPath = this.convertSlugsToPath(slug);
+
+        // 문서화 등록을 지연시키거나 setBasePath 호출 후 올바른 경로로 등록하도록 함
+        if (this.basePath) {
+            // basePath가 이미 설정된 경우 즉시 등록
+            DocumentationGenerator.registerRoute({
+                method: 'PATCH',
+                path: this.getFullPath(slugPath),
+                parameters: {
+                    query: requestConfig.query,
+                    params: requestConfig.params,
+                    body: requestConfig.body
+                },
+                responses: responseConfig
+            });
+        } else {
+            // basePath가 아직 설정되지 않은 경우 지연 등록
+            this.pendingDocumentation.push({
+                method: 'PATCH',
+                path: slugPath,
+                requestConfig,
+                responseConfig
+            });
+        }
+
+        if (options?.exact) {
+            // 정확한 매칭: 하위 경로에 영향을 주지 않음
+            const exactMiddleware = (req: any, res: any, next: any) => {
+                // 현재 요청 경로가 정확한 패턴과 일치하는지 확인
+                const pathParts = req.path.split('/').filter(Boolean);
+                const expectedParts = slug.length;
+
+                // 경로 세그먼트 수가 정확히 일치해야 함
+                if (pathParts.length === expectedParts) {
+                    next();
+                } else {
+                    next('route'); // 다른 라우터로 넘김
+                }
+            };
+            this.router.patch(slugPath, exactMiddleware, ...middlewares);
+        } else {
+            // 기본 동작: 하위 경로도 매칭
+            this.router.patch(slugPath, ...middlewares);
+        }
+
+        return this;
+    }
+
+    /**
+     * # PATCH_SLUG_VALIDATED_EXACT
+     * 검증된 PATCH 슬러그 요청 처리 (정확한 경로 매칭)
+     */
+    public PATCH_SLUG_VALIDATED_EXACT<TConfig extends RequestConfig>(
+        slug: string[],
+        requestConfig: TConfig,
+        responseConfig: ResponseConfig,
+        handler: ValidatedHandlerFunction<TConfig>
+    ): ExpressRouter {
+        const middlewares = CustomRequestHandler.createHandler(
+            { request: requestConfig, response: responseConfig },
+            handler
+        );
+
+        const exactPath = this.convertSlugsToPath(slug);
+        this.router.patch(new RegExp(`^${exactPath.replace(/:\w+/g, '([^/]+)')}$`), ...middlewares);
+
+        // 문서화 등록을 지연시키거나 setBasePath 호출 후 올바른 경로로 등록하도록 함
+        if (this.basePath) {
+            // basePath가 이미 설정된 경우 즉시 등록
+            DocumentationGenerator.registerRoute({
+                method: 'PATCH',
+                path: this.getFullPath(exactPath),
+                parameters: {
+                    query: requestConfig.query,
+                    params: requestConfig.params,
+                    body: requestConfig.body
+                },
+                responses: responseConfig
+            });
+        } else {
+            // basePath가 아직 설정되지 않은 경우 지연 등록
+            this.pendingDocumentation.push({
+                method: 'PATCH',
+                path: exactPath,
+                requestConfig,
+                responseConfig
+            });
+        }
+
+        return this;
+    }
+
 
 
     /**
@@ -1821,11 +1936,76 @@ export class ExpressRouter {
         return this;
     }
 
+    /**
+     * # PUT_SLUG_VALIDATED
+     * 검증된 PUT 슬러그 요청 처리
+     * @param exact true이면 하위 경로 매칭 방지 (기본값 false)
+     */
+    public PUT_SLUG_VALIDATED<TConfig extends RequestConfig>(
+        slug: string[],
+        requestConfig: TConfig,
+        responseConfig: ResponseConfig,
+        handler: ValidatedHandlerFunction<TConfig>,
+        options?: { exact?: boolean }
+    ): ExpressRouter {
+        // 헬퍼 메서드를 통해 호출자 위치 정보 획득
+        const { filePath, lineNumber } = this.getCallerSourceInfo();
 
+        const middlewares = CustomRequestHandler.createHandler(
+            {
+                request: requestConfig,
+                response: responseConfig,
+                sourceInfo: { filePath, lineNumber }
+            },
+            handler
+        );
+        const slugPath = this.convertSlugsToPath(slug);
 
+        // 문서화 등록을 지연시키거나 setBasePath 호출 후 올바른 경로로 등록하도록 함
+        if (this.basePath) {
+            // basePath가 이미 설정된 경우 즉시 등록
+            DocumentationGenerator.registerRoute({
+                method: 'PUT',
+                path: this.getFullPath(slugPath),
+                parameters: {
+                    query: requestConfig.query,
+                    params: requestConfig.params,
+                    body: requestConfig.body
+                },
+                responses: responseConfig
+            });
+        } else {
+            // basePath가 아직 설정되지 않은 경우 지연 등록
+            this.pendingDocumentation.push({
+                method: 'PUT',
+                path: slugPath,
+                requestConfig,
+                responseConfig
+            });
+        }
 
+        if (options?.exact) {
+            // 정확한 매칭: 하위 경로에 영향을 주지 않음
+            const exactMiddleware = (req: any, res: any, next: any) => {
+                // 현재 요청 경로가 정확한 패턴과 일치하는지 확인
+                const pathParts = req.path.split('/').filter(Boolean);
+                const expectedParts = slug.length;
 
+                // 경로 세그먼트 수가 정확히 일치해야 함
+                if (pathParts.length === expectedParts) {
+                    next();
+                } else {
+                    next('route'); // 다른 라우터로 넘김
+                }
+            };
+            this.router.put(slugPath, exactMiddleware, ...middlewares);
+        } else {
+            // 기본 동작: 하위 경로도 매칭
+            this.router.put(slugPath, ...middlewares);
+        }
 
+        return this;
+    }
 
     /**
      * # PUT_SLUG_VALIDATED_EXACT
@@ -1872,52 +2052,121 @@ export class ExpressRouter {
         return this;
     }
 
+    /**
+     * # DELETE_SLUG_VALIDATED
+     * 검증된 DELETE 슬러그 요청 처리
+     * @param exact true이면 하위 경로 매칭 방지 (기본값 false)
+     */
+    public DELETE_SLUG_VALIDATED<TConfig extends RequestConfig>(
+        slug: string[],
+        requestConfig: TConfig,
+        responseConfig: ResponseConfig,
+        handler: ValidatedHandlerFunction<TConfig>,
+        options?: { exact?: boolean }
+    ): ExpressRouter {
+        // 헬퍼 메서드를 통해 호출자 위치 정보 획득
+        const { filePath, lineNumber } = this.getCallerSourceInfo();
 
+        const middlewares = CustomRequestHandler.createHandler(
+            {
+                request: requestConfig,
+                response: responseConfig,
+                sourceInfo: { filePath, lineNumber }
+            },
+            handler
+        );
+        const slugPath = this.convertSlugsToPath(slug);
 
-    // /**
-    //  * # DELETE_SLUG_VALIDATED_EXACT
-    //  * 검증된 DELETE ?�러�??�청 처리 (?�확??경로 매칭�?
-    //  */
-    // public DELETE_SLUG_VALIDATED_EXACT(
-    //     slug: string[],
-    //     requestConfig: RequestConfig,
-    //     responseConfig: ResponseConfig,
-    //     handler: ValidatedHandlerFunction
-    // ): ExpressRouter {
-    //     const middlewares = CustomRequestHandler.createHandler(
-    //         { request: requestConfig, response: responseConfig },
-    //         handler
-    //     );
+        // 문서화 등록을 지연시키거나 setBasePath 호출 후 올바른 경로로 등록하도록 함
+        if (this.basePath) {
+            // basePath가 이미 설정된 경우 즉시 등록
+            DocumentationGenerator.registerRoute({
+                method: 'DELETE',
+                path: this.getFullPath(slugPath),
+                parameters: {
+                    query: requestConfig.query,
+                    params: requestConfig.params,
+                    body: requestConfig.body
+                },
+                responses: responseConfig
+            });
+        } else {
+            // basePath가 아직 설정되지 않은 경우 지연 등록
+            this.pendingDocumentation.push({
+                method: 'DELETE',
+                path: slugPath,
+                requestConfig,
+                responseConfig
+            });
+        }
 
-    //     const exactPath = this.convertSlugsToPath(slug);
-    //     this.router.delete(new RegExp(`^${exactPath.replace(/:\w+/g, '([^/]+)')}$`), ...middlewares);
+        if (options?.exact) {
+            // 정확한 매칭: 하위 경로에 영향을 주지 않음
+            const exactMiddleware = (req: any, res: any, next: any) => {
+                // 현재 요청 경로가 정확한 패턴과 일치하는지 확인
+                const pathParts = req.path.split('/').filter(Boolean);
+                const expectedParts = slug.length;
 
-    //     // 문서???�록??지?�시�?setBasePath ?�출 ???�바�?경로�??�록?�도�???
-    //     if (this.basePath) {
-    //         // basePath가 ?��? ?�정??경우 즉시 ?�록
-    //         DocumentationGenerator.registerRoute({
-    //             method: 'DELETE',
-    //             path: this.getFullPath(exactPath),
-    //             parameters: {
-    //                 query: requestConfig.query,
-    //                 params: requestConfig.params,
-    //                 body: requestConfig.body
-    //             },
-    //             responses: responseConfig
-    //         });
+                // 경로 세그먼트 수가 정확히 일치해야 함
+                if (pathParts.length === expectedParts) {
+                    next();
+                } else {
+                    next('route'); // 다른 라우터로 넘김
+                }
+            };
+            this.router.delete(slugPath, exactMiddleware, ...middlewares);
+        } else {
+            // 기본 동작: 하위 경로도 매칭
+            this.router.delete(slugPath, ...middlewares);
+        }
 
-    //     } else {
-    //         // basePath가 ?�직 ?�정?��? ?��? 경우 지???�록
-    //         this.pendingDocumentation.push({
-    //             method: 'DELETE',
-    //             path: exactPath,
-    //             requestConfig,
-    //             responseConfig
-    //         });
-    //     }
+        return this;
+    }
 
-    //     return this;
-    // }
+    /**
+     * # DELETE_SLUG_VALIDATED_EXACT
+     * 검증된 DELETE ?�러�??�청 처리 (?�확??경로 매칭�?
+     */
+    public DELETE_SLUG_VALIDATED_EXACT<TConfig extends RequestConfig>(
+        slug: string[],
+        requestConfig: TConfig,
+        responseConfig: ResponseConfig,
+        handler: ValidatedHandlerFunction<TConfig>
+    ): ExpressRouter {
+        const middlewares = CustomRequestHandler.createHandler(
+            { request: requestConfig, response: responseConfig },
+            handler
+        );
+
+        const exactPath = this.convertSlugsToPath(slug);
+        this.router.delete(new RegExp(`^${exactPath.replace(/:\w+/g, '([^/]+)')}$`), ...middlewares);
+
+        // 문서화 등록을 지연시키거나 setBasePath 호출 후 올바른 경로로 등록하도록 함
+        if (this.basePath) {
+            // basePath가 이미 설정된 경우 즉시 등록
+            DocumentationGenerator.registerRoute({
+                method: 'DELETE',
+                path: this.getFullPath(exactPath),
+                parameters: {
+                    query: requestConfig.query,
+                    params: requestConfig.params,
+                    body: requestConfig.body
+                },
+                responses: responseConfig
+            });
+
+        } else {
+            // basePath가 아직 설정되지 않은 경우 지연 등록
+            this.pendingDocumentation.push({
+                method: 'DELETE',
+                path: exactPath,
+                requestConfig,
+                responseConfig
+            });
+        }
+
+        return this;
+    }
 
     // /**
     //  * # GET_SLUG_VALIDATED (개선??버전)

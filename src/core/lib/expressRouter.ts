@@ -821,9 +821,9 @@ export class ExpressRouter {
     public DELETE(handler: HandlerFunction, options?: object): ExpressRouter {
         this.router.delete('/', this.wrapHandler(handler));
 
-        // 문서???�록??지?�시�?setBasePath ?�출 ???�바�?경로�??�록?�도�???
+        // 문서화 등록을 지연시키거나 setBasePath 호출 후 올바른 경로로 등록하도록 함
         if (this.basePath) {
-            // basePath가 ?��? ?�정??경우 즉시 ?�록
+            // basePath가 이미 설정된 경우 즉시 등록
             DocumentationGenerator.registerRoute({
                 method: 'DELETE',
                 path: this.getFullPath('/'),
@@ -831,7 +831,7 @@ export class ExpressRouter {
                 responses: { 200: { data: { type: 'object' as const, required: false } } }
             });
         } else {
-            // basePath가 ?�직 ?�정?��? ?��? 경우 지???�록
+            // basePath가 아직 설정되지 않은 경우 지연 등록
             this.pendingDocumentation.push({
                 method: 'DELETE',
                 path: '/',
@@ -852,15 +852,15 @@ export class ExpressRouter {
      * @param options 
      * @returns 
      * @description
-     * - ?�우?�로 ?�언??slug 직접 주워 ?�아???�니?? 
+     * - 라우터로 선언된 slug 직접 주워 받아야 합니다 
      */
     public DELETE_SLUG(slug: string[], handler: HandlerFunction, options?: object): ExpressRouter {
         const slugPath = this.convertSlugsToPath(slug);
         this.router.delete(slugPath, this.wrapHandler(handler));
 
-        // 문서???�록??지?�시�?setBasePath ?�출 ???�바�?경로�??�록?�도�???
+        // 문서화 등록을 지연시키거나 setBasePath 호출 후 올바른 경로로 등록하도록 함
         if (this.basePath) {
-            // basePath가 ?��? ?�정??경우 즉시 ?�록
+            // basePath가 이미 설정된 경우 즉시 등록
             DocumentationGenerator.registerRoute({
                 method: 'DELETE',
                 path: this.getFullPath(slugPath),
@@ -868,7 +868,7 @@ export class ExpressRouter {
                 responses: { 200: { data: { type: 'object' as const, required: false } } }
             });
         } else {
-            // basePath가 ?�직 ?�정?��? ?��? 경우 지???�록
+            // basePath가 아직 설정되지 않은 경우 지연 등록
             this.pendingDocumentation.push({
                 method: 'DELETE',
                 path: slugPath,
@@ -892,9 +892,9 @@ export class ExpressRouter {
     public PATCH(handler: HandlerFunction, options?: object): ExpressRouter {
         this.router.patch('/', this.wrapHandler(handler));
 
-        // 문서???�록??지?�시�?setBasePath ?�출 ???�바�?경로�??�록?�도�???
+        // 문서화 등록을 지연시키거나 setBasePath 호출 후 올바른 경로로 등록하도록 함
         if (this.basePath) {
-            // basePath가 ?��? ?�정??경우 즉시 ?�록
+            // basePath가 이미 설정된 경우 즉시 등록
             DocumentationGenerator.registerRoute({
                 method: 'PATCH',
                 path: this.getFullPath('/'),
@@ -902,7 +902,7 @@ export class ExpressRouter {
                 responses: { 200: { data: { type: 'object' as const, required: false } } }
             });
         } else {
-            // basePath가 ?�직 ?�정?��? ?��? 경우 지???�록
+            // basePath가 아직 설정되지 않은 경우 지연 등록
             this.pendingDocumentation.push({
                 method: 'PATCH',
                 path: '/',
@@ -924,15 +924,15 @@ export class ExpressRouter {
      * @param options 
      * @returns 
      * @description
-     * - ?�우?�로 ?�언??slug 직접 주워 ?�아???�니?? 
+     * - 라우터로 선언된 slug 직접 주워 받아야 합니다 
      */
     public PATCH_SLUG(slug: string[], handler: HandlerFunction, options?: object): ExpressRouter {
         const slugPath = this.convertSlugsToPath(slug);
         this.router.patch(slugPath, this.wrapHandler(handler));
 
-        // 문서???�록??지?�시�?setBasePath ?�출 ???�바�?경로�??�록?�도�???
+        // 문서화 등록을 지연시키거나 setBasePath 호출 후 올바른 경로로 등록하도록 함
         if (this.basePath) {
-            // basePath가 ?��? ?�정??경우 즉시 ?�록
+            // basePath가 이미 설정된 경우 즉시 등록
             DocumentationGenerator.registerRoute({
                 method: 'PATCH',
                 path: this.getFullPath(slugPath),
@@ -940,7 +940,7 @@ export class ExpressRouter {
                 responses: { 200: { data: { type: 'object' as const, required: false } } }
             });
         } else {
-            // basePath가 ?�직 ?�정?��? ?��? 경우 지???�록
+            // basePath가 아직 설정되지 않은 경우 지연 등록
             this.pendingDocumentation.push({
                 method: 'PATCH',
                 path: slugPath,
@@ -980,7 +980,7 @@ export class ExpressRouter {
         } else {
             this.router.use(middleware);
         }
-        return this; // 메소??체인???�해 ?�스?�스 반환
+        return this; // 메소드 체인을 위해 인스턴스 반환
     }    
     
 
@@ -999,7 +999,7 @@ export class ExpressRouter {
         } else {
             this.router.use(this.wrapHandler(middleware));
         }
-        return this; // 메소??체인???�해 ?�스?�스 반환
+        return this; // 메소드 체인을 위해 인스턴스 반환
     }
     
 
@@ -1040,7 +1040,7 @@ export class ExpressRouter {
         } else {
             this.router.use(this.wrapMiddleware(middleware));
         }
-        return this; // 메소??체인???�해 ?�스?�스 반환
+        return this; // 메소드 체인을 위해 인스턴스 반환
     }    
     
 
@@ -1084,32 +1084,32 @@ export class ExpressRouter {
                 throw new Error(`Middleware '${middlewareName}' not found in dependency injector`);
             }            
             
-            // 미들?�어 ?�름???�라미터 ?�로 변?�하???�수 (?�적 매핑 ?�용)
+            // 미들웨어 이름을 파라미터 키로 변환하는 헬퍼 함수 (정적 매핑 적용)
             const getParameterKey = (middlewareName: string): string => {
                 // 정적 매핑에서 파라미터 키 조회
                 return MIDDLEWARE_PARAM_MAPPING[middlewareName as keyof typeof MIDDLEWARE_PARAM_MAPPING] || middlewareName;
             };
 
-            // 미들?�어 ?�스?�스??모든 메서?��? Express 미들?�어�?변?�하???�용
+            // 미들웨어 인스턴스의 모든 메서드를 Express 미들웨어로 변환하여 적용
             if (typeof middlewareInstance === 'object' && middlewareInstance !== null) {
                 
                 // 미들웨어 객체의 메서드들을 순회하고 Express 미들웨어로 래핑
                 Object.keys(middlewareInstance).forEach(methodName => {
                     const method = (middlewareInstance as any)[methodName];
                     if (typeof method === 'function') {
-                        // �?메서?��? 미들?�어�??�핑?�여 ?�우?�에 ?�용
-                        // 미들?�어 ?�수??매개변??개수�??�단 (req, res, next, injected, repo, db = 6�?
+                        // 각 메서드를 미들웨어로 래핑하여 라우터에 적용
+                        // 미들웨어 함수의 매개변수 개수로 판단 (req, res, next, injected, repo, db = 6개)
                         if (method.length >= 6) {
-                            // MiddlewareHandlerFunction ?�?�으�??�단?�면 wrapMiddleware ?�용
+                            // MiddlewareHandlerFunction 타입으로 판단되면 wrapMiddleware 적용
                             this.router.use(this.wrapMiddleware(method));
                         } else {
-                            // ?�반 Express 미들?�어
+                            // 일반 Express 미들웨어
                             this.router.use((req: Request, res: Response, next: NextFunction) => {
                                 try {
-                                    // Kusto 매니?��?Request 객체???�정
+                                    // Kusto 매니저를 Request 객체에 설정
                                     req.kusto = kustoManager;
                                     
-                                    // ?�라미터가 ?�다�?req 객체??추�?
+                                    // 파라미터가 있다면 req 객체에 추가
                                     if (params) {
                                         const parameterKey = getParameterKey(middlewareName);
                                         (req as any).with = { 
@@ -1128,19 +1128,19 @@ export class ExpressRouter {
             
             } else if (typeof middlewareInstance === 'function') {
                
-                // 미들?�어가 직접 ?�수??경우
-                // 매개변??개수�?MiddlewareHandlerFunction?��? ?�단
+                // 미들웨어가 직접 함수인 경우
+                // 매개변수 개수로 MiddlewareHandlerFunction인지 판단
                 if ((middlewareInstance as Function).length >= 6) {
-                    // MiddlewareHandlerFunction ?�?�으�??�단?�면 wrapMiddleware ?�용
+                    // MiddlewareHandlerFunction 타입으로 판단되면 wrapMiddleware 적용
                     this.router.use(this.wrapMiddleware(middlewareInstance as MiddlewareHandlerFunction));
                 } else {
-                    // ?�반 Express 미들?�어
+                    // 일반 Express 미들웨어
                     this.router.use((req: Request, res: Response, next: NextFunction) => {
                         try {
-                            // Kusto 매니?��?Request 객체???�정
+                            // Kusto 매니저를 Request 객체에 설정
                             req.kusto = kustoManager;
                             
-                            // ?�라미터가 ?�다�?req 객체??추�?
+                            // 파라미터가 있다면 req 객체에 추가
                             if (params) {
                                 const parameterKey = getParameterKey(middlewareName);
                                 (req as any).with = { 
@@ -1167,9 +1167,9 @@ export class ExpressRouter {
 
     /**
      * # MIDDLE_PROXY_ROUTE
-     * @param options - http-proxy-middleware ?�션
+     * @param options - http-proxy-middleware 옵션
      * @description
-     * - Express ?�우?�에 ?�록??미들?�어�?추�??�니??
+     * - Express 라우터에 등록할 미들웨어를 추가합니다
      */
     public MIDDLE_PROXY_ROUTE(options: Options) {
         this.router.use("/", createProxyMiddleware(options));
@@ -1179,10 +1179,10 @@ export class ExpressRouter {
 
     /**
      * # MIDDLE_PROXY_ROUTE_SLUG
-     * @param slug - ?�러�?배열
-     * @param options - http-proxy-middleware ?�션
+     * @param slug - 슬러그 배열
+     * @param options - http-proxy-middleware 옵션
      * @description
-     * - Express ?�우?�에 ?�록??미들?�어�?추�??�니??
+     * - Express 라우터에 등록할 미들웨어를 추가합니다
      */
     public MIDDLE_PROXY_ROUTE_SLUG(slug: string[], options: Options) {
         this.router.use(this.convertSlugsToPath(slug), createProxyMiddleware(options));
@@ -1190,10 +1190,10 @@ export class ExpressRouter {
 
     /**
      * # STATIC
-     * @param staticPath - ?�적 ?�일???�비?�할 물리??경로
-     * @param options - express.static ?�션
+     * @param staticPath - 정적 파일을 서비스할 물리적 경로
+     * @param options - express.static 옵션
      * @description
-     * - Express???�적 ?�일 ?�비??미들?�어�??�우??루트(/)??추�??�니??
+     * - Express의 정적 파일 서비스 미들웨어를 라우트 루트(/)에 추가합니다
      */
     public STATIC(staticPath: string, options?: any): ExpressRouter {
         this.router.use('/', static_(staticPath, options));
@@ -1202,11 +1202,11 @@ export class ExpressRouter {
 
     /**
      * # STATIC_SLUG
-     * @param slug - ?�러�?배열 (URL 경로)
-     * @param staticPath - ?�적 ?�일???�비?�할 물리??경로
-     * @param options - express.static ?�션
+     * @param slug - 슬러그 배열 (URL 경로)
+     * @param staticPath - 정적 파일을 서비스할 물리적 경로
+     * @param options - express.static 옵션
      * @description
-     * - Express???�적 ?�일 ?�비??미들?�어�??�정 경로??추�??�니??
+     * - Express의 정적 파일 서비스 미들웨어를 지정 경로에 추가합니다
      */
     public STATIC_SLUG(slug: string[], staticPath: string, options?: any): ExpressRouter {
         const slugPath = this.convertSlugsToPath(slug);
@@ -1219,14 +1219,14 @@ export class ExpressRouter {
      * # GET_VALIDATED
      * 검증된 GET 요청 처리
      * @param requestConfig 요청 검증 설정
-     * @param responseConfig ?�답 검�??�정
-     * @param handler ?�들???�수
+     * @param responseConfig 응답 검증 설정
+     * @param handler 핸들러 함수
      * @returns ExpressRouter
      */
 
     /**
      * # GET_VALIDATED
-     * 검증된 GET ?�청 처리
+     * 검증된 GET 요청 처리
      */
     public GET_VALIDATED<TConfig extends RequestConfig>(
         requestConfig: TConfig,
@@ -1246,11 +1246,11 @@ export class ExpressRouter {
         );
         this.router.get('/', ...middlewares);
 
-        // 문서???�록??지?�시�?setBasePath ?�출 ???�바�?경로�??�록?�도�???
+        // 문서화 등록을 지연시키거나 setBasePath 호출 후 올바른 경로로 등록하도록 함
         if (this.basePath) {
 
 
-            // basePath가 ?��? ?�정??경우 즉시 ?�록
+            // basePath가 이미 설정된 경우 즉시 등록
             DocumentationGenerator.registerRoute({
                 method: 'GET',
                 path: this.getFullPath('/'),
@@ -1262,7 +1262,7 @@ export class ExpressRouter {
                 responses: responseConfig
             });
         } else {
-            // basePath가 ?�직 ?�정?��? ?��? 경우 지???�록
+            // basePath가 아직 설정되지 않은 경우 지연 등록
             this.pendingDocumentation.push({
                 method: 'GET',
                 path: '/',
@@ -1281,8 +1281,8 @@ export class ExpressRouter {
 
     /**
      * # GET_SLUG_VALIDATED
-     * 검증된 GET ?�러�??�청 처리
-     * @param exact true?�면 ?�위 경로 매칭 방�? (기본�? false)
+     * 검증된 GET 슬러그 요청 처리
+     * @param exact true이면 하위 경로 매칭 방지 (기본값 false)
      */
     public GET_SLUG_VALIDATED<TConfig extends RequestConfig>(
         slug: string[],
@@ -1291,7 +1291,7 @@ export class ExpressRouter {
         handler: ValidatedHandlerFunction<TConfig>,
         options?: { exact?: boolean }
     ): ExpressRouter {
-        // ?�퍼 메서?��? ?�해 ?�출???�치 ?�보 ?�득
+        // 헬퍼 메서드를 통해 호출자 위치 정보 획득
         const { filePath, lineNumber } = this.getCallerSourceInfo();
 
         const middlewares = CustomRequestHandler.createHandler(
@@ -1304,9 +1304,9 @@ export class ExpressRouter {
         );
         const slugPath = this.convertSlugsToPath(slug);
 
-        // 문서???�록??지?�시�?setBasePath ?�출 ???�바�?경로�??�록?�도�???
+        // 문서화 등록을 지연시키거나 setBasePath 호출 후 올바른 경로로 등록하도록 함
         if (this.basePath) {
-            // basePath가 ?��? ?�정??경우 즉시 ?�록
+            // basePath가 이미 설정된 경우 즉시 등록
             DocumentationGenerator.registerRoute({
                 method: 'GET',
                 path: this.getFullPath(slugPath),
@@ -1318,7 +1318,7 @@ export class ExpressRouter {
                 responses: responseConfig
             });
         } else {
-            // basePath가 ?�직 ?�정?��? ?��? 경우 지???�록
+            // basePath가 아직 설정되지 않은 경우 지연 등록
             this.pendingDocumentation.push({
                 method: 'GET',
                 path: slugPath,
@@ -1328,22 +1328,22 @@ export class ExpressRouter {
         }
 
         if (options?.exact) {
-            // ?�확??매칭: ?�위 경로???�향??주�? ?�음
+            // 정확한 매칭: 하위 경로에 영향을 주지 않음
             const exactMiddleware = (req: any, res: any, next: any) => {
                 // 현재 요청 경로가 정확한 패턴과 일치하는지 확인
                 const pathParts = req.path.split('/').filter(Boolean);
                 const expectedParts = slug.length;
 
-                // 경로 ?�그먼트 ?��? ?�확???�치?�야 ??
+                // 경로 세그먼트 수가 정확히 일치해야 함
                 if (pathParts.length === expectedParts) {
                     next();
                 } else {
-                    next('route'); // ???�우?��? 건너?�고 ?�음 ?�우?�로
+                    next('route'); // 다른 라우터로 건너뛰고 다음 라우터로
                 }
             };
             this.router.get(slugPath, exactMiddleware, ...middlewares);
         } else {
-            // 기본 ?�작: ?�위 경로??매칭
+            // 기본 동작: 하위 경로도 매칭
             this.router.get(slugPath, ...middlewares);
         }
 
@@ -1357,14 +1357,14 @@ export class ExpressRouter {
 
     /**
      * # POST_VALIDATED
-     * 검증된 POST ?�청 처리
+     * 검증된 POST 요청 처리
      */
     public POST_VALIDATED<TConfig extends RequestConfig>(
         requestConfig: TConfig,
         responseConfig: ResponseConfig,
         handler: ValidatedHandlerFunction<TConfig>
     ): ExpressRouter {
-        // ?�퍼 메서?��? ?�해 ?�출???�치 ?�보 ?�득
+        // 헬퍼 메서드를 통해 호출자 위치 정보 획득
         const { filePath, lineNumber } = this.getCallerSourceInfo();
 
         const middlewares = CustomRequestHandler.createHandler(
@@ -1376,9 +1376,9 @@ export class ExpressRouter {
             handler
         ); this.router.post('/', ...middlewares);
 
-        // 문서???�록??지?�시�?setBasePath ?�출 ???�바�?경로�??�록?�도�???
+        // 문서화 등록을 지연시키거나 setBasePath 호출 후 올바른 경로로 등록하도록 함
         if (this.basePath) {
-            // basePath가 ?��? ?�정??경우 즉시 ?�록
+            // basePath가 이미 설정된 경우 즉시 등록
             DocumentationGenerator.registerRoute({
                 method: 'POST',
                 path: this.getFullPath('/'),
@@ -1390,7 +1390,7 @@ export class ExpressRouter {
                 responses: responseConfig
             });
         } else {
-            // basePath가 ?�직 ?�정?��? ?��? 경우 지???�록
+            // basePath가 아직 설정되지 않은 경우 지연 등록
             this.pendingDocumentation.push({
                 method: 'POST',
                 path: '/',
@@ -1409,8 +1409,8 @@ export class ExpressRouter {
 
     /**
      * # POST_SLUG_VALIDATED
-     * 검증된 POST ?�러�??�청 처리
-     * @param exact true?�면 ?�위 경로 매칭 방�? (기본�? false)
+     * 검증된 POST 슬러그 요청 처리
+     * @param exact true이면 하위 경로 매칭 방지 (기본값 false)
      */    
     public POST_SLUG_VALIDATED<TConfig extends RequestConfig>(
         slug: string[],
@@ -1419,7 +1419,7 @@ export class ExpressRouter {
         handler: ValidatedHandlerFunction<TConfig>,
         options?: { exact?: boolean }
     ): ExpressRouter {
-        // ?�퍼 메서?��? ?�해 ?�출???�치 ?�보 ?�득
+        // 헬퍼 메서드를 통해 호출자 위치 정보 획득
         const { filePath, lineNumber } = this.getCallerSourceInfo();
 
         const middlewares = CustomRequestHandler.createHandler(
@@ -1483,14 +1483,14 @@ export class ExpressRouter {
 
     /**
      * # PUT_VALIDATED
-     * 검증된 PUT ?�청 처리
+     * 검증된 PUT 요청 처리
      */    
     public PUT_VALIDATED<TConfig extends RequestConfig>(
         requestConfig: TConfig,
         responseConfig: ResponseConfig,
         handler: ValidatedHandlerFunction<TConfig>
     ): ExpressRouter {
-        // ?�퍼 메서?��? ?�해 ?�출???�치 ?�보 ?�득
+        // 헬퍼 메서드를 통해 호출자 위치 정보 획득
         const { filePath, lineNumber } = this.getCallerSourceInfo();
 
         const middlewares = CustomRequestHandler.createHandler(
@@ -1504,9 +1504,9 @@ export class ExpressRouter {
 
         this.router.put('/', ...middlewares);
 
-        // 문서???�록??지?�시�?setBasePath ?�출 ???�바�?경로�??�록?�도�???
+        // 문서화 등록을 지연시키거나 setBasePath 호출 후 올바른 경로로 등록하도록 함
         if (this.basePath) {
-            // basePath가 ?��? ?�정??경우 즉시 ?�록
+            // basePath가 이미 설정된 경우 즉시 등록
             DocumentationGenerator.registerRoute({
                 method: 'PUT',
                 path: this.getFullPath('/'),
@@ -1518,7 +1518,7 @@ export class ExpressRouter {
                 responses: responseConfig
             });
         } else {
-            // basePath가 ?�직 ?�정?��? ?��? 경우 지???�록
+            // basePath가 아직 설정되지 않은 경우 지연 등록
             this.pendingDocumentation.push({
                 method: 'PUT',
                 path: '/',
@@ -1537,14 +1537,14 @@ export class ExpressRouter {
 
     /**
      * # DELETE_VALIDATED
-     * 검증된 DELETE ?�청 처리
+     * 검증된 DELETE 요청 처리
      */    
     public DELETE_VALIDATED<TConfig extends RequestConfig>(
         requestConfig: TConfig,
         responseConfig: ResponseConfig,
         handler: ValidatedHandlerFunction<TConfig>
     ): ExpressRouter {
-        // ?�퍼 메서?��? ?�해 ?�출???�치 ?�보 ?�득
+        // 헬퍼 메서드를 통해 호출자 위치 정보 획득
         const { filePath, lineNumber } = this.getCallerSourceInfo();
 
         const middlewares = CustomRequestHandler.createHandler(
@@ -1556,9 +1556,9 @@ export class ExpressRouter {
             handler
         ); this.router.delete('/', ...middlewares);
 
-        // 문서???�록??지?�시�?setBasePath ?�출 ???�바�?경로�??�록?�도�???
+        // 문서화 등록을 지연시키거나 setBasePath 호출 후 올바른 경로로 등록하도록 함
         if (this.basePath) {
-            // basePath가 ?��? ?�정??경우 즉시 ?�록
+            // basePath가 이미 설정된 경우 즉시 등록
             DocumentationGenerator.registerRoute({
                 method: 'DELETE',
                 path: this.getFullPath('/'),
@@ -1570,7 +1570,7 @@ export class ExpressRouter {
                 responses: responseConfig
             });
         } else {
-            // basePath가 ?�직 ?�정?��? ?��? 경우 지???�록
+            // basePath가 아직 설정되지 않은 경우 지연 등록
             this.pendingDocumentation.push({
                 method: 'DELETE',
                 path: '/',
@@ -1589,14 +1589,14 @@ export class ExpressRouter {
 
     /**
      * # PATCH_VALIDATED
-     * 검증된 PATCH ?�청 처리
+     * 검증된 PATCH 요청 처리
      */    
     public PATCH_VALIDATED<TConfig extends RequestConfig>(
         requestConfig: TConfig,
         responseConfig: ResponseConfig,
         handler: ValidatedHandlerFunction<TConfig>
     ): ExpressRouter {
-        // ?�퍼 메서?��? ?�해 ?�출???�치 ?�보 ?�득
+        // 헬퍼 메서드를 통해 호출자 위치 정보 획득
         const { filePath, lineNumber } = this.getCallerSourceInfo();
 
         const middlewares = CustomRequestHandler.createHandler(
@@ -1611,9 +1611,9 @@ export class ExpressRouter {
 
         this.router.patch('/', ...middlewares);
 
-        // 문서???�록??지?�시�?setBasePath ?�출 ???�바�?경로�??�록?�도�???
+        // 문서화 등록을 지연시키거나 setBasePath 호출 후 올바른 경로로 등록하도록 함
         if (this.basePath) {
-            // basePath가 ?��? ?�정??경우 즉시 ?�록
+            // basePath가 이미 설정된 경우 즉시 등록
             DocumentationGenerator.registerRoute({
                 method: 'PATCH',
                 path: this.getFullPath('/'),
@@ -1625,10 +1625,125 @@ export class ExpressRouter {
                 responses: responseConfig
             });
         } else {
-            // basePath가 ?�직 ?�정?��? ?��? 경우 지???�록
+            // basePath가 아직 설정되지 않은 경우 지연 등록
             this.pendingDocumentation.push({
                 method: 'PATCH',
                 path: '/',
+                requestConfig,
+                responseConfig
+            });
+        }
+
+        return this;
+    }
+
+    /**
+     * # PATCH_SLUG_VALIDATED
+     * 검증된 PATCH 슬러그 요청 처리
+     * @param exact true이면 하위 경로 매칭 방지 (기본값 false)
+     */
+    public PATCH_SLUG_VALIDATED<TConfig extends RequestConfig>(
+        slug: string[],
+        requestConfig: TConfig,
+        responseConfig: ResponseConfig,
+        handler: ValidatedHandlerFunction<TConfig>,
+        options?: { exact?: boolean }
+    ): ExpressRouter {
+        // 헬퍼 메서드를 통해 호출자 위치 정보 획득
+        const { filePath, lineNumber } = this.getCallerSourceInfo();
+
+        const middlewares = CustomRequestHandler.createHandler(
+            {
+                request: requestConfig,
+                response: responseConfig,
+                sourceInfo: { filePath, lineNumber }
+            },
+            handler
+        );
+        const slugPath = this.convertSlugsToPath(slug);
+
+        // 문서화 등록을 지연시키거나 setBasePath 호출 후 올바른 경로로 등록하도록 함
+        if (this.basePath) {
+            // basePath가 이미 설정된 경우 즉시 등록
+            DocumentationGenerator.registerRoute({
+                method: 'PATCH',
+                path: this.getFullPath(slugPath),
+                parameters: {
+                    query: requestConfig.query,
+                    params: requestConfig.params,
+                    body: requestConfig.body
+                },
+                responses: responseConfig
+            });
+        } else {
+            // basePath가 아직 설정되지 않은 경우 지연 등록
+            this.pendingDocumentation.push({
+                method: 'PATCH',
+                path: slugPath,
+                requestConfig,
+                responseConfig
+            });
+        }
+
+        if (options?.exact) {
+            // 정확한 매칭: 하위 경로에 영향을 주지 않음
+            const exactMiddleware = (req: any, res: any, next: any) => {
+                // 현재 요청 경로가 정확한 패턴과 일치하는지 확인
+                const pathParts = req.path.split('/').filter(Boolean);
+                const expectedParts = slug.length;
+
+                // 경로 세그먼트 수가 정확히 일치해야 함
+                if (pathParts.length === expectedParts) {
+                    next();
+                } else {
+                    next('route'); // 다른 라우터로 넘김
+                }
+            };
+            this.router.patch(slugPath, exactMiddleware, ...middlewares);
+        } else {
+            // 기본 동작: 하위 경로도 매칭
+            this.router.patch(slugPath, ...middlewares);
+        }
+
+        return this;
+    }
+
+    /**
+     * # PATCH_SLUG_VALIDATED_EXACT
+     * 검증된 PATCH 슬러그 요청 처리 (정확한 경로 매칭)
+     */
+    public PATCH_SLUG_VALIDATED_EXACT<TConfig extends RequestConfig>(
+        slug: string[],
+        requestConfig: TConfig,
+        responseConfig: ResponseConfig,
+        handler: ValidatedHandlerFunction<TConfig>
+    ): ExpressRouter {
+        const middlewares = CustomRequestHandler.createHandler(
+            { request: requestConfig, response: responseConfig },
+            handler
+        );
+
+        const exactPath = this.convertSlugsToPath(slug);
+        this.router.patch(new RegExp(`^${exactPath.replace(/:\w+/g, '([^/]+)')}$`), ...middlewares);
+
+        // 문서화 등록을 지연시키거나 setBasePath 호출 후 올바른 경로로 등록하도록 함
+        if (this.basePath) {
+            // basePath가 이미 설정된 경우 즉시 등록
+            DocumentationGenerator.registerRoute({
+                method: 'PATCH',
+                path: this.getFullPath(exactPath),
+                parameters: {
+                    query: requestConfig.query,
+                    params: requestConfig.params,
+                    body: requestConfig.body
+                },
+                responses: responseConfig
+            });
+        } else {
+            // basePath가 아직 설정되지 않은 경우 지연 등록
+            this.pendingDocumentation.push({
+                method: 'PATCH',
+                path: exactPath,
                 requestConfig,
                 responseConfig
             });
@@ -1641,7 +1756,7 @@ export class ExpressRouter {
 
     /**
      * # GET_WITH_VALIDATION
-     * ?�청 검증만 ?�는 GET
+     * 요청 검증만 있는 GET
      */
     public GET_WITH_VALIDATION<TConfig extends RequestConfig>(
         requestConfig: TConfig,
@@ -1682,7 +1797,7 @@ export class ExpressRouter {
 
     /**
      * # POST_WITH_VALIDATION
-     * ?�청 검증만 ?�는 POST
+     * 요청 검증만 있는 POST
      */
     public POST_WITH_VALIDATION<TConfig extends RequestConfig>(
         requestConfig: TConfig,
@@ -1722,8 +1837,8 @@ export class ExpressRouter {
 
     /**
      * # GET_SLUG_VALIDATED_EXACT
-     * 검증된 GET ?�러�??�청 처리 (?�확??경로 매칭�?
-     * ?�위 ?�우?�에 ?�향??주�? ?�음
+     * 검증된 GET 슬러그 요청 처리 (정확한 경로 매칭)
+     * 하위 라우터에 영향을 주지 않음
      */
     public GET_SLUG_VALIDATED_EXACT<TConfig extends RequestConfig>(
         slug: string[],
@@ -1821,15 +1936,80 @@ export class ExpressRouter {
         return this;
     }
 
+    /**
+     * # PUT_SLUG_VALIDATED
+     * 검증된 PUT 슬러그 요청 처리
+     * @param exact true이면 하위 경로 매칭 방지 (기본값 false)
+     */
+    public PUT_SLUG_VALIDATED<TConfig extends RequestConfig>(
+        slug: string[],
+        requestConfig: TConfig,
+        responseConfig: ResponseConfig,
+        handler: ValidatedHandlerFunction<TConfig>,
+        options?: { exact?: boolean }
+    ): ExpressRouter {
+        // 헬퍼 메서드를 통해 호출자 위치 정보 획득
+        const { filePath, lineNumber } = this.getCallerSourceInfo();
 
+        const middlewares = CustomRequestHandler.createHandler(
+            {
+                request: requestConfig,
+                response: responseConfig,
+                sourceInfo: { filePath, lineNumber }
+            },
+            handler
+        );
+        const slugPath = this.convertSlugsToPath(slug);
 
+        // 문서화 등록을 지연시키거나 setBasePath 호출 후 올바른 경로로 등록하도록 함
+        if (this.basePath) {
+            // basePath가 이미 설정된 경우 즉시 등록
+            DocumentationGenerator.registerRoute({
+                method: 'PUT',
+                path: this.getFullPath(slugPath),
+                parameters: {
+                    query: requestConfig.query,
+                    params: requestConfig.params,
+                    body: requestConfig.body
+                },
+                responses: responseConfig
+            });
+        } else {
+            // basePath가 아직 설정되지 않은 경우 지연 등록
+            this.pendingDocumentation.push({
+                method: 'PUT',
+                path: slugPath,
+                requestConfig,
+                responseConfig
+            });
+        }
 
+        if (options?.exact) {
+            // 정확한 매칭: 하위 경로에 영향을 주지 않음
+            const exactMiddleware = (req: any, res: any, next: any) => {
+                // 현재 요청 경로가 정확한 패턴과 일치하는지 확인
+                const pathParts = req.path.split('/').filter(Boolean);
+                const expectedParts = slug.length;
 
+                // 경로 세그먼트 수가 정확히 일치해야 함
+                if (pathParts.length === expectedParts) {
+                    next();
+                } else {
+                    next('route'); // 다른 라우터로 넘김
+                }
+            };
+            this.router.put(slugPath, exactMiddleware, ...middlewares);
+        } else {
+            // 기본 동작: 하위 경로도 매칭
+            this.router.put(slugPath, ...middlewares);
+        }
 
+        return this;
+    }
 
     /**
      * # PUT_SLUG_VALIDATED_EXACT
-     * 검증된 PUT ?�러�??�청 처리 (?�확??경로 매칭�?
+     * 검증된 PUT 슬러그 요청 처리 (정확한 경로 매칭)
      */
     public PUT_SLUG_VALIDATED_EXACT<TConfig extends RequestConfig>(
         slug: string[],
@@ -1846,9 +2026,9 @@ export class ExpressRouter {
         const exactPath = this.convertSlugsToPath(slug);
         this.router.put(new RegExp(`^${exactPath.replace(/:\w+/g, '([^/]+)')}$`), ...middlewares);
 
-        // 문서???�록??지?�시�?setBasePath ?�출 ???�바�?경로�??�록?�도�???
+        // 문서화 등록을 지연시키거나 setBasePath 호출 후 올바른 경로로 등록하도록 함
         if (this.basePath) {
-            // basePath가 ?��? ?�정??경우 즉시 ?�록
+            // basePath가 이미 설정된 경우 즉시 등록
             DocumentationGenerator.registerRoute({
                 method: 'PUT',
                 path: this.getFullPath(exactPath),
@@ -1860,7 +2040,7 @@ export class ExpressRouter {
                 responses: responseConfig
             });
         } else {
-            // basePath가 ?�직 ?�정?��? ?��? 경우 지???�록
+            // basePath가 아직 설정되지 않은 경우 지연 등록
             this.pendingDocumentation.push({
                 method: 'PUT',
                 path: exactPath,
@@ -1872,52 +2052,121 @@ export class ExpressRouter {
         return this;
     }
 
+    /**
+     * # DELETE_SLUG_VALIDATED
+     * 검증된 DELETE 슬러그 요청 처리
+     * @param exact true이면 하위 경로 매칭 방지 (기본값 false)
+     */
+    public DELETE_SLUG_VALIDATED<TConfig extends RequestConfig>(
+        slug: string[],
+        requestConfig: TConfig,
+        responseConfig: ResponseConfig,
+        handler: ValidatedHandlerFunction<TConfig>,
+        options?: { exact?: boolean }
+    ): ExpressRouter {
+        // 헬퍼 메서드를 통해 호출자 위치 정보 획득
+        const { filePath, lineNumber } = this.getCallerSourceInfo();
 
+        const middlewares = CustomRequestHandler.createHandler(
+            {
+                request: requestConfig,
+                response: responseConfig,
+                sourceInfo: { filePath, lineNumber }
+            },
+            handler
+        );
+        const slugPath = this.convertSlugsToPath(slug);
 
-    // /**
-    //  * # DELETE_SLUG_VALIDATED_EXACT
-    //  * 검증된 DELETE ?�러�??�청 처리 (?�확??경로 매칭�?
-    //  */
-    // public DELETE_SLUG_VALIDATED_EXACT(
-    //     slug: string[],
-    //     requestConfig: RequestConfig,
-    //     responseConfig: ResponseConfig,
-    //     handler: ValidatedHandlerFunction
-    // ): ExpressRouter {
-    //     const middlewares = CustomRequestHandler.createHandler(
-    //         { request: requestConfig, response: responseConfig },
-    //         handler
-    //     );
+        // 문서화 등록을 지연시키거나 setBasePath 호출 후 올바른 경로로 등록하도록 함
+        if (this.basePath) {
+            // basePath가 이미 설정된 경우 즉시 등록
+            DocumentationGenerator.registerRoute({
+                method: 'DELETE',
+                path: this.getFullPath(slugPath),
+                parameters: {
+                    query: requestConfig.query,
+                    params: requestConfig.params,
+                    body: requestConfig.body
+                },
+                responses: responseConfig
+            });
+        } else {
+            // basePath가 아직 설정되지 않은 경우 지연 등록
+            this.pendingDocumentation.push({
+                method: 'DELETE',
+                path: slugPath,
+                requestConfig,
+                responseConfig
+            });
+        }
 
-    //     const exactPath = this.convertSlugsToPath(slug);
-    //     this.router.delete(new RegExp(`^${exactPath.replace(/:\w+/g, '([^/]+)')}$`), ...middlewares);
+        if (options?.exact) {
+            // 정확한 매칭: 하위 경로에 영향을 주지 않음
+            const exactMiddleware = (req: any, res: any, next: any) => {
+                // 현재 요청 경로가 정확한 패턴과 일치하는지 확인
+                const pathParts = req.path.split('/').filter(Boolean);
+                const expectedParts = slug.length;
 
-    //     // 문서???�록??지?�시�?setBasePath ?�출 ???�바�?경로�??�록?�도�???
-    //     if (this.basePath) {
-    //         // basePath가 ?��? ?�정??경우 즉시 ?�록
-    //         DocumentationGenerator.registerRoute({
-    //             method: 'DELETE',
-    //             path: this.getFullPath(exactPath),
-    //             parameters: {
-    //                 query: requestConfig.query,
-    //                 params: requestConfig.params,
-    //                 body: requestConfig.body
-    //             },
-    //             responses: responseConfig
-    //         });
+                // 경로 세그먼트 수가 정확히 일치해야 함
+                if (pathParts.length === expectedParts) {
+                    next();
+                } else {
+                    next('route'); // 다른 라우터로 넘김
+                }
+            };
+            this.router.delete(slugPath, exactMiddleware, ...middlewares);
+        } else {
+            // 기본 동작: 하위 경로도 매칭
+            this.router.delete(slugPath, ...middlewares);
+        }
 
-    //     } else {
-    //         // basePath가 ?�직 ?�정?��? ?��? 경우 지???�록
-    //         this.pendingDocumentation.push({
-    //             method: 'DELETE',
-    //             path: exactPath,
-    //             requestConfig,
-    //             responseConfig
-    //         });
-    //     }
+        return this;
+    }
 
-    //     return this;
-    // }
+    /**
+     * # DELETE_SLUG_VALIDATED_EXACT
+     * 검증된 DELETE 슬러그 요청 처리 (정확한 경로 매칭)
+     */
+    public DELETE_SLUG_VALIDATED_EXACT<TConfig extends RequestConfig>(
+        slug: string[],
+        requestConfig: TConfig,
+        responseConfig: ResponseConfig,
+        handler: ValidatedHandlerFunction<TConfig>
+    ): ExpressRouter {
+        const middlewares = CustomRequestHandler.createHandler(
+            { request: requestConfig, response: responseConfig },
+            handler
+        );
+
+        const exactPath = this.convertSlugsToPath(slug);
+        this.router.delete(new RegExp(`^${exactPath.replace(/:\w+/g, '([^/]+)')}$`), ...middlewares);
+
+        // 문서화 등록을 지연시키거나 setBasePath 호출 후 올바른 경로로 등록하도록 함
+        if (this.basePath) {
+            // basePath가 이미 설정된 경우 즉시 등록
+            DocumentationGenerator.registerRoute({
+                method: 'DELETE',
+                path: this.getFullPath(exactPath),
+                parameters: {
+                    query: requestConfig.query,
+                    params: requestConfig.params,
+                    body: requestConfig.body
+                },
+                responses: responseConfig
+            });
+
+        } else {
+            // basePath가 아직 설정되지 않은 경우 지연 등록
+            this.pendingDocumentation.push({
+                method: 'DELETE',
+                path: exactPath,
+                requestConfig,
+                responseConfig
+            });
+        }
+
+        return this;
+    }
 
     // /**
     //  * # GET_SLUG_VALIDATED (개선??버전)
@@ -1989,20 +2238,20 @@ export class ExpressRouter {
             except?: ('index' | 'show' | 'create' | 'update' | 'destroy' | 'recover')[];
 
 
-            /** Primary key ?�드�?지??(기본�? 'id') */
+            /** Primary key 필드명 지정(기본값: 'id') */
             primaryKey?: string;
 
 
-            /** Primary key ?�??변???�수 */
+            /** Primary key 값 변환 파서 */
             primaryKeyParser?: (value: string) => any;
 
 
-            /** JSON:API 리소???�??(기본�? modelName.toLowerCase()) */
+            /** JSON:API 리소스 타입(기본값: modelName.toLowerCase()) */
             resourceType?: string;
 
 
             /**
-             * includeMerge: true�?included ?�??attributes??관계명?�로 병합 (기본�? false)
+             * includeMerge: true시 included 배열 attributes가 관계명으로 병합 (기본값: false)
              */
             includeMerge?: boolean;
 
@@ -2013,7 +2262,7 @@ export class ExpressRouter {
                 field: string;
             };
 
-            /** 미들?�어 */
+            /** 미들웨어 */
             middleware?: {
                 index?: HandlerFunction[];
                 show?: HandlerFunction[];
@@ -2023,14 +2272,14 @@ export class ExpressRouter {
                 recover?: HandlerFunction[];
             };
 
-            /** ?�청 검�??�정 */
+            /** 요청 검증 설정 */
             validation?: {
                 create?: RequestConfig;
                 update?: RequestConfig;
                 recover?: RequestConfig;
             };
 
-            /** ?�답 검�??�정 */
+            /** 응답 검증 설정 */
             hooks?: {
                 beforeCreate?: (data: any, req: Request) => Promise<any> | any;
                 afterCreate?: (result: any, req: Request) => Promise<any> | any;
@@ -2053,7 +2302,7 @@ export class ExpressRouter {
         const enabledActions = this.getEnabledActions(options);
         const client = prismaManager.getWrap(databaseName);
         
-        // Primary key ?�정 �??�동 ?�서 ?�택
+        // Primary key 설정 및 자동 파서 선택
         const primaryKey = options?.primaryKey || 'id';
         const primaryKeyParser = options?.primaryKeyParser || this.getSmartPrimaryKeyParser(databaseName, modelName, primaryKey);
         
@@ -2062,27 +2311,27 @@ export class ExpressRouter {
             this.setupIndexRoute(client, modelName, options, primaryKey);
         }
 
-        // SHOW - GET /:identifier (?�일 조회)
+        // SHOW - GET /:identifier (단일 조회)
         if (enabledActions.includes('show')) {
             this.setupShowRoute(client, modelName, options, primaryKey, primaryKeyParser);
         }
 
-        // CREATE - POST / (?�성)
+        // CREATE - POST / (생성)
         if (enabledActions.includes('create')) {
             this.setupCreateRoute(client, modelName, options, primaryKey);
         }
 
-        // UPDATE - PUT /:identifier, PATCH /:identifier (?�정)
+        // UPDATE - PUT /:identifier, PATCH /:identifier (수정)
         if (enabledActions.includes('update')) {
             this.setupUpdateRoute(client, modelName, options, primaryKey, primaryKeyParser);
         }
 
-        // DESTROY - DELETE /:identifier (??��)
+        // DESTROY - DELETE /:identifier (삭제)
         if (enabledActions.includes('destroy')) {
             this.setupDestroyRoute(client, modelName, options, primaryKey, primaryKeyParser);
         }
 
-        // ATOMIC OPERATIONS - POST /atomic (?�자???�업)
+        // ATOMIC OPERATIONS - POST /atomic (원자적 작업)
         this.setupAtomicOperationsRoute(client, modelName, options);
 
         // RECOVER - POST /:identifier/recover (복구)
@@ -2150,20 +2399,20 @@ export class ExpressRouter {
     }
 
     /**
-     * Primary key ?�?�을 ?�동?�로 감�??�고 ?�절???�서�?반환?�는 ?�퍼 메서??
+     * Primary key 타입을 자동으로 감지하고 적절한 파서를 반환하는 헬퍼 메서드
      */
     private getSmartPrimaryKeyParser(databaseName: string, modelName: string, primaryKey: string): (value: string) => any {
         try {
-            // 간단???�??추론 로직
-            // ?�제로는 Prisma ?�키마나 메�??�이?��? ?�어???�단?????��?�?
-            // ?�기?�는 ?�반?�인 ?�턴??기반?�로 추론
+            // 간단한 타입 추론 로직
+            // 실제로는 Prisma 스키마나 메타데이터를 통해 판단할 수 있음
+            // 여기서는 일반적인 패턴을 기반으로 추론
             
-            // primaryKey ?�름 기반 추론
+            // primaryKey 이름 기반 추론
             if (primaryKey === 'uuid' || primaryKey.includes('uuid') || primaryKey.endsWith('_uuid')) {
                 return ExpressRouter.parseUuid;
             }
             
-            // 기본?�으�??�마???�서 ?�용 (?�자?��? UUID?��? ?�동 ?�단)
+            // 기본적으로 스마트 파서 사용 (숫자인지 UUID인지 자동 판단)
             return this.parseIdSmart;
         } catch (error) {
             console.warn(`Failed to determine primary key type for ${modelName}.${primaryKey}, using string parser`);
@@ -2172,22 +2421,22 @@ export class ExpressRouter {
     }
 
     /**
-     * ?�마??ID ?�서 - ?�력값을 보고 ?�절???�?�으�?변??
-     * UUID ?�식???�닌 경우 ?�자??문자?�로 ?�전?�게 처리
+     * 스마트 ID 파서 - 입력값을 보고 적절한 타입으로 변환
+     * UUID 형식이 아닌 경우 숫자를 문자열로 안전하게 처리
      */
     private parseIdSmart = (id: string): any => {
-        // 먼�? ?�력�?검�?
+        // 먼저 입력값 검증
         if (!id || typeof id !== 'string') {
             throw new Error('Invalid ID format: ID must be a non-empty string');
         }
 
-        // UUID ?�턴 체크 (?�격??검�?
+        // UUID 패턴 체크 (엄격한 검증)
         const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
         if (uuidRegex.test(id)) {
-            return id; // ?�효??UUID 그�?�?반환
+            return id; // 유효한 UUID 그대로 반환
         }
         
-        // ?�수 ?�자??경우 ?�수�?변??
+        // 순수 숫자인 경우 숫자로 변환
         if (/^\d+$/.test(id)) {
             const numValue = parseInt(id, 10);
             if (!isNaN(numValue) && numValue > 0) {
@@ -2195,12 +2444,12 @@ export class ExpressRouter {
             }
         }
         
-        // ?�효??문자??ID??경우 (?�파�? ?�자, ?�이?? ?�더?�코???�용)
+        // 유효한 문자열 ID인 경우 (알파넷, 숫자, 하이픈, 언더스코어 허용)
         if (/^[a-zA-Z0-9_-]+$/.test(id)) {
             return id;
         }
         
-        // �??�의 경우 ?�러 발생
+        // 나머지 경우 에러 발생
         throw new Error(`Invalid ID format: '${id}' is not a valid UUID, number, or string identifier`);
     };
 
@@ -2216,7 +2465,7 @@ export class ExpressRouter {
     private getEnabledActions(options?: any): string[] {
         const allActions = ['index', 'show', 'create', 'update', 'destroy', 'recover'];
         
-        // only?� except가 ????지?�된 경우 경고
+        // only와 except가 모두 지정된 경우 경고
         if (options?.only && options?.except) {
             console.warn(
                 '[CRUD Warning] Both "only" and "except" options are specified. ' +
@@ -2225,12 +2474,12 @@ export class ExpressRouter {
             return options.only;
         }
         
-        // only�?지?�된 경우
+        // only가 지정된 경우
         if (options?.only) {
             return options.only;
         }
         
-        // except�?지?�된 경우
+        // except가 지정된 경우
         if (options?.except) {
             return allActions.filter(action => !options.except.includes(action));
         }
@@ -2256,7 +2505,7 @@ export class ExpressRouter {
                 // 쿼리 ?�라미터 ?�싱
                 const queryParams = CrudQueryParser.parseQuery(req);
                 
-                // ?�이지?�이??방식 검�?- 반드??지?�되?�야 ??
+                // 페이지네이션 방식 검증 - 반드시 지정되어야 함
                 if (!queryParams.page) {
                     const errorResponse = this.formatJsonApiError(
                         new Error('Pagination is required. You must specify either page-based pagination (page[number] & page[size]) or cursor-based pagination (page[cursor] & page[size])'),
@@ -2268,7 +2517,7 @@ export class ExpressRouter {
                     return res.status(400).json(errorResponse);
                 }
                 
-                // ?�이지?�이???�라미터 ?�세 검�?
+                // 페이지네이션 파라미터 세부 검증
                 if (!queryParams.page.number && !queryParams.page.cursor) {
                     const errorResponse = this.formatJsonApiError(
                         new Error('Invalid pagination parameters. Specify either page[number] for offset-based pagination or page[cursor] for cursor-based pagination'),
@@ -2280,7 +2529,7 @@ export class ExpressRouter {
                     return res.status(400).json(errorResponse);
                 }
                 
-                // ?�이지 ?�기 검�?
+                // 페이지 크기 검증
                 if (!queryParams.page.size || queryParams.page.size <= 0) {
                     const errorResponse = this.formatJsonApiError(
                         new Error('page[size] parameter is required and must be greater than 0'),
@@ -2295,13 +2544,13 @@ export class ExpressRouter {
                 // Prisma 쿼리 ?�션 빌드
                 const findManyOptions = PrismaQueryBuilder.buildFindManyOptions(queryParams);
                 
-                // Soft Delete ?�터 추�? (기존 where 조건�?병합)
+                // Soft Delete 필터 추가 (기존 where 조건과 병합)
                 if (isSoftDelete) {
-                    // include_deleted 쿼리 ?�라미터가 true가 ?�닌 경우 ??��????�� ?�외
+                    // include_deleted 쿼리 파라미터가 true가 아닌 경우 삭제된 것들 제외
                     const includeDeleted = req.query.include_deleted === 'true';
                     
                     if (!includeDeleted) {
-                        // 기존 where 조건???�는 경우 AND 조건?�로 추�?
+                        // 기존 where 조건이 있는 경우 AND 조건으로 추가
                         if (findManyOptions.where) {
                             findManyOptions.where = {
                                 AND: [
@@ -2310,13 +2559,13 @@ export class ExpressRouter {
                                 ]
                             };
                         } else {
-                            // where 조건???�는 경우 ?�로 ?�성
+                            // where 조건이 없는 경우 새로 생성
                             findManyOptions.where = { [softDeleteField]: null };
                         }
                     }
                 }
                 
-                // �?개수 조회 (?�이지?�이?�용)
+                // 총 개수 조회 (페이지네이션용)
                 const totalCountOptions = { ...findManyOptions };
                 delete totalCountOptions.skip;
                 delete totalCountOptions.take;
@@ -2330,7 +2579,7 @@ export class ExpressRouter {
                 // Base URL ?�성
                 const baseUrl = `${req.protocol}://${req.get('host')}${req.baseUrl}`;
                 
-                // ?�함??리소???�성 (include ?�라미터가 ?�는 경우)
+                // 포함된 리소스 생성 (include 파라미터가 있는 경우)
                 let included: JsonApiResource[] | undefined;
                 if (queryParams.include && queryParams.include.length > 0 && !options?.includeMerge) {
                     included = JsonApiTransformer.createIncludedResources(
@@ -2341,7 +2590,7 @@ export class ExpressRouter {
                     );
                 }
 
-                // ?�이지?�이??링크 ?�성
+                // 페이지네이션 링크 생성
                 let links: any;
                 if (queryParams.page) {
                     const pageSize = queryParams.page.size || 10;
@@ -2365,11 +2614,11 @@ export class ExpressRouter {
                 // 메타데이터 생성 (JSON:API 스펙 준수)
                 const meta: any = {
                     timestamp: new Date().toISOString(),
-                    total: total,  // ?�체 ?�코????(JSON:API?�서 ?�반?�으�??�용)
-                    count: items.length  // ?�재 ?�답???�코????
+                    total: total,  // 전체 레코드 수(JSON:API에서 일반적으로 사용)
+                    count: items.length  // 현재 응답 레코드 수
                 };
 
-                // ?�이지?�이?�이 ?�성?�된 경우?�만 ?�이지 ?�보 추�?
+                // 페이지네이션이 설정된 경우에만 페이지 정보 추가
                 if (queryParams.page) {
                     const pageSize = queryParams.page.size || 10;
                     const currentPage = queryParams.page.number || 1;
@@ -2378,7 +2627,7 @@ export class ExpressRouter {
                     meta.page = {
                         current: currentPage,
                         size: pageSize,
-                        total: totalPages  // ?�체 ?�이지 ??
+                        total: totalPages  // 전체 페이지 수
                     };
                 }
 
@@ -2422,14 +2671,14 @@ export class ExpressRouter {
             }
         };
 
-        // 미들?�어 ?�록
+        // 미들웨어 등록
         if (middlewares.length > 0) {
             this.router.get('/', ...middlewares, this.wrapHandler(handler));
         } else {
             this.router.get('/', this.wrapHandler(handler));
         }
 
-        // 문서???�록
+        // 문서화 등록
         const queryParams: any = {
             include: { type: 'string', required: false, description: 'Related resources to include (comma-separated). Example: author,comments.author' },
             'fields[type]': { type: 'string', required: false, description: 'Sparse fieldsets - specify which fields to include for each resource type. Example: fields[posts]=title,content&fields[users]=name,email' },
@@ -2440,7 +2689,7 @@ export class ExpressRouter {
             'filter[field_op]': { type: 'string', required: false, description: 'Filter conditions. Operators: eq, ne, gt, gte, lt, lte, like, in, etc. Example: filter[status_eq]=active&filter[age_gte]=18' }
         };
         
-        // Soft delete가 ?�성?�된 경우 include_deleted ?�라미터 추�?
+        // Soft delete가 설정된 경우 include_deleted 파라미터 추가
         if (isSoftDelete) {
             queryParams.include_deleted = { 
                 type: 'boolean', 
@@ -2492,13 +2741,13 @@ export class ExpressRouter {
                 );
                 if (!success) return; // ?�러 ?�답?� ?��? ?�퍼?�서 처리??
                 
-                // 쿼리 ?�라미터?�서 include ?�싱
+                // 쿼리 파라미터에서 include 파싱
                 const queryParams = CrudQueryParser.parseQuery(req);
                 const includeOptions = queryParams.include 
                     ? PrismaQueryBuilder['buildIncludeOptions'](queryParams.include)
                     : undefined;
 
-                // Soft Delete ?�터 추�? (include_deleted가 true가 ?�닌 경우)
+                // Soft Delete 필터 추가 (include_deleted가 true가 아닌 경우)
                 const includeDeleted = req.query.include_deleted === 'true';
                 const whereClause: any = { [primaryKey]: parsedIdentifier };
                 
@@ -2519,7 +2768,7 @@ export class ExpressRouter {
                         });
                         
                         if (deletedItem && deletedItem[softDeleteField]) {
-                            // Soft delete????��???�??410 Gone ?�답 (JSON:API ?�장)
+                            // Soft delete된 경우에는 410 Gone 응답 (JSON:API 확장)
                             const errorResponse = this.formatJsonApiError(
                                 new Error(`${modelName} has been deleted`),
                                 'RESOURCE_DELETED',
@@ -2544,7 +2793,7 @@ export class ExpressRouter {
                 // Base URL ?�성
                 const baseUrl = `${req.protocol}://${req.get('host')}${req.baseUrl}`;
                 
-                // ?�함??리소???�성 (include ?�라미터가 ?�는 경우)
+                // 포함된 리소스 생성 (include 파라미터가 있는 경우)
                 let included: JsonApiResource[] | undefined;
                 if (queryParams.include && queryParams.include.length > 0 && !options?.includeMerge) {
                     included = JsonApiTransformer.createIncludedResources(
@@ -2568,17 +2817,17 @@ export class ExpressRouter {
                     }
                 );
                 
-                // metadata 객체 ?�성 - 기존 ?�퍼 ?�수 ?�용
+                // metadata 객체 생성 - 기존 헬퍼 함수 사용
                 const metadata = CrudResponseFormatter.createPaginationMeta(
-                    [item], // ?�일 ??��??배열�?감싸???�달
-                    1,      // total count??1
-                    undefined, // page ?�라미터 ?�음 (?�일 조회)
+                    [item], // 단일 아이템을 배열로 감싸서 전달
+                    1,      // total count는 1
+                    undefined, // page 파라미터 없음 (단일 조회)
                     'show',
                     queryParams.include,
                     queryParams
                 );
                 
-                // excludedFields 추�? (show ?�용)
+                // excludedFields 추가 (show 전용)
                 if (queryParams.fields) {
                     metadata.excludedFields = Object.keys(queryParams.fields[modelName] || {});
                 }
@@ -2598,7 +2847,7 @@ export class ExpressRouter {
             }
         };
 
-        // 미들?�어 ?�록 - ?�적 경로 ?�용
+        // 미들웨어 등록 - 정적 경로 사용
         const routePath = `/:${primaryKey}`;
         if (middlewares.length > 0) {
             this.router.get(routePath, ...middlewares, this.wrapHandler(handler));
@@ -2611,7 +2860,7 @@ export class ExpressRouter {
             include: { type: 'string', required: false, description: 'Related resources to include' }
         };
         
-        // Soft delete가 ?�성?�된 경우 include_deleted ?�라미터 추�?
+        // Soft delete가 설정된 경우 include_deleted 파라미터 추가
         if (isSoftDelete) {
             queryParams.include_deleted = { 
                 type: 'boolean', 
@@ -2629,7 +2878,7 @@ export class ExpressRouter {
             }
         };
         
-        // Soft delete가 ?�성?�된 경우 410 Gone ?�답 추�?
+        // Soft delete가 설정된 경우 410 Gone 응답 추가
         if (isSoftDelete) {
             responses[410] = {
                 error: { type: 'object', required: true, description: 'Resource has been soft deleted' }

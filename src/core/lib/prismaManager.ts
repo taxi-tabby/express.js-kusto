@@ -554,7 +554,7 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 			}
 
 			// Log successful database access with hint
-			console.log(`🗃️ Accessing database '${databaseName}' from: ${callerInfo.filePath}${callerInfo.lineNumber ? `:${callerInfo.lineNumber}` : ''}`);
+			// console.log(`🗃️ Accessing database '${databaseName}' from: ${callerInfo.filePath}${callerInfo.lineNumber ? `:${callerInfo.lineNumber}` : ''}`);
 
 			// Ensure connection is healthy (includes automatic reconnection)
 			const isConnected = await this.ensureConnection(databaseName);
@@ -607,7 +607,7 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 			}
 
 			// Log successful database access with hint
-			console.log(`🗃️ Accessing database '${databaseName}' sync from: ${callerInfo.filePath}${callerInfo.lineNumber ? `:${callerInfo.lineNumber}` : ''}`);
+			// console.log(`🗃️ Accessing database '${databaseName}' sync from: ${callerInfo.filePath}${callerInfo.lineNumber ? `:${callerInfo.lineNumber}` : ''}`);
 
 			// Return the client with its original type preserved from dynamic import
 			return client as T;

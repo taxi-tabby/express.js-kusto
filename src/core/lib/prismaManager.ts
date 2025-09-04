@@ -535,8 +535,12 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 	 */
 	public async getClient<T = any>(databaseName: string): Promise<T> {
 		try {
+			// Get caller information for hint tracking
+			const callerInfo = this.getCallerSourceInfo();
+			
 			if (!this.initialized) {
 				console.error('❌ PrismaManager not initialized. Call initialize() first.');
+				console.error(`   Called from: ${callerInfo.filePath}${callerInfo.lineNumber ? `:${callerInfo.lineNumber}` : ''}`);
 				throw new Error('데이터베이스 관리자가 초기화되지 않았습니다. 애플리케이션 시작 시 initialize()를 호출했는지 확인하세요.');
 			}
 
@@ -545,17 +549,25 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 				const availableDbs = Array.from(this.configs.keys());
 				const dbList = availableDbs.length > 0 ? availableDbs.join(', ') : '없음';
 				console.error(`❌ Database '${databaseName}' not found. Available: ${dbList}`);
+				console.error(`   Called from: ${callerInfo.filePath}${callerInfo.lineNumber ? `:${callerInfo.lineNumber}` : ''}`);
 				throw new Error(`데이터베이스 '${databaseName}'를 찾을 수 없습니다. 사용 가능한 데이터베이스: ${dbList}`);
 			}
+
+			// Log successful database access with hint
+			console.log(`🗃️ Accessing database '${databaseName}' from: ${callerInfo.filePath}${callerInfo.lineNumber ? `:${callerInfo.lineNumber}` : ''}`);
 
 			// Ensure connection is healthy (includes automatic reconnection)
 			const isConnected = await this.ensureConnection(databaseName);
 			if (!isConnected) {
+				console.error(`❌ Failed to connect to database '${databaseName}'`);
+				console.error(`   Called from: ${callerInfo.filePath}${callerInfo.lineNumber ? `:${callerInfo.lineNumber}` : ''}`);
 				throw new Error(`데이터베이스 '${databaseName}'에 연결할 수 없습니다. 재연결 시도가 실패했습니다.`);
 			}
 
 			const client = this.databases.get(databaseName);
 			if (!client) {
+				console.error(`❌ Database client '${databaseName}' not found`);
+				console.error(`   Called from: ${callerInfo.filePath}${callerInfo.lineNumber ? `:${callerInfo.lineNumber}` : ''}`);
 				throw new Error(`데이터베이스 '${databaseName}' 클라이언트를 찾을 수 없습니다.`);
 			}
 
@@ -576,8 +588,12 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 	 */
 	public getClientSync<T = any>(databaseName: string): T {
 		try {
+			// Get caller information for hint tracking
+			const callerInfo = this.getCallerSourceInfo();
+			
 			if (!this.initialized) {
 				console.error('❌ PrismaManager not initialized. Call initialize() first.');
+				console.error(`   Called from: ${callerInfo.filePath}${callerInfo.lineNumber ? `:${callerInfo.lineNumber}` : ''}`);
 				throw new Error('데이터베이스 관리자가 초기화되지 않았습니다. 애플리케이션 시작 시 initialize()를 호출했는지 확인하세요.');
 			}
 
@@ -586,8 +602,12 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 				const availableDbs = Array.from(this.databases.keys());
 				const dbList = availableDbs.length > 0 ? availableDbs.join(', ') : '없음';
 				console.error(`❌ Database '${databaseName}' not found. Available: ${dbList}`);
+				console.error(`   Called from: ${callerInfo.filePath}${callerInfo.lineNumber ? `:${callerInfo.lineNumber}` : ''}`);
 				throw new Error(`데이터베이스 '${databaseName}'를 찾을 수 없습니다. 사용 가능한 데이터베이스: ${dbList}`);
 			}
+
+			// Log successful database access with hint
+			console.log(`🗃️ Accessing database '${databaseName}' sync from: ${callerInfo.filePath}${callerInfo.lineNumber ? `:${callerInfo.lineNumber}` : ''}`);
 
 			// Return the client with its original type preserved from dynamic import
 			return client as T;
@@ -597,6 +617,34 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 			}
 			throw new Error(`데이터베이스 클라이언트 획득 중 오류가 발생했습니다: ${error}`);
 		}
+	}
+
+	/**
+	 * Extract caller source information from stack trace for hint tracking
+	 * @returns Object containing file path and line number information
+	 */
+	private getCallerSourceInfo(): { filePath: string; lineNumber?: number } {
+		const stack = new Error().stack;
+		let filePath = 'Unknown';
+		let lineNumber: number | undefined;
+
+		// Extract caller file path from stack trace
+		if (stack) {
+			const stackLines = stack.split('\n');
+			// First line is current function, second line is the calling method, third line is the actual user code caller
+			const callerLine = stackLines[3] || '';
+
+			// Regular expression to handle both Windows paths (with drive letters) and general paths
+			const fileMatch = callerLine.match(/\(([a-zA-Z]:\\[^:]+|\/?[^:]+):(\d+):(\d+)\)/) ||
+				callerLine.match(/at\s+([a-zA-Z]:\\[^:]+|\/?[^:]+):(\d+):(\d+)/);
+
+			if (fileMatch) {
+				filePath = fileMatch[1];
+				lineNumber = parseInt(fileMatch[2], 10);
+			}
+		}
+
+		return { filePath, lineNumber };
 	}
 
 	/**

@@ -74,16 +74,7 @@ Express.js-Kusto는 **AWS Lambda, Vercel, Google Cloud Functions** 등의 server
 - **Connection Pool 최적화**: Serverless 환경에 맞는 연결 풀 관리
 - **Health Check API**: DB 상태 모니터링 엔드포인트 제공
 
-### 🛠️ 설정
 
-Serverless 환경은 자동으로 감지되지만, 수동 설정도 가능합니다:
-
-```bash
-# .env 파일에 추가
-SERVERLESS=true
-DB_CONNECTION_CHECK_INTERVAL=15000  # 15초마다 체크
-DB_MAX_RECONNECTION_ATTEMPTS=3      # 최대 재연결 시도 횟수
-```
 
 ### 📊 모니터링 API
 

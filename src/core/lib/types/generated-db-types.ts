@@ -48,8 +48,8 @@ export interface PrismaManagerWrapOverloads {
  * Method overloads for getClient
  */
 export interface PrismaManagerClientOverloads {
-  getClient(databaseName: 'temporary'): TemporaryInstance;
-  getClient<T = any>(databaseName: string): T;
+  getClient(databaseName: 'temporary'): Promise<TemporaryInstance>;
+  getClient<T = any>(databaseName: string): Promise<T>;
 }
 
 
@@ -59,6 +59,6 @@ export interface PrismaManagerClientOverloads {
 declare module '../prismaManager' {
   interface PrismaManager {
   getWrap(databaseName: 'temporary'): TemporaryInstance;
-  getClient(databaseName: 'temporary'): TemporaryInstance;
+  getClient(databaseName: 'temporary'): Promise<TemporaryInstance>;
   }
 }

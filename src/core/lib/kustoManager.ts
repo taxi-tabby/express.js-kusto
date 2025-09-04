@@ -3,7 +3,7 @@ import { repositoryManager } from './repositoryManager';
 import { prismaManager } from './prismaManager';
 import { Injectable } from './types/generated-injectable-types';
 import { RepositoryTypeMap, RepositoryName } from './types/generated-repository-types';
-import { PrismaManagerClientOverloads } from './types/generated-db-types';
+import { PrismaManagerClientOverloads, DatabaseNamesUnion, DatabaseClientType } from './types/generated-db-types';
 
 
 
@@ -13,12 +13,15 @@ import { PrismaManagerClientOverloads } from './types/generated-db-types';
  */
 export interface KustoDbProxy {
     /** 비동기 클라이언트 가져오기 (재연결 로직 포함) */
+    getClient<T extends DatabaseNamesUnion>(name: T): Promise<DatabaseClientType<T>>;
     getClient<T = any>(name: string): Promise<T>;
     
     /** 동기 클라이언트 가져오기 (재연결 로직 없음) */
+    getClientSync<T extends DatabaseNamesUnion>(name: T): DatabaseClientType<T>;
     getClientSync<T = any>(name: string): T;
 
     /** 래핑된 클라이언트 가져오기 (동기, Repository에서 사용) */
+    getWrap<T extends DatabaseNamesUnion>(name: T): DatabaseClientType<T>;
     getWrap<T = any>(name: string): T;
 
     /** 사용 가능한 데이터베이스 목록 */
@@ -119,11 +122,17 @@ export class KustoManager {
         
         // 동적으로 데이터베이스 이름을 속성으로 접근할 수 있는 프록시 객체 생성
         const dbProxy = new Proxy({
-            // 메서드로 클라이언트 가져오기 (async)
-            getClient: async (name: string) => await prismaManager.getClient(name),
+            // 메서드로 클라이언트 가져오기 (async) - hint 추적 포함
+            getClient: async (name: string) => {
+                // prismaManager의 getClient 메서드가 자동으로 hint 추적을 수행함
+                return await prismaManager.getClient(name);
+            },
             
-            // 동기 버전 (연결 상태 확인 없이)
-            getClientSync: (name: string) => prismaManager.getClientSync(name),
+            // 동기 버전 (연결 상태 확인 없이) - hint 추적 포함
+            getClientSync: (name: string) => {
+                // prismaManager의 getClientSync 메서드가 자동으로 hint 추적을 수행함
+                return prismaManager.getClientSync(name);
+            },
             
             // 래핑된 클라이언트 가져오기 (Repository에서 사용)
             getWrap: (name: string) => prismaManager.getClientSync(name),
@@ -143,8 +152,9 @@ export class KustoManager {
                     return target[prop as keyof typeof target];
                 }
                 
-                // 데이터베이스 이름으로 직접 접근하는 경우 (동기 버전 사용)
+                // 데이터베이스 이름으로 직접 접근하는 경우 (동기 버전 사용) - hint 추적 포함
                 if (typeof prop === 'string' && availableDbs.includes(prop)) {
+                    // prismaManager의 getClientSync 메서드가 자동으로 hint 추적을 수행함
                     return prismaManager.getClientSync(prop);
                 }
                 
@@ -173,6 +183,7 @@ export class KustoManager {
      * 특정 데이터베이스 클라이언트 가져오기 (재연결 로직 포함)
      */
     public async getDbClient(name: string) {
+        // prismaManager의 getClient 메서드가 자동으로 hint 추적을 수행함
         return await prismaManager.getClient(name);
     }
 
@@ -180,6 +191,7 @@ export class KustoManager {
      * 특정 데이터베이스 클라이언트 가져오기 (동기 버전, 재연결 로직 없음)
      */
     public getDbClientSync(name: string) {
+        // prismaManager의 getClientSync 메서드가 자동으로 hint 추적을 수행함
         return prismaManager.getClientSync(name);
     }
 }

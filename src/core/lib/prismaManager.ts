@@ -602,8 +602,68 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 	/**
 	 * Get a wrapped client with enhanced type information and runtime type checking
 	 * This method provides the best TypeScript intellisense by preserving the original client type
+	 * Synchronous version for use in repositories
 	 */
-	public async getWrap(databaseName: string): Promise<any> {
+	public getWrap(databaseName: string): any {
+		try {
+			// Use sync version for repositories
+			const client = this.getClientSync(databaseName);
+			const clientType = this.clientTypes.get(databaseName);
+
+			if (!clientType) {
+				console.warn(`⚠️ Database '${databaseName}' client type not found, returning basic client.`);
+				return client;
+			}
+
+			// Create a proxy that preserves the original client prototype and type information
+			const wrappedClient = new Proxy(client, {
+				get(target, prop, receiver) {
+					try {
+						const value = Reflect.get(target, prop, receiver);
+
+						// If it's a function, bind it to the original target
+						if (typeof value === 'function') {
+							return value.bind(target);
+						}
+
+						return value;
+					} catch (error) {
+						console.error(`❌ Error accessing property '${String(prop)}' on database client: ${error}`);
+						throw new Error(`데이터베이스 클라이언트 속성 '${String(prop)}' 접근 중 오류: ${error}`);
+					}
+				},
+
+				getPrototypeOf() {
+					return clientType.prototype;
+				},
+
+				has(target, prop) {
+					return prop in target || prop in clientType.prototype;
+				},
+
+				getOwnPropertyDescriptor(target, prop) {
+					const desc = Reflect.getOwnPropertyDescriptor(target, prop);
+					if (desc) return desc;
+					return Reflect.getOwnPropertyDescriptor(clientType.prototype, prop);
+				}
+			});
+
+			return wrappedClient;
+
+		} catch (error) {
+			if (error instanceof Error) {
+				throw error; // getClientSync에서 이미 처리된 오류는 그대로 전달
+			}
+			throw new Error(`데이터베이스 래핑된 클라이언트 획득 중 오류가 발생했습니다: ${error}`);
+		}
+	}
+
+	/**
+	 * Get a wrapped client with enhanced type information and runtime type checking (async version)
+	 * This method provides the best TypeScript intellisense by preserving the original client type
+	 * Includes automatic reconnection logic
+	 */
+	public async getWrapAsync(databaseName: string): Promise<any> {
 		try {
 			// getClient 내부에서 이미 예외 처리를 하므로 여기서 추가로 할 필요는 없음
 			const client = await this.getClient(databaseName);
@@ -695,9 +755,9 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 			throw new Error(`Database '${databaseName}' not found or not properly initialized`);
 		}
 
-		// Return a function that provides the typed client
-		return async () => {
-			return await this.getWrap(databaseName);
+		// Return a function that provides the typed client (synchronous)
+		return () => {
+			return this.getWrap(databaseName);
 		};
 	}
 
@@ -869,8 +929,8 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 
 		// Only create the method if it doesn't already exist
 		if (!(this as any)[methodName]) {
-			(this as any)[methodName] = async () => {
-				return await this.getWrap(databaseName);
+			(this as any)[methodName] = () => {
+				return this.getWrap(databaseName);
 			};
 		}
 	}  /**

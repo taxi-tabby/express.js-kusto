@@ -18,6 +18,9 @@ export interface KustoDbProxy {
     /** 동기 클라이언트 가져오기 (재연결 로직 없음) */
     getClientSync<T = any>(name: string): T;
 
+    /** 래핑된 클라이언트 가져오기 (동기, Repository에서 사용) */
+    getWrap<T = any>(name: string): T;
+
     /** 사용 가능한 데이터베이스 목록 */
     available: string[];
 
@@ -121,6 +124,9 @@ export class KustoManager {
             
             // 동기 버전 (연결 상태 확인 없이)
             getClientSync: (name: string) => prismaManager.getClientSync(name),
+            
+            // 래핑된 클라이언트 가져오기 (Repository에서 사용)
+            getWrap: (name: string) => prismaManager.getClientSync(name),
             
             // 사용 가능한 데이터베이스 목록
             available: availableDbs,

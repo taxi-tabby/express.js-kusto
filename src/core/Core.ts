@@ -13,6 +13,9 @@ import { prismaManager } from './lib/prismaManager';
 import { DependencyInjector } from './lib/dependencyInjector';
 import { repositoryManager } from './lib/repositoryManager';
 import { SchemaApiSetup } from '@core/lib/schemaApiSetup';
+import { 
+    setupDbConnectionMiddleware
+} from './lib/dbConnectionMiddleware';
 
 
 export interface CoreConfig {
@@ -85,6 +88,7 @@ export class Core {
 
         
         this.setupExpress();
+        this.setupDbConnectionMiddleware(); // DB 연결 미들웨어 설정
         this.setupDocumentationRoutes(); // 문서화 라우트를 먼저 등록
         this.loadRoutes();
         this.setupViews();
@@ -123,6 +127,58 @@ export class Core {
             trustProxy: this._config.trustProxy,
             staticPath: publicPath
         });
+    }
+
+    /**
+     * Setup database connection middleware for serverless environments
+     */
+    private setupDbConnectionMiddleware(): void {
+        try {
+            // Serverless 환경 감지
+            const isServerless = process.env.AWS_LAMBDA_FUNCTION_NAME || 
+                                process.env.VERCEL || 
+                                process.env.FUNCTIONS_WORKER ||
+                                process.env.NODE_ENV === 'production';
+
+            if (isServerless) {
+                log.Info('🔗 Serverless environment detected, setting up DB connection middleware');
+                
+                // Serverless 환경에서는 더 자주 연결 상태를 확인
+                setupDbConnectionMiddleware(this._app, {
+                    continueOnFailure: false, // 연결 실패 시 요청 중단
+                    checkInterval: 15000, // 15초마다 체크
+                    onReconnect: (database: string) => {
+                        log.Info(`🔄 Database '${database}' reconnected in serverless environment`);
+                    },
+                    onError: (error, req, res, next) => {
+                        log.Error('❌ Database connection error in serverless environment:', error);
+                        res.status(503).json({
+                            error: 'Database connection failed',
+                            message: 'Serverless database connection is temporarily unavailable',
+                            serverless: true,
+                            timestamp: new Date().toISOString()
+                        });
+                    }
+                });
+            } else {
+                log.Info('🔗 Traditional server environment, setting up basic DB connection middleware');
+                
+                // 일반 서버 환경에서는 덜 자주 체크
+                setupDbConnectionMiddleware(this._app, {
+                    continueOnFailure: true, // 연결 실패 시에도 계속 진행
+                    checkInterval: 60000, // 60초마다 체크
+                    onReconnect: (database: string) => {
+                        log.Info(`🔄 Database '${database}' reconnected`);
+                    }
+                });
+            }
+
+            log.Info('✅ Database connection middleware configured');
+            
+        } catch (error) {
+            log.Error('❌ Failed to setup database connection middleware:', error);
+            // Don't throw error - continue without middleware
+        }
     }
 
     private loadRoutes(): void {

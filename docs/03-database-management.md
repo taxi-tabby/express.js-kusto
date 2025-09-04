@@ -1,7 +1,123 @@
 # 🗄️ 데이터베이스 관리
 
 > **멀티 데이터베이스 지원과 Prisma 통합**  
-> 폴더 기반 스키마 관리와 kusto-db CLI를 통한 효율적인 데이터베이스 운영
+> 폴더 기반 스키마 관리와 kusto-db CLI를 통한 효율적인 데이터베이스 운영  
+> **Serverless 환경 자동 재연결 지원**
+
+## 🔌 Serverless 환경 DB 연결 관리
+
+Express.js-Kusto는 **AWS Lambda**, **Vercel**, **Google Cloud Functions** 등의 serverless 환경에서 발생하는 데이터베이스 연결 문제를 자동으로 해결합니다.
+
+### 🚀 핵심 기능
+
+#### 1. 자동 연결 상태 확인
+- 각 요청마다 DB 연결 상태를 지능적으로 확인
+- 설정된 간격 내에서는 캐시된 상태 사용으로 성능 최적화
+- Serverless: 15초, Traditional: 60초 기본 간격
+
+#### 2. 지능형 재연결 로직
+- 연결이 끊어진 경우 자동으로 재연결 시도
+- 최대 재시도 횟수 제한으로 무한 루프 방지
+- 재연결 실패 시 적절한 에러 응답
+
+#### 3. Connection Pool 최적화
+- Serverless 환경에 맞는 연결 풀 관리
+- Cold start 시 빠른 연결 복구
+- 메모리 효율적인 연결 관리
+
+### 🛠️ 환경별 자동 설정
+
+```typescript
+// Serverless 환경 자동 감지
+const isServerless = process.env.AWS_LAMBDA_FUNCTION_NAME || 
+                    process.env.VERCEL || 
+                    process.env.FUNCTIONS_WORKER ||
+                    process.env.NODE_ENV === 'production';
+
+// 환경별 최적화된 설정 자동 적용
+if (isServerless) {
+    // 더 자주 연결 상태 확인, 빠른 재연결
+    checkInterval: 15000,
+    continueOnFailure: false
+} else {
+    // 덜 자주 체크, 에러 허용적
+    checkInterval: 60000,
+    continueOnFailure: true
+}
+```
+
+###  사용 방법
+
+#### 1. 자동 재연결 포함 (권장)
+```typescript
+// getClient는 자동으로 연결 상태를 확인하고 필요시 재연결합니다
+const userDb = await kusto.db.getClient('user');
+const users = await userDb.user.findMany();
+```
+
+#### 2. 동기 버전 (빠른 응답, 재연결 없음)
+```typescript
+// 이미 연결된 상태에서 빠른 접근이 필요한 경우
+const userDb = kusto.db.getClientSync('user'); 
+const users = await userDb.user.findMany();
+```
+
+### ⚙️ 환경 변수 설정
+
+```bash
+# .env 파일
+# Serverless 환경 수동 설정 (자동 감지되지만 필요시)
+SERVERLESS=true
+
+# 연결 체크 간격 (밀리초)
+DB_CONNECTION_CHECK_INTERVAL=15000
+
+# 최대 재연결 시도 횟수
+DB_MAX_RECONNECTION_ATTEMPTS=3
+
+# Health check 활성화
+HEALTH_CHECK_ENABLED=true
+
+# Prisma Connection String에 connection pool 설정 추가
+DATABASE_URL="postgresql://user:pass@host:5432/db?connection_limit=5&pool_timeout=10"
+```
+
+### 🔧 고급 설정
+
+#### Custom Middleware 설정
+```typescript
+import { createDbConnectionMiddleware } from './core/lib/dbConnectionMiddleware';
+
+// 특정 데이터베이스만 체크
+app.use('/api/users', createDbConnectionMiddleware({
+    databases: ['user'], // user DB만 체크
+    continueOnFailure: false,
+    checkInterval: 10000
+}));
+
+// 에러 핸들링 커스터마이징
+app.use(createDbConnectionMiddleware({
+    onError: (error, req, res, next) => {
+        // 커스텀 에러 응답
+        res.status(503).json({
+            error: 'Database temporarily unavailable',
+            retryAfter: '30 seconds'
+        });
+    },
+    onReconnect: (database, req) => {
+        // 재연결 시 로깅
+        console.log(`Database ${database} reconnected for ${req.ip}`);
+    }
+}));
+```
+
+### 🎯 Best Practices
+
+1. **Serverless 환경에서는 `getClient()` 사용**: 자동 재연결 포함
+2. **Traditional 서버에서는 `getClientSync()` 사용**: 성능 최적화
+3. **Health check 엔드포인트 활용**: 모니터링 시스템 연동
+4. **Connection pool 설정**: DATABASE_URL에 적절한 pool 설정 추가
+5. **에러 처리**: 연결 실패 시 적절한 fallback 로직 구현
 
 ## 📂 폴더 기반 데이터베이스 구조
 

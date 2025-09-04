@@ -103,6 +103,14 @@ export abstract class BaseRepository<T extends DatabaseNamesUnion> {
         return this.db.getWrap(this.repositoryDatabaseName);
     }
 
+    /**
+     * 비동기 데이터베이스 클라이언트 (재연결 로직 포함)
+     * @returns 타입 안전한 Prisma 클라이언트 (Promise)
+     */
+    protected async getAsyncClient(): Promise<DatabaseClientMap[T]> {
+        return await this.db.getClient(this.repositoryDatabaseName) as DatabaseClientMap[T];
+    }
+
 
     /**
      * 타입 안전성을 위한 분산 트랜잭션 작업 생성 헬퍼 메서드

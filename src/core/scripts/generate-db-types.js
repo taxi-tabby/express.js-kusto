@@ -42,7 +42,7 @@ function generateDatabaseTypes() {
   ).join('\n');
 
   const getClientOverloads = dbFolders.map(dbName => 
-    `  getClient(databaseName: '${dbName}'): ${capitalize(dbName)}Instance;`
+    `  getClient(databaseName: '${dbName}'): Promise<${capitalize(dbName)}Instance>;`
   ).join('\n');
 
   // Generate PrismaManager class extension with proper overloads
@@ -109,7 +109,7 @@ ${methodOverloads}
  */
 export interface PrismaManagerClientOverloads {
 ${getClientOverloads}
-  getClient<T = any>(databaseName: string): T;
+  getClient<T = any>(databaseName: string): Promise<T>;
 }
 
 ${classExtension}

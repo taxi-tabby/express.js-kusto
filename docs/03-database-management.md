@@ -62,25 +62,6 @@ const userDb = kusto.db.getClientSync('user');
 const users = await userDb.user.findMany();
 ```
 
-### ⚙️ 환경 변수 설정
-
-```bash
-# .env 파일
-# Serverless 환경 수동 설정 (자동 감지되지만 필요시)
-SERVERLESS=true
-
-# 연결 체크 간격 (밀리초)
-DB_CONNECTION_CHECK_INTERVAL=15000
-
-# 최대 재연결 시도 횟수
-DB_MAX_RECONNECTION_ATTEMPTS=3
-
-# Health check 활성화
-HEALTH_CHECK_ENABLED=true
-
-# Prisma Connection String에 connection pool 설정 추가
-DATABASE_URL="postgresql://user:pass@host:5432/db?connection_limit=5&pool_timeout=10"
-```
 
 ### 🔧 고급 설정
 

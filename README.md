@@ -63,6 +63,51 @@ npm run dev
 - **자동 문서화**: http://localhost:3000/docs
 - **개발자 대시보드**: http://localhost:3000/docs/dev
 
+## 🔌 Serverless 환경 DB 연결 관리
+
+Express.js-Kusto는 **AWS Lambda, Vercel, Google Cloud Functions** 등의 serverless 환경에서 데이터베이스 연결 문제를 자동으로 해결합니다.
+
+### 🎯 주요 기능
+
+- **자동 연결 상태 확인**: 각 요청마다 DB 연결 상태를 확인
+- **지능형 재연결**: 연결이 끊어졌을 때 자동으로 재연결 시도
+- **Connection Pool 최적화**: Serverless 환경에 맞는 연결 풀 관리
+- **Health Check API**: DB 상태 모니터링 엔드포인트 제공
+
+### 🛠️ 설정
+
+Serverless 환경은 자동으로 감지되지만, 수동 설정도 가능합니다:
+
+```bash
+# .env 파일에 추가
+SERVERLESS=true
+DB_CONNECTION_CHECK_INTERVAL=15000  # 15초마다 체크
+DB_MAX_RECONNECTION_ATTEMPTS=3      # 최대 재연결 시도 횟수
+```
+
+### 📊 모니터링 API
+
+```bash
+# DB 연결 상태 확인
+GET /health/db
+
+# 모든 DB 강제 재연결
+POST /health/db/reconnect
+```
+
+### 💡 사용 예시
+
+```typescript
+// 일반 사용 (자동 재연결 포함)
+const user = await kusto.db.getClient('main');
+const users = await user.user.findMany();
+
+// 동기 버전 (재연결 없음, 빠른 응답)
+const userSync = kusto.db.getClientSync('main');
+```
+
+자세한 내용은 [DB 관리 문서](./docs/03-database-management.md)를 참고하세요.
+
 
 
 ## 📄 라이선스

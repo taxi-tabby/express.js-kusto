@@ -11,7 +11,12 @@ import { PrismaManagerClientOverloads } from './types/generated-db-types';
  * 데이터베이스 접근을 위한 프록시 인터페이스
  * PrismaManagerClientOverloads를 확장하여 동적으로 타입 안전한 오버로드 제공
  */
-export interface KustoDbProxy extends Pick<PrismaManagerClientOverloads, 'getClient'> {
+export interface KustoDbProxy {
+    /** 비동기 클라이언트 가져오기 (재연결 로직 포함) */
+    getClient<T = any>(name: string): Promise<T>;
+    
+    /** 동기 클라이언트 가져오기 (재연결 로직 없음) */
+    getClientSync<T = any>(name: string): T;
 
     /** 사용 가능한 데이터베이스 목록 */
     available: string[];
@@ -35,7 +40,7 @@ export interface KustoDbProxy extends Pick<PrismaManagerClientOverloads, 'getCli
         }>;
     }>;
 
-    /** 동적으로 데이터베이스 이름으로 접근 (예: db.user, db.admin) */
+    /** 동적으로 데이터베이스 이름으로 접근 (예: db.user, db.admin) - 동기 버전 */
     [databaseName: string]: any;
 }
 
@@ -111,8 +116,11 @@ export class KustoManager {
         
         // 동적으로 데이터베이스 이름을 속성으로 접근할 수 있는 프록시 객체 생성
         const dbProxy = new Proxy({
-            // 메서드로 클라이언트 가져오기
-            getClient: (name: string) => prismaManager.getClient(name),
+            // 메서드로 클라이언트 가져오기 (async)
+            getClient: async (name: string) => await prismaManager.getClient(name),
+            
+            // 동기 버전 (연결 상태 확인 없이)
+            getClientSync: (name: string) => prismaManager.getClientSync(name),
             
             // 사용 가능한 데이터베이스 목록
             available: availableDbs,
@@ -129,9 +137,9 @@ export class KustoManager {
                     return target[prop as keyof typeof target];
                 }
                 
-                // 데이터베이스 이름으로 직접 접근하는 경우
+                // 데이터베이스 이름으로 직접 접근하는 경우 (동기 버전 사용)
                 if (typeof prop === 'string' && availableDbs.includes(prop)) {
-                    return prismaManager.getClient(prop);
+                    return prismaManager.getClientSync(prop);
                 }
                 
                 return undefined;
@@ -156,10 +164,17 @@ export class KustoManager {
     }
 
     /**
-     * 특정 데이터베이스 클라이언트 가져오기
+     * 특정 데이터베이스 클라이언트 가져오기 (재연결 로직 포함)
      */
-    public getDbClient(name: string) {
-        return prismaManager.getClient(name);
+    public async getDbClient(name: string) {
+        return await prismaManager.getClient(name);
+    }
+
+    /**
+     * 특정 데이터베이스 클라이언트 가져오기 (동기 버전, 재연결 로직 없음)
+     */
+    public getDbClientSync(name: string) {
+        return prismaManager.getClientSync(name);
     }
 }
 

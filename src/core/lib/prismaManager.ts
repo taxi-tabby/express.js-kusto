@@ -31,6 +31,10 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 	private configs: Map<string, DatabaseConfig> = new Map();
 	private clientTypes: Map<string, any> = new Map(); // Store client type constructors
 	private initialized: boolean = false;
+	private connectionStates: Map<string, { connected: boolean; lastChecked: number }> = new Map();
+	private reconnectionAttempts: Map<string, number> = new Map();
+	private readonly CONNECTION_CHECK_INTERVAL = 30000; // 30초
+	private readonly MAX_RECONNECTION_ATTEMPTS = 3;
 
 
 	/**
@@ -206,18 +210,23 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 				}
 			});
 
-			// Test the connection
-			await prismaClient.$connect();
+		// Test the connection
+		await prismaClient.$connect();
 
-			// Store the client instance with its original prototype and type information
-			this.databases.set(folderName, prismaClient);
-			this.configs.set(folderName, {
-				name: folderName,
-				schemaPath,
-				isGenerated: true
-			});
+		// Store the client instance with its original prototype and type information
+		this.databases.set(folderName, prismaClient);
+		this.configs.set(folderName, {
+			name: folderName,
+			schemaPath,
+			isGenerated: true
+		});
 
-			// Dynamically extend the DatabaseClientMap interface with the actual client type
+		// Initialize connection state
+		this.connectionStates.set(folderName, {
+			connected: true,
+			lastChecked: Date.now()
+		});
+		this.reconnectionAttempts.set(folderName, 0);			// Dynamically extend the DatabaseClientMap interface with the actual client type
 			this.extendDatabaseClientMap(folderName, DatabasePrismaClient);
 
 			// Dynamically create getter methods for this database
@@ -387,10 +396,185 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 	}
 
 	/**
+	 * Check if connection is healthy and reconnect if necessary
+	 */
+	private async ensureConnection(databaseName: string): Promise<boolean> {
+		const connectionState = this.connectionStates.get(databaseName);
+		const now = Date.now();
+
+		// If recently checked and was healthy, assume still connected
+		if (connectionState && connectionState.connected && 
+			(now - connectionState.lastChecked) < this.CONNECTION_CHECK_INTERVAL) {
+			return true;
+		}
+
+		// Check actual connection health
+		const isHealthy = await this.checkConnectionHealth(databaseName);
+		
+		if (!isHealthy) {
+			console.log(`🔄 Connection lost for database '${databaseName}', attempting reconnection...`);
+			return await this.reconnectDatabase(databaseName);
+		}
+
+		// Update connection state
+		this.connectionStates.set(databaseName, {
+			connected: true,
+			lastChecked: now
+		});
+
+		return true;
+	}
+
+	/**
+	 * Check if a specific database connection is healthy
+	 */
+	private async checkConnectionHealth(databaseName: string): Promise<boolean> {
+		try {
+			const client = this.databases.get(databaseName);
+			if (!client) return false;
+
+			// Simple query to check connection
+			await client.$queryRaw`SELECT 1 as health_check`;
+			return true;
+		} catch (error) {
+			console.warn(`⚠️ Connection health check failed for '${databaseName}':`, error);
+			return false;
+		}
+	}
+
+	/**
+	 * Reconnect to a specific database
+	 */
+	private async reconnectDatabase(databaseName: string): Promise<boolean> {
+		const attempts = this.reconnectionAttempts.get(databaseName) || 0;
+		
+		if (attempts >= this.MAX_RECONNECTION_ATTEMPTS) {
+			console.error(`❌ Max reconnection attempts reached for database '${databaseName}'`);
+			this.connectionStates.set(databaseName, {
+				connected: false,
+				lastChecked: Date.now()
+			});
+			return false;
+		}
+
+		try {
+			// Increment attempt counter
+			this.reconnectionAttempts.set(databaseName, attempts + 1);
+
+			// Disconnect existing client
+			const existingClient = this.databases.get(databaseName);
+			if (existingClient) {
+				try {
+					await existingClient.$disconnect();
+				} catch (disconnectError) {
+					console.warn(`Warning during disconnect:`, disconnectError);
+				}
+			}
+
+			// Recreate the client
+			await this.recreateClient(databaseName);
+
+			// Reset attempt counter on successful reconnection
+			this.reconnectionAttempts.set(databaseName, 0);
+			this.connectionStates.set(databaseName, {
+				connected: true,
+				lastChecked: Date.now()
+			});
+
+			console.log(`✅ Successfully reconnected to database '${databaseName}'`);
+			return true;
+
+		} catch (error) {
+			console.error(`❌ Failed to reconnect to database '${databaseName}':`, error);
+			this.connectionStates.set(databaseName, {
+				connected: false,
+				lastChecked: Date.now()
+			});
+			return false;
+		}
+	}
+
+	/**
+	 * Recreate a client for a specific database
+	 */
+	private async recreateClient(databaseName: string): Promise<void> {
+		const config = this.configs.get(databaseName);
+		if (!config || !config.isGenerated) {
+			throw new Error(`Cannot recreate client for '${databaseName}': config not found or not generated`);
+		}
+
+		// Get client type constructor
+		const DatabasePrismaClient = this.clientTypes.get(databaseName);
+		if (!DatabasePrismaClient) {
+			throw new Error(`Cannot recreate client for '${databaseName}': client type not found`);
+		}
+
+		// Create new Prisma client instance
+		const connectionUrl = this.getDatabaseUrl(databaseName);
+		const datasourceName = this.getDatasourceName(databaseName);
+
+		const prismaClient = new DatabasePrismaClient({
+			datasources: {
+				[datasourceName]: {
+					url: connectionUrl
+				}
+			}
+		});
+
+		// Test the connection
+		await prismaClient.$connect();
+
+		// Store the new client instance
+		this.databases.set(databaseName, prismaClient);
+	}
+
+	/**
 	 * Get a Prisma client instance by database name with proper typing
+	 * Includes automatic reconnection logic for serverless environments
 	 * Returns the actual client with full type information preserved from dynamic import
 	 */
-	public getClient<T = any>(databaseName: string): T {
+	public async getClient<T = any>(databaseName: string): Promise<T> {
+		try {
+			if (!this.initialized) {
+				console.error('❌ PrismaManager not initialized. Call initialize() first.');
+				throw new Error('데이터베이스 관리자가 초기화되지 않았습니다. 애플리케이션 시작 시 initialize()를 호출했는지 확인하세요.');
+			}
+
+			// Check if database exists in configs
+			if (!this.configs.has(databaseName)) {
+				const availableDbs = Array.from(this.configs.keys());
+				const dbList = availableDbs.length > 0 ? availableDbs.join(', ') : '없음';
+				console.error(`❌ Database '${databaseName}' not found. Available: ${dbList}`);
+				throw new Error(`데이터베이스 '${databaseName}'를 찾을 수 없습니다. 사용 가능한 데이터베이스: ${dbList}`);
+			}
+
+			// Ensure connection is healthy (includes automatic reconnection)
+			const isConnected = await this.ensureConnection(databaseName);
+			if (!isConnected) {
+				throw new Error(`데이터베이스 '${databaseName}'에 연결할 수 없습니다. 재연결 시도가 실패했습니다.`);
+			}
+
+			const client = this.databases.get(databaseName);
+			if (!client) {
+				throw new Error(`데이터베이스 '${databaseName}' 클라이언트를 찾을 수 없습니다.`);
+			}
+
+			// Return the client with its original type preserved from dynamic import
+			return client as T;
+		} catch (error) {
+			if (error instanceof Error) {
+				throw error; // 이미 처리된 오류는 그대로 전달
+			}
+			throw new Error(`데이터베이스 클라이언트 획득 중 오류가 발생했습니다: ${error}`);
+		}
+	}
+
+	/**
+	 * Get a Prisma client instance synchronously (without reconnection logic)
+	 * Use this only when you're sure the connection is healthy
+	 * For most cases, use getClient() instead
+	 */
+	public getClientSync<T = any>(databaseName: string): T {
 		try {
 			if (!this.initialized) {
 				console.error('❌ PrismaManager not initialized. Call initialize() first.');
@@ -419,10 +603,10 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 	 * Get a wrapped client with enhanced type information and runtime type checking
 	 * This method provides the best TypeScript intellisense by preserving the original client type
 	 */
-	public getWrap(databaseName: string): any {
+	public async getWrap(databaseName: string): Promise<any> {
 		try {
 			// getClient 내부에서 이미 예외 처리를 하므로 여기서 추가로 할 필요는 없음
-			const client = this.getClient(databaseName);
+			const client = await this.getClient(databaseName);
 			const clientType = this.clientTypes.get(databaseName);
 
 			if (!clientType) {
@@ -476,8 +660,8 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 	/**
 	 * Get a client with runtime type checking and enhanced type information
 	 */
-	public getTypedClient(databaseName: string) {
-		const client = this.getClient(databaseName);
+	public async getTypedClient(databaseName: string) {
+		const client = await this.getClient(databaseName);
 		const clientType = this.clientTypes.get(databaseName);
 
 		// Add runtime type information
@@ -512,8 +696,8 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 		}
 
 		// Return a function that provides the typed client
-		return () => {
-			return this.getWrap(databaseName);
+		return async () => {
+			return await this.getWrap(databaseName);
 		};
 	}
 
@@ -593,7 +777,7 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 	): Promise<T[]> {
 		const results: T[] = [];
 		for (const { database, operation } of operations) {
-			const client = this.getClient(database);
+			const client = await this.getClient(database);
 			const result = await client.$transaction(async (tx: any) => {
 				return operation(tx);
 			});
@@ -611,7 +795,7 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 		query: string,
 		params?: any[]
 	): Promise<T[]> {
-		const client = this.getClient(database);
+		const client = await this.getClient(database);
 		return client.$queryRawUnsafe(query, ...(params || []));
 	}
 
@@ -632,7 +816,7 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 		for (const dbName of this.getAvailableDatabases()) {
 			const start = Date.now();
 			try {
-				const client = this.getClient(dbName);
+				const client = await this.getClient(dbName);
 				await client.$queryRaw`SELECT 1 as health_check`;
 				const responseTime = Date.now() - start;
 
@@ -685,8 +869,8 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 
 		// Only create the method if it doesn't already exist
 		if (!(this as any)[methodName]) {
-			(this as any)[methodName] = () => {
-				return this.getWrap(databaseName);
+			(this as any)[methodName] = async () => {
+				return await this.getWrap(databaseName);
 			};
 		}
 	}  /**

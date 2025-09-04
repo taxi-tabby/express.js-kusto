@@ -313,7 +313,7 @@ export class TransactionCommitManager {
                 throw new Error(`Database ${participant.database} is not healthy: ${dbHealth?.error || 'Unknown issue'}`);
             }
 
-            const client = this.prismaManager.getClient(participant.database);
+            const client = this.prismaManager.getClientSync(participant.database);
 
             // 안전한 트랜잭션 제어 구현
             const transactionId = this.generateTransactionId(participant.database);
@@ -496,7 +496,7 @@ export class TransactionCommitManager {
             // PrismaManager의 모든 연결된 데이터베이스에서 클라이언트 매칭 시도
             const availableDbs = this.prismaManager.getAvailableDatabases();
             for (const dbName of availableDbs) {
-                const dbClient = this.prismaManager.getClient(dbName);
+                const dbClient = this.prismaManager.getClientSync(dbName);
                 if (dbClient === client) {
                     return dbName;
                 }
@@ -861,7 +861,7 @@ export class TransactionCommitManager {
                 throw new Error(`No active transaction found for participant ${participant.database}`);
             }
 
-            const client = this.prismaManager.getClient(participant.database);
+            const client = this.prismaManager.getClientSync(participant.database);
 
             // 검증된 결과가 있으면 재사용, 없으면 다시 실행
             let finalResult;
@@ -985,7 +985,7 @@ export class TransactionCommitManager {
         for (const participant of committedParticipants.reverse()) {
             if (participant.rollbackOperation) {
                 try {
-                    const client = this.prismaManager.getClient(participant.database);
+                    const client = this.prismaManager.getClientSync(participant.database);
 
                     const compensationResult = await client.$transaction(
                         async (tx: any) => {

@@ -60,23 +60,38 @@ export function createDbConnectionMiddleware(options: DbConnectionMiddlewareOpti
                 }
 
                 try {
-                    // 연결 상태 확인 및 필요시 재연결
+                    // 서버리스 환경에서는 매번 연결 상태를 확인하고 필요시 재연결
                     const client = await prismaManager.getClient(dbName);
+                    
+                    // 간단한 헬스체크 쿼리 실행
+                    await client.$queryRaw`SELECT 1 as health_check`;
+                    
                     lastChecks.set(dbName, now);
                     
                     return { database: dbName, status: 'healthy' };
                 } catch (error) {
                     console.warn(`⚠️ Database connection check failed for '${dbName}':`, error);
                     
-                    // 재연결 콜백 호출
-                    if (onReconnect) {
-                        onReconnect(dbName, req);
-                    }
-                    
-                    if (continueOnFailure) {
-                        return { database: dbName, status: 'failed', error };
-                    } else {
-                        throw error;
+                    // 재연결 시도
+                    try {
+                        console.log(`🔄 Attempting to reconnect to database '${dbName}'...`);
+                        const client = await prismaManager.getClient(dbName);
+                        await client.$queryRaw`SELECT 1 as health_check`;
+                        
+                        if (onReconnect) {
+                            onReconnect(dbName, req);
+                        }
+                        
+                        lastChecks.set(dbName, now);
+                        return { database: dbName, status: 'reconnected' };
+                    } catch (reconnectError) {
+                        console.error(`❌ Failed to reconnect to database '${dbName}':`, reconnectError);
+                        
+                        if (continueOnFailure) {
+                            return { database: dbName, status: 'failed', error: reconnectError };
+                        } else {
+                            throw reconnectError;
+                        }
                     }
                 }
             });

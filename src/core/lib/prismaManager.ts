@@ -76,7 +76,6 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 			console.log(`⚠️ Environment-specific file not found: ${envSpecificPath}`);
 		}
 		
-
 	}
 
 	/**
@@ -99,6 +98,9 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 			return;
 		}
 
+		// Load environment variables first
+		this.loadEnvironmentVariables();
+
 		const dbPath = path.join(process.cwd(), 'src', 'app', 'db');
 
 		if (!fs.existsSync(dbPath)) {
@@ -112,13 +114,27 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 
 		console.log(`Found ${folders.length} database folders:`, folders);
 
-		// Process each database folder
+		// Process each database folder with error handling
 		for (const folderName of folders) {
-			await this.processDatabaseFolder(folderName, dbPath);
+			try {
+				await this.processDatabaseFolder(folderName, dbPath);
+			} catch (error) {
+				console.error(`❌ Failed to process database folder '${folderName}':`, error);
+				// Continue with other databases instead of failing completely
+			}
 		}
 
 		this.initialized = true;
-		console.log('PrismaManager initialized successfully');
+		
+		// Log final status
+		const connectedCount = this.databases.size;
+		const totalCount = folders.length;
+		
+		if (connectedCount === 0) {
+			console.warn('⚠️ PrismaManager initialized but no databases are connected');
+		} else {
+			console.log(`✅ PrismaManager initialized successfully (${connectedCount}/${totalCount} databases connected)`);
+		}
 	}
 
 	/**
@@ -134,7 +150,6 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 			return;
 		}
 
-
 		// Check if Prisma client is generated
 		const isGenerated = await this.checkIfGenerated(folderName);
 
@@ -148,28 +163,36 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 			return;
 		}
 
-
 		try {
 			// Dynamically import the generated Prisma client
 			let clientModule;
 			let DatabasePrismaClient;			
 			
-			if (process.env.WEBPACK_BUILD == 'true') {
-				// In webpack build environment, use Node.js Module API to bypass webpack's require interception
+			// Enhanced serverless environment detection and handling
+			const isWebpackBuild = process.env.WEBPACK_BUILD === 'true' || 
+								   process.env.NODE_ENV === 'production' ||
+								   fs.existsSync(path.join(process.cwd(), 'dist', 'server.js'));
+			
+			if (isWebpackBuild) {
+				// In webpack build/production environment
 				const distClientPath = path.join(process.cwd(), 'dist', 'src', 'app', 'db', folderName, 'client');
 				const clientIndexPath = path.join(distClientPath, 'index.js');
 				
+				// Check if built client exists
+				if (!fs.existsSync(clientIndexPath)) {
+					throw new Error(`Built Prisma client not found at: ${clientIndexPath}`);
+				}
+				
 				try {
-					// Use multiple approaches to bypass webpack's module resolution
+					// Multiple fallback strategies for loading the module
 					let nodeRequire: any;
 					
-					// Try using Module.createRequire with __filename fallback
+					// Strategy 1: Try Module.createRequire
 					try {
 						const Module = eval('require')('module');
-						// Use __filename as fallback since import.meta.url is not available in webpack
 						nodeRequire = Module.createRequire(__filename);
 					} catch (e) {
-						// Fallback to direct eval require
+						// Strategy 2: Direct eval require
 						nodeRequire = eval('require');
 					}
 					
@@ -184,9 +207,18 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 					
 					console.log(`✅ Successfully loaded Prisma client for ${folderName} from dist path`);
 				} catch (requireError: any) {
-					console.error(`Detailed require error:`, requireError);
-					console.error(`Error stack:`, requireError.stack);
-					throw requireError;
+					console.error(`❌ Failed to load Prisma client from dist for ${folderName}:`, requireError);
+					
+					// Fallback: Try to load from source (for development in production mode)
+					console.log(`🔄 Attempting fallback to source client for ${folderName}...`);
+					const clientPath = path.join(folderPath, 'client');
+					if (fs.existsSync(path.join(clientPath, 'index.js'))) {
+						clientModule = await import(clientPath);
+						DatabasePrismaClient = clientModule.PrismaClient;
+						console.log(`✅ Fallback successful for ${folderName}`);
+					} else {
+						throw requireError;
+					}
 				}
 			} else {
 				// Development environment - use normal dynamic import
@@ -198,10 +230,19 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 			// Store the client type constructor for type information
 			this.clientTypes.set(folderName, DatabasePrismaClient);
 
-			// Create Prisma client instance with database URL
-			const connectionUrl = this.getDatabaseUrl(folderName);
+			// Check if database URL is available
+			let connectionUrl;
+			try {
+				connectionUrl = this.getDatabaseUrl(folderName);
+			} catch (urlError) {
+				console.error(`❌ Database URL not configured for ${folderName}:`, urlError);
+				throw urlError;
+			}
+
+			// Get datasource name
 			const datasourceName = this.getDatasourceName(folderName);
 
+			// Create Prisma client instance with database URL
 			const prismaClient = new DatabasePrismaClient({
 				datasources: {
 					[datasourceName]: {
@@ -210,23 +251,43 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 				}
 			});
 
-		// Test the connection
-		await prismaClient.$connect();
+			// Test the connection with retry logic
+			let connectionAttempts = 0;
+			const maxAttempts = 3;
+			
+			while (connectionAttempts < maxAttempts) {
+				try {
+					await prismaClient.$connect();
+					break; // Connection successful
+				} catch (connectError) {
+					connectionAttempts++;
+					console.warn(`⚠️ Connection attempt ${connectionAttempts}/${maxAttempts} failed for ${folderName}:`, connectError);
+					
+					if (connectionAttempts >= maxAttempts) {
+						throw connectError;
+					}
+					
+					// Wait before retry
+					await new Promise(resolve => setTimeout(resolve, 1000));
+				}
+			}
 
-		// Store the client instance with its original prototype and type information
-		this.databases.set(folderName, prismaClient);
-		this.configs.set(folderName, {
-			name: folderName,
-			schemaPath,
-			isGenerated: true
-		});
+			// Store the client instance with its original prototype and type information
+			this.databases.set(folderName, prismaClient);
+			this.configs.set(folderName, {
+				name: folderName,
+				schemaPath,
+				isGenerated: true
+			});
 
-		// Initialize connection state
-		this.connectionStates.set(folderName, {
-			connected: true,
-			lastChecked: Date.now()
-		});
-		this.reconnectionAttempts.set(folderName, 0);			// Dynamically extend the DatabaseClientMap interface with the actual client type
+			// Initialize connection state
+			this.connectionStates.set(folderName, {
+				connected: true,
+				lastChecked: Date.now()
+			});
+			this.reconnectionAttempts.set(folderName, 0);
+			
+			// Dynamically extend the DatabaseClientMap interface with the actual client type
 			this.extendDatabaseClientMap(folderName, DatabasePrismaClient);
 
 			// Dynamically create getter methods for this database
@@ -235,6 +296,16 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 			console.log(`✅ Connected to database: ${folderName}`);
 		} catch (error) {
 			console.error(`❌ Failed to connect to database ${folderName}:`, error);
+			
+			// Store failed config for reference
+			this.configs.set(folderName, {
+				name: folderName,
+				schemaPath,
+				isGenerated: true // We know it's generated, just connection failed
+			});
+			
+			// Don't throw the error, let the application continue
+			throw error;
 		}
 	}
 

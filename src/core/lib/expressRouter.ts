@@ -115,7 +115,7 @@ export class ExpressRouter {
                     
                     // 초기화 완료 표시
                     ExpressRouter.initializedDatabases.add(databaseName);
-                    console.log(`🔍 Prisma 스키마 분석기가 초기화되었습니다. (데이터베이스: ${databaseName})`);
+                    // console.log(`🔍 Prisma 스키마 분석기가 초기화되었습니다. (데이터베이스: ${databaseName})`);
                 }
             }
 

@@ -65,7 +65,6 @@ export class PrismaSchemaAnalyzer {
     const lowerModelName = modelName.toLowerCase();
     for (const [cachedName, cachedModel] of this.modelCache.entries()) {
       if (cachedName.toLowerCase() === lowerModelName) {
-        console.log(`🔄 모델 이름 매핑: '${modelName}' -> '${cachedName}'`);
         return cachedModel;
       }
     }
@@ -152,7 +151,8 @@ export class PrismaSchemaAnalyzer {
           // enum 정보를 클래스 변수에 저장
           this.loadedEnums = enums;
           
-          console.log(`✅ Prisma 스키마 분석 완료 (${this.databaseName}): ${models.length}개 모델, ${Object.keys(enums).length}개 enum 로드됨`);
+          // 분석 완료 - 간단한 로그만 출력
+          // console.log(`✅ Prisma 스키마 분석 완료 (${this.databaseName}): ${models.length}개 모델, ${Object.keys(enums).length}개 enum 로드됨`);
           
           for (const model of models) {
             const modelInfo = this.parseModelFromDMMF(model);
@@ -226,7 +226,8 @@ export class PrismaSchemaAnalyzer {
         this.modelCache.set(model.name, modelInfo);
       }
 
-      console.log(`✅ Prisma 스키마 분석 완료 (${this.databaseName}): ${this.modelCache.size}개 모델 로드됨`);
+      // 분석 완료 - 로그 제거
+      // console.log(`✅ Prisma 스키마 분석 완료 (${this.databaseName}): ${this.modelCache.size}개 모델 로드됨`);
     } catch (error) {
       console.error('Prisma DMMF 로드 중 오류 발생:', error);
     }

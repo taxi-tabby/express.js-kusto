@@ -74,14 +74,17 @@ export class ExpressRouter {
 
     constructor() {
         this.schemaRegistry = CrudSchemaRegistry.getInstance();
-        this.initializeSchemaAnalyzer();
+        // 비동기 초기화는 별도로 처리
+        this.initializeSchemaAnalyzer().catch(error => {
+            console.error('스키마 분석기 초기화 실패:', error);
+        });
     }
 
     /**
      * 스키마 분석기를 초기화합니다 (개발 모드에서만)
      * 각 데이터베이스별로 1번씩만 실행됩니다.
      */
-    private initializeSchemaAnalyzer(): void {
+    private async initializeSchemaAnalyzer(): Promise<void> {
         if (!this.schemaRegistry.isSchemaApiEnabled()) {
             return; // 개발 모드가 아니면 초기화하지 않음
         }
@@ -102,7 +105,7 @@ export class ExpressRouter {
                     continue;
                 }
 
-                const prismaClient = prismaManager.getClient(databaseName);
+                const prismaClient = await prismaManager.getClient(databaseName);
                 if (prismaClient) {
                     // 각 데이터베이스별로 분석기 생성 (싱글톤이므로 중복 생성되지 않음)
                     const analyzer = PrismaSchemaAnalyzer.getInstance(prismaClient, databaseName);
@@ -118,7 +121,7 @@ export class ExpressRouter {
 
             // 첫 번째 사용 가능한 데이터베이스를 기본 분석기로 설정
             const firstDatabase = availableDatabases[0];
-            const firstClient = prismaManager.getClient(firstDatabase);
+            const firstClient = await prismaManager.getClient(firstDatabase);
             if (firstClient && !this.schemaAnalyzer) {
                 this.schemaAnalyzer = PrismaSchemaAnalyzer.getInstance(firstClient, firstDatabase);
             }
@@ -2296,8 +2299,11 @@ export class ExpressRouter {
         }
     ): ExpressRouter {
         
-        // 개발 모드에서 스키마 등록
-        this.registerSchemaInDevelopment(databaseName, modelName as string, options);
+        // 개발 모드에서 스키마 등록 (비동기로 백그라운드 실행)
+        this.registerSchemaInDevelopment(databaseName, modelName as string, options)
+            .catch(error => {
+                console.error(`스키마 등록 실패 (${databaseName}.${modelName}):`, error.message);
+            });
 
         const enabledActions = this.getEnabledActions(options);
         const client = prismaManager.getWrap(databaseName);
@@ -2348,11 +2354,11 @@ export class ExpressRouter {
     /**
      * 개발 모드에서 CRUD 스키마를 등록합니다
      */
-    private registerSchemaInDevelopment(
+    private async registerSchemaInDevelopment(
         databaseName: string, 
         modelName: string, 
         options?: any
-    ): void {
+    ): Promise<void> {
         if (!this.schemaRegistry.isSchemaApiEnabled() || !this.schemaAnalyzer) {
             return; // 개발 모드가 아니거나 스키마 분석기가 없으면 등록하지 않음
         }
@@ -2361,7 +2367,7 @@ export class ExpressRouter {
             // 현재 스키마 분석기가 요청된 데이터베이스와 다른 경우 새로운 분석기 생성
             let analyzer = this.schemaAnalyzer;
             if (this.schemaAnalyzer.getDatabaseName() !== databaseName) {
-                const requestedClient = prismaManager.getClient(databaseName);
+                const requestedClient = await prismaManager.getClient(databaseName);
                 if (requestedClient) {
                     analyzer = PrismaSchemaAnalyzer.getInstance(requestedClient, databaseName);
                 } else {
@@ -2496,12 +2502,13 @@ export class ExpressRouter {
         const isSoftDelete = options?.softDelete?.enabled;
         const softDeleteField = options?.softDelete?.field || 'deletedAt';
         
+
         const handler: HandlerFunction = async (req, res, injected, repo, db) => {
             try {
                 // JSON:API Content-Type ?�더 ?�정
                 res.setHeader('Content-Type', 'application/vnd.api+json');
                 res.setHeader('Vary', 'Accept');
-                
+
                 // 쿼리 ?�라미터 ?�싱
                 const queryParams = CrudQueryParser.parseQuery(req);
                 

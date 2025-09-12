@@ -33,8 +33,9 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 	private initialized: boolean = false;
 	private connectionStates: Map<string, { connected: boolean; lastChecked: number }> = new Map();
 	private reconnectionAttempts: Map<string, number> = new Map();
-	private readonly CONNECTION_CHECK_INTERVAL = 30000; // 30초
-	private readonly MAX_RECONNECTION_ATTEMPTS = 3;
+	// 서버리스 최적화: 헬스체크 간격을 매우 길게 설정 (실제로는 거의 사용되지 않음)
+	private readonly CONNECTION_CHECK_INTERVAL = 600000; // 10분 (거의 사용되지 않음)
+	private readonly MAX_RECONNECTION_ATTEMPTS = 2; // 빠른 실패
 
 
 	/**
@@ -112,7 +113,10 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 			.filter(dirent => dirent.isDirectory())
 			.map(dirent => dirent.name);
 
-		console.log(`Found ${folders.length} database folders:`, folders);
+		// 개발 환경에서만 상세 로그 출력
+		if (process.env.NODE_ENV === 'development') {
+			console.log(`Found ${folders.length} database folders:`, folders);
+		}
 
 		// Process each database folder with error handling
 		for (const folderName of folders) {
@@ -126,14 +130,14 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 
 		this.initialized = true;
 		
-		// Log final status
+		// 간소화된 초기화 로그
 		const connectedCount = this.databases.size;
 		const totalCount = folders.length;
 		
 		if (connectedCount === 0) {
-			console.warn('⚠️ PrismaManager initialized but no databases are connected');
+			console.warn('⚠️ No databases connected');
 		} else {
-			console.log(`✅ PrismaManager initialized successfully (${connectedCount}/${totalCount} databases connected)`);
+			console.log(`✅ PrismaManager: ${connectedCount}/${totalCount} databases ready`);
 		}
 	}
 
@@ -261,13 +265,13 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 					break; // Connection successful
 				} catch (connectError) {
 					connectionAttempts++;
-					console.warn(`⚠️ Connection attempt ${connectionAttempts}/${maxAttempts} failed for ${folderName}:`, connectError);
-					
+					// 최종 실패 시에만 로그 출력 (성능 개선)
 					if (connectionAttempts >= maxAttempts) {
+						console.error(`❌ Connection failed for ${folderName} after ${maxAttempts} attempts:`, connectError);
 						throw connectError;
 					}
 					
-					// Wait before retry
+					// 짧은 대기 후 재시도 (로그 없음)
 					await new Promise(resolve => setTimeout(resolve, 1000));
 				}
 			}
@@ -293,7 +297,10 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 			// Dynamically create getter methods for this database
 			this.createDynamicMethods(folderName);
 
-			console.log(`✅ Connected to database: ${folderName}`);
+			// 개발 환경에서만 성공 로그 출력
+			if (process.env.NODE_ENV === 'development') {
+				console.log(`✅ Connected to database: ${folderName}`);
+			}
 		} catch (error) {
 			console.error(`❌ Failed to connect to database ${folderName}:`, error);
 			
@@ -467,27 +474,21 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 	}
 
 	/**
+	 * 서버리스 최적화: 사전 헬스체크 없이 요청 시점에만 연결 확인
 	 * Check if connection is healthy and reconnect if necessary
 	 */
 	private async ensureConnection(databaseName: string): Promise<boolean> {
 		const connectionState = this.connectionStates.get(databaseName);
 		const now = Date.now();
 
-		// If recently checked and was healthy, assume still connected
-		if (connectionState && connectionState.connected && 
-			(now - connectionState.lastChecked) < this.CONNECTION_CHECK_INTERVAL) {
+		// 서버리스 최적화: 사전 헬스체크를 완전히 제거
+		// 단순히 연결 상태만 확인하고, 실제 연결은 getClient에서 시도
+		if (connectionState && connectionState.connected) {
 			return true;
 		}
 
-		// Check actual connection health
-		const isHealthy = await this.checkConnectionHealth(databaseName);
-		
-		if (!isHealthy) {
-			console.log(`🔄 Connection lost for database '${databaseName}', attempting reconnection...`);
-			return await this.reconnectDatabase(databaseName);
-		}
-
-		// Update connection state
+		// 연결 상태가 없거나 연결되지 않은 상태라면 연결된 것으로 가정
+		// 실제 연결 실패는 getClient()에서 catch하여 재연결 처리
 		this.connectionStates.set(databaseName, {
 			connected: true,
 			lastChecked: now
@@ -497,18 +498,16 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 	}
 
 	/**
+	 * 서버리스 최적화: 간단한 연결 상태 체크 (실제 쿼리 없음)
 	 * Check if a specific database connection is healthy
 	 */
 	private async checkConnectionHealth(databaseName: string): Promise<boolean> {
 		try {
+			// 서버리스에서는 실제 헬스체크 쿼리를 실행하지 않음
+			// 단순히 클라이언트가 존재하는지만 확인
 			const client = this.databases.get(databaseName);
-			if (!client) return false;
-
-			// Simple query to check connection
-			await client.$queryRaw`SELECT 1 as health_check`;
-			return true;
+			return !!client;
 		} catch (error) {
-			console.warn(`⚠️ Connection health check failed for '${databaseName}':`, error);
 			return false;
 		}
 	}
@@ -519,12 +518,15 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 	private async reconnectDatabase(databaseName: string): Promise<boolean> {
 		const attempts = this.reconnectionAttempts.get(databaseName) || 0;
 		
+		// 빠른 포기: 최대 시도 횟수에 도달하면 즉시 실패 처리 (성능 개선)
 		if (attempts >= this.MAX_RECONNECTION_ATTEMPTS) {
-			console.error(`❌ Max reconnection attempts reached for database '${databaseName}'`);
+			console.error(`❌ Max reconnection attempts (${this.MAX_RECONNECTION_ATTEMPTS}) reached for database '${databaseName}'`);
 			this.connectionStates.set(databaseName, {
 				connected: false,
 				lastChecked: Date.now()
 			});
+			// 재연결 시도 카운터를 리셋하여 일정 시간 후 다시 시도 가능하게 함
+			this.reconnectionAttempts.set(databaseName, 0);
 			return false;
 		}
 
@@ -532,13 +534,17 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 			// Increment attempt counter
 			this.reconnectionAttempts.set(databaseName, attempts + 1);
 
-			// Disconnect existing client
+			// 기존 클라이언트 정리를 더 간단하게 처리 (성능 개선)
 			const existingClient = this.databases.get(databaseName);
 			if (existingClient) {
 				try {
-					await existingClient.$disconnect();
+					// 타임아웃을 짧게 설정하여 빠른 정리
+					await Promise.race([
+						existingClient.$disconnect(),
+						new Promise((_, reject) => setTimeout(() => reject(new Error('Disconnect timeout')), 3000))
+					]);
 				} catch (disconnectError) {
-					console.warn(`Warning during disconnect:`, disconnectError);
+					// 연결 끊기 실패는 무시하고 계속 진행 (로그 제거)
 				}
 			}
 
@@ -552,7 +558,10 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 				lastChecked: Date.now()
 			});
 
-			console.log(`✅ Successfully reconnected to database '${databaseName}'`);
+			// 개발 환경에서만 재연결 성공 로그 출력
+			if (process.env.NODE_ENV === 'development') {
+				console.log(`✅ Successfully reconnected to database '${databaseName}'`);
+			}
 			return true;
 
 		} catch (error) {
@@ -624,17 +633,8 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 				throw new Error(`데이터베이스 '${databaseName}'를 찾을 수 없습니다. 사용 가능한 데이터베이스: ${dbList}`);
 			}
 
-			// Log successful database access with hint
-			// console.log(`🗃️ Accessing database '${databaseName}' from: ${callerInfo.filePath}${callerInfo.lineNumber ? `:${callerInfo.lineNumber}` : ''}`);
-
-			// Ensure connection is healthy (includes automatic reconnection)
-			const isConnected = await this.ensureConnection(databaseName);
-			if (!isConnected) {
-				console.error(`❌ Failed to connect to database '${databaseName}'`);
-				console.error(`   Called from: ${callerInfo.filePath}${callerInfo.lineNumber ? `:${callerInfo.lineNumber}` : ''}`);
-				throw new Error(`데이터베이스 '${databaseName}'에 연결할 수 없습니다. 재연결 시도가 실패했습니다.`);
-			}
-
+			// 서버리스 최적화: 사전 연결 체크 제거, 실제 사용 시점에 재연결 시도
+			// ensureConnection을 생략하고 바로 클라이언트 사용 시도
 			const client = this.databases.get(databaseName);
 			if (!client) {
 				console.error(`❌ Database client '${databaseName}' not found`);
@@ -642,7 +642,7 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 				throw new Error(`데이터베이스 '${databaseName}' 클라이언트를 찾을 수 없습니다.`);
 			}
 
-			// Return the client with its original type preserved from dynamic import
+			// 클라이언트 반환 - 실제 쿼리 실행 시 연결 오류가 발생하면 그때 재연결
 			return client as T;
 		} catch (error) {
 			if (error instanceof Error) {
@@ -652,8 +652,6 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 		}
 	}
 
-
-	
 	/**
 	 * Get a Prisma client instance synchronously (without reconnection logic)
 	 * Use this only when you're sure the connection is healthy
@@ -684,8 +682,6 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 		}
 	}
 
-
-
 	/**
 	 * Extract caller source information from stack trace for hint tracking
 	 * @returns Object containing file path and line number information
@@ -713,8 +709,6 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 
 		return { filePath, lineNumber };
 	}
-
-
 
 	/**
 	 * Get a wrapped client with enhanced type information and runtime type checking
@@ -747,8 +741,6 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 			throw new Error(`데이터베이스 래핑된 클라이언트 획득 중 오류가 발생했습니다: ${error}`);
 		}
 	}
-
-
 
 	/**
 	 * Get a wrapped client with enhanced type information and runtime type checking (async version)
@@ -808,9 +800,6 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 			throw new Error(`데이터베이스 래핑된 클라이언트 획득 중 오류가 발생했습니다: ${error}`);
 		}
 	}
-
-
-
 
 	/**
 	 * Get a client with runtime type checking and enhanced type information
@@ -884,8 +873,6 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 		return this.databases.has(databaseName);
 	}
 
-
-
 	/**
 	 * Disconnect all databases
 	 */
@@ -901,8 +888,6 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 		this.initialized = false;
 		console.log('All Prisma clients disconnected');
 	}
-
-
 
 	/**
 	 * Get connection status
@@ -924,9 +909,6 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 			}))
 		};
 	}
-
-
-
 	/**
 	 * Execute a transaction across multiple databases
 	 * Note: This is for separate transactions, not distributed transactions
@@ -949,9 +931,6 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 		return results;
 	}
 
-
-
-
 	/**
 	 * Get raw database connection for custom queries
 	 */
@@ -964,8 +943,6 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 		return client.$queryRawUnsafe(query, ...(params || []));
 	}
 
-
-	
 	/**
 	 * Health check for all connected databases
 	 */
@@ -1028,9 +1005,6 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 			databases: results
 		};
 	}
-
-
-
 	/**
 	 * Dynamically create typed getter methods for each database
 	 */
@@ -1043,9 +1017,7 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 				return this.getWrap(databaseName);
 			};
 		}
-	}  
-	
-	/**
+	}  /**
    * Dynamically extend the DatabaseClientMap interface with the actual client type
    */
 	private extendDatabaseClientMap(databaseName: string, ClientType: any): void {

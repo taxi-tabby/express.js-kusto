@@ -659,12 +659,8 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 	 */
 	public getClientSync<T = any>(databaseName: string): T {
 		try {
-			// Get caller information for hint tracking
-			const callerInfo = this.getCallerSourceInfo();
-			
 			if (!this.initialized) {
 				console.error('❌ PrismaManager not initialized. Call initialize() first.');
-				console.error(`   Called from: ${callerInfo.filePath}${callerInfo.lineNumber ? `:${callerInfo.lineNumber}` : ''}`);
 				throw new Error('데이터베이스 관리자가 초기화되지 않았습니다. 애플리케이션 시작 시 initialize()를 호출했는지 확인하세요.');
 			}
 
@@ -673,12 +669,8 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 				const availableDbs = Array.from(this.databases.keys());
 				const dbList = availableDbs.length > 0 ? availableDbs.join(', ') : '없음';
 				console.error(`❌ Database '${databaseName}' not found. Available: ${dbList}`);
-				console.error(`   Called from: ${callerInfo.filePath}${callerInfo.lineNumber ? `:${callerInfo.lineNumber}` : ''}`);
 				throw new Error(`데이터베이스 '${databaseName}'를 찾을 수 없습니다. 사용 가능한 데이터베이스: ${dbList}`);
 			}
-
-			// Log successful database access with hint
-			// console.log(`🗃️ Accessing database '${databaseName}' sync from: ${callerInfo.filePath}${callerInfo.lineNumber ? `:${callerInfo.lineNumber}` : ''}`);
 
 			// Return the client with its original type preserved from dynamic import
 			return client as T;
@@ -725,49 +717,22 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 	 */
 	public getWrap(databaseName: string): any {
 		try {
-			// Use sync version for repositories
-			const client = this.getClientSync(databaseName);
-			const clientType = this.clientTypes.get(databaseName);
-
-			if (!clientType) {
-				console.warn(`⚠️ Database '${databaseName}' client type not found, returning basic client.`);
-				return client;
+			// 항상 최신 클라이언트를 로드하여 모델 동기화 보장
+			try {
+				const clientPath = `@app/db/${databaseName}/client`;
+				delete require.cache[require.resolve(clientPath)];
+				const { PrismaClient: FreshClientType } = require(clientPath);
+				const freshClient = new FreshClientType();
+				
+				// 새로운 클라이언트로 업데이트
+				this.databases.set(databaseName, freshClient);
+				this.clientTypes.set(databaseName, FreshClientType);
+				return freshClient;
+			} catch (error) {
+				console.error(`❌ Failed to reload fresh client, using cached:`, error);
+				// 새로운 클라이언트 로드 실패 시 기존 클라이언트 반환
+				return this.getClientSync(databaseName);
 			}
-
-			// Create a proxy that preserves the original client prototype and type information
-			const wrappedClient = new Proxy(client, {
-				get(target, prop, receiver) {
-					try {
-						const value = Reflect.get(target, prop, receiver);
-
-						// If it's a function, bind it to the original target
-						if (typeof value === 'function') {
-							return value.bind(target);
-						}
-
-						return value;
-					} catch (error) {
-						console.error(`❌ Error accessing property '${String(prop)}' on database client: ${error}`);
-						throw new Error(`데이터베이스 클라이언트 속성 '${String(prop)}' 접근 중 오류: ${error}`);
-					}
-				},
-
-				getPrototypeOf() {
-					return clientType.prototype;
-				},
-
-				has(target, prop) {
-					return prop in target || prop in clientType.prototype;
-				},
-
-				getOwnPropertyDescriptor(target, prop) {
-					const desc = Reflect.getOwnPropertyDescriptor(target, prop);
-					if (desc) return desc;
-					return Reflect.getOwnPropertyDescriptor(clientType.prototype, prop);
-				}
-			});
-
-			return wrappedClient;
 
 		} catch (error) {
 			if (error instanceof Error) {

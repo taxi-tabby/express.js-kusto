@@ -652,6 +652,8 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 		}
 	}
 
+
+	
 	/**
 	 * Get a Prisma client instance synchronously (without reconnection logic)
 	 * Use this only when you're sure the connection is healthy
@@ -682,6 +684,8 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 		}
 	}
 
+
+
 	/**
 	 * Extract caller source information from stack trace for hint tracking
 	 * @returns Object containing file path and line number information
@@ -709,6 +713,8 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 
 		return { filePath, lineNumber };
 	}
+
+
 
 	/**
 	 * Get a wrapped client with enhanced type information and runtime type checking
@@ -741,6 +747,8 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 			throw new Error(`데이터베이스 래핑된 클라이언트 획득 중 오류가 발생했습니다: ${error}`);
 		}
 	}
+
+
 
 	/**
 	 * Get a wrapped client with enhanced type information and runtime type checking (async version)
@@ -800,6 +808,9 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 			throw new Error(`데이터베이스 래핑된 클라이언트 획득 중 오류가 발생했습니다: ${error}`);
 		}
 	}
+
+
+
 
 	/**
 	 * Get a client with runtime type checking and enhanced type information
@@ -873,6 +884,8 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 		return this.databases.has(databaseName);
 	}
 
+
+
 	/**
 	 * Disconnect all databases
 	 */
@@ -888,6 +901,8 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 		this.initialized = false;
 		console.log('All Prisma clients disconnected');
 	}
+
+
 
 	/**
 	 * Get connection status
@@ -909,6 +924,9 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 			}))
 		};
 	}
+
+
+
 	/**
 	 * Execute a transaction across multiple databases
 	 * Note: This is for separate transactions, not distributed transactions
@@ -931,6 +949,9 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 		return results;
 	}
 
+
+
+
 	/**
 	 * Get raw database connection for custom queries
 	 */
@@ -943,6 +964,8 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 		return client.$queryRawUnsafe(query, ...(params || []));
 	}
 
+
+	
 	/**
 	 * Health check for all connected databases
 	 */
@@ -1005,6 +1028,9 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 			databases: results
 		};
 	}
+
+
+
 	/**
 	 * Dynamically create typed getter methods for each database
 	 */
@@ -1017,7 +1043,9 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 				return this.getWrap(databaseName);
 			};
 		}
-	}  /**
+	}  
+	
+	/**
    * Dynamically extend the DatabaseClientMap interface with the actual client type
    */
 	private extendDatabaseClientMap(databaseName: string, ClientType: any): void {

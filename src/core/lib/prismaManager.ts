@@ -33,8 +33,6 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 	private initialized: boolean = false;
 	private connectionStates: Map<string, { connected: boolean; lastChecked: number }> = new Map();
 	private reconnectionAttempts: Map<string, number> = new Map();
-	// 서버리스 최적화: 헬스체크 간격을 매우 길게 설정 (실제로는 거의 사용되지 않음)
-	private readonly CONNECTION_CHECK_INTERVAL = 600000; // 10분 (거의 사용되지 않음)
 	private readonly MAX_RECONNECTION_ATTEMPTS = 2; // 빠른 실패
 
 
@@ -246,13 +244,16 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 			// Get datasource name
 			const datasourceName = this.getDatasourceName(folderName);
 
-			// Create Prisma client instance with database URL
+			// Create Prisma client instance with database URL and connection pool settings
 			const prismaClient = new DatabasePrismaClient({
 				datasources: {
 					[datasourceName]: {
 						url: connectionUrl
 					}
-				}
+				},
+				// 올바른 연결 풀 설정
+				log: process.env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error'],
+				errorFormat: 'minimal'
 			});
 
 			// Test the connection with retry logic
@@ -374,12 +375,20 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 			}
 
 			const envVarName = urlMatch[1];
-			const url = process.env[envVarName];
+			let url = process.env[envVarName];
 			
 
 			if (!url) {
 				throw new Error(`Environment variable ${envVarName} not found for database ${folderName}`);
 			}
+
+			// 연결 풀 매개변수가 없으면 추가
+			// if (!url.includes('connection_limit') && !url.includes('pool_timeout')) {
+			// 	const hasParams = url.includes('?');
+			// 	const connector = hasParams ? '&' : '?';
+			// 	url += `${connector}connection_limit=5&pool_timeout=10000&connect_timeout=5000`;
+			// 	console.log(`📊 Added connection pool settings to ${folderName} database URL`);
+			// }
 
 			return url;
 		} catch (error) {
@@ -598,7 +607,10 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 				[datasourceName]: {
 					url: connectionUrl
 				}
-			}
+			},
+			// 올바른 연결 풀 설정
+			log: process.env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error'],
+			errorFormat: 'minimal'
 		});
 
 		// Test the connection
@@ -717,26 +729,23 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 	 */
 	public getWrap(databaseName: string): any {
 		try {
-			// 항상 최신 클라이언트를 로드하여 모델 동기화 보장
-			try {
-				const clientPath = `@app/db/${databaseName}/client`;
-				delete require.cache[require.resolve(clientPath)];
-				const { PrismaClient: FreshClientType } = require(clientPath);
-				const freshClient = new FreshClientType();
-				
-				// 새로운 클라이언트로 업데이트
-				this.databases.set(databaseName, freshClient);
-				this.clientTypes.set(databaseName, FreshClientType);
-				return freshClient;
-			} catch (error) {
-				console.error(`❌ Failed to reload fresh client, using cached:`, error);
-				// 새로운 클라이언트 로드 실패 시 기존 클라이언트 반환
-				return this.getClientSync(databaseName);
+			if (!this.initialized) {
+				throw new Error('데이터베이스 관리자가 초기화되지 않았습니다. 애플리케이션 시작 시 initialize()를 호출했는지 확인하세요.');
 			}
+
+			// 기존 클라이언트를 재사용 - 새로운 인스턴스를 생성하지 않음
+			const existingClient = this.databases.get(databaseName);
+			if (!existingClient) {
+				const availableDbs = Array.from(this.databases.keys());
+				const dbList = availableDbs.length > 0 ? availableDbs.join(', ') : '없음';
+				throw new Error(`데이터베이스 '${databaseName}'를 찾을 수 없습니다. 사용 가능한 데이터베이스: ${dbList}`);
+			}
+
+			return existingClient;
 
 		} catch (error) {
 			if (error instanceof Error) {
-				throw error; // getClientSync에서 이미 처리된 오류는 그대로 전달
+				throw error;
 			}
 			throw new Error(`데이터베이스 래핑된 클라이언트 획득 중 오류가 발생했습니다: ${error}`);
 		}

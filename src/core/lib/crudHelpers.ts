@@ -354,43 +354,117 @@ export class CrudQueryParser {
    * filter 파라미터 파싱
    * ?filter[name_eq]=John&filter[age_gt]=18
    * 또는 중첩 객체 형태: { filter: { name_eq: "John", age_gt: 18 } }
+   * OR 조건 지원: ?filter[or][0][name_eq]=John&filter[or][0][age_gt]=18&filter[or][1][name_eq]=Jane
    */
   private static parseFilter(query: any, modelName?: string, schemaAnalyzer?: any): Record<string, any> | undefined {
     const filters: Record<string, any> = {};
+    let orConditions: any[] = [];
     
     // 1. 중첩 객체 형태 처리 (Express에서 filter[key]=value를 { filter: { key: value } }로 파싱하는 경우)
     if (query.filter && typeof query.filter === 'object') {
       Object.entries(query.filter).forEach(([filterExpression, value]) => {
-        const parsed = this.parseFilterExpression(filterExpression, value, modelName, schemaAnalyzer);
-        
-        if (parsed) {
-          filters[parsed.field] = {
-            ...filters[parsed.field],
-            [parsed.operator]: parsed.value
-          };
+        // OR 조건 처리 (대소문자 구분 없음)
+        if (filterExpression.toLowerCase() === 'or' && typeof value === 'object') {
+          orConditions = this.parseOrConditions(value, modelName, schemaAnalyzer);
+        } else {
+          // 일반 필터 조건 처리
+          const parsed = this.parseFilterExpression(filterExpression, value, modelName, schemaAnalyzer);
+          
+          if (parsed) {
+            filters[parsed.field] = {
+              ...filters[parsed.field],
+              [parsed.operator]: parsed.value
+            };
+          }
         }
       });
     }
     
     // 2. 평면 키 형태 처리 (filter[key]=value)
     Object.keys(query).forEach(key => {
+      // OR 조건 패턴 매칭: filter[or][0][field_op]=value (대소문자 구분 없음)
+      const orMatch = key.match(/^filter\[(or|Or|OR)\]\[(\d+)\]\[(.+)\]$/i);
+      if (orMatch) {
+        const orIndex = parseInt(orMatch[2], 10);
+        const filterExpression = orMatch[3];
+        const value = query[key];
+        
+        // OR 조건 배열 초기화
+        if (!orConditions[orIndex]) {
+          orConditions[orIndex] = {};
+        }
+        
+        const parsed = this.parseFilterExpression(filterExpression, value, modelName, schemaAnalyzer);
+        if (parsed) {
+          orConditions[orIndex][parsed.field] = {
+            ...orConditions[orIndex][parsed.field],
+            [parsed.operator]: parsed.value
+          };
+        }
+        return;
+      }
+      
+      // 일반 필터 패턴 매칭: filter[field_op]=value
       const match = key.match(/^filter\[(.+)\]$/);
       if (match) {
         const filterExpression = match[1];
         const value = query[key];
         
-        // Parse field and operator
-        const parsed = this.parseFilterExpression(filterExpression, value, modelName, schemaAnalyzer);
-        if (parsed) {
-          filters[parsed.field] = {
-            ...filters[parsed.field],
-            [parsed.operator]: parsed.value
-          };
+        // OR 조건이 아닌 경우에만 처리 (대소문자 구분 없음)
+        if (filterExpression.toLowerCase() !== 'or') {
+          const parsed = this.parseFilterExpression(filterExpression, value, modelName, schemaAnalyzer);
+          if (parsed) {
+            filters[parsed.field] = {
+              ...filters[parsed.field],
+              [parsed.operator]: parsed.value
+            };
+          }
         }
       }
     });
 
+    // OR 조건이 있는 경우 처리
+    if (orConditions.length > 0) {
+      // 빈 조건 제거
+      const validOrConditions = orConditions.filter(condition => 
+        condition && Object.keys(condition).length > 0
+      );
+      
+      if (validOrConditions.length > 0) {
+        filters._or = validOrConditions;
+      }
+    }
+
     return Object.keys(filters).length > 0 ? filters : undefined;
+  }
+
+  /**
+   * OR 조건 파싱 (중첩 객체 형태)
+   * filter: { or: { "0": { name_eq: "John" }, "1": { name_eq: "Jane" } } }
+   */
+  private static parseOrConditions(orObject: any, modelName?: string, schemaAnalyzer?: any): any[] {
+    const orConditions: any[] = [];
+    
+    Object.entries(orObject).forEach(([index, condition]) => {
+      if (typeof condition === 'object' && condition !== null) {
+        const orIndex = parseInt(index, 10);
+        if (!isNaN(orIndex)) {
+          orConditions[orIndex] = {};
+          
+          Object.entries(condition).forEach(([filterExpression, value]) => {
+            const parsed = this.parseFilterExpression(filterExpression, value, modelName, schemaAnalyzer);
+            if (parsed) {
+              orConditions[orIndex][parsed.field] = {
+                ...orConditions[orIndex][parsed.field],
+                [parsed.operator]: parsed.value
+              };
+            }
+          });
+        }
+      }
+    });
+    
+    return orConditions;
   }
 
   /**
@@ -838,23 +912,60 @@ export class PrismaQueryBuilder {
   }
 
   /**
-   * Where 옵션 빌드 (관계 필터링 지원)
+   * Where 옵션 빌드 (관계 필터링 및 OR 조건 지원)
    */
   private static buildWhereOptions(filters: Record<string, any>) {
     const where: any = {};
+    const orConditions: any[] = [];
 
     Object.entries(filters).forEach(([field, conditions]) => {
-      // 관계 필터링 처리 (author.name, tags.name 등)
-      if (field.includes('.')) {
-        this.buildNestedWhereCondition(where, field, conditions);
+      // OR 조건 처리 (대소문자 구분 없음)
+      if (field === '_or' && Array.isArray(conditions)) {
+        conditions.forEach(orCondition => {
+          const orWhere: any = {};
+          
+          Object.entries(orCondition).forEach(([orField, orConditions]) => {
+            // 타입 검증
+            if (typeof orConditions !== 'object' || orConditions === null) {
+              return;
+            }
+            
+            // 관계 필터링 처리 (author.name, tags.name 등)
+            if (orField.includes('.')) {
+              this.buildNestedWhereCondition(orWhere, orField, orConditions as Record<string, any>);
+            } else {
+              // 일반 필드 필터링
+              const fieldConditions = this.buildFieldConditions(orConditions as Record<string, any>);
+              if (fieldConditions !== undefined) {
+                orWhere[orField] = fieldConditions;
+              }
+            }
+          });
+          
+          // 유효한 OR 조건만 추가
+          if (Object.keys(orWhere).length > 0) {
+            orConditions.push(orWhere);
+          }
+        });
       } else {
-        // 일반 필드 필터링
-        const fieldConditions = this.buildFieldConditions(conditions);
-        if (fieldConditions !== undefined) {
-          where[field] = fieldConditions;
+        // 일반 AND 조건 처리
+        // 관계 필터링 처리 (author.name, tags.name 등)
+        if (field.includes('.')) {
+          this.buildNestedWhereCondition(where, field, conditions);
+        } else {
+          // 일반 필드 필터링
+          const fieldConditions = this.buildFieldConditions(conditions);
+          if (fieldConditions !== undefined) {
+            where[field] = fieldConditions;
+          }
         }
       }
     });
+
+    // OR 조건이 있는 경우 추가
+    if (orConditions.length > 0) {
+      where.OR = orConditions;
+    }
 
     return where;
   }

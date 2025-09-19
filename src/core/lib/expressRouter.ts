@@ -2509,8 +2509,8 @@ export class ExpressRouter {
                 res.setHeader('Content-Type', 'application/vnd.api+json');
                 res.setHeader('Vary', 'Accept');
 
-                // 쿼리 ?�라미터 ?�싱
-                const queryParams = CrudQueryParser.parseQuery(req);
+                // 쿼리 파라미터 파싱
+                const queryParams = CrudQueryParser.parseQuery(req, modelName, this.schemaAnalyzer);
                 
                 // 페이지네이션 방식 검증 - 반드시 지정되어야 함
                 if (!queryParams.page) {
@@ -2749,7 +2749,7 @@ export class ExpressRouter {
                 if (!success) return; // ?�러 ?�답?� ?��? ?�퍼?�서 처리??
                 
                 // 쿼리 파라미터에서 include 파싱
-                const queryParams = CrudQueryParser.parseQuery(req);
+                const queryParams = CrudQueryParser.parseQuery(req, modelName, this.schemaAnalyzer);
                 const includeOptions = queryParams.include 
                     ? PrismaQueryBuilder['buildIncludeOptions'](queryParams.include)
                     : undefined;
@@ -3601,6 +3601,10 @@ export class ExpressRouter {
         const middlewares = options?.middleware?.update || [];
         
         const handler: HandlerFunction = async (req, res, injected, repo, db) => {
+
+            console.log(client);
+
+
             try {
                 // JSON:API Content-Type ?�더 ?�정
                 res.setHeader('Content-Type', 'application/vnd.api+json');
@@ -3610,7 +3614,7 @@ export class ExpressRouter {
                 //     return;
                 // }
                 
-                // ?�라미터 추출 �?검�?
+                // 파라미터 추출 검사
                 const extractResult = this.extractAndParsePrimaryKey(req, res, primaryKey, primaryKeyParser, modelName);
                 if (!extractResult.success) return; // ?�러 ?�답?� ?�퍼 메서?�에??처리
 
@@ -3626,10 +3630,7 @@ export class ExpressRouter {
                         data: {
                             type: resourceType,
                             id: String(parsedIdentifier),
-                            attributes: {
-                                // "fieldName": "fieldValue"
-                                // ?? "email": "user@example.com"
-                            }
+                            attributes: {}
                         }
                     };
                     
@@ -3685,6 +3686,8 @@ export class ExpressRouter {
                 if (options?.hooks?.beforeUpdate) {
                     data = await options.hooks.beforeUpdate(data, req);
                 }
+
+                
 
                 const result = await client[modelName].update({
                     where: { [primaryKey]: parsedIdentifier },
@@ -4510,8 +4513,8 @@ export class ExpressRouter {
 
                 const relationName = req.params.relationName;
                 
-                // 쿼리 ?�라미터 ?�싱 (include, fields, sort, pagination 지??
-                const queryParams = CrudQueryParser.parseQuery(req);
+                // 쿼리 파라미터 파싱 (include, fields, sort, pagination 지원)
+                const queryParams = CrudQueryParser.parseQuery(req, modelName, this.schemaAnalyzer);
                 
                 // 기본 리소??조회
                 const item = await client[modelName].findUnique({
@@ -4837,7 +4840,7 @@ export class ExpressRouter {
                 if (!success) return;
 
                 const relationName = req.params.relationName;
-                const queryParams = CrudQueryParser.parseQuery(req);
+                const queryParams = CrudQueryParser.parseQuery(req, modelName, this.schemaAnalyzer);
                 
                 // 기본 리소??조회
                 const item = await client[modelName].findUnique({

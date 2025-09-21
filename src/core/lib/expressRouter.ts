@@ -31,6 +31,57 @@ type ExtractModelNames<T> = T extends { [K in keyof T]: any }
   ? Exclude<keyof T, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends' | '$executeRaw' | '$executeRawUnsafe' | '$queryRaw' | '$queryRawUnsafe'> & string
   : never;
 
+/**
+ * Extract model type from Prisma client
+ * 특정 데이터베이스와 모델명에 대한 실제 모델 타입을 추출
+ */
+type ExtractModelType<
+  TDatabase extends DatabaseNamesUnion,
+  TModel extends string
+> = TDatabase extends keyof DatabaseClientMap
+  ? DatabaseClientMap[TDatabase] extends { [K in TModel]: { create: (args: { data: infer TCreate }) => any } }
+    ? TCreate
+    : any
+  : any;
+
+/**
+ * Extract model result type from Prisma client
+ * 생성/수정 후 반환되는 모델 타입을 추출
+ */
+type ExtractModelResultType<
+  TDatabase extends DatabaseNamesUnion,
+  TModel extends string
+> = TDatabase extends keyof DatabaseClientMap
+  ? DatabaseClientMap[TDatabase] extends { [K in TModel]: { create: (...args: any[]) => Promise<infer TResult> } }
+    ? TResult
+    : any
+  : any;
+
+/**
+ * Extract findMany args type from Prisma client
+ * INDEX 훅에서 사용할 쿼리 옵션 타입을 추출
+ */
+type ExtractFindManyArgsType<
+  TDatabase extends DatabaseNamesUnion,
+  TModel extends string
+> = TDatabase extends keyof DatabaseClientMap
+  ? DatabaseClientMap[TDatabase] extends { [K in TModel]: { findMany: (args?: infer TArgs) => any } }
+    ? TArgs
+    : any
+  : any;
+
+/**
+ * Extract findUnique args type from Prisma client
+ * SHOW 훅에서 사용할 쿼리 옵션 타입을 추출
+ */
+type ExtractFindUniqueArgsType<
+  TDatabase extends DatabaseNamesUnion,
+  TModel extends string
+> = TDatabase extends keyof DatabaseClientMap
+  ? DatabaseClientMap[TDatabase] extends { [K in TModel]: { findUnique: (args: infer TArgs) => any } }
+    ? TArgs
+    : any
+  : any;
   
 /**
  * Get available model names for a specific database
@@ -2231,9 +2282,12 @@ export class ExpressRouter {
      * @param modelName 대상 모델 이름 (복수형 변환을 위해 단수형 사용)
      * @param options CRUD 옵션 설정
      */
-    public CRUD<T extends DatabaseNamesUnion>(
+    public CRUD<
+        T extends DatabaseNamesUnion,
+        M extends ModelNamesFor<T> = ModelNamesFor<T>
+    >(
         databaseName: T, 
-        modelName: ModelNamesFor<T>,
+        modelName: M,
         options?: {
 
             /** CRUD 액션 생성 및 설정 */
@@ -2282,19 +2336,28 @@ export class ExpressRouter {
                 recover?: RequestConfig;
             };
 
-            /** 응답 검증 설정 */
+            /** 훅 설정 */
             hooks?: {
-                beforeCreate?: (data: any, req: Request) => Promise<any> | any;
-                afterCreate?: (result: any, req: Request) => Promise<any> | any;
+                // 조회용 훅 (쿼리 조건 가공용)
+                beforeIndex?: (queryOptions: ExtractFindManyArgsType<T, M>, req: Request) => Promise<ExtractFindManyArgsType<T, M>> | ExtractFindManyArgsType<T, M>;
+                
+                beforeShow?: (findOptions: ExtractFindUniqueArgsType<T, M>, req: Request) => Promise<ExtractFindUniqueArgsType<T, M>> | ExtractFindUniqueArgsType<T, M>;
 
-                beforeUpdate?: (data: any, req: Request) => Promise<any> | any;
-                afterUpdate?: (result: any, req: Request) => Promise<any> | any
+                // 생성용 훅
+                beforeCreate?: (data: ExtractModelType<T, M>, req: Request) => Promise<ExtractModelType<T, M>> | ExtractModelType<T, M>;
+                afterCreate?: (result: ExtractModelResultType<T, M>, req: Request) => Promise<ExtractModelResultType<T, M>> | ExtractModelResultType<T, M>;
 
+                // 수정용 훅
+                beforeUpdate?: (data: Partial<ExtractModelType<T, M>>, req: Request) => Promise<Partial<ExtractModelType<T, M>>> | Partial<ExtractModelType<T, M>>;
+                afterUpdate?: (result: ExtractModelResultType<T, M>, req: Request) => Promise<ExtractModelResultType<T, M>> | ExtractModelResultType<T, M>;
+
+                // 삭제용 훅
                 beforeDestroy?: (id: any, req: Request) => Promise<void> | void;
                 afterDestroy?: (id: any, req: Request) => Promise<void> | void;
 
+                // 복구용 훅
                 beforeRecover?: (id: any, req: Request) => Promise<void> | void;
-                afterRecover?: (result: any, req: Request) => Promise<void> | void;
+                afterRecover?: (result: ExtractModelResultType<T, M>, req: Request) => Promise<ExtractModelResultType<T, M>> | ExtractModelResultType<T, M>;
             };
         }
     ): ExpressRouter {
@@ -2548,8 +2611,27 @@ export class ExpressRouter {
                     return res.status(400).json(errorResponse);
                 }
                 
-                // Prisma 쿼리 ?�션 빌드
-                const findManyOptions = PrismaQueryBuilder.buildFindManyOptions(queryParams);
+                // Prisma 쿼리 옵션 빌드
+                let findManyOptions = PrismaQueryBuilder.buildFindManyOptions(queryParams);
+                
+                // beforeIndex 훅 실행 (쿼리 옵션 가공)
+                if (options?.hooks?.beforeIndex) {
+                    try {
+                        const hookResult = await options.hooks.beforeIndex(findManyOptions, req);
+                        if (hookResult) {
+                            findManyOptions = hookResult;
+                        }
+                    } catch (hookError) {
+                        const errorResponse = this.formatJsonApiError(
+                            hookError instanceof Error ? hookError : new Error('Hook execution failed'),
+                            ERROR_CODES.INTERNAL_SERVER_ERROR,
+                            500,
+                            req.path,
+                            req.method
+                        );
+                        return res.status(500).json(errorResponse);
+                    }
+                }
                 
                 // Soft Delete 필터 추가 (기존 where 조건과 병합)
                 if (isSoftDelete) {
@@ -2756,16 +2838,38 @@ export class ExpressRouter {
 
                 // Soft Delete 필터 추가 (include_deleted가 true가 아닌 경우)
                 const includeDeleted = req.query.include_deleted === 'true';
-                const whereClause: any = { [primaryKey]: parsedIdentifier };
+                let whereClause: any = { [primaryKey]: parsedIdentifier };
                 
                 if (isSoftDelete && !includeDeleted) {
                     whereClause[softDeleteField] = null;
                 }
 
-                const item = await client[modelName].findFirst({
+                // Prisma findFirst 옵션 구성
+                let findOptions: any = {
                     where: whereClause,
                     ...(includeOptions && { include: includeOptions })
-                });
+                };
+
+                // beforeShow 훅 실행 (조회 옵션 가공)
+                if (options?.hooks?.beforeShow) {
+                    try {
+                        const hookResult = await options.hooks.beforeShow(findOptions, req);
+                        if (hookResult) {
+                            findOptions = hookResult;
+                        }
+                    } catch (hookError) {
+                        const errorResponse = this.formatJsonApiError(
+                            hookError instanceof Error ? hookError : new Error('Hook execution failed'),
+                            ERROR_CODES.INTERNAL_SERVER_ERROR,
+                            500,
+                            req.path,
+                            req.method
+                        );
+                        return res.status(500).json(errorResponse);
+                    }
+                }
+
+                const item = await client[modelName].findFirst(findOptions);
 
                 if (!item) {
                     // Soft delete된 데이터 확인 (include_deleted=false 상태에서)

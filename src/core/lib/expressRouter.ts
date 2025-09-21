@@ -2962,7 +2962,8 @@ export class ExpressRouter {
         // 미들웨어 등록 - 정적 경로 사용
         const routePath = `/:${primaryKey}`;
         if (middlewares.length > 0) {
-            this.router.get(routePath, ...middlewares, this.wrapHandler(handler));
+            const wrappedMiddlewares = middlewares.map((mw: MiddlewareHandlerFunction) => this.wrapMiddleware(mw));
+            this.router.get(routePath, ...wrappedMiddlewares, this.wrapHandler(handler));
         } else {
             this.router.get(routePath, this.wrapHandler(handler));
         }
@@ -3152,7 +3153,8 @@ export class ExpressRouter {
         } else {
             // ?�반 ?�들??
             if (middlewares.length > 0) {
-                this.router.post('/', ...middlewares, this.wrapHandler(handler));
+                const wrappedMiddlewares = middlewares.map((mw: MiddlewareHandlerFunction) => this.wrapMiddleware(mw));
+                this.router.post('/', ...wrappedMiddlewares, this.wrapHandler(handler));
             } else {
                 this.router.post('/', this.wrapHandler(handler));
             }
@@ -3859,7 +3861,8 @@ export class ExpressRouter {
                 }
             } else {
                 if (middlewares.length > 0) {
-                    this.router[method](routePath, ...middlewares, this.wrapHandler(handler));
+                    const wrappedMiddlewares = middlewares.map((mw: MiddlewareHandlerFunction) => this.wrapMiddleware(mw));
+                    this.router[method](routePath, ...wrappedMiddlewares, this.wrapHandler(handler));
                 } else {
                     this.router[method](routePath, this.wrapHandler(handler));
                 }
@@ -4041,7 +4044,8 @@ export class ExpressRouter {
         // 미들?�어 ?�록
         const routePath = `/:${primaryKey}`;
         if (middlewares.length > 0) {
-            this.router.delete(routePath, ...middlewares, this.wrapHandler(handler));
+            const wrappedMiddlewares = middlewares.map((mw: MiddlewareHandlerFunction) => this.wrapMiddleware(mw));
+            this.router.delete(routePath, ...wrappedMiddlewares, this.wrapHandler(handler));
         } else {
             this.router.delete(routePath, this.wrapHandler(handler));
         }
@@ -4205,9 +4209,10 @@ export class ExpressRouter {
                 this.router.post(routePath, ...validationMiddlewares);
             }
         } else {
-            // ?�반 ?�들??
+            // 일반 핸들러
             if (middlewares.length > 0) {
-                this.router.post(routePath, ...middlewares, this.wrapHandler(handler));
+                const wrappedMiddlewares = middlewares.map((mw: MiddlewareHandlerFunction) => this.wrapMiddleware(mw));
+                this.router.post(routePath, ...wrappedMiddlewares, this.wrapHandler(handler));
             } else {
                 this.router.post(routePath, this.wrapHandler(handler));
             }

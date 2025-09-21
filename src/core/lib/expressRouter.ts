@@ -2321,12 +2321,12 @@ export class ExpressRouter {
 
             /** 미들웨어 */
             middleware?: {
-                index?: HandlerFunction[];
-                show?: HandlerFunction[];
-                create?: HandlerFunction[];
-                update?: HandlerFunction[];
-                destroy?: HandlerFunction[];
-                recover?: HandlerFunction[];
+                index?: MiddlewareHandlerFunction[];
+                show?: MiddlewareHandlerFunction[];
+                create?: MiddlewareHandlerFunction[];
+                update?: MiddlewareHandlerFunction[];
+                destroy?: MiddlewareHandlerFunction[];
+                recover?: MiddlewareHandlerFunction[];
             };
 
             /** 요청 검증 설정 */
@@ -2762,7 +2762,8 @@ export class ExpressRouter {
 
         // 미들웨어 등록
         if (middlewares.length > 0) {
-            this.router.get('/', ...middlewares, this.wrapHandler(handler));
+            const wrappedMiddlewares = middlewares.map((mw: MiddlewareHandlerFunction) => this.wrapMiddleware(mw));
+            this.router.get('/', ...wrappedMiddlewares, this.wrapHandler(handler));
         } else {
             this.router.get('/', this.wrapHandler(handler));
         }

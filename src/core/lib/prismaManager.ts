@@ -1,6 +1,7 @@
 // filepath: r:\project\express.js-kusto\src\core\lib\prismaManager.ts
 
-import { PrismaClient } from '@prisma/client';
+// Note: PrismaClient is dynamically imported from each database's client folder
+// import { PrismaClient } from '@prisma/client'; // Removed - using dynamic imports instead
 import * as fs from 'fs';
 import * as path from 'path';
 import { config } from 'dotenv';
@@ -223,10 +224,101 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 					}
 				}
 			} else {
-				// Development environment - use normal dynamic import
+				// Development environment - enhanced client loading with cache clearing
 				const clientPath = path.join(folderPath, 'client');
-				clientModule = await import(clientPath);
-				DatabasePrismaClient = clientModule.PrismaClient;
+				console.log(`🔧 Loading Prisma client for ${folderName} from development path: ${clientPath}`);
+				
+				try {
+					// 개발 모드에서 모듈 캐시 완전 클리어
+					if (process.env.NODE_ENV === 'development') {
+						// Clear require cache for this client module (cross-platform path handling)
+						const normalizedClientPath = clientPath.replace(/\\/g, '/');
+						Object.keys(require.cache).forEach(key => {
+							const normalizedKey = key.replace(/\\/g, '/');
+							if (normalizedKey.includes(normalizedClientPath) || 
+								normalizedKey.includes(`/db/${folderName}/client`) ||
+								normalizedKey.includes(`\\db\\${folderName}\\client`)) {
+								delete require.cache[key];
+								console.log(`🗑️ Cleared cache for: ${key}`);
+							}
+						});
+					}
+					
+					// Check if client files exist before importing
+					const clientIndexPath = path.join(clientPath, 'index.js');
+					const clientIndexTsPath = path.join(clientPath, 'index.d.ts');
+					
+					if (!fs.existsSync(clientIndexPath)) {
+						throw new Error(`Prisma client index.js not found at: ${clientIndexPath}. Please run 'npx prisma generate --schema=${path.join(folderPath, 'schema.prisma')}'`);
+					}
+					
+					if (!fs.existsSync(clientIndexTsPath)) {
+						console.warn(`⚠️ Prisma client TypeScript definitions not found at: ${clientIndexTsPath}`);
+					}
+					
+					// Dynamic import with timestamp to avoid ES module cache
+					const timestamp = Date.now();
+					let importPath = clientPath;
+					
+					// Try import with cache busting
+					try {
+						// First try with timestamp query (works in some environments)
+						importPath = `${clientPath}?t=${timestamp}`;
+						clientModule = await import(importPath);
+					} catch (timestampError) {
+						// Fallback to normal import
+						console.log(`🔄 Timestamp import failed, using normal import for ${folderName}`);
+						importPath = clientPath;
+						clientModule = await import(importPath);
+					}
+					
+					DatabasePrismaClient = clientModule.PrismaClient;
+					
+					if (!DatabasePrismaClient) {
+						throw new Error(`PrismaClient not found in module: ${importPath}. Module exports: ${Object.keys(clientModule || {}).join(', ')}`);
+					}
+					
+					// Verify the client has expected properties
+					if (typeof DatabasePrismaClient !== 'function') {
+						throw new Error(`PrismaClient is not a constructor function. Type: ${typeof DatabasePrismaClient}`);
+					}
+					
+					console.log(`✅ Successfully loaded Prisma client for ${folderName} from development path`);
+					
+				} catch (importError: any) {
+					console.error(`❌ Failed to load Prisma client from development path for ${folderName}:`, importError);
+					
+					// Try fallback to dist path if exists (development with build)
+					const distClientPath = path.join(process.cwd(), 'dist', 'src', 'app', 'db', folderName, 'client');
+					const distClientIndexPath = path.join(distClientPath, 'index.js');
+					
+					if (fs.existsSync(distClientIndexPath)) {
+						console.log(`🔄 Attempting fallback to dist client for ${folderName}...`);
+						try {
+							let nodeRequire: any;
+							try {
+								const Module = eval('require')('module');
+								nodeRequire = Module.createRequire(__filename);
+							} catch (e) {
+								nodeRequire = eval('require');
+							}
+							
+							delete nodeRequire.cache[distClientIndexPath];
+							clientModule = nodeRequire(distClientIndexPath);
+							DatabasePrismaClient = clientModule.PrismaClient;
+							
+							if (!DatabasePrismaClient) {
+								throw new Error(`PrismaClient not found in dist module: ${distClientIndexPath}`);
+							}
+							
+							console.log(`✅ Fallback to dist client successful for ${folderName}`);
+						} catch (distError) {
+							throw new Error(`Both development and dist client loading failed for ${folderName}. Development error: ${importError.message}, Dist error: ${distError}`);
+						}
+					} else {
+						throw new Error(`Development client loading failed for ${folderName}: ${importError.message}. Dist fallback not available.`);
+					}
+				}
 			}
 
 			// Store the client type constructor for type information
@@ -645,6 +737,14 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 				throw new Error(`데이터베이스 '${databaseName}'를 찾을 수 없습니다. 사용 가능한 데이터베이스: ${dbList}`);
 			}
 
+			// 개발 모드에서 클라이언트 무결성 검증 및 필요시 새로고침
+			if (process.env.NODE_ENV === 'development') {
+				const isClientHealthy = await this.verifyAndRefreshClientIfNeeded(databaseName);
+				if (!isClientHealthy) {
+					console.warn(`⚠️ Client verification failed for ${databaseName}, but continuing...`);
+				}
+			}
+
 			// 서버리스 최적화: 사전 연결 체크 제거, 실제 사용 시점에 재연결 시도
 			// ensureConnection을 생략하고 바로 클라이언트 사용 시도
 			const client = this.databases.get(databaseName);
@@ -1026,7 +1126,158 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 				return this.getWrap(databaseName);
 			};
 		}
-	}  /**
+	}
+
+	/**
+	 * Force refresh a specific database client
+	 * Useful when schema changes or client is out of sync
+	 */
+	public async forceRefreshClient(databaseName: string): Promise<void> {
+		console.log(`🔄 Force refreshing client for database: ${databaseName}`);
+		
+		// Disconnect existing client
+		const existingClient = this.databases.get(databaseName);
+		if (existingClient && typeof existingClient.$disconnect === 'function') {
+			try {
+				await existingClient.$disconnect();
+			} catch (error) {
+				console.warn(`⚠️ Error disconnecting existing client: ${error}`);
+			}
+		}
+
+		// Clear from cache
+		this.databases.delete(databaseName);
+		this.connectionStates.delete(databaseName);
+		this.reconnectionAttempts.delete(databaseName);
+
+		// 개발 모드에서 더 적극적인 캐시 클리어
+		if (process.env.NODE_ENV === 'development') {
+			const config = this.configs.get(databaseName);
+			if (config) {
+				const clientPath = path.join(process.cwd(), 'src', 'app', 'db', databaseName, 'client');
+				const normalizedClientPath = clientPath.replace(/\\/g, '/');
+				
+				// Clear all cached modules related to this client (cross-platform)
+				Object.keys(require.cache).forEach(key => {
+					const normalizedKey = key.replace(/\\/g, '/');
+					if (normalizedKey.includes(normalizedClientPath) || 
+						normalizedKey.includes(`/db/${databaseName}/client`) ||
+						normalizedKey.includes(`\\db\\${databaseName}\\client`)) {
+						delete require.cache[key];
+						console.log(`🗑️ Cleared cache for: ${key}`);
+					}
+				});
+				
+				// Also clear any related prisma cache but be more selective
+				Object.keys(require.cache).forEach(key => {
+					const normalizedKey = key.replace(/\\/g, '/');
+					if (normalizedKey.includes(`/db/${databaseName}/`) && 
+						(normalizedKey.includes('@prisma') || normalizedKey.includes('prisma'))) {
+						delete require.cache[key];
+						console.log(`🗑️ Cleared Prisma cache for: ${key}`);
+					}
+				});
+			}
+		}
+
+		// Process the database folder again to recreate the client
+		try {
+			const dbPath = path.join(process.cwd(), 'src', 'app', 'db');
+			await this.processDatabaseFolder(databaseName, dbPath);
+			console.log(`✅ Client refreshed for database: ${databaseName}`);
+		} catch (error) {
+			console.error(`❌ Failed to refresh client for database: ${databaseName}`, error);
+			throw error;
+		}
+	}
+
+	/**
+	 * Force refresh all database clients
+	 */
+	public async forceRefreshAllClients(): Promise<void> {
+		console.log('🔄 Force refreshing all database clients...');
+		
+		const databases = Array.from(this.databases.keys());
+		for (const dbName of databases) {
+			await this.forceRefreshClient(dbName);
+		}
+		
+		console.log('✅ All clients refreshed');
+	}
+
+	/**
+	 * Development mode: Verify client integrity and regenerate if needed
+	 */
+	public async verifyAndRefreshClientIfNeeded(databaseName: string): Promise<boolean> {
+		if (process.env.NODE_ENV !== 'development') {
+			return true; // Skip verification in production
+		}
+
+		try {
+			const config = this.configs.get(databaseName);
+			if (!config) {
+				console.warn(`⚠️ Database config not found for: ${databaseName}`);
+				return false;
+			}
+
+			const clientPath = path.join(process.cwd(), 'src', 'app', 'db', databaseName, 'client');
+			const schemaPath = path.join(process.cwd(), 'src', 'app', 'db', databaseName, 'schema.prisma');
+			
+			// Check if schema file exists
+			if (!fs.existsSync(schemaPath)) {
+				console.error(`❌ Schema file not found: ${schemaPath}`);
+				return false;
+			}
+
+			// Check if client files exist
+			const clientIndexPath = path.join(clientPath, 'index.js');
+			const clientIndexTsPath = path.join(clientPath, 'index.d.ts');
+			
+			if (!fs.existsSync(clientIndexPath) || !fs.existsSync(clientIndexTsPath)) {
+				console.log(`🔧 Client files missing for ${databaseName}, regenerating...`);
+				
+				// Try to regenerate the client
+				const { spawn } = require('child_process');
+				return new Promise((resolve) => {
+					const generateProcess = spawn('npx', ['prisma', 'generate', `--schema=${schemaPath}`], {
+						stdio: 'inherit',
+						shell: true
+					});
+					
+					generateProcess.on('close', async (code: number | null) => {
+						if (code === 0) {
+							console.log(`✅ Client regenerated for ${databaseName}`);
+							try {
+								await this.forceRefreshClient(databaseName);
+								resolve(true);
+							} catch (error) {
+								console.error(`❌ Failed to refresh after regeneration: ${error}`);
+								resolve(false);
+							}
+						} else {
+							console.error(`❌ Failed to regenerate client for ${databaseName}`);
+							resolve(false);
+						}
+					});
+				});
+			}
+
+			// Check if current client is working
+			const client = this.databases.get(databaseName);
+			if (!client) {
+				console.log(`🔧 Client not loaded for ${databaseName}, refreshing...`);
+				await this.forceRefreshClient(databaseName);
+				return this.databases.has(databaseName);
+			}
+
+			return true;
+		} catch (error) {
+			console.error(`❌ Client verification failed for ${databaseName}:`, error);
+			return false;
+		}
+	}
+
+  /**
    * Dynamically extend the DatabaseClientMap interface with the actual client type
    */
 	private extendDatabaseClientMap(databaseName: string, ClientType: any): void {

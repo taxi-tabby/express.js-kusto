@@ -20,12 +20,9 @@
     "clean:tmp": "node -e \"const fs = require('fs'); const path = require('path'); const tmpDir = path.join(__dirname, 'src', 'core', 'tmp'); if (fs.existsSync(tmpDir)) { fs.rmSync(tmpDir, { recursive: true, force: true }); console.log('🧹 Cleaned tmp directory'); }\"",
     "serve": "node dist/server.js",
     "db": "ts-node ./src/core/scripts/kusto-db-cli.ts",
-    "test:serverless-db": "ts-node ./examples/serverless-db-test.ts",
     "updater:generate": "ts-node ./updater/generate.ts",
     "updater:check": "ts-node ./updater/compare.ts",
-    "updater:update": "ts-node ./updater/update.ts",
-    "install-cli": "tsc -p src/core/scripts/tsconfig.cli.json && npm install . && npm link",
-    "uninstall-cli": "npm uninstall -g kusto-server"
+    "updater:update": "ts-node ./updater/update.ts"
   },
   "author": "rkdmf0000@gmail.com",
   "license": "ISC",

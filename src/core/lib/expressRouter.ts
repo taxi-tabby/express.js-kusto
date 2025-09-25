@@ -2660,6 +2660,8 @@ export class ExpressRouter {
                 delete totalCountOptions.take;
                 delete totalCountOptions.cursor;
                  
+                // console.log(modelName, Object.keys(client))
+
                 const [items, total] = await Promise.all([
                     client[modelName].findMany(findManyOptions),
                     client[modelName].count({ where: totalCountOptions.where })
@@ -3708,9 +3710,6 @@ export class ExpressRouter {
         const middlewares = options?.middleware?.update || [];
         
         const handler: HandlerFunction = async (req, res, injected, repo, db) => {
-
-            console.log(client);
-
 
             try {
                 // JSON:API Content-Type ?�더 ?�정

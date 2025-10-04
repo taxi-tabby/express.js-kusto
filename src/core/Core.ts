@@ -2,7 +2,7 @@ import { Express } from 'express';
 import express from 'express';
 import { Server } from 'http';
 import { config } from 'dotenv';
-import path from 'path';
+import * as path from 'path';
 import { log } from './external/winston';
 import { getElapsedTimeInString } from './external/util';
 import loadRoutes from './lib/loadRoutes_V6_Clean';
@@ -13,10 +13,6 @@ import { prismaManager } from './lib/prismaManager';
 import { DependencyInjector } from './lib/dependencyInjector';
 import { repositoryManager } from './lib/repositoryManager';
 import { SchemaApiSetup } from '@core/lib/schemaApiSetup';
-import { 
-    setupDbConnectionMiddleware
-} from './lib/dbConnectionMiddleware';
-
 
 export interface CoreConfig {
     basePath?: string;
@@ -69,7 +65,9 @@ export class Core {
      */
     public async initialize(customConfig?: Partial<CoreConfig>): Promise<Core> {
         if (this._isInitialized) {
-            log.Warn('Core is already initialized');
+            if (process.env.NODE_ENV === 'development') {
+                log.Warn('Core is already initialized');
+            }
             return this;
         }
 
@@ -88,7 +86,7 @@ export class Core {
 
         
         this.setupExpress();
-        this.setupDbConnectionMiddleware(); // DB 연결 미들웨어 설정
+        // this.setupDbConnectionMiddleware(); // DB 연결 미들웨어 설정
         this.setupDocumentationRoutes(); // 문서화 라우트를 먼저 등록
         this.loadRoutes();
         this.setupViews();
@@ -97,12 +95,16 @@ export class Core {
         try {
             SchemaApiSetup.registerSchemaApi(this._app, '/api/schema');
         } catch (error) {
-            log.Warn('스키마 API 등록 중 오류 발생:', error);
+            if (process.env.NODE_ENV === 'development') {
+                log.Warn('스키마 API 등록 중 오류 발생:', error);
+            }
         }
 
 
         this._isInitialized = true;
-        log.Info('Core initialized successfully', { config: this._config });
+        if (process.env.NODE_ENV === 'development') {
+            log.Info('Core initialized successfully', { config: this._config });
+        }
         
         return this;
     }    
@@ -123,63 +125,30 @@ export class Core {
         // Serve development static files when AUTO_DOCS=true
         this._app.use(StaticFileMiddleware.serveStaticFiles());
         
-        log.Debug('Express app configured', { 
-            trustProxy: this._config.trustProxy,
-            staticPath: publicPath
-        });
+        if (process.env.NODE_ENV === 'development') {
+            log.Debug('Express app configured', { 
+                trustProxy: this._config.trustProxy,
+                staticPath: publicPath
+            });
+        }
     }
 
     /**
      * Setup database connection middleware for serverless environments
+     * 서버리스 환경에서는 헬스체크 대신 on-demand 재연결 방식 사용
      */
-    private setupDbConnectionMiddleware(): void {
-        try {
-            // Serverless 환경 감지
-            const isServerless = process.env.AWS_LAMBDA_FUNCTION_NAME || 
-                                process.env.VERCEL || 
-                                process.env.FUNCTIONS_WORKER ||
-                                process.env.NODE_ENV === 'production';
-
-            if (isServerless) {
-                log.Info('🔗 Serverless environment detected, setting up DB connection middleware');
-                
-                // Serverless 환경에서는 더 자주 연결 상태를 확인
-                setupDbConnectionMiddleware(this._app, {
-                    continueOnFailure: false, // 연결 실패 시 요청 중단
-                    checkInterval: 15000, // 15초마다 체크
-                    onReconnect: (database: string) => {
-                        log.Info(`🔄 Database '${database}' reconnected in serverless environment`);
-                    },
-                    onError: (error, req, res, next) => {
-                        log.Error('❌ Database connection error in serverless environment:', error);
-                        res.status(503).json({
-                            error: 'Database connection failed',
-                            message: 'Serverless database connection is temporarily unavailable',
-                            serverless: true,
-                            timestamp: new Date().toISOString()
-                        });
-                    }
-                });
-            } else {
-                log.Info('🔗 Traditional server environment, setting up basic DB connection middleware');
-                
-                // 일반 서버 환경에서는 덜 자주 체크
-                setupDbConnectionMiddleware(this._app, {
-                    continueOnFailure: true, // 연결 실패 시에도 계속 진행
-                    checkInterval: 60000, // 60초마다 체크
-                    onReconnect: (database: string) => {
-                        log.Info(`🔄 Database '${database}' reconnected`);
-                    }
-                });
-            }
-
-            log.Info('✅ Database connection middleware configured');
+    // private setupDbConnectionMiddleware(): void {
+    //     try {
+    //         // 서버리스 환경에서는 미들웨어 헬스체크를 사용하지 않음
+    //         // 대신 PrismaManager에서 요청 시점에 연결 실패 시 재연결 처리
+    //         log.Info('� Serverless-optimized DB connection: on-demand reconnection enabled');
+    //         log.Info('✅ Database connection configured for serverless environment');
             
-        } catch (error) {
-            log.Error('❌ Failed to setup database connection middleware:', error);
-            // Don't throw error - continue without middleware
-        }
-    }
+    //     } catch (error) {
+    //         log.Error('❌ Failed to setup database connection middleware:', error);
+    //         // Don't throw error - continue without middleware
+    //     }
+    // }
 
     private loadRoutes(): void {
         const startTime = process.hrtime();

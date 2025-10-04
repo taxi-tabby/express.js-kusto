@@ -1,6 +1,7 @@
 // filepath: r:\project\express.js-kusto\src\core\lib\prismaManager.ts
 
-import { PrismaClient } from '@prisma/client';
+// Note: PrismaClient is dynamically imported from each database's client folder
+// import { PrismaClient } from '@prisma/client'; // Removed - using dynamic imports instead
 import * as fs from 'fs';
 import * as path from 'path';
 import { config } from 'dotenv';
@@ -33,8 +34,7 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 	private initialized: boolean = false;
 	private connectionStates: Map<string, { connected: boolean; lastChecked: number }> = new Map();
 	private reconnectionAttempts: Map<string, number> = new Map();
-	private readonly CONNECTION_CHECK_INTERVAL = 30000; // 30초
-	private readonly MAX_RECONNECTION_ATTEMPTS = 3;
+	private readonly MAX_RECONNECTION_ATTEMPTS = 2; // 빠른 실패
 
 
 	/**
@@ -112,7 +112,10 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 			.filter(dirent => dirent.isDirectory())
 			.map(dirent => dirent.name);
 
-		console.log(`Found ${folders.length} database folders:`, folders);
+		// 개발 환경에서만 상세 로그 출력
+		if (process.env.NODE_ENV === 'development') {
+			console.log(`Found ${folders.length} database folders:`, folders);
+		}
 
 		// Process each database folder with error handling
 		for (const folderName of folders) {
@@ -126,14 +129,14 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 
 		this.initialized = true;
 		
-		// Log final status
+		// 간소화된 초기화 로그
 		const connectedCount = this.databases.size;
 		const totalCount = folders.length;
 		
 		if (connectedCount === 0) {
-			console.warn('⚠️ PrismaManager initialized but no databases are connected');
+			console.warn('⚠️ No databases connected');
 		} else {
-			console.log(`✅ PrismaManager initialized successfully (${connectedCount}/${totalCount} databases connected)`);
+			console.log(`✅ PrismaManager: ${connectedCount}/${totalCount} databases ready`);
 		}
 	}
 
@@ -221,10 +224,101 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 					}
 				}
 			} else {
-				// Development environment - use normal dynamic import
+				// Development environment - enhanced client loading with cache clearing
 				const clientPath = path.join(folderPath, 'client');
-				clientModule = await import(clientPath);
-				DatabasePrismaClient = clientModule.PrismaClient;
+				console.log(`🔧 Loading Prisma client for ${folderName} from development path: ${clientPath}`);
+				
+				try {
+					// 개발 모드에서 모듈 캐시 완전 클리어
+					if (process.env.NODE_ENV === 'development') {
+						// Clear require cache for this client module (cross-platform path handling)
+						const normalizedClientPath = clientPath.replace(/\\/g, '/');
+						Object.keys(require.cache).forEach(key => {
+							const normalizedKey = key.replace(/\\/g, '/');
+							if (normalizedKey.includes(normalizedClientPath) || 
+								normalizedKey.includes(`/db/${folderName}/client`) ||
+								normalizedKey.includes(`\\db\\${folderName}\\client`)) {
+								delete require.cache[key];
+								console.log(`🗑️ Cleared cache for: ${key}`);
+							}
+						});
+					}
+					
+					// Check if client files exist before importing
+					const clientIndexPath = path.join(clientPath, 'index.js');
+					const clientIndexTsPath = path.join(clientPath, 'index.d.ts');
+					
+					if (!fs.existsSync(clientIndexPath)) {
+						throw new Error(`Prisma client index.js not found at: ${clientIndexPath}. Please run 'npx prisma generate --schema=${path.join(folderPath, 'schema.prisma')}'`);
+					}
+					
+					if (!fs.existsSync(clientIndexTsPath)) {
+						console.warn(`⚠️ Prisma client TypeScript definitions not found at: ${clientIndexTsPath}`);
+					}
+					
+					// Dynamic import with timestamp to avoid ES module cache
+					const timestamp = Date.now();
+					let importPath = clientPath;
+					
+					// Try import with cache busting
+					try {
+						// First try with timestamp query (works in some environments)
+						importPath = `${clientPath}?t=${timestamp}`;
+						clientModule = await import(importPath);
+					} catch (timestampError) {
+						// Fallback to normal import
+						console.log(`🔄 Timestamp import failed, using normal import for ${folderName}`);
+						importPath = clientPath;
+						clientModule = await import(importPath);
+					}
+					
+					DatabasePrismaClient = clientModule.PrismaClient;
+					
+					if (!DatabasePrismaClient) {
+						throw new Error(`PrismaClient not found in module: ${importPath}. Module exports: ${Object.keys(clientModule || {}).join(', ')}`);
+					}
+					
+					// Verify the client has expected properties
+					if (typeof DatabasePrismaClient !== 'function') {
+						throw new Error(`PrismaClient is not a constructor function. Type: ${typeof DatabasePrismaClient}`);
+					}
+					
+					console.log(`✅ Successfully loaded Prisma client for ${folderName} from development path`);
+					
+				} catch (importError: any) {
+					console.error(`❌ Failed to load Prisma client from development path for ${folderName}:`, importError);
+					
+					// Try fallback to dist path if exists (development with build)
+					const distClientPath = path.join(process.cwd(), 'dist', 'src', 'app', 'db', folderName, 'client');
+					const distClientIndexPath = path.join(distClientPath, 'index.js');
+					
+					if (fs.existsSync(distClientIndexPath)) {
+						console.log(`🔄 Attempting fallback to dist client for ${folderName}...`);
+						try {
+							let nodeRequire: any;
+							try {
+								const Module = eval('require')('module');
+								nodeRequire = Module.createRequire(__filename);
+							} catch (e) {
+								nodeRequire = eval('require');
+							}
+							
+							delete nodeRequire.cache[distClientIndexPath];
+							clientModule = nodeRequire(distClientIndexPath);
+							DatabasePrismaClient = clientModule.PrismaClient;
+							
+							if (!DatabasePrismaClient) {
+								throw new Error(`PrismaClient not found in dist module: ${distClientIndexPath}`);
+							}
+							
+							console.log(`✅ Fallback to dist client successful for ${folderName}`);
+						} catch (distError) {
+							throw new Error(`Both development and dist client loading failed for ${folderName}. Development error: ${importError.message}, Dist error: ${distError}`);
+						}
+					} else {
+						throw new Error(`Development client loading failed for ${folderName}: ${importError.message}. Dist fallback not available.`);
+					}
+				}
 			}
 
 			// Store the client type constructor for type information
@@ -242,13 +336,16 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 			// Get datasource name
 			const datasourceName = this.getDatasourceName(folderName);
 
-			// Create Prisma client instance with database URL
+			// Create Prisma client instance with database URL and connection pool settings
 			const prismaClient = new DatabasePrismaClient({
 				datasources: {
 					[datasourceName]: {
 						url: connectionUrl
 					}
-				}
+				},
+				// 올바른 연결 풀 설정
+				log: process.env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error'],
+				errorFormat: 'minimal'
 			});
 
 			// Test the connection with retry logic
@@ -261,13 +358,13 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 					break; // Connection successful
 				} catch (connectError) {
 					connectionAttempts++;
-					console.warn(`⚠️ Connection attempt ${connectionAttempts}/${maxAttempts} failed for ${folderName}:`, connectError);
-					
+					// 최종 실패 시에만 로그 출력 (성능 개선)
 					if (connectionAttempts >= maxAttempts) {
+						console.error(`❌ Connection failed for ${folderName} after ${maxAttempts} attempts:`, connectError);
 						throw connectError;
 					}
 					
-					// Wait before retry
+					// 짧은 대기 후 재시도 (로그 없음)
 					await new Promise(resolve => setTimeout(resolve, 1000));
 				}
 			}
@@ -293,7 +390,10 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 			// Dynamically create getter methods for this database
 			this.createDynamicMethods(folderName);
 
-			console.log(`✅ Connected to database: ${folderName}`);
+			// 개발 환경에서만 성공 로그 출력
+			if (process.env.NODE_ENV === 'development') {
+				console.log(`✅ Connected to database: ${folderName}`);
+			}
 		} catch (error) {
 			console.error(`❌ Failed to connect to database ${folderName}:`, error);
 			
@@ -367,12 +467,20 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 			}
 
 			const envVarName = urlMatch[1];
-			const url = process.env[envVarName];
+			let url = process.env[envVarName];
 			
 
 			if (!url) {
 				throw new Error(`Environment variable ${envVarName} not found for database ${folderName}`);
 			}
+
+			// 연결 풀 매개변수가 없으면 추가
+			// if (!url.includes('connection_limit') && !url.includes('pool_timeout')) {
+			// 	const hasParams = url.includes('?');
+			// 	const connector = hasParams ? '&' : '?';
+			// 	url += `${connector}connection_limit=5&pool_timeout=10000&connect_timeout=5000`;
+			// 	console.log(`📊 Added connection pool settings to ${folderName} database URL`);
+			// }
 
 			return url;
 		} catch (error) {
@@ -467,27 +575,21 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 	}
 
 	/**
+	 * 서버리스 최적화: 사전 헬스체크 없이 요청 시점에만 연결 확인
 	 * Check if connection is healthy and reconnect if necessary
 	 */
 	private async ensureConnection(databaseName: string): Promise<boolean> {
 		const connectionState = this.connectionStates.get(databaseName);
 		const now = Date.now();
 
-		// If recently checked and was healthy, assume still connected
-		if (connectionState && connectionState.connected && 
-			(now - connectionState.lastChecked) < this.CONNECTION_CHECK_INTERVAL) {
+		// 서버리스 최적화: 사전 헬스체크를 완전히 제거
+		// 단순히 연결 상태만 확인하고, 실제 연결은 getClient에서 시도
+		if (connectionState && connectionState.connected) {
 			return true;
 		}
 
-		// Check actual connection health
-		const isHealthy = await this.checkConnectionHealth(databaseName);
-		
-		if (!isHealthy) {
-			console.log(`🔄 Connection lost for database '${databaseName}', attempting reconnection...`);
-			return await this.reconnectDatabase(databaseName);
-		}
-
-		// Update connection state
+		// 연결 상태가 없거나 연결되지 않은 상태라면 연결된 것으로 가정
+		// 실제 연결 실패는 getClient()에서 catch하여 재연결 처리
 		this.connectionStates.set(databaseName, {
 			connected: true,
 			lastChecked: now
@@ -497,18 +599,16 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 	}
 
 	/**
+	 * 서버리스 최적화: 간단한 연결 상태 체크 (실제 쿼리 없음)
 	 * Check if a specific database connection is healthy
 	 */
 	private async checkConnectionHealth(databaseName: string): Promise<boolean> {
 		try {
+			// 서버리스에서는 실제 헬스체크 쿼리를 실행하지 않음
+			// 단순히 클라이언트가 존재하는지만 확인
 			const client = this.databases.get(databaseName);
-			if (!client) return false;
-
-			// Simple query to check connection
-			await client.$queryRaw`SELECT 1 as health_check`;
-			return true;
+			return !!client;
 		} catch (error) {
-			console.warn(`⚠️ Connection health check failed for '${databaseName}':`, error);
 			return false;
 		}
 	}
@@ -519,12 +619,15 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 	private async reconnectDatabase(databaseName: string): Promise<boolean> {
 		const attempts = this.reconnectionAttempts.get(databaseName) || 0;
 		
+		// 빠른 포기: 최대 시도 횟수에 도달하면 즉시 실패 처리 (성능 개선)
 		if (attempts >= this.MAX_RECONNECTION_ATTEMPTS) {
-			console.error(`❌ Max reconnection attempts reached for database '${databaseName}'`);
+			console.error(`❌ Max reconnection attempts (${this.MAX_RECONNECTION_ATTEMPTS}) reached for database '${databaseName}'`);
 			this.connectionStates.set(databaseName, {
 				connected: false,
 				lastChecked: Date.now()
 			});
+			// 재연결 시도 카운터를 리셋하여 일정 시간 후 다시 시도 가능하게 함
+			this.reconnectionAttempts.set(databaseName, 0);
 			return false;
 		}
 
@@ -532,13 +635,17 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 			// Increment attempt counter
 			this.reconnectionAttempts.set(databaseName, attempts + 1);
 
-			// Disconnect existing client
+			// 기존 클라이언트 정리를 더 간단하게 처리 (성능 개선)
 			const existingClient = this.databases.get(databaseName);
 			if (existingClient) {
 				try {
-					await existingClient.$disconnect();
+					// 타임아웃을 짧게 설정하여 빠른 정리
+					await Promise.race([
+						existingClient.$disconnect(),
+						new Promise((_, reject) => setTimeout(() => reject(new Error('Disconnect timeout')), 3000))
+					]);
 				} catch (disconnectError) {
-					console.warn(`Warning during disconnect:`, disconnectError);
+					// 연결 끊기 실패는 무시하고 계속 진행 (로그 제거)
 				}
 			}
 
@@ -552,7 +659,10 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 				lastChecked: Date.now()
 			});
 
-			console.log(`✅ Successfully reconnected to database '${databaseName}'`);
+			// 개발 환경에서만 재연결 성공 로그 출력
+			if (process.env.NODE_ENV === 'development') {
+				console.log(`✅ Successfully reconnected to database '${databaseName}'`);
+			}
 			return true;
 
 		} catch (error) {
@@ -589,7 +699,10 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 				[datasourceName]: {
 					url: connectionUrl
 				}
-			}
+			},
+			// 올바른 연결 풀 설정
+			log: process.env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error'],
+			errorFormat: 'minimal'
 		});
 
 		// Test the connection
@@ -624,17 +737,16 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 				throw new Error(`데이터베이스 '${databaseName}'를 찾을 수 없습니다. 사용 가능한 데이터베이스: ${dbList}`);
 			}
 
-			// Log successful database access with hint
-			// console.log(`🗃️ Accessing database '${databaseName}' from: ${callerInfo.filePath}${callerInfo.lineNumber ? `:${callerInfo.lineNumber}` : ''}`);
-
-			// Ensure connection is healthy (includes automatic reconnection)
-			const isConnected = await this.ensureConnection(databaseName);
-			if (!isConnected) {
-				console.error(`❌ Failed to connect to database '${databaseName}'`);
-				console.error(`   Called from: ${callerInfo.filePath}${callerInfo.lineNumber ? `:${callerInfo.lineNumber}` : ''}`);
-				throw new Error(`데이터베이스 '${databaseName}'에 연결할 수 없습니다. 재연결 시도가 실패했습니다.`);
+			// 개발 모드에서 클라이언트 무결성 검증 및 필요시 새로고침
+			if (process.env.NODE_ENV === 'development') {
+				const isClientHealthy = await this.verifyAndRefreshClientIfNeeded(databaseName);
+				if (!isClientHealthy) {
+					console.warn(`⚠️ Client verification failed for ${databaseName}, but continuing...`);
+				}
 			}
 
+			// 서버리스 최적화: 사전 연결 체크 제거, 실제 사용 시점에 재연결 시도
+			// ensureConnection을 생략하고 바로 클라이언트 사용 시도
 			const client = this.databases.get(databaseName);
 			if (!client) {
 				console.error(`❌ Database client '${databaseName}' not found`);
@@ -642,7 +754,7 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 				throw new Error(`데이터베이스 '${databaseName}' 클라이언트를 찾을 수 없습니다.`);
 			}
 
-			// Return the client with its original type preserved from dynamic import
+			// 클라이언트 반환 - 실제 쿼리 실행 시 연결 오류가 발생하면 그때 재연결
 			return client as T;
 		} catch (error) {
 			if (error instanceof Error) {
@@ -659,12 +771,8 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 	 */
 	public getClientSync<T = any>(databaseName: string): T {
 		try {
-			// Get caller information for hint tracking
-			const callerInfo = this.getCallerSourceInfo();
-			
 			if (!this.initialized) {
 				console.error('❌ PrismaManager not initialized. Call initialize() first.');
-				console.error(`   Called from: ${callerInfo.filePath}${callerInfo.lineNumber ? `:${callerInfo.lineNumber}` : ''}`);
 				throw new Error('데이터베이스 관리자가 초기화되지 않았습니다. 애플리케이션 시작 시 initialize()를 호출했는지 확인하세요.');
 			}
 
@@ -673,12 +781,8 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 				const availableDbs = Array.from(this.databases.keys());
 				const dbList = availableDbs.length > 0 ? availableDbs.join(', ') : '없음';
 				console.error(`❌ Database '${databaseName}' not found. Available: ${dbList}`);
-				console.error(`   Called from: ${callerInfo.filePath}${callerInfo.lineNumber ? `:${callerInfo.lineNumber}` : ''}`);
 				throw new Error(`데이터베이스 '${databaseName}'를 찾을 수 없습니다. 사용 가능한 데이터베이스: ${dbList}`);
 			}
-
-			// Log successful database access with hint
-			// console.log(`🗃️ Accessing database '${databaseName}' sync from: ${callerInfo.filePath}${callerInfo.lineNumber ? `:${callerInfo.lineNumber}` : ''}`);
 
 			// Return the client with its original type preserved from dynamic import
 			return client as T;
@@ -725,53 +829,23 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 	 */
 	public getWrap(databaseName: string): any {
 		try {
-			// Use sync version for repositories
-			const client = this.getClientSync(databaseName);
-			const clientType = this.clientTypes.get(databaseName);
-
-			if (!clientType) {
-				console.warn(`⚠️ Database '${databaseName}' client type not found, returning basic client.`);
-				return client;
+			if (!this.initialized) {
+				throw new Error('데이터베이스 관리자가 초기화되지 않았습니다. 애플리케이션 시작 시 initialize()를 호출했는지 확인하세요.');
 			}
 
-			// Create a proxy that preserves the original client prototype and type information
-			const wrappedClient = new Proxy(client, {
-				get(target, prop, receiver) {
-					try {
-						const value = Reflect.get(target, prop, receiver);
+			// 기존 클라이언트를 재사용 - 새로운 인스턴스를 생성하지 않음
+			const existingClient = this.databases.get(databaseName);
+			if (!existingClient) {
+				const availableDbs = Array.from(this.databases.keys());
+				const dbList = availableDbs.length > 0 ? availableDbs.join(', ') : '없음';
+				throw new Error(`데이터베이스 '${databaseName}'를 찾을 수 없습니다. 사용 가능한 데이터베이스: ${dbList}`);
+			}
 
-						// If it's a function, bind it to the original target
-						if (typeof value === 'function') {
-							return value.bind(target);
-						}
-
-						return value;
-					} catch (error) {
-						console.error(`❌ Error accessing property '${String(prop)}' on database client: ${error}`);
-						throw new Error(`데이터베이스 클라이언트 속성 '${String(prop)}' 접근 중 오류: ${error}`);
-					}
-				},
-
-				getPrototypeOf() {
-					return clientType.prototype;
-				},
-
-				has(target, prop) {
-					return prop in target || prop in clientType.prototype;
-				},
-
-				getOwnPropertyDescriptor(target, prop) {
-					const desc = Reflect.getOwnPropertyDescriptor(target, prop);
-					if (desc) return desc;
-					return Reflect.getOwnPropertyDescriptor(clientType.prototype, prop);
-				}
-			});
-
-			return wrappedClient;
+			return existingClient;
 
 		} catch (error) {
 			if (error instanceof Error) {
-				throw error; // getClientSync에서 이미 처리된 오류는 그대로 전달
+				throw error;
 			}
 			throw new Error(`데이터베이스 래핑된 클라이언트 획득 중 오류가 발생했습니다: ${error}`);
 		}
@@ -1052,7 +1126,158 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 				return this.getWrap(databaseName);
 			};
 		}
-	}  /**
+	}
+
+	/**
+	 * Force refresh a specific database client
+	 * Useful when schema changes or client is out of sync
+	 */
+	public async forceRefreshClient(databaseName: string): Promise<void> {
+		console.log(`🔄 Force refreshing client for database: ${databaseName}`);
+		
+		// Disconnect existing client
+		const existingClient = this.databases.get(databaseName);
+		if (existingClient && typeof existingClient.$disconnect === 'function') {
+			try {
+				await existingClient.$disconnect();
+			} catch (error) {
+				console.warn(`⚠️ Error disconnecting existing client: ${error}`);
+			}
+		}
+
+		// Clear from cache
+		this.databases.delete(databaseName);
+		this.connectionStates.delete(databaseName);
+		this.reconnectionAttempts.delete(databaseName);
+
+		// 개발 모드에서 더 적극적인 캐시 클리어
+		if (process.env.NODE_ENV === 'development') {
+			const config = this.configs.get(databaseName);
+			if (config) {
+				const clientPath = path.join(process.cwd(), 'src', 'app', 'db', databaseName, 'client');
+				const normalizedClientPath = clientPath.replace(/\\/g, '/');
+				
+				// Clear all cached modules related to this client (cross-platform)
+				Object.keys(require.cache).forEach(key => {
+					const normalizedKey = key.replace(/\\/g, '/');
+					if (normalizedKey.includes(normalizedClientPath) || 
+						normalizedKey.includes(`/db/${databaseName}/client`) ||
+						normalizedKey.includes(`\\db\\${databaseName}\\client`)) {
+						delete require.cache[key];
+						console.log(`🗑️ Cleared cache for: ${key}`);
+					}
+				});
+				
+				// Also clear any related prisma cache but be more selective
+				Object.keys(require.cache).forEach(key => {
+					const normalizedKey = key.replace(/\\/g, '/');
+					if (normalizedKey.includes(`/db/${databaseName}/`) && 
+						(normalizedKey.includes('@prisma') || normalizedKey.includes('prisma'))) {
+						delete require.cache[key];
+						console.log(`🗑️ Cleared Prisma cache for: ${key}`);
+					}
+				});
+			}
+		}
+
+		// Process the database folder again to recreate the client
+		try {
+			const dbPath = path.join(process.cwd(), 'src', 'app', 'db');
+			await this.processDatabaseFolder(databaseName, dbPath);
+			console.log(`✅ Client refreshed for database: ${databaseName}`);
+		} catch (error) {
+			console.error(`❌ Failed to refresh client for database: ${databaseName}`, error);
+			throw error;
+		}
+	}
+
+	/**
+	 * Force refresh all database clients
+	 */
+	public async forceRefreshAllClients(): Promise<void> {
+		console.log('🔄 Force refreshing all database clients...');
+		
+		const databases = Array.from(this.databases.keys());
+		for (const dbName of databases) {
+			await this.forceRefreshClient(dbName);
+		}
+		
+		console.log('✅ All clients refreshed');
+	}
+
+	/**
+	 * Development mode: Verify client integrity and regenerate if needed
+	 */
+	public async verifyAndRefreshClientIfNeeded(databaseName: string): Promise<boolean> {
+		if (process.env.NODE_ENV !== 'development') {
+			return true; // Skip verification in production
+		}
+
+		try {
+			const config = this.configs.get(databaseName);
+			if (!config) {
+				console.warn(`⚠️ Database config not found for: ${databaseName}`);
+				return false;
+			}
+
+			const clientPath = path.join(process.cwd(), 'src', 'app', 'db', databaseName, 'client');
+			const schemaPath = path.join(process.cwd(), 'src', 'app', 'db', databaseName, 'schema.prisma');
+			
+			// Check if schema file exists
+			if (!fs.existsSync(schemaPath)) {
+				console.error(`❌ Schema file not found: ${schemaPath}`);
+				return false;
+			}
+
+			// Check if client files exist
+			const clientIndexPath = path.join(clientPath, 'index.js');
+			const clientIndexTsPath = path.join(clientPath, 'index.d.ts');
+			
+			if (!fs.existsSync(clientIndexPath) || !fs.existsSync(clientIndexTsPath)) {
+				console.log(`🔧 Client files missing for ${databaseName}, regenerating...`);
+				
+				// Try to regenerate the client
+				const { spawn } = require('child_process');
+				return new Promise((resolve) => {
+					const generateProcess = spawn('npx', ['prisma', 'generate', `--schema=${schemaPath}`], {
+						stdio: 'inherit',
+						shell: true
+					});
+					
+					generateProcess.on('close', async (code: number | null) => {
+						if (code === 0) {
+							console.log(`✅ Client regenerated for ${databaseName}`);
+							try {
+								await this.forceRefreshClient(databaseName);
+								resolve(true);
+							} catch (error) {
+								console.error(`❌ Failed to refresh after regeneration: ${error}`);
+								resolve(false);
+							}
+						} else {
+							console.error(`❌ Failed to regenerate client for ${databaseName}`);
+							resolve(false);
+						}
+					});
+				});
+			}
+
+			// Check if current client is working
+			const client = this.databases.get(databaseName);
+			if (!client) {
+				console.log(`🔧 Client not loaded for ${databaseName}, refreshing...`);
+				await this.forceRefreshClient(databaseName);
+				return this.databases.has(databaseName);
+			}
+
+			return true;
+		} catch (error) {
+			console.error(`❌ Client verification failed for ${databaseName}:`, error);
+			return false;
+		}
+	}
+
+  /**
    * Dynamically extend the DatabaseClientMap interface with the actual client type
    */
 	private extendDatabaseClientMap(databaseName: string, ClientType: any): void {

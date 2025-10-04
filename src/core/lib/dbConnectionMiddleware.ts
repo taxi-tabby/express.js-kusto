@@ -30,7 +30,7 @@ export function createDbConnectionMiddleware(options: DbConnectionMiddlewareOpti
     const {
         databases = [], // 빈 배열이면 모든 DB 확인
         continueOnFailure = false,
-        checkInterval = 30000, // 30초
+        checkInterval = 120000, // 30초 → 2분으로 기본값 증가 (성능 개선)
         onError,
         onReconnect
     } = options;
@@ -60,11 +60,20 @@ export function createDbConnectionMiddleware(options: DbConnectionMiddlewareOpti
                 }
 
                 try {
-                    // 서버리스 환경에서는 매번 연결 상태를 확인하고 필요시 재연결
+                    // 개발 환경에서는 헬스체크를 건너뛰어 성능 향상 (성능 개선)
+                    if (process.env.NODE_ENV === 'development') {
+                        lastChecks.set(dbName, now);
+                        return { database: dbName, status: 'healthy' };
+                    }
+
+                    // 프로덕션에서만 실제 헬스체크 수행
                     const client = await prismaManager.getClient(dbName);
                     
-                    // 간단한 헬스체크 쿼리 실행
-                    await client.$queryRaw`SELECT 1 as health_check`;
+                    // 헬스체크 쿼리에 타임아웃 설정 (성능 개선)
+                    await Promise.race([
+                        client.$queryRaw`SELECT 1 as health_check`,
+                        new Promise((_, reject) => setTimeout(() => reject(new Error('Health check timeout')), 5000))
+                    ]);
                     
                     lastChecks.set(dbName, now);
                     

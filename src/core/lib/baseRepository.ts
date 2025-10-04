@@ -111,6 +111,74 @@ export abstract class BaseRepository<T extends DatabaseNamesUnion> {
         return await this.db.getClient(this.repositoryDatabaseName) as DatabaseClientMap[T];
     }
 
+    /**
+     * 서버리스 최적화: DB 쿼리 실행 시 자동 재연결 래퍼
+     * 연결 오류 발생 시 자동으로 재연결 후 재시도
+     */
+    protected async executeWithAutoReconnect<R>(
+        operation: (client: DatabaseClientMap[T]) => Promise<R>,
+        maxRetries: number = 1
+    ): Promise<R> {
+        let lastError: Error | null = null;
+        
+        for (let attempt = 0; attempt <= maxRetries; attempt++) {
+            try {
+                const client = await this.getAsyncClient();
+                return await operation(client);
+            } catch (error: any) {
+                lastError = error;
+                
+                // 연결 관련 오류인지 확인
+                const isConnectionError = this.isConnectionError(error);
+                
+                if (isConnectionError && attempt < maxRetries) {
+                    // 개발 환경에서만 재연결 시도 로그 출력
+                    if (process.env.NODE_ENV === 'development') {
+                        console.log(`🔄 DB connection error, attempting reconnection (${attempt + 1}/${maxRetries + 1})`);
+                    }
+                    
+                    // 재연결 시도
+                    try {
+                        await this.db['reconnectDatabase'](this.repositoryDatabaseName);
+                    } catch (reconnectError) {
+                        // 재연결 실패 로그 제거 (성능상 불필요)
+                    }
+                    
+                    // 짧은 대기 후 재시도
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    continue;
+                }
+                
+                // 재시도 불가능하거나 재시도 횟수 초과
+                throw error;
+            }
+        }
+        
+        throw lastError || new Error('Unknown error during database operation');
+    }
+
+    /**
+     * 연결 관련 오류인지 판단하는 헬퍼 메서드
+     */
+    private isConnectionError(error: any): boolean {
+        if (!error) return false;
+        
+        const errorMessage = error.message?.toLowerCase() || '';
+        const errorCode = error.code || '';
+        
+        // Prisma/PostgreSQL 연결 오류 패턴
+        return (
+            errorMessage.includes('connection') ||
+            errorMessage.includes('timeout') ||
+            errorMessage.includes('econnrefused') ||
+            errorMessage.includes('enotfound') ||
+            errorMessage.includes('server closed the connection') ||
+            errorCode === 'P1001' || // Connection error
+            errorCode === 'P1008' || // Operation timeout
+            errorCode === 'P1017'    // Server has closed the connection
+        );
+    }
+
 
     /**
      * 타입 안전성을 위한 분산 트랜잭션 작업 생성 헬퍼 메서드

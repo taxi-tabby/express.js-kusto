@@ -159,6 +159,57 @@ npm run db -- <명령어> [옵션]
 - **보안 코드**: 무작위 4자리 영숫자 코드를 두 번 입력해야 함
 - **강제 대기**: `deploy` 같은 특정 작업은 추가 대기 시간 필요
 
+## 💡 실전 워크플로우
+
+### 🚀 프로젝트 초기 설정
+```bash
+# 1. 데이터베이스 목록 확인
+npm run db -- list
+
+# 2. 모든 데이터베이스의 Prisma 클라이언트 생성
+npm run db -- generate -a
+
+# 3. 스키마 검증
+npm run db -- validate -d temporary
+
+# 4. 마이그레이션 생성 및 적용
+npm run db -- migrate -t dev -n "initial_schema" -d temporary
+```
+
+### 🔄 개발 중 스키마 변경
+```bash
+# 1. schema.prisma 파일 수정
+
+# 2. 변경사항 마이그레이션 생성
+npm run db -- migrate -t dev -n "add_user_field" -d temporary
+
+# 3. 마이그레이션 상태 확인
+npm run db -- migrate -t status -d temporary
+```
+
+### 🌱 초기 데이터 세팅
+```bash
+# 1. seed.ts 파일 작성
+
+# 2. 시드 데이터 실행
+npm run db -- seed -d temporary
+
+# 3. Prisma Studio로 데이터 확인
+npm run db -- studio -d temporary
+```
+
+### 🔍 개발 시 유용한 명령어
+```bash
+# 스키마 검증
+npm run db -- validate -d temporary
+
+# SQL 직접 실행
+npm run db -- execute -d temporary -c "SELECT COUNT(*) FROM your_table;"
+
+# 디버그 정보 확인
+npm run db -- debug -d temporary
+```
+
 ## ⚡ 자동 타입 생성
 
 `npm run db -- generate -a` 실행 시 자동으로 생성되는 파일들:

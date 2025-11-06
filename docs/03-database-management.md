@@ -203,8 +203,8 @@ npm run db -- studio -d temporary
 # 스키마 검증
 npm run db -- validate -d temporary
 
-# SQL 직접 실행
-npm run db -- execute -d temporary -c "SELECT COUNT(*) FROM your_table;"
+# SQL 직접 실행 (예: 데이터 개수 확인)
+npm run db -- execute -d temporary -c "SELECT COUNT(*) FROM User;"
 
 # 디버그 정보 확인
 npm run db -- debug -d temporary

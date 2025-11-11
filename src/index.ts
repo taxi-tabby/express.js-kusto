@@ -17,7 +17,7 @@ envLoader.load();
 // 환경 정보 출력
 console.log(`🌍 Environment: ${envLoader.get('NODE_ENV', 'undefined')}`);
 console.log(`🚀 Host: ${envLoader.get('HOST', 'localhost')}:${envLoader.get('PORT', '3000')}`);
-console.log(`� Production Mode: ${envLoader.isProduction()}`);
+console.log(`- Production Mode: ${envLoader.isProduction()}`);
 
 // 애플리케이션 생성 및 설정
 const app = new Application({

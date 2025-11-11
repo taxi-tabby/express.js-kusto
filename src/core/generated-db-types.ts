@@ -4,18 +4,18 @@
 /**
  * Import actual Prisma client types from each database
  */
-type TemporaryClient = typeof import('@app/db/temporary/client')['PrismaClient'];
+// type TemporaryClient = typeof import('@app/db/temporary/client')['PrismaClient'];
 
 /**
  * Instantiated client types
  */
-type TemporaryInstance = InstanceType<TemporaryClient>;
+// type TemporaryInstance = InstanceType<TemporaryClient>;
 
 /**
  * Type mapping for database names to their corresponding Prisma client instances
  */
 export interface DatabaseClientMap {
-  temporary: TemporaryInstance;
+  // temporary: TemporaryInstance;
   [key: string]: any; // Allow for additional databases
 }
 
@@ -34,13 +34,13 @@ export type DatabaseName = keyof DatabaseClientMap;
 /**
  * Database names as Union type
  */
-export type DatabaseNamesUnion = 'temporary';
+export type DatabaseNamesUnion = string;
 
 /**
  * Method overloads for getWrap
  */
 export interface PrismaManagerWrapOverloads {
-  getWrap(databaseName: 'temporary'): TemporaryInstance;
+  // getWrap(databaseName: 'temporary'): TemporaryInstance;
   getWrap<T extends string>(databaseName: T): DatabaseClientType<T>;
 }
 
@@ -48,7 +48,7 @@ export interface PrismaManagerWrapOverloads {
  * Method overloads for getClient
  */
 export interface PrismaManagerClientOverloads {
-  getClient(databaseName: 'temporary'): Promise<TemporaryInstance>;
+  // getClient(databaseName: 'temporary'): Promise<TemporaryInstance>;
   getClient<T = any>(databaseName: string): Promise<T>;
 }
 
@@ -56,9 +56,10 @@ export interface PrismaManagerClientOverloads {
 /**
  * Extend PrismaManager class with proper method overloads
  */
-declare module '../prismaManager' {
+
+declare module 'kusto-framework-core' {
   interface PrismaManager {
-  getWrap(databaseName: 'temporary'): TemporaryInstance;
-  getClient(databaseName: 'temporary'): Promise<TemporaryInstance>;
+  // getWrap(databaseName: 'temporary'): TemporaryInstance;
+  // getClient(databaseName: 'temporary'): Promise<TemporaryInstance>;
   }
 }

@@ -56,7 +56,7 @@ export interface PrismaManagerClientOverloads {
 /**
  * Extend PrismaManager class with proper method overloads
  */
-declare module '../prismaManager' {
+declare module 'kusto-framework-core' {
   interface PrismaManager {
   getWrap(databaseName: 'temporary'): TemporaryInstance;
   getClient(databaseName: 'temporary'): Promise<TemporaryInstance>;

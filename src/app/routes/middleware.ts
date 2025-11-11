@@ -1,12 +1,11 @@
-import { log } from '@/src/core/external/winston';
 import { Request, Response, NextFunction } from "express";
-import '@lib/types/express-extensions'; // Ensure express extensions are loaded
-import { kustoManager } from '@lib/kustoManager'
-import cors from 'cors';
-import cookieParser from 'cookie-parser'
-import helmet from 'helmet';
-import bodyParser from 'body-parser';
 
+import KustoFramework, {cookieParser, helmet, bodyParser, cors} from 'kusto-framework-core';
+
+
+const log = KustoFramework.log;
+const kustoManager = KustoFramework.kustoManager;
+import '../../core/express-extensions';
 
 const getClientIP = (req: Request): string => {
     // 우선순위에 따른 헤더 확인
@@ -96,7 +95,7 @@ const whitelist = getWhitelist();
 const corsOptions: cors.CorsOptions = {
     optionsSuccessStatus: 204,
     methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS", "HEAD"],
-    origin: (origin, callback) => {
+    origin: (origin: any, callback: any) => {
         // Create dynamic whitelist including server's own IP if available
         const dynamicWhitelist = [...whitelist];
 

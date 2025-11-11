@@ -1,7 +1,7 @@
 # 🗄️ 데이터베이스 관리
 
 > **멀티 데이터베이스 지원과 Prisma 통합**  
-> 폴더 기반 스키마 관리와 kusto-db CLI를 통한 효율적인 데이터베이스 운영  
+> 폴더 기반 스키마 관리와 npm run db CLI를 통한 효율적인 데이터베이스 운영  
 > **Serverless 환경 자동 재연결 지원**
 
 ## 🔌 Serverless 환경 DB 연결 관리
@@ -118,55 +118,101 @@ src/app/db/
 
 각 폴더는 독립적인 데이터베이스를 나타내며, 각자의 스키마와 클라이언트를 가집니다.
 
-## ⚙️ kusto-db CLI 설치
+## 🛠️ 데이터베이스 CLI 사용법
 
-### 1. CLI 도구 설치
+프로젝트에서는 별도 설치 없이 `npm run db ---` 명령어를 사용하여 데이터베이스를 관리합니다.
+
+### 기본 사용법
 ```bash
-npm run install-cli
+npm run db --- <명령어> [옵션]
 ```
 
-### 2. CLI 도구 제거
-```bash
-npm run uninstall-cli
-```
-
-설치 후 전역에서 `kusto-db` 명령어를 사용할 수 있습니다.
-
-## 🛠️ kusto-db 명령어 목록
+## 🛠️ 명령어 목록
 
 | 명령어 | 설명 | 옵션 | 예시 |
 |--------|------|------|------|
 | **기본 명령어** |
-| `list` | 사용 가능한 모든 데이터베이스 목록 표시 | - | `kusto-db list` |
-| `generate` | Prisma 클라이언트 생성 | `-a` (전체), `-d <db>` (특정 DB) | `kusto-db generate -a`<br>`kusto-db generate -d user` |
-| `studio` | Prisma Studio 열기 | `-d <db>` (필수) | `kusto-db studio -d user` |
+| `list` | 사용 가능한 모든 데이터베이스 목록 표시 | - | `npm run db --- list` |
+| `generate` | Prisma 클라이언트 생성 | `-a` (전체), `-d <db>` (특정 DB) | `npm run db --- generate -a`<br>`npm run db --- generate -d user` |
+| `studio` | Prisma Studio 열기 | `-d <db>` (필수) | `npm run db --- studio -d user` |
 | **마이그레이션 관리** |
-| `migrate` | 스키마 변경사항 관리 | `-t <type>`, `-n <name>`, `-d <db>` | `kusto-db migrate -t dev -n "add_profile" -d user`<br>`kusto-db migrate -t reset -d user`<br>`kusto-db migrate -t status -d user` |
+| `migrate` | 스키마 변경사항 관리 | `-t <type>`, `-n <name>`, `-d <db>` | `npm run db --- migrate -t dev -n "add_profile" -d user`<br>`npm run db --- migrate -t reset -d user`<br>`npm run db --- migrate -t status -d user` |
 | **데이터 관리** |
-| `seed` | 초기 데이터 삽입 | `-a` (전체), `-d <db>` (특정 DB) | `kusto-db seed -d user`<br>`kusto-db seed -a` |
-| `pull` ⚠️ | DB 스키마를 Prisma 스키마로 가져오기 | `-d <db>` (필수) | `kusto-db pull -d user` |
-| `push` ⚠️ | Prisma 스키마를 DB에 강제 적용 | `-d <db>`, `--accept-data-loss` | `kusto-db push -d user --accept-data-loss` |
+| `seed` | 초기 데이터 삽입 | `-a` (전체), `-d <db>` (특정 DB) | `npm run db --- seed -d user`<br>`npm run db --- seed -a` |
+| `pull` ⚠️ | DB 스키마를 Prisma 스키마로 가져오기 | `-d <db>` (필수) | `npm run db --- pull -d user` |
+| `push` ⚠️ | Prisma 스키마를 DB에 강제 적용 | `-d <db>`, `--accept-data-loss` | `npm run db --- push -d user --accept-data-loss` |
 | **유틸리티** |
-| `validate` | Prisma 스키마 파일 유효성 검사 | `-d <db>` (필수) | `kusto-db validate -d user` |
-| `execute` | 원시 SQL 명령 실행 | `-d <db>`, `-q <query>` | `kusto-db execute -d user -q "SELECT COUNT(*) FROM User;"` |
-| `debug` | 디버깅 정보 표시 | - | `kusto-db debug` |
-| `version` | Prisma CLI 버전 정보 | - | `kusto-db version` |
-| `rollback` ⚠️ | 마이그레이션 롤백 (위험) | `-d <db>`, `-t <target>` | `kusto-db rollback -d user -t 1` |
+| `validate` | Prisma 스키마 파일 유효성 검사 | `-d <db>` (필수) | `npm run db --- validate -d user` |
+| `execute` | 원시 SQL 명령 실행 | `-d <db>`, `-c <command>` | `npm run db --- execute -d user -c "SELECT COUNT(*) FROM User;"` |
+| `debug` | 디버깅 정보 표시 | - | `npm run db --- debug` |
+| `version` | Prisma CLI 버전 정보 | - | `npm run db --- version` |
+| `rollback` ⚠️ | 마이그레이션 롤백 (위험) | `-d <db>`, `-t <target>` | `npm run db --- rollback -d user -t 1` |
 
 > **⚠️ 위험 표시**: 해당 명령어는 데이터 손실 위험이 있어 이중 보안 확인이 필요합니다.
 
 
 ## 🔒 보안 기능
 
-kusto-db CLI는 위험한 작업에 대해 이중 보안 확인을 요구합니다:
+데이터베이스 CLI는 위험한 작업에 대해 이중 보안 확인을 요구합니다:
 
 - **위험 작업**: `reset`, `pull`, `push`, `rollback`
 - **보안 코드**: 무작위 4자리 영숫자 코드를 두 번 입력해야 함
 - **강제 대기**: `deploy` 같은 특정 작업은 추가 대기 시간 필요
 
+## 💡 실전 워크플로우
+
+### 🚀 프로젝트 초기 설정
+```bash
+# 1. 데이터베이스 목록 확인
+npm run db --- list
+
+# 2. 모든 데이터베이스의 Prisma 클라이언트 생성
+npm run db --- generate -a
+
+# 3. 스키마 검증
+npm run db --- validate -d temporary
+
+# 4. 마이그레이션 생성 및 적용
+npm run db --- migrate -t dev -n "initial_schema" -d temporary
+```
+
+### 🔄 개발 중 스키마 변경
+```bash
+# 1. schema.prisma 파일 수정
+
+# 2. 변경사항 마이그레이션 생성
+npm run db --- migrate -t dev -n "add_user_field" -d temporary
+
+# 3. 마이그레이션 상태 확인
+npm run db --- migrate -t status -d temporary
+```
+
+### 🌱 초기 데이터 세팅
+```bash
+# 1. seed.ts 파일 작성
+
+# 2. 시드 데이터 실행
+npm run db --- seed -d temporary
+
+# 3. Prisma Studio로 데이터 확인
+npm run db --- studio -d temporary
+```
+
+### 🔍 개발 시 유용한 명령어
+```bash
+# 스키마 검증
+npm run db --- validate -d temporary
+
+# SQL 직접 실행 (예: 데이터 개수 확인)
+npm run db --- execute -d temporary -c "SELECT COUNT(*) FROM User;"
+
+# 디버그 정보 확인
+npm run db --- debug -d temporary
+```
+
 ## ⚡ 자동 타입 생성
 
-`kusto-db generate -a` 실행 시 자동으로 생성되는 파일들:
+`npm run db --- generate -a` 실행 시 자동으로 생성되는 파일들:
 
 1. **Prisma 클라이언트**: `src/app/db/{database}/client/`
 2. **타입 안전한 접근**: KustoManager를 통한 완전한 타입 지원

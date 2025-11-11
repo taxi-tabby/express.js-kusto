@@ -1,26 +1,21 @@
 {
 	"compilerOptions": {
+		"ignoreDeprecations": "6.0",
 		"typeRoots": ["./node_modules/@types", "./types"],
 		"types": ["node"],
 		"baseUrl": ".",
 		"paths": {
 			"@/*": [
-				"./*"
+				"./src*"
 			],
 			"@app/*": [
-				"src/app/*"
+				"./src/app/*"
 			],
 			"@core/*": [
-				"src/core/*"
-			],
-			"@lib/*": [
-				"src/core/lib/*"
-			],
-			"@ext/*": [
-				"src/core/external/*"
+				"./src/core/*"
 			],
 			"@db/*": [
-				"src/app/db/*"
+				"./src/app/db/*"
 			]
 		},
 		

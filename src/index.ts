@@ -4,6 +4,7 @@ import 'module-alias/register';
 
 import KustoFramework from 'kusto-framework-core'
 
+
 const Application = KustoFramework.Application;
 const Log = KustoFramework.log;
 const envLoader = KustoFramework.EnvironmentLoader;

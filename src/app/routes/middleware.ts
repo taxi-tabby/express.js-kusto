@@ -95,7 +95,7 @@ const whitelist = getWhitelist();
 const corsOptions: cors.CorsOptions = {
     optionsSuccessStatus: 204,
     methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS", "HEAD"],
-    origin: (origin, callback) => {
+    origin: (origin: any, callback: any) => {
         // Create dynamic whitelist including server's own IP if available
         const dynamicWhitelist = [...whitelist];
 

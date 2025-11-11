@@ -73,11 +73,9 @@
     "webpack-node-externals": "^3.0.0"
   },
   "_moduleAliases": {
-    "@": "./",
+    "@": "./src",
     "@app": "./src/app",
     "@core": "./src/core",
-    "@lib": "./src/core/lib",
-    "@ext": "./src/core/external",
     "@db": "./src/app/db"
   }
 }

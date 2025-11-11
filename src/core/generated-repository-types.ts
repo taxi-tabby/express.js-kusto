@@ -1,5 +1,5 @@
 // Auto-generated file - DO NOT EDIT MANUALLY
-// Generated on: 2025-11-11T16:28:58.180Z
+// Generated on: 2025-11-11T16:30:05.723Z
 // Source: src/app/repos/
 
 // Repository type map for getRepository return types (empty - no repositories found)

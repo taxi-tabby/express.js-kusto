@@ -5,7 +5,7 @@ import KustoFramework, {cookieParser, helmet, bodyParser, cors} from 'kusto-fram
 
 const log = KustoFramework.log;
 const kustoManager = KustoFramework.kustoManager;
-import '@core/express-extensions';
+import '../../core/express-extensions';
 
 const getClientIP = (req: Request): string => {
     // 우선순위에 따른 헤더 확인

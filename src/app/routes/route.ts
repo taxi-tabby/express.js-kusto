@@ -18,7 +18,6 @@ router
     }
 
     
-    
     // 상용 모드일 때는 JSON 응답
     return res.json({
         status: "online",

@@ -1,8 +1,4 @@
-// Import type augmentation to enable proper type inference
-import '@core/kusto-types';
-
 import { ExpressRouter } from 'kusto-framework-core';
-// import '../../core/kusto-types';
 
 
 const router = new ExpressRouter();
@@ -12,7 +8,8 @@ const router = new ExpressRouter();
 router
 .GET(async (req, res, injected, repo, db) => {
 
-    console.log(injected.testMath);
+    console.log(injected);
+    console.log(injected.testMath.add(1,2));
 
     // 개발 모드일 때는 HTML 페이지 렌더링
     if (process.env.NODE_ENV === 'development') {

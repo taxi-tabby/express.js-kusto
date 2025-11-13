@@ -1,34 +1,32 @@
 {
 	"compilerOptions": {
-		"typeRoots": ["./node_modules/@types", "./types"],
-		"types": ["node"],
+		"ignoreDeprecations": "6.0",
+		"typeRoots": [
+			"./node_modules/@types",
+		],
+		"types": [
+			"node"
+		],
 		"baseUrl": ".",
 		"paths": {
 			"@/*": [
-				"./*"
+				"./src*"
 			],
 			"@app/*": [
-				"src/app/*"
+				"./src/app/*"
 			],
 			"@core/*": [
-				"src/core/*"
-			],
-			"@lib/*": [
-				"src/core/lib/*"
-			],
-			"@ext/*": [
-				"src/core/external/*"
+				"./src/core/*"
 			],
 			"@db/*": [
-				"src/app/db/*"
+				"./src/app/db/*"
 			]
 		},
-		
 		"lib": [
 			"es5",
 			"es6"
 		],
-		"target": "ES2021", 
+		"target": "ES2021",
 		"module": "commonjs",
 		"outDir": "./dist",
 		"strict": true,
@@ -42,9 +40,12 @@
 		"declaration": false,
 		"noEmit": false
 	},
+
+
 	"include": [
-		"**/*.ts"
-	],	
+		"**/*.ts",
+		"**/*.d.ts"
+	],
 	"exclude": [
 		"node_modules",
 		"dist",

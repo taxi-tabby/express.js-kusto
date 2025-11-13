@@ -1,6 +1,6 @@
 {
 	"compilerOptions": {
-		"ignoreDeprecations": "6.0",
+		"ignoreDeprecations": "5.0",
 		"typeRoots": ["./node_modules/@types", "./types"],
 		"types": ["node"],
 		"baseUrl": ".",
@@ -38,8 +38,13 @@
 		"noEmit": false
 	},
 	"include": [
-		"**/*.ts"
-	],	
+		"**/*.ts",
+		"**/*.d.ts",
+		"src/core/kusto-types.d.ts"
+	],
+	"files": [
+		"src/core/kusto-types.d.ts"
+	],
 	"exclude": [
 		"node_modules",
 		"dist",

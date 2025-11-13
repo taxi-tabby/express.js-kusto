@@ -1,9 +1,15 @@
 // Module alias 등록 (다른 import보다 먼저 실행되어야 함)
 import 'module-alias/register';
 
+// Kusto Framework 타입 증강 (framework import 전에 로드)
+import './core/kusto-types';
 
 import KustoFramework from 'kusto-framework-core'
+import type {Injectable} from '@core/generated-injectable-types';
+import type {DatabaseClientMap} from '@core/generated-db-types';
+import type { RepositoryTypeMap } from '@core/generated-repository-types';
 
+import { MODULE_REGISTRY, MIDDLEWARE_REGISTRY } from './core/generated-injectable-types';
 
 const Application = KustoFramework.Application;
 const Log = KustoFramework.log;
@@ -26,7 +32,11 @@ const app = new Application({
     routesPath: './src/app/routes',
     viewsPath: './src/app/views',
     viewEngine: 'ejs',
-    trustProxy: true
+    trustProxy: true,
+    dependencyInjector: {
+        moduleRegistry: MODULE_REGISTRY,
+        middlewareRegistry: MIDDLEWARE_REGISTRY,
+    }
 });
 
 // 보안 헤더 설정

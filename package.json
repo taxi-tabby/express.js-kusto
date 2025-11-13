@@ -25,7 +25,7 @@
   "license": "ISC",
   "dependencies": {
     "express": "^5.1.0",
-    "kusto-framework-core": "^1.0.33",
+    "kusto-framework-core": "^1.1.0",
     "nodemon": "^3.1.11"
   },
   "_moduleAliases": {

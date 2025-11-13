@@ -2,8 +2,7 @@
   "watch": ["src"],
   "ext": "ts,js,json",
   "ignore": [
-    "src/core/tmp/**/*",
-    "src/core/lib/types/**/*",
+    "src/core/**/*",
     "**/*.test.ts",
     "**/*.spec.ts",
     "**/node_modules/**"

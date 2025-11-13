@@ -1,15 +1,11 @@
 // Module alias 등록 (다른 import보다 먼저 실행되어야 함)
 import 'module-alias/register';
-
-
 import KustoFramework from 'kusto-framework-core'
-
+import { MODULE_REGISTRY, MIDDLEWARE_REGISTRY } from './core/generated-injectable-types';
 
 const Application = KustoFramework.Application;
 const Log = KustoFramework.log;
 const envLoader = KustoFramework.EnvironmentLoader;
-
-
 
 // 환경변수 로드 (가장 먼저 실행)
 envLoader.load();
@@ -26,7 +22,11 @@ const app = new Application({
     routesPath: './src/app/routes',
     viewsPath: './src/app/views',
     viewEngine: 'ejs',
-    trustProxy: true
+    trustProxy: true,
+    dependencyInjector: {
+        moduleRegistry: MODULE_REGISTRY,
+        middlewareRegistry: MIDDLEWARE_REGISTRY,
+    }
 });
 
 // 보안 헤더 설정

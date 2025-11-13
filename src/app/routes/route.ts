@@ -1,4 +1,3 @@
-
 import { ExpressRouter } from 'kusto-framework-core';
 
 
@@ -8,7 +7,8 @@ const router = new ExpressRouter();
 
 router
 .GET(async (req, res, injected, repo, db) => {
-    
+
+
     // 개발 모드일 때는 HTML 페이지 렌더링
     if (process.env.NODE_ENV === 'development') {
         return res.render('index', { 
@@ -17,7 +17,6 @@ router
         });
     }
 
-    
     
     // 상용 모드일 때는 JSON 응답
     return res.json({

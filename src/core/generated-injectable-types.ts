@@ -1,7 +1,7 @@
 // Auto-generated file - DO NOT EDIT MANUALLY
-// Source: src/app/injectable/
+// Source: ./src/app/injectable
 
-import TestMathModule from '@app/injectable/test/math.module';
+import TestMathModule from '../app/injectable/test/math.module';
 
 // Type definitions
 type TestMathModuleType = InstanceType<typeof TestMathModule>;
@@ -24,7 +24,7 @@ export interface MiddlewareParams {
 
 // Module registry for dynamic loading
 export const MODULE_REGISTRY = {
-  'testMath': () => import('@app/injectable/test/math.module'),
+  'testMath': () => import('../app/injectable/test/math.module'),
 } as const;
 
 // Middleware registry for dynamic loading

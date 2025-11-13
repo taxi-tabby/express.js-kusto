@@ -1,10 +1,10 @@
 // Auto-generated file - Do not edit manually
-// Generated from src/app/db folder structure
+// Generated from ./src/app/db folder structure
 
 /**
  * Import actual Prisma client types from each database
  */
-type TemporaryClient = typeof import('@app/db/temporary/client')['PrismaClient'];
+type TemporaryClient = typeof import('../app/db/temporary/client')['PrismaClient'];
 
 /**
  * Instantiated client types

@@ -6,22 +6,6 @@ import TestMathModule from '../app/injectable/test/math.module';
 // Type definitions
 type TestMathModuleType = InstanceType<typeof TestMathModule>;
 
-// Injectable modules interface
-export interface Injectable {
-  testMath: TestMathModuleType;
-}
-
-// Middleware interface
-export interface Middleware {
-
-}
-
-// Middleware parameters interface (empty - no middleware interfaces found)
-export interface MiddlewareParams {
-  // No middleware parameter interfaces found
-  // Add *.middleware.interface.ts files to src/app/injectable/ and regenerate types
-}
-
 // Module registry for dynamic loading
 export const MODULE_REGISTRY = {
   'testMath': () => import('../app/injectable/test/math.module'),
@@ -37,6 +21,39 @@ export const MIDDLEWARE_PARAM_MAPPING = {
   // No middleware parameter mappings found
 } as const;
 
+/**
+ * Augment kusto-framework-core module with actual injectable types
+ */
+declare module 'kusto-framework-core' {
+  // Injectable modules interface
+  interface Injectable {
+  testMath: TestMathModuleType;
+  }
+
+  // Middleware interface
+  interface Middleware {
+
+  }
+
+  // Middleware parameters interface
+  interface MiddlewareParams {
+    // No middleware parameters
+  }
+  
+  // Middleware parameter mapping interface
+  interface MiddlewareParamMapping {
+    // No middleware parameter mappings
+  }
+
+  // Augment KustoConfigurableTypes for type inference
+  interface KustoConfigurableTypes {
+    injectable: Injectable;
+    middleware: Middleware;
+    middlewareParams: MiddlewareParams;
+    middlewareParamMapping: MiddlewareParamMapping;
+  }
+}
+
 // Module names type
 export type ModuleName = keyof typeof MODULE_REGISTRY;
 
@@ -44,13 +61,13 @@ export type ModuleName = keyof typeof MODULE_REGISTRY;
 export type MiddlewareName = keyof typeof MIDDLEWARE_REGISTRY;
 
 // Middleware parameter names type
-export type MiddlewareParamName = keyof MiddlewareParams;
+export type MiddlewareParamName = keyof typeof MIDDLEWARE_PARAM_MAPPING;
 
 // Helper type for getting module type by name
-export type GetModuleType<T extends ModuleName> = T extends keyof Injectable ? Injectable[T] : never;
+export type GetModuleType<T extends ModuleName> = T extends keyof import('kusto-framework-core').Injectable ? import('kusto-framework-core').Injectable[T] : never;
 
 // Helper type for getting middleware type by name
-export type GetMiddlewareType<T extends MiddlewareName> = T extends keyof Middleware ? Middleware[T] : never;
+export type GetMiddlewareType<T extends MiddlewareName> = T extends keyof import('kusto-framework-core').Middleware ? import('kusto-framework-core').Middleware[T] : never;
 
 // Helper type for getting middleware parameter type by name
-export type GetMiddlewareParamType<T extends MiddlewareParamName> = T extends keyof MiddlewareParams ? MiddlewareParams[T] : never;
+export type GetMiddlewareParamType<T extends MiddlewareParamName> = T extends keyof import('kusto-framework-core').MiddlewareParams ? import('kusto-framework-core').MiddlewareParams[T] : never;

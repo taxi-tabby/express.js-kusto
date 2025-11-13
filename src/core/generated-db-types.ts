@@ -12,51 +12,45 @@ type TemporaryClient = typeof import('../app/db/temporary/client')['PrismaClient
 type TemporaryInstance = InstanceType<TemporaryClient>;
 
 /**
- * Type mapping for database names to their corresponding Prisma client instances
- */
-export interface DatabaseClientMap {
-  temporary: TemporaryInstance;
-  [key: string]: any; // Allow for additional databases
-}
-
-/**
  * Enhanced client type that preserves actual Prisma client type information
  */
-export type DatabaseClientType<T extends string> = T extends keyof DatabaseClientMap 
-  ? DatabaseClientMap[T] 
+export type DatabaseClientType<T extends string> = T extends keyof import('kusto-framework-core').DatabaseClientMap 
+  ? import('kusto-framework-core').DatabaseClientMap[T] 
+  : any;
+
+/**
+ * Type helper for extracting client type from database name
+ * Use this when you need to get the client type for a specific database
+ */
+export type GetDatabaseClient<T extends string> = T extends keyof import('kusto-framework-core').DatabaseClientMap
+  ? import('kusto-framework-core').DatabaseClientMap[T]
   : any;
 
 /**
  * Valid database names
  */
-export type DatabaseName = keyof DatabaseClientMap;
+export type DatabaseName = keyof import('kusto-framework-core').DatabaseClientMap;
 
 /**
  * Database names as Union type
  */
-export type DatabaseNamesUnion = 'temporary';
-
-/**
- * Method overloads for getWrap
- */
-export interface PrismaManagerWrapOverloads {
-  getWrap(databaseName: 'temporary'): TemporaryInstance;
-  getWrap<T extends string>(databaseName: T): DatabaseClientType<T>;
-}
-
-/**
- * Method overloads for getClient
- */
-export interface PrismaManagerClientOverloads {
-  getClient(databaseName: 'temporary'): Promise<TemporaryInstance>;
-  getClient<T = any>(databaseName: string): Promise<T>;
-}
+export type DatabaseNamesUnion = keyof import('kusto-framework-core').DatabaseClientMap | string;
 
 
 /**
- * Extend PrismaManager class with proper method overloads
+ * Augment kusto-framework-core module with actual database types
  */
 declare module 'kusto-framework-core' {
+  /**
+   * Type mapping for database names to their corresponding Prisma client instances
+   */
+  interface DatabaseClientMap {
+  temporary: TemporaryInstance;
+  }
+
+  /**
+   * Extend PrismaManager class with proper method overloads
+   */
   interface PrismaManager {
   getWrap(databaseName: 'temporary'): TemporaryInstance;
   getClient(databaseName: 'temporary'): Promise<TemporaryInstance>;

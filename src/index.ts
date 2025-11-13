@@ -21,6 +21,8 @@ const app = new Application({
     host: envLoader.get('HOST') || '0.0.0.0',
     routesPath: './src/app/routes',
     viewsPath: './src/app/views',
+    dbPath: './src/app/db',  // ✅ 추가!
+    repositoriesPath: './src/app/repos',  // ✅ 추가!
     viewEngine: 'ejs',
     trustProxy: true,
     dependencyInjector: {

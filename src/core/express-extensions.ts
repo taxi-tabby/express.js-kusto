@@ -2,7 +2,8 @@
 import type { kustoManager } from 'kusto-framework-core'
 
 // Type extensions for Express Request object
-import { MiddlewareParamName, MiddlewareParams } from './generated-injectable-types';
+import { MiddlewareParamName } from './generated-injectable-types';
+import type { MiddlewareParams } from 'kusto-framework-core';
 
 
 // import type { KustoManager } from '../kustoManager';

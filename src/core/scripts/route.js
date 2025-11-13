@@ -1,2 +1,2 @@
-import {scripts} from 'kusto-framework-core'
+const {scripts} = require('kusto-framework-core');
 scripts.buildRoutes();

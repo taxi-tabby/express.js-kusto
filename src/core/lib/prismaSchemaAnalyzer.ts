@@ -305,7 +305,8 @@ export class PrismaSchemaAnalyzer {
       relationName: dmmfField.relationName,
       relationFromFields: dmmfField.relationFromFields,
       relationToFields: dmmfField.relationToFields,
-      documentation: dmmfField.documentation
+      documentation: dmmfField.documentation,
+      nativeType: dmmfField.nativeType // @db.Uuid, @db.VarChar 등의 네이티브 타입 정보
     };
   }
 

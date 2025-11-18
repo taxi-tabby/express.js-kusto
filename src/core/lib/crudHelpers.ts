@@ -200,6 +200,7 @@ export class CrudQueryParser {
   
   /**
    * Express 요청 객체에서 CRUD 쿼리 파라미터를 파싱
+   * UUID 필드에 잘못된 값이 입력되면 해당 필터를 무시함
    */
   static parseQuery(req: Request, modelName?: string, schemaAnalyzer?: any): CrudQueryParams {
     const query = req.query;
@@ -355,6 +356,7 @@ export class CrudQueryParser {
    * ?filter[name_eq]=John&filter[age_gt]=18
    * 또는 중첩 객체 형태: { filter: { name_eq: "John", age_gt: 18 } }
    * OR 조건 지원: ?filter[or][0][name_eq]=John&filter[or][0][age_gt]=18&filter[or][1][name_eq]=Jane
+   * UUID 검증 실패 시 해당 필터를 무시함
    */
   private static parseFilter(query: any, modelName?: string, schemaAnalyzer?: any): Record<string, any> | undefined {
     const filters: Record<string, any> = {};
@@ -470,6 +472,7 @@ export class CrudQueryParser {
   /**
    * 필터 표현식 파싱 (field_operator 형태)
    * 관계 필터링도 지원: author.name_like, tags.name_in 등
+   * UUID 검증 실패 시 null 반환하여 필터 무시
    */
   private static parseFilterExpression(expression: string, value: any, modelName?: string, schemaAnalyzer?: any) {
     const operators = [
@@ -483,6 +486,12 @@ export class CrudQueryParser {
         const field = expression.slice(0, -(op.length + 1));
         const parsedValue = this.parseFilterValue(op as FilterOperator, value, field, modelName, schemaAnalyzer);
         
+        // 값이 null이면 필터 무시 (빈 배열 또는 UUID 검증 실패)
+        if (parsedValue === null) {
+          // console.warn(`Filter ignored for field "${field}" with operator "${op}": value validation failed`);
+          return null;
+        }
+        
         return {
           field,
           operator: op as FilterOperator,
@@ -493,11 +502,18 @@ export class CrudQueryParser {
 
     // 연산자가 명시되지 않은 경우 값의 패턴을 보고 자동 감지
     const autoDetectedOperator = this.autoDetectOperator(value);
+    const parsedValue = this.parseFilterValue(autoDetectedOperator, value, expression, modelName, schemaAnalyzer);
+    
+    // 값이 null이면 필터 무시 (빈 배열 또는 UUID 검증 실패)
+    if (parsedValue === null) {
+      console.warn(`Filter ignored for field "${expression}": value validation failed`);
+      return null;
+    }
     
     return {
       field: expression,
       operator: autoDetectedOperator,
-      value: this.parseFilterValue(autoDetectedOperator, value, expression, modelName, schemaAnalyzer)
+      value: parsedValue
     };
   }
 
@@ -530,6 +546,7 @@ export class CrudQueryParser {
 
   /**
    * 필터 값을 올바른 타입으로 변환
+   * null 반환 시 필터가 무시됨
    */
   private static parseFilterValue(operator: FilterOperator, value: any, fieldName?: string, modelName?: string, schemaAnalyzer?: any): any {
     if (value === null || value === undefined) return value;
@@ -538,10 +555,14 @@ export class CrudQueryParser {
       case 'in':
       case 'not_in':
         if (typeof value === 'string') {
-          return value.split(',')
+          const converted = value.split(',')
             .map(v => v.trim())
             .filter(v => v.length > 0) // 빈 문자열 제거
-            .map(v => this.smartTypeConversion(v, fieldName, modelName, schemaAnalyzer)); // 각 값에 대해 타입 변환
+            .map(v => this.smartTypeConversion(v, fieldName, modelName, schemaAnalyzer)) // 각 값에 대해 타입 변환
+            .filter(v => v !== null); // null 값 제거 (UUID 검증 실패한 경우)
+          
+          // 빈 배열인 경우 null 반환
+          return converted.length > 0 ? converted : null;
         }
         return Array.isArray(value) ? value.filter(v => v !== '' && v != null) : value;
       
@@ -550,8 +571,11 @@ export class CrudQueryParser {
           const parts = value.split(',')
             .map(v => v.trim())
             .filter(v => v.length > 0) // 빈 문자열 제거
-            .map(v => this.smartTypeConversion(v, fieldName, modelName, schemaAnalyzer)); // 각 값에 대해 타입 변환
-          return parts.length === 2 ? parts : value;
+            .map(v => this.smartTypeConversion(v, fieldName, modelName, schemaAnalyzer)) // 각 값에 대해 타입 변환
+            .filter(v => v !== null); // null 값 제거 (UUID 검증 실패한 경우)
+          
+          // between은 정확히 2개의 값이 필요
+          return parts.length === 2 ? parts : null;
         }
         return value;
       
@@ -611,9 +635,21 @@ export class CrudQueryParser {
       const field = model.fields.find((f: any) => f.name === fieldName);
       if (!field) return null;
 
+      // nativeType이 객체인 경우 name 속성 추출
+      let nativeTypeName: string | undefined;
+      if (field.nativeType) {
+        if (typeof field.nativeType === 'string') {
+          nativeTypeName = field.nativeType;
+        } else if (field.nativeType.name) {
+          nativeTypeName = field.nativeType.name;
+        } else if (Array.isArray(field.nativeType) && field.nativeType.length > 0) {
+          nativeTypeName = field.nativeType[0];
+        }
+      }
+
       return {
         type: field.type,
-        nativeType: field.nativeType?.name // @db.Uuid 같은 네이티브 타입 정보
+        nativeType: nativeTypeName
       };
     } catch (error) {
       // 스키마 분석 실패 시 null 반환
@@ -631,16 +667,17 @@ export class CrudQueryParser {
 
   /**
    * 필드 타입에 따른 값 변환
+   * @returns 변환된 값 또는 null (UUID 검증 실패 시 null 반환으로 필터 무시)
    */
   private static convertValueByType(value: string, fieldTypeInfo: { type: string; nativeType?: string }): any {
     const { type: fieldType, nativeType } = fieldTypeInfo;
 
     // UUID 타입인 경우 유효성 검증
     if (nativeType === 'Uuid' || fieldType === 'Uuid') {
-      // UUID가 아닌 값이 들어온 경우 null 반환 (빈 결과를 위해)
+      // UUID가 아닌 값이 들어온 경우 null 반환 (필터 무시됨)
       if (!this.isValidUUID(value)) {
-        // 잘못된 UUID는 null로 변환하여 조건에 맞지 않는 결과를 반환
-        return '__INVALID_UUID__'; // 절대 매칭되지 않을 특수값
+        // console.warn(`Invalid UUID format in filter: expected a valid UUID, but received "${value}". This filter will be ignored.`);
+        return null;
       }
       return value; // 유효한 UUID는 그대로 반환
     }

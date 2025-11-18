@@ -2572,8 +2572,21 @@ export class ExpressRouter {
                 res.setHeader('Content-Type', 'application/vnd.api+json');
                 res.setHeader('Vary', 'Accept');
 
-                // 쿼리 파라미터 파싱
-                const queryParams = CrudQueryParser.parseQuery(req, modelName, this.schemaAnalyzer);
+                // 쿼리 파라미터 파싱 (UUID 검증 등의 에러 발생 가능)
+                let queryParams;
+                try {
+                    queryParams = CrudQueryParser.parseQuery(req, modelName, this.schemaAnalyzer);
+                } catch (parseError: any) {
+                    // UUID 검증 실패 등의 에러를 400으로 응답
+                    const errorResponse = this.formatJsonApiError(
+                        parseError,
+                        parseError.code || ERROR_CODES.VALIDATION_ERROR,
+                        parseError.statusCode || 400,
+                        req.path,
+                        req.method
+                    );
+                    return res.status(parseError.statusCode || 400).json(errorResponse);
+                }
                 
                 // 페이지네이션 방식 검증 - 반드시 지정되어야 함
                 if (!queryParams.page) {
@@ -2833,8 +2846,22 @@ export class ExpressRouter {
                 );
                 if (!success) return; // ?�러 ?�답?� ?��? ?�퍼?�서 처리??
                 
-                // 쿼리 파라미터에서 include 파싱
-                const queryParams = CrudQueryParser.parseQuery(req, modelName, this.schemaAnalyzer);
+                // 쿼리 파라미터에서 include 파싱 (UUID 검증 등의 에러 발생 가능)
+                let queryParams;
+                try {
+                    queryParams = CrudQueryParser.parseQuery(req, modelName, this.schemaAnalyzer);
+                } catch (parseError: any) {
+                    // UUID 검증 실패 등의 에러를 400으로 응답
+                    const errorResponse = this.formatJsonApiError(
+                        parseError,
+                        parseError.code || ERROR_CODES.VALIDATION_ERROR,
+                        parseError.statusCode || 400,
+                        req.path,
+                        req.method
+                    );
+                    return res.status(parseError.statusCode || 400).json(errorResponse);
+                }
+                
                 const includeOptions = queryParams.include 
                     ? PrismaQueryBuilder['buildIncludeOptions'](queryParams.include)
                     : undefined;
@@ -4622,8 +4649,21 @@ export class ExpressRouter {
 
                 const relationName = req.params.relationName;
                 
-                // 쿼리 파라미터 파싱 (include, fields, sort, pagination 지원)
-                const queryParams = CrudQueryParser.parseQuery(req, modelName, this.schemaAnalyzer);
+                // 쿼리 파라미터 파싱 (include, fields, sort, pagination 지원) (UUID 검증 등의 에러 발생 가능)
+                let queryParams;
+                try {
+                    queryParams = CrudQueryParser.parseQuery(req, modelName, this.schemaAnalyzer);
+                } catch (parseError: any) {
+                    // UUID 검증 실패 등의 에러를 400으로 응답
+                    const errorResponse = this.formatJsonApiError(
+                        parseError,
+                        parseError.code || ERROR_CODES.VALIDATION_ERROR,
+                        parseError.statusCode || 400,
+                        req.path,
+                        req.method
+                    );
+                    return res.status(parseError.statusCode || 400).json(errorResponse);
+                }
                 
                 // 기본 리소??조회
                 const item = await client[modelName].findUnique({
@@ -4949,7 +4989,22 @@ export class ExpressRouter {
                 if (!success) return;
 
                 const relationName = req.params.relationName;
-                const queryParams = CrudQueryParser.parseQuery(req, modelName, this.schemaAnalyzer);
+                
+                // 쿼리 파라미터 파싱 (UUID 검증 등의 에러 발생 가능)
+                let queryParams;
+                try {
+                    queryParams = CrudQueryParser.parseQuery(req, modelName, this.schemaAnalyzer);
+                } catch (parseError: any) {
+                    // UUID 검증 실패 등의 에러를 400으로 응답
+                    const errorResponse = this.formatJsonApiError(
+                        parseError,
+                        parseError.code || ERROR_CODES.VALIDATION_ERROR,
+                        parseError.statusCode || 400,
+                        req.path,
+                        req.method
+                    );
+                    return res.status(parseError.statusCode || 400).json(errorResponse);
+                }
                 
                 // 기본 리소??조회
                 const item = await client[modelName].findUnique({

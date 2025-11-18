@@ -583,9 +583,9 @@ export class CrudQueryParser {
 
     // 스키마 정보가 있는 경우 정확한 타입 변환
     if (fieldName && modelName && schemaAnalyzer) {
-      const fieldType = this.getFieldTypeFromSchema(fieldName, modelName, schemaAnalyzer);
-      if (fieldType) {
-        return this.convertValueByType(value, fieldType);
+      const fieldTypeInfo = this.getFieldTypeFromSchema(fieldName, modelName, schemaAnalyzer);
+      if (fieldTypeInfo) {
+        return this.convertValueByType(value, fieldTypeInfo);
       }
     }
 
@@ -595,8 +595,9 @@ export class CrudQueryParser {
 
   /**
    * 스키마에서 필드 타입 정보 가져오기
+   * @returns { type: 'String', nativeType: 'Uuid' } 형태로 반환
    */
-  private static getFieldTypeFromSchema(fieldName: string, modelName: string, schemaAnalyzer: any): string | null {
+  private static getFieldTypeFromSchema(fieldName: string, modelName: string, schemaAnalyzer: any): { type: string; nativeType?: string } | null {
     try {
       const model = schemaAnalyzer.getModel(modelName);
       if (!model) return null;
@@ -604,11 +605,16 @@ export class CrudQueryParser {
       // 중첩된 필드 처리 (author.name 등)
       if (fieldName.includes('.')) {
         // 관계 필드는 현재 구현에서는 문자열로 처리
-        return 'String';
+        return { type: 'String' };
       }
 
       const field = model.fields.find((f: any) => f.name === fieldName);
-      return field ? field.type : null;
+      if (!field) return null;
+
+      return {
+        type: field.type,
+        nativeType: field.nativeType?.name // @db.Uuid 같은 네이티브 타입 정보
+      };
     } catch (error) {
       // 스키마 분석 실패 시 null 반환
       return null;
@@ -616,9 +622,29 @@ export class CrudQueryParser {
   }
 
   /**
+   * UUID 유효성 검증
+   */
+  private static isValidUUID(value: string): boolean {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    return uuidRegex.test(value);
+  }
+
+  /**
    * 필드 타입에 따른 값 변환
    */
-  private static convertValueByType(value: string, fieldType: string): any {
+  private static convertValueByType(value: string, fieldTypeInfo: { type: string; nativeType?: string }): any {
+    const { type: fieldType, nativeType } = fieldTypeInfo;
+
+    // UUID 타입인 경우 유효성 검증
+    if (nativeType === 'Uuid' || fieldType === 'Uuid') {
+      // UUID가 아닌 값이 들어온 경우 null 반환 (빈 결과를 위해)
+      if (!this.isValidUUID(value)) {
+        // 잘못된 UUID는 null로 변환하여 조건에 맞지 않는 결과를 반환
+        return '__INVALID_UUID__'; // 절대 매칭되지 않을 특수값
+      }
+      return value; // 유효한 UUID는 그대로 반환
+    }
+
     switch (fieldType) {
       case 'String':
         return value; // 문자열은 그대로 유지

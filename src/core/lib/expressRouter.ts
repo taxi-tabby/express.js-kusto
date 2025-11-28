@@ -3705,23 +3705,55 @@ export class ExpressRouter {
     }
 
     /**
-     * 리소???�?�에??모델명을 추론?�는 ?�퍼 메서??
+     * 리소스 타입에서 Prisma 모델명을 추론하는 헬퍼 메서드
+     * - userRole, userrole, user-role, user_role -> UserRole
+     * - users -> User
      */
     private getModelNameFromResourceType(resourceType: string): string | null {
-        // 캐�?케?�스�?변??(orderItem -> OrderItem)
-        const pascalCase = resourceType
-            .split(/[-_]/)
+        // 1. 먼저 kebab-case나 snake_case를 분리
+        let parts: string[];
+        
+        if (resourceType.includes('-') || resourceType.includes('_')) {
+            // kebab-case 또는 snake_case
+            parts = resourceType.split(/[-_]/);
+        } else {
+            // camelCase 또는 lowercase 처리
+            // userRole -> ['user', 'Role'] -> ['user', 'role']
+            // userrole -> ['userrole']
+            parts = resourceType.split(/(?=[A-Z])/).map(p => p.toLowerCase());
+            
+            // 전부 소문자인 경우 (userrole) 일반적인 패턴으로 분리 시도
+            if (parts.length === 1 && parts[0] === resourceType.toLowerCase()) {
+                // 알려진 패턴들을 체크
+                const knownPatterns = [
+                    { pattern: /^user(role|permission|session|token)s?$/i, split: ['user', '$1'] },
+                    { pattern: /^role(permission)s?$/i, split: ['role', '$1'] },
+                    { pattern: /^(.+)(item|detail|log|history)s?$/i, split: ['$1', '$2'] },
+                ];
+                
+                for (const { pattern, split } of knownPatterns) {
+                    const match = resourceType.match(pattern);
+                    if (match) {
+                        parts = split.map(s => s.startsWith('$') ? match[parseInt(s[1])] : s);
+                        break;
+                    }
+                }
+            }
+        }
+        
+        // 2. 각 부분을 PascalCase로 변환
+        let pascalCase = parts
             .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
             .join('');
         
-        // 복수??-> ?�수??변??
+        // 3. 복수형 -> 단수형 변환
         if (pascalCase.endsWith('ies')) {
-            return pascalCase.slice(0, -3) + 'y'; // Categories -> Category
+            pascalCase = pascalCase.slice(0, -3) + 'y'; // Categories -> Category
         } else if (pascalCase.endsWith('s') && !pascalCase.endsWith('ss')) {
-            return pascalCase.slice(0, -1); // Users -> User, Orders -> Order
+            pascalCase = pascalCase.slice(0, -1); // Users -> User, Orders -> Order
         }
         
-        return pascalCase; // OrderItem -> OrderItem (?�수??그�?�?
+        return pascalCase;
     }
 
     /**
@@ -4696,10 +4728,13 @@ export class ExpressRouter {
                 // Base URL ?�성
                 const baseUrl = `${req.protocol}://${req.get('host')}${req.baseUrl}`;
                 
-                // 관�?리소???�??추론
-                const relationResourceType = JsonApiTransformer.inferResourceTypeFromRelationship(
+                // 관�?리소???�??추론 (실제 데이터 기반)
+                const isArray = Array.isArray(relationData);
+                const sampleData = isArray ? relationData[0] : relationData;
+                const relationResourceType = JsonApiTransformer.inferResourceTypeFromData(
+                    sampleData, 
                     relationName, 
-                    Array.isArray(relationData)
+                    isArray
                 );
 
                 // JSON:API ?�답 ?�성
@@ -4757,17 +4792,17 @@ export class ExpressRouter {
 
                 const relationData = item[relationName];
                 
-                // 관�??�이?��? JSON:API ?�식?�로 변??
+                // 관�??�이?��? JSON:API ?�식?�로 변??(실제 데이터 기반 타입 추론)
                 let data = null;
                 if (relationData) {
                     if (Array.isArray(relationData)) {
                         data = relationData.map(relItem => ({
-                            type: JsonApiTransformer.inferResourceTypeFromRelationship(relationName, true),
+                            type: JsonApiTransformer.inferResourceTypeFromData(relItem, relationName, true),
                             id: String(relItem.id || relItem.uuid || relItem._id)
                         }));
                     } else {
                         data = {
-                            type: JsonApiTransformer.inferResourceTypeFromRelationship(relationName, false),
+                            type: JsonApiTransformer.inferResourceTypeFromData(relationData, relationName, false),
                             id: String(relationData.id || relationData.uuid || relationData._id)
                         };
                     }
@@ -5037,7 +5072,13 @@ export class ExpressRouter {
 
                 // Base URL ?�성
                 const baseUrl = `${req.protocol}://${req.get('host')}${req.baseUrl}`;
-                const resourceType = JsonApiTransformer.inferResourceTypeFromRelationship(relationName, Array.isArray(relationData));
+                const isArrayRelation = Array.isArray(relationData);
+                const sampleRelationData = isArrayRelation ? relationData[0] : relationData;
+                const resourceType = JsonApiTransformer.inferResourceTypeFromData(
+                    sampleRelationData, 
+                    relationName, 
+                    isArrayRelation
+                );
 
                 // JSON:API ?�답 ?�성
                 const response: JsonApiResponse = JsonApiTransformer.createJsonApiResponse(

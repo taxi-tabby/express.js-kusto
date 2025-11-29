@@ -3092,7 +3092,7 @@ export class ExpressRouter {
                     }
                 }
 
-                // 관�??�이??처리 (relationships가 ?�는 경우)
+                // 관계 데이터 처리 (relationships가 있는 경우)
                 if (requestData.relationships) {
                     try {
                         data = await this.processRelationships(
@@ -3100,7 +3100,8 @@ export class ExpressRouter {
                             requestData.relationships, 
                             client, 
                             modelName,
-                            false // ?�성 모드
+                            false, // 생성 모드
+                            options // softDelete 옵션 전달 (생성 시에는 parentId 불필요)
                         );
                     } catch (relationshipError: any) {
                         const errorResponse = this.formatJsonApiError(
@@ -3555,144 +3556,297 @@ export class ExpressRouter {
 
     /**
      * JSON:API 관계 데이터 처리 - 최신 JSON:API 명세 준수
-     * ?�성/?�정 ??관�??�이?��? Prisma ?�식?�로 변??
+     * PATCH 요청 시 relationships는 "replace" 동작 (기존 관계를 완전히 대체)
+     * 생성/수정 시 관계 데이터를 Prisma 형식으로 변환
      * 기존 리소스 연결과 새 리소스 생성을 모두 지원
+     * 
+     * @param data 기존 데이터
+     * @param relationships JSON:API relationships 객체
+     * @param client Prisma 클라이언트
+     * @param modelName 모델명
+     * @param isUpdate 업데이트 여부
+     * @param options CRUD 옵션 (softDelete 등)
+     * @param parentId 부모 리소스 ID (관계 삭제 시 필요)
+     * @param parentIdField 부모 ID 필드명 (기본값: 'id')
      */
     private async processRelationships(
         data: any, 
         relationships: Record<string, JsonApiRelationship>, 
         client: any, 
         modelName: string,
-        isUpdate: boolean = false
+        isUpdate: boolean = false,
+        options?: any,
+        parentId?: any,
+        parentIdField: string = 'id'
     ): Promise<any> {
         const processedData = { ...data };
         
+        // softDelete 옵션 확인
+        const isSoftDelete = options?.softDelete?.enabled;
+        const softDeleteField = options?.softDelete?.field || 'deletedAt';
+        
         for (const [relationName, relationshipData] of Object.entries(relationships)) {
             if (relationshipData.data !== undefined) {
-                // null??경우 - 관�??�거 (?�데?�트 ?�에�?
+                // null인 경우 - 관계 제거 (업데이트 시에만)
                 if (relationshipData.data === null) {
                     if (isUpdate) {
-                        processedData[relationName] = {
-                            disconnect: true
-                        };
-                    }
-                    // ?�성 ?�에??null 관계�? 무시
-                }
-                // 배열??경우 - ?��???관�?
-                else if (Array.isArray(relationshipData.data)) {
-                    if (relationshipData.data.length === 0) {
-                        // �?배열 - 모든 관�??�거 (?�데?�트 ?�에�?
-                        if (isUpdate) {
+                        // softDelete인 경우 관계된 레코드를 soft delete
+                        if (isSoftDelete && parentId) {
+                            await this.softDeleteRelatedRecords(
+                                client, 
+                                modelName, 
+                                relationName, 
+                                parentId, 
+                                parentIdField,
+                                softDeleteField
+                            );
+                            // Prisma 관계는 disconnect하지 않음 (soft delete된 레코드 유지)
+                        } else {
                             processedData[relationName] = {
-                                set: []
+                                disconnect: true
                             };
                         }
+                    }
+                    // 생성 시에는 null 관계를 무시
+                }
+                // 배열인 경우 - 일대다 관계
+                else if (Array.isArray(relationshipData.data)) {
+                    if (relationshipData.data.length === 0) {
+                        // 빈 배열 - 모든 관계 제거 (업데이트 시에만)
+                        if (isUpdate) {
+                            if (isSoftDelete && parentId) {
+                                // 기존 모든 관계를 soft delete
+                                await this.softDeleteRelatedRecords(
+                                    client,
+                                    modelName,
+                                    relationName,
+                                    parentId,
+                                    parentIdField,
+                                    softDeleteField
+                                );
+                            } else {
+                                processedData[relationName] = {
+                                    set: []
+                                };
+                            }
+                        }
                     } else {
-                        // 관�??�이??처리
-                        const connectIds = [];
-                        const createData = [];
+                        // 관계 데이터 처리 - JSON:API 표준 준수
+                        // relationships.data는 Resource Identifier Objects만 포함
+                        // (type과 id만 있어야 함, attributes는 허용하지 않음)
+                        const connectIds: any[] = [];
+                        let relatedResourceType: string | null = null;
                         
                         for (const item of relationshipData.data) {
-                            // console.log(`Processing relationship item in ${relationName}:`, JSON.stringify(item, null, 2));
-                            
                             if (!item.type) {
                                 throw new Error(`Invalid relationship data: missing type in ${relationName}`);
                             }
                             
-                            // 기존 리소???�결 (id가 ?�는 경우)
-                            if (item.id) {
-                                // 관�?리소?��? ?�제�?존재?�는지 검�?(?�택??
-                                const relatedModel = this.getModelNameFromResourceType(item.type);
-                                if (relatedModel) {
-                                    try {
-                                        const exists = await client[relatedModel].findUnique({
-                                            where: { id: item.id }
-                                        });
-                                        if (!exists) {
-                                            throw new Error(`Related resource ${item.type}:${item.id} not found`);
-                                        }
-                                    } catch (error) {
-                                        console.warn(`Could not verify existence of ${item.type}:${item.id}`, error);
-                                    }
-                                }
+                            // 첫 번째 아이템의 type을 저장 (soft delete 시 사용)
+                            if (!relatedResourceType) {
+                                relatedResourceType = item.type;
+                            }
+                            
+                            // JSON:API 표준: id가 반드시 있어야 함
+                            if (!item.id) {
+                                throw new Error(`Invalid relationship data: missing id in ${relationName}. JSON:API requires resource identifier objects to have both type and id.`);
+                            }
+                            
+                            connectIds.push({ id: this.parseRelationshipId(item.id) });
+                        }
+                        
+                        // JSON:API 스펙: UPDATE 시 relationships는 "replace" 동작
+                        if (isUpdate) {
+                            if (isSoftDelete && parentId && relatedResourceType) {
+                                // 1. 기존 관계 중 새 목록에 없는 것들을 soft delete
+                                // relatedResourceType (요청의 type)에서 모델명 추출
+                                await this.replaceRelationshipsWithSoftDelete(
+                                    client,
+                                    modelName,
+                                    relatedResourceType, // relationName 대신 실제 type 사용
+                                    parentId,
+                                    parentIdField,
+                                    connectIds.map(c => c.id),
+                                    softDeleteField
+                                );
                                 
-                                connectIds.push({ id: item.id });
-                            }
-                            // ??리소???�성 (attributes가 ?�는 경우)
-                            else if (this.hasAttributes(item)) {
-                                // console.log(`Creating new resource for ${relationName} with attributes:`, item.attributes);
-                                createData.push(item.attributes);
+                                // 2. 새 연결 처리
+                                if (connectIds.length > 0) {
+                                    processedData[relationName] = {
+                                        connect: connectIds
+                                    };
+                                }
                             } else {
-                                // console.log(`Invalid relationship item in ${relationName}:`, JSON.stringify(item, null, 2));
-                                throw new Error(`Invalid relationship data: item must have either id (for connecting) or attributes (for creating) in ${relationName}`);
+                                // Hard delete: set으로 완전 대체
+                                processedData[relationName] = {
+                                    set: connectIds
+                                };
                             }
-                        }
-                        
-                        // Prisma 관�??�이??구성
-                        const relationshipConfig: any = {};
-                        
-                        if (connectIds.length > 0) {
-                            if (isUpdate) {
-                                relationshipConfig.connect = connectIds;
-                            } else {
-                                relationshipConfig.connect = connectIds;
-                            }
-                        }
-                        
-                        if (createData.length > 0) {
-                            relationshipConfig.create = createData;
-                        }
-                        
-                        // set ?�업?� ?�데?�트 ?�에�??�용 (기존 관계�? ?�전???��?
-                        if (isUpdate && connectIds.length > 0 && createData.length === 0) {
-                            processedData[relationName] = {
-                                set: connectIds
-                            };
                         } else {
-                            processedData[relationName] = relationshipConfig;
+                            // CREATE 시에는 connect 사용
+                            if (connectIds.length > 0) {
+                                processedData[relationName] = {
+                                    connect: connectIds
+                                };
+                            }
                         }
                     }
                 }
-                // ?�일 객체??경우 - ?��???관�?
+                // 단일 객체인 경우 - 일대일 관계
                 else if (typeof relationshipData.data === 'object') {
                     if (!relationshipData.data.type) {
                         throw new Error(`Invalid relationship data: missing type in ${relationName}`);
                     }
                     
-                    // 기존 리소???�결
-                    if (relationshipData.data.id) {
-                        // 관�?리소?��? ?�제�?존재?�는지 검�?(?�택??
-                        const relatedModel = this.getModelNameFromResourceType(relationshipData.data.type);
-                        if (relatedModel) {
-                            try {
-                                const exists = await client[relatedModel].findUnique({
-                                    where: { id: relationshipData.data.id }
-                                });
-                                if (!exists) {
-                                    throw new Error(`Related resource ${relationshipData.data.type}:${relationshipData.data.id} not found`);
-                                }
-                            } catch (error) {
-                                console.warn(`Could not verify existence of ${relationshipData.data.type}:${relationshipData.data.id}`, error);
-                            }
-                        }
-                        
-                        processedData[relationName] = {
-                            connect: { id: relationshipData.data.id }
-                        };
+                    // JSON:API 표준: id가 반드시 있어야 함
+                    if (!relationshipData.data.id) {
+                        throw new Error(`Invalid relationship data: missing id in ${relationName}. JSON:API requires resource identifier objects to have both type and id.`);
                     }
-                    // ??리소???�성
-                    else if (this.hasAttributes(relationshipData.data)) {
-                        processedData[relationName] = {
-                            create: relationshipData.data.attributes
-                        };
-                    } else {
-                        throw new Error(`Invalid relationship data: item must have either id (for connecting) or attributes (for creating) in ${relationName}`);
-                    }
+                    
+                    // 기존 리소스 연결
+                    processedData[relationName] = {
+                        connect: { id: this.parseRelationshipId(relationshipData.data.id) }
+                    };
                 }
             }
         }
         
         return processedData;
+    }
+
+    /**
+     * 관계 ID 파싱 (문자열 숫자는 숫자로 변환)
+     */
+    private parseRelationshipId(id: any): any {
+        if (typeof id === 'string') {
+            // UUID 형식인지 확인
+            const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+            if (uuidRegex.test(id)) {
+                return id; // UUID는 문자열 그대로
+            }
+            // 숫자 문자열인 경우
+            const numId = parseInt(id, 10);
+            if (!isNaN(numId)) {
+                return numId;
+            }
+        }
+        return id;
+    }
+
+    /**
+     * 관련 레코드들을 soft delete 처리
+     * @param resourceType 요청에서 전달된 리소스 타입 (예: "UserRole", "userRole")
+     */
+    private async softDeleteRelatedRecords(
+        client: any,
+        modelName: string,
+        resourceType: string,
+        parentId: any,
+        parentIdField: string,
+        softDeleteField: string
+    ): Promise<void> {
+        try {
+            // 리소스 타입에서 모델명 추론 (예: UserRole -> UserRole, userRole -> UserRole)
+            const relatedModelName = this.getModelNameFromResourceType(resourceType);
+            if (!relatedModelName || !client[relatedModelName]) {
+                console.warn(`Could not find model for resourceType: ${resourceType} (tried: ${relatedModelName})`);
+                return;
+            }
+
+            // 부모 참조 필드명 추론 (예: User -> userUuid, userId 등)
+            const parentRefField = this.inferParentReferenceField(modelName, parentIdField);
+            
+            // 관련 레코드들을 soft delete
+            await client[relatedModelName].updateMany({
+                where: {
+                    [parentRefField]: parentId,
+                    [softDeleteField]: null // 아직 삭제되지 않은 것만
+                },
+                data: {
+                    [softDeleteField]: new Date()
+                }
+            });
+        } catch (error) {
+            console.warn(`Failed to soft delete related records for ${resourceType}:`, error);
+        }
+    }
+
+    /**
+     * 관계를 soft delete 방식으로 대체 (replace)
+     * 새 목록에 없는 기존 관계만 soft delete
+     * @param resourceType 요청에서 전달된 리소스 타입 (예: "UserRole", "userRole")
+     */
+    private async replaceRelationshipsWithSoftDelete(
+        client: any,
+        modelName: string,
+        resourceType: string,
+        parentId: any,
+        parentIdField: string,
+        newIds: any[],
+        softDeleteField: string
+    ): Promise<void> {
+        try {
+            // 리소스 타입에서 모델명 추론 (예: UserRole -> UserRole, userRole -> UserRole)
+            const relatedModelName = this.getModelNameFromResourceType(resourceType);
+            if (!relatedModelName || !client[relatedModelName]) {
+                console.warn(`Could not find model for resourceType: ${resourceType} (tried: ${relatedModelName})`);
+                return;
+            }
+
+            const parentRefField = this.inferParentReferenceField(modelName, parentIdField);
+            
+            // 새 목록에 없는 기존 관계만 soft delete
+            const whereClause: any = {
+                [parentRefField]: parentId,
+                [softDeleteField]: null
+            };
+            
+            // newIds가 있으면 해당 ID들은 제외
+            if (newIds.length > 0) {
+                whereClause.id = { notIn: newIds };
+            }
+            
+            await client[relatedModelName].updateMany({
+                where: whereClause,
+                data: {
+                    [softDeleteField]: new Date()
+                }
+            });
+
+            // soft delete된 레코드 중 다시 연결해야 할 것들 복원
+            if (newIds.length > 0) {
+                await client[relatedModelName].updateMany({
+                    where: {
+                        [parentRefField]: parentId,
+                        id: { in: newIds },
+                        [softDeleteField]: { not: null }
+                    },
+                    data: {
+                        [softDeleteField]: null
+                    }
+                });
+            }
+        } catch (error) {
+            console.warn(`Failed to replace relationships with soft delete for ${resourceType}:`, error);
+        }
+    }
+
+    /**
+     * 부모 모델의 참조 필드명 추론
+     */
+    private inferParentReferenceField(modelName: string, parentIdField: string): string {
+        // 모델명을 camelCase로 변환 후 ID 필드 추가
+        const camelModelName = modelName.charAt(0).toLowerCase() + modelName.slice(1);
+        
+        // parentIdField가 'uuid'면 'userUuid' 형태, 'id'면 'userId' 형태
+        if (parentIdField === 'uuid') {
+            return `${camelModelName}Uuid`;
+        } else if (parentIdField === 'id') {
+            return `${camelModelName}Id`;
+        }
+        
+        // 기본값: camelCase + 첫글자 대문자 parentIdField
+        return `${camelModelName}${parentIdField.charAt(0).toUpperCase()}${parentIdField.slice(1)}`;
     }
 
     /**
@@ -3823,7 +3977,7 @@ export class ExpressRouter {
                 // attributes?�서 ?�이??추출
                 let data = requestData.attributes || {};
 
-                // 관�??�이??처리 (relationships가 ?�는 경우)
+                // 관계 데이터 처리 (relationships가 있는 경우)
                 if (requestData.relationships) {
                     try {
                         data = await this.processRelationships(
@@ -3831,7 +3985,10 @@ export class ExpressRouter {
                             requestData.relationships, 
                             client, 
                             modelName,
-                            true // ?�데?�트 모드
+                            true, // 업데이트 모드
+                            options, // softDelete 옵션 전달
+                            parsedIdentifier, // 부모 ID
+                            primaryKey // 부모 ID 필드명
                         );
                     } catch (relationshipError: any) {
                         const errorResponse = this.formatJsonApiError(

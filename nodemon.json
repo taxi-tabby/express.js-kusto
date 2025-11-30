@@ -1,6 +1,6 @@
 {
-  "watch": ["src"],
-  "ext": "ts,js,json",
+  "watch": ["src", ".env*"],
+  "ext": "ts,js,json,env",
   "ignore": [
     "src/core/tmp/**/*",
     "src/core/lib/types/**/*",
@@ -8,7 +8,7 @@
     "**/*.spec.ts",
     "**/node_modules/**"
   ],
-  "exec": "npm run generate-injectables && npm run generate-repositories && npm run generate-db-types && ts-node ./src/index.ts",
+  "exec": "npm run generate && ts-node ./src/index.ts",
   "env": {
     "NODE_ENV": "development"
   },

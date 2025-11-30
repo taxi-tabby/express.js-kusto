@@ -417,9 +417,49 @@ function getDatabaseUrl(dbName: string): string | undefined {
 }
 
 /**
+ * Create a temporary prisma.config.ts for a specific database
+ * Prisma 7 requires prisma.config.ts for CLI commands
+ */
+function createTempPrismaConfig(dbName: string, databaseUrl: string): string {
+    const schemaPath = getSchemaPath(dbName).replace(/\\/g, '/');
+    const migrationsPath = getMigrationsPath(dbName).replace(/\\/g, '/');
+    
+    const configContent = `
+import { defineConfig } from 'prisma/config'
+
+export default defineConfig({
+  schema: '${schemaPath}',
+  migrations: {
+    path: '${migrationsPath}',
+  },
+  datasource: {
+    url: '${databaseUrl}',
+  },
+})
+`;
+    
+    const tempConfigPath = path.join(process.cwd(), `prisma.config.${dbName}.ts`);
+    fs.writeFileSync(tempConfigPath, configContent, 'utf-8');
+    return tempConfigPath;
+}
+
+/**
+ * Remove temporary prisma config file
+ */
+function removeTempPrismaConfig(configPath: string): void {
+    try {
+        if (fs.existsSync(configPath)) {
+            fs.unlinkSync(configPath);
+        }
+    } catch (error) {
+        console.warn(`⚠️ Failed to remove temp config: ${configPath}`);
+    }
+}
+
+/**
  * Execute a Prisma command for a specific database
  * Supports both non-interactive (exec) and interactive (spawn) modes
- * Prisma 7: Automatically adds --url option since schema.prisma no longer contains url
+ * Prisma 7: Uses temporary prisma.config.ts for each database
  */
 async function executePrismaCommand(dbName: string, command: string): Promise<void> {
     const schemaPath = getSchemaPath(dbName);
@@ -435,52 +475,65 @@ async function executePrismaCommand(dbName: string, command: string): Promise<vo
         throw new Error(`Database URL not found. Please set ${envVarName} environment variable.`);
     }
 
-    // Commands that need --url option (migrate, db push/pull, etc.)
-    // Generate command doesn't need --url
-    const needsUrl = !command.startsWith('generate') && !command.startsWith('studio') && !command.startsWith('format');
-    const urlOption = needsUrl ? ` --url "${databaseUrl}"` : '';
+    // Commands that need prisma.config.ts (migrate, db push/pull, etc.)
+    // Generate command doesn't need config
+    const needsConfig = !command.startsWith('generate') && !command.startsWith('format') && !command.startsWith('validate');
+    
+    let tempConfigPath: string | null = null;
+    let configOption = '';
+    
+    if (needsConfig) {
+        tempConfigPath = createTempPrismaConfig(dbName, databaseUrl);
+        configOption = ` --config "${tempConfigPath}"`;
+    }
 
-    const fullCommand = `npx prisma ${command} --schema ${schemaPath}${urlOption}`;
-    console.log(`Executing: npx prisma ${command} --schema ${schemaPath}${needsUrl ? ' --url <hidden>' : ''}`);
+    const fullCommand = `npx prisma ${command} --schema ${schemaPath}${configOption}`;
+    console.log(`Executing: npx prisma ${command} --schema ${schemaPath}${needsConfig ? ' --config <temp>' : ''}`);
 
     // Commands that require interactive mode (user input)
     const interactiveCommands = ['migrate dev', 'migrate reset', 'studio'];
     const needsInteractive = interactiveCommands.some(cmd => command.includes(cmd.split(' ')[1]));
 
-    if (needsInteractive) {
-        // Use spawn for interactive commands
-        return new Promise((resolve, reject) => {
-            const args = ['prisma', ...command.split(' '), '--schema', schemaPath];
-            // Add --url for interactive commands that need it
-            if (needsUrl) {
-                args.push('--url', databaseUrl);
-            }
-            const child = spawn('npx', args, {
-                stdio: 'inherit', // This allows user interaction
-                shell: true
-            });
-
-            child.on('close', (code) => {
-                if (code === 0) {
-                    console.log(`[${dbName}] Command completed successfully`);
-                    resolve();
-                } else {
-                    reject(new Error(`[${dbName}] Command failed with exit code ${code}`));
+    try {
+        if (needsInteractive) {
+            // Use spawn for interactive commands
+            await new Promise<void>((resolve, reject) => {
+                const args = ['prisma', ...command.split(' '), '--schema', schemaPath];
+                if (tempConfigPath) {
+                    args.push('--config', tempConfigPath);
                 }
-            });
+                const child = spawn('npx', args, {
+                    stdio: 'inherit', // This allows user interaction
+                    shell: true
+                });
 
-            child.on('error', (error) => {
-                reject(new Error(`[${dbName}] Failed to execute command: ${error.message}`));
+                child.on('close', (code) => {
+                    if (code === 0) {
+                        console.log(`[${dbName}] Command completed successfully`);
+                        resolve();
+                    } else {
+                        reject(new Error(`[${dbName}] Command failed with exit code ${code}`));
+                    }
+                });
+
+                child.on('error', (error) => {
+                    reject(new Error(`[${dbName}] Failed to execute command: ${error.message}`));
+                });
             });
-        });
-    } else {
-        // Use exec for non-interactive commands
-        try {
-            const { stdout, stderr } = await execPromise(fullCommand);
-            console.log(`[${dbName}] ${stdout}`);
-            if (stderr) console.error(`[${dbName}] Error: ${stderr}`);
-        } catch (error: any) {
-            console.error(`[${dbName}] Failed to execute command: ${error?.message || String(error)}`);
+        } else {
+            // Use exec for non-interactive commands
+            try {
+                const { stdout, stderr } = await execPromise(fullCommand);
+                console.log(`[${dbName}] ${stdout}`);
+                if (stderr) console.error(`[${dbName}] Error: ${stderr}`);
+            } catch (error: any) {
+                console.error(`[${dbName}] Failed to execute command: ${error?.message || String(error)}`);
+            }
+        }
+    } finally {
+        // Clean up temp config file
+        if (tempConfigPath) {
+            removeTempPrismaConfig(tempConfigPath);
         }
     }
 }
@@ -1106,17 +1159,22 @@ program
 
             if (options.command) {
                 // For stdin commands, we need to pipe the command
-                // Prisma 7: Add --url option for database connection
+                // Prisma 7: Create temp config for database connection
                 const databaseUrl = getDatabaseUrl(options.db);
                 if (!databaseUrl) {
                     const envVarName = getDatabaseEnvVarName(options.db);
                     throw new Error(`Database URL not found. Please set ${envVarName} environment variable.`);
                 }
-                const fullCommand = `echo "${options.command}" | npx prisma ${executeCommand} --schema ${getSchemaPath(options.db)} --url "${databaseUrl}"`;
-                console.log(`Executing: echo "${options.command}" | npx prisma ${executeCommand} --schema ${getSchemaPath(options.db)} --url <hidden>`);
-                const { stdout, stderr } = await execPromise(fullCommand);
-                console.log(`[${options.db}] ${stdout}`);
-                if (stderr) console.error(`[${options.db}] Error: ${stderr}`);
+                const tempConfigPath = createTempPrismaConfig(options.db, databaseUrl);
+                try {
+                    const fullCommand = `echo "${options.command}" | npx prisma ${executeCommand} --schema ${getSchemaPath(options.db)} --config "${tempConfigPath}"`;
+                    console.log(`Executing: echo "${options.command}" | npx prisma ${executeCommand} --schema ... --config <temp>`);
+                    const { stdout, stderr } = await execPromise(fullCommand);
+                    console.log(`[${options.db}] ${stdout}`);
+                    if (stderr) console.error(`[${options.db}] Error: ${stderr}`);
+                } finally {
+                    removeTempPrismaConfig(tempConfigPath);
+                }
             } else {
                 await executePrismaCommand(options.db, executeCommand);
             }

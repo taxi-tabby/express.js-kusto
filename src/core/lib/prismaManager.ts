@@ -428,7 +428,8 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 			const hasGenerator = /generator\s+\w+\s*{[\s\S]*?provider\s*=\s*["']prisma-client-js["'][\s\S]*?}/m.test(schemaContent);
 
 			// Check for datasource block (any name, not just "db")
-			const hasDatasource = /datasource\s+\w+\s*{[\s\S]*?provider\s*=[\s\S]*?url\s*=[\s\S]*?}/m.test(schemaContent);
+			// Prisma 7: url is optional in schema (moved to prisma.config.ts)
+			const hasDatasource = /datasource\s+\w+\s*{[\s\S]*?provider\s*=/m.test(schemaContent);
 
 			if (!hasGenerator || !hasDatasource) {
 				return false;
@@ -453,20 +454,31 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 
 	/**
 	 * Get database URL by parsing schema.prisma file to extract environment variable
+	 * Supports both Prisma 6 (url in schema) and Prisma 7 (url in prisma.config.ts) formats
 	 */
 	private getDatabaseUrl(folderName: string): string {
 		try {
 			const schemaPath = path.join(process.cwd(), 'src', 'app', 'db', folderName, 'schema.prisma');
 			const schemaContent = fs.readFileSync(schemaPath, 'utf-8');
 
-			// Parse the schema to extract the env variable name
+			// Parse the schema to extract the env variable name (Prisma 6 format)
 			const urlMatch = schemaContent.match(/url\s*=\s*env\("([^"]+)"\)/);
 
-			if (!urlMatch || !urlMatch[1]) {
-				throw new Error(`Could not parse database URL from schema for ${folderName}`);
+			let envVarName: string;
+			if (urlMatch && urlMatch[1]) {
+				// Prisma 6 format: url = env("RDS_URL")
+				envVarName = urlMatch[1];
+			} else {
+				// Prisma 7 format: url is in prisma.config.ts
+				// Use folder name convention to determine env variable
+				if (folderName === 'default') {
+					envVarName = 'RDS_URL';
+				} else {
+					// Convert folder name to env variable: myDatabase -> MY_DATABASE_URL
+					envVarName = folderName.replace(/([a-z])([A-Z])/g, '$1_$2').toUpperCase() + '_URL';
+				}
 			}
 
-			const envVarName = urlMatch[1];
 			let url = process.env[envVarName];
 			
 

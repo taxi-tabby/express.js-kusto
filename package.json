@@ -27,6 +27,7 @@
   "author": "rkdmf0000@gmail.com",
   "license": "ISC",
   "dependencies": {
+    "@prisma/adapter-pg": "^7.0.1",
     "@prisma/client": "^7.0.1",
     "@types/archiver": "^6.0.3",
     "@types/bcrypt": "^5.0.2",

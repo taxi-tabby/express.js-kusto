@@ -5,6 +5,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { config } from 'dotenv';
+import { PrismaPg } from '@prisma/adapter-pg';
 import {
 	DatabaseClientMap,
 	DatabaseClientType,
@@ -333,17 +334,11 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 				throw urlError;
 			}
 
-			// Get datasource name
-			const datasourceName = this.getDatasourceName(folderName);
-
-			// Create Prisma client instance with database URL and connection pool settings
+			// Create Prisma client instance with driver adapter
+			// Prisma 7: Use @prisma/adapter-pg for PostgreSQL connections
+			const adapter = new PrismaPg({ connectionString: connectionUrl });
 			const prismaClient = new DatabasePrismaClient({
-				datasources: {
-					[datasourceName]: {
-						url: connectionUrl
-					}
-				},
-				// 올바른 연결 풀 설정
+				adapter,
 				log: process.env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error'],
 				errorFormat: 'minimal'
 			});
@@ -466,17 +461,13 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 
 			let envVarName: string;
 			if (urlMatch && urlMatch[1]) {
-				// Prisma 6 format: url = env("RDS_URL")
+				// Prisma 6 format: url = env("DEFAULT_URL")
 				envVarName = urlMatch[1];
 			} else {
-				// Prisma 7 format: url is in prisma.config.ts
+				// Prisma 7 format: url is provided via CLI --url option
 				// Use folder name convention to determine env variable
-				if (folderName === 'default') {
-					envVarName = 'RDS_URL';
-				} else {
-					// Convert folder name to env variable: myDatabase -> MY_DATABASE_URL
-					envVarName = folderName.replace(/([a-z])([A-Z])/g, '$1_$2').toUpperCase() + '_URL';
-				}
+				// Convert folder name to env variable: default -> DEFAULT__KUSTO_RDB_URL, myDatabase -> MY_DATABASE__KUSTO_RDB_URL
+				envVarName = folderName.replace(/([a-z])([A-Z])/g, '$1_$2').toUpperCase() + '__KUSTO_RDB_URL';
 			}
 
 			let url = process.env[envVarName];

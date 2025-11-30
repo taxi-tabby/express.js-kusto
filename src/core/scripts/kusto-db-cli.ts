@@ -399,8 +399,27 @@ function extractIndexName(createIndexSQL: string): string | null {
 }
 
 /**
+ * Get database URL environment variable name for a database
+ * Follows the same convention as PrismaManager.getDatabaseUrl()
+ * Convention: folderName -> FOLDER_NAME__KUSTO_RDB_URL (e.g., default -> DEFAULT__KUSTO_RDB_URL, myDatabase -> MY_DATABASE__KUSTO_RDB_URL)
+ */
+function getDatabaseEnvVarName(dbName: string): string {
+    // Convert folder name to env variable: default -> DEFAULT__KUSTO_RDB_URL, myDatabase -> MY_DATABASE__KUSTO_RDB_URL
+    return dbName.replace(/([a-z])([A-Z])/g, '$1_$2').toUpperCase() + '__KUSTO_RDB_URL';
+}
+
+/**
+ * Get database URL from environment variable
+ */
+function getDatabaseUrl(dbName: string): string | undefined {
+    const envVarName = getDatabaseEnvVarName(dbName);
+    return process.env[envVarName];
+}
+
+/**
  * Execute a Prisma command for a specific database
  * Supports both non-interactive (exec) and interactive (spawn) modes
+ * Prisma 7: Automatically adds --url option since schema.prisma no longer contains url
  */
 async function executePrismaCommand(dbName: string, command: string): Promise<void> {
     const schemaPath = getSchemaPath(dbName);
@@ -409,8 +428,20 @@ async function executePrismaCommand(dbName: string, command: string): Promise<vo
         throw new Error(`Schema file not found: ${schemaPath}`);
     }
 
-    const fullCommand = `npx prisma ${command} --schema ${schemaPath}`;
-    console.log(`Executing: ${fullCommand}`);
+    // Get database URL from environment (Prisma 7 compatibility)
+    const databaseUrl = getDatabaseUrl(dbName);
+    if (!databaseUrl) {
+        const envVarName = getDatabaseEnvVarName(dbName);
+        throw new Error(`Database URL not found. Please set ${envVarName} environment variable.`);
+    }
+
+    // Commands that need --url option (migrate, db push/pull, etc.)
+    // Generate command doesn't need --url
+    const needsUrl = !command.startsWith('generate') && !command.startsWith('studio') && !command.startsWith('format');
+    const urlOption = needsUrl ? ` --url "${databaseUrl}"` : '';
+
+    const fullCommand = `npx prisma ${command} --schema ${schemaPath}${urlOption}`;
+    console.log(`Executing: npx prisma ${command} --schema ${schemaPath}${needsUrl ? ' --url <hidden>' : ''}`);
 
     // Commands that require interactive mode (user input)
     const interactiveCommands = ['migrate dev', 'migrate reset', 'studio'];
@@ -420,6 +451,10 @@ async function executePrismaCommand(dbName: string, command: string): Promise<vo
         // Use spawn for interactive commands
         return new Promise((resolve, reject) => {
             const args = ['prisma', ...command.split(' '), '--schema', schemaPath];
+            // Add --url for interactive commands that need it
+            if (needsUrl) {
+                args.push('--url', databaseUrl);
+            }
             const child = spawn('npx', args, {
                 stdio: 'inherit', // This allows user interaction
                 shell: true
@@ -1071,8 +1106,14 @@ program
 
             if (options.command) {
                 // For stdin commands, we need to pipe the command
-                const fullCommand = `echo "${options.command}" | npx prisma ${executeCommand} --schema ${getSchemaPath(options.db)}`;
-                console.log(`Executing: ${fullCommand}`);
+                // Prisma 7: Add --url option for database connection
+                const databaseUrl = getDatabaseUrl(options.db);
+                if (!databaseUrl) {
+                    const envVarName = getDatabaseEnvVarName(options.db);
+                    throw new Error(`Database URL not found. Please set ${envVarName} environment variable.`);
+                }
+                const fullCommand = `echo "${options.command}" | npx prisma ${executeCommand} --schema ${getSchemaPath(options.db)} --url "${databaseUrl}"`;
+                console.log(`Executing: echo "${options.command}" | npx prisma ${executeCommand} --schema ${getSchemaPath(options.db)} --url <hidden>`);
                 const { stdout, stderr } = await execPromise(fullCommand);
                 console.log(`[${options.db}] ${stdout}`);
                 if (stderr) console.error(`[${options.db}] Error: ${stderr}`);

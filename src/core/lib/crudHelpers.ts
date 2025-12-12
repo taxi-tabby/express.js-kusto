@@ -2028,6 +2028,7 @@ export class JsonApiTransformer {
   
   /**
    * 원시 데이터를 JSON:API 리소스 객체로 변환
+   * @param jsonFields - Json 타입 필드 이름 목록 (관계 데이터로 간주하지 않음)
    */
   static transformToResource(
     item: any, 
@@ -2036,7 +2037,8 @@ export class JsonApiTransformer {
     fields?: string[],
     baseUrl?: string,
     id?: string,
-    includeMerge: boolean = false
+    includeMerge: boolean = false,
+    jsonFields?: Set<string>
   ): JsonApiResource {
     const resourceId = id || item[primaryKey] || item.id || item.uuid || item._id;
     
@@ -2055,7 +2057,8 @@ export class JsonApiTransformer {
       item, 
       primaryKey, 
       fields,
-      includeMerge
+      includeMerge,
+      jsonFields
     );
 
     // attributes가 있는 경우에만 추가
@@ -2080,6 +2083,7 @@ export class JsonApiTransformer {
 
   /**
    * 여러 리소스를 JSON:API 컬렉션으로 변환
+   * @param jsonFields - Json 타입 필드 이름 목록 (관계 데이터로 간주하지 않음)
    */
   static transformToCollection(
     items: any[], 
@@ -2087,10 +2091,11 @@ export class JsonApiTransformer {
     primaryKey: string = 'id',
     fields?: string[],
     baseUrl?: string,
-    includeMerge: boolean = false
+    includeMerge: boolean = false,
+    jsonFields?: Set<string>
   ): JsonApiResource[] {
     return items.map(item => 
-      this.transformToResource(item, resourceType, primaryKey, fields, baseUrl, undefined, includeMerge)
+      this.transformToResource(item, resourceType, primaryKey, fields, baseUrl, undefined, includeMerge, jsonFields)
     );
   }
 
@@ -2126,12 +2131,14 @@ export class JsonApiTransformer {
 
   /**
    * attributes와 relationships 분리
+   * @param jsonFields - Json 타입 필드 이름 목록 (관계 데이터로 간주하지 않음)
    */
   private static separateAttributesAndRelationships(
     item: any, 
     primaryKey: string, 
     fields?: string[],
-    includeMerge: boolean = false
+    includeMerge: boolean = false,
+    jsonFields?: Set<string>
   ): { attributes: Record<string, any>, relationships: Record<string, JsonApiRelationship> } {
     const attributes: Record<string, any> = {};
     const relationships: Record<string, JsonApiRelationship> = {};
@@ -2151,6 +2158,12 @@ export class JsonApiTransformer {
       // Sparse Fieldsets 적용 (fields가 지정된 경우)
       if (fields && !fields.includes(key)) {
         return; // 지정된 필드가 아니면 스킵
+      }
+
+      // Json 타입 필드는 관계 데이터가 아님
+      if (jsonFields && jsonFields.has(key)) {
+        attributes[key] = value;
+        return;
       }
       
       // 관계 데이터인지 확인
@@ -2400,6 +2413,7 @@ export class JsonApiTransformer {
       included?: JsonApiResource[];
       query?: any; // 요청 쿼리 정보 추가
       includeMerge?: boolean; // includeMerge 옵션 추가
+      jsonFields?: Set<string>; // Json 타입 필드 목록
     } = {}
   ): JsonApiResponse {
     const {
@@ -2410,7 +2424,8 @@ export class JsonApiTransformer {
       meta,
       included,
       query,
-      includeMerge = false // 기본값: false (표준 JSON:API 방식)
+      includeMerge = false, // 기본값: false (표준 JSON:API 방식)
+      jsonFields
     } = options;
 
     // 현재 리소스 타입의 필드 제한
@@ -2427,7 +2442,8 @@ export class JsonApiTransformer {
         primaryKey, 
         resourceFields, 
         baseUrl,
-        includeMerge
+        includeMerge,
+        jsonFields
       );
     } else {
       jsonApiData = this.transformToResource(
@@ -2437,7 +2453,8 @@ export class JsonApiTransformer {
         resourceFields, 
         baseUrl,
         undefined, // id 파라미터
-        includeMerge
+        includeMerge,
+        jsonFields
       );
     }
 

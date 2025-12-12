@@ -391,6 +391,18 @@ export class PrismaSchemaAnalyzer {
   }
 
   /**
+   * 모델의 Json 타입 필드 이름들을 반환합니다
+   */
+  public getJsonFields(modelName: string): string[] {
+    const model = this.getModel(modelName);
+    if (!model) return [];
+
+    return model.fields
+      .filter(field => field.type === 'Json')
+      .map(field => field.name);
+  }
+
+  /**
    * TypeORM 호환 형식으로 모든 스키마 정보를 반환합니다
    */
   public getTypeOrmCompatibleSchema(): any {

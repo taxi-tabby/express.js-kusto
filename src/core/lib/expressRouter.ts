@@ -2735,6 +2735,10 @@ export class ExpressRouter {
                     };
                 }
 
+                // Json 타입 필드 목록 가져오기
+                const jsonFieldsArray = this.schemaAnalyzer?.getJsonFields(modelName) || [];
+                const jsonFields = new Set(jsonFieldsArray);
+
                 // JSON:API ?�답 ?�성
                 const response: JsonApiResponse = JsonApiTransformer.createJsonApiResponse(
                     items,
@@ -2746,7 +2750,8 @@ export class ExpressRouter {
                         links,
                         meta,
                         included,
-                        includeMerge: options?.includeMerge || false
+                        includeMerge: options?.includeMerge || false,
+                        jsonFields
                     }
                 );
                 
@@ -2945,6 +2950,10 @@ export class ExpressRouter {
                     );
                 }
 
+                // Json 타입 필드 목록 가져오기
+                const jsonFieldsArray = this.schemaAnalyzer?.getJsonFields(modelName) || [];
+                const jsonFields = new Set(jsonFieldsArray);
+
                 // JSON:API ?�답 ?�성
                 const response: JsonApiResponse = JsonApiTransformer.createJsonApiResponse(
                     item,
@@ -2954,7 +2963,8 @@ export class ExpressRouter {
                         fields: queryParams.fields,
                         baseUrl,
                         included,
-                        includeMerge: options?.includeMerge || false
+                        includeMerge: options?.includeMerge || false,
+                        jsonFields
                     }
                 );
                 
@@ -3132,6 +3142,10 @@ export class ExpressRouter {
                 // Base URL ?�성
                 const baseUrl = `${req.protocol}://${req.get('host')}${req.baseUrl}`;
 
+                // Json 타입 필드 목록 가져오기
+                const jsonFieldsArray = this.schemaAnalyzer?.getJsonFields(modelName) || [];
+                const jsonFields = new Set(jsonFieldsArray);
+
                 // JSON:API ?�답 ?�성
                 const response: JsonApiResponse = JsonApiTransformer.createJsonApiResponse(
                     result,
@@ -3139,7 +3153,8 @@ export class ExpressRouter {
                     {
                         primaryKey,
                         baseUrl,
-                        includeMerge: options?.includeMerge || false
+                        includeMerge: options?.includeMerge || false,
+                        jsonFields
                     }
                 );
                 
@@ -4024,6 +4039,10 @@ export class ExpressRouter {
                 // Base URL ?�성
                 const baseUrl = `${req.protocol}://${req.get('host')}${req.baseUrl}`;
 
+                // Json 타입 필드 목록 가져오기
+                const jsonFieldsArray = this.schemaAnalyzer?.getJsonFields(modelName) || [];
+                const jsonFields = new Set(jsonFieldsArray);
+
                 // JSON:API ?�답 ?�성
                 const response: JsonApiResponse = JsonApiTransformer.createJsonApiResponse(
                     result,
@@ -4031,7 +4050,8 @@ export class ExpressRouter {
                     {
                         primaryKey,
                         baseUrl,
-                        includeMerge: options?.includeMerge || false
+                        includeMerge: options?.includeMerge || false,
+                        jsonFields
                     }
                 );
                 
@@ -4894,6 +4914,10 @@ export class ExpressRouter {
                     isArray
                 );
 
+                // Json 타입 필드 목록 가져오기 (관계 리소스 타입 기준)
+                const jsonFieldsArray = this.schemaAnalyzer?.getJsonFields(relationResourceType) || [];
+                const jsonFields = new Set(jsonFieldsArray);
+
                 // JSON:API ?�답 ?�성
                 const response: JsonApiResponse = JsonApiTransformer.createJsonApiResponse(
                     relationData,
@@ -4905,7 +4929,8 @@ export class ExpressRouter {
                         links: {
                             self: `${baseUrl}/${modelName.toLowerCase()}/${parsedIdentifier}/${relationName}`,
                             related: `${baseUrl}/${modelName.toLowerCase()}/${parsedIdentifier}/relationships/${relationName}`
-                        }
+                        },
+                        jsonFields
                     }
                 );
 
@@ -5237,6 +5262,10 @@ export class ExpressRouter {
                     isArrayRelation
                 );
 
+                // Json 타입 필드 목록 가져오기 (관계 리소스 타입 기준)
+                const jsonFieldsArray = this.schemaAnalyzer?.getJsonFields(resourceType) || [];
+                const jsonFields = new Set(jsonFieldsArray);
+
                 // JSON:API ?�답 ?�성
                 const response: JsonApiResponse = JsonApiTransformer.createJsonApiResponse(
                     relationData,
@@ -5244,7 +5273,8 @@ export class ExpressRouter {
                     {
                         primaryKey: 'id', // 관??리소?�는 기본?�으�?id ?�용
                         fields: queryParams.fields,
-                        baseUrl
+                        baseUrl,
+                        jsonFields
                     }
                 );
 

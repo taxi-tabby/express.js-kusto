@@ -681,6 +681,7 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 	/**
 	 * Recreate a client for a specific database
 	 * Prisma 7: PrismaPg adapter를 사용하여 연결 재생성
+	 * 서버리스 DB 슬립 복구를 위해 충분한 재시도 시간 확보
 	 */
 	private async recreateClient(databaseName: string): Promise<void> {
 		const config = this.configs.get(databaseName);
@@ -706,21 +707,24 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 			errorFormat: 'minimal'
 		});
 
-		// Test the connection with retry
+		// Test the connection with retry (서버리스 DB 복구 대기)
 		let connectionAttempts = 0;
-		const maxAttempts = 3;
+		const maxAttempts = 5;
+		const baseDelay = 2000; // 2초부터 시작
 		
 		while (connectionAttempts < maxAttempts) {
 			try {
 				await prismaClient.$connect();
 				break; // Connection successful
-			} catch (connectError) {
+			} catch (connectError: any) {
 				connectionAttempts++;
 				if (connectionAttempts >= maxAttempts) {
 					throw connectError;
 				}
-				// 서버리스 DB가 깨어날 시간을 위해 대기
-				await new Promise(resolve => setTimeout(resolve, 1000));
+				// 지수 백오프: 서버리스 DB가 깨어날 시간을 위해 대기
+				const delay = Math.min(baseDelay * Math.pow(1.5, connectionAttempts - 1), 8000);
+				console.log(`⏳ DB 연결 대기 중 (${connectError.message?.substring(0, 40)}...), ${delay/1000}초 후 재시도... (${connectionAttempts}/${maxAttempts})`);
+				await new Promise(resolve => setTimeout(resolve, delay));
 			}
 		}
 
@@ -839,30 +843,126 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 	}
 
 	/**
+	 * Prisma 에러 코드 (공식 문서 기반)
+	 * @see https://www.prisma.io/docs/reference/api-reference/error-reference
+	 */
+	private static readonly PRISMA_CONNECTION_ERROR_CODES = new Set([
+		// Common errors (P1xxx) - 연결 관련
+		'P1001', // Can't reach database server
+		'P1002', // Database server was reached but timed out
+		'P1003', // Database does not exist
+		'P1008', // Operations timed out
+		'P1009', // Database already exists
+		'P1010', // User was denied access
+		'P1011', // Error opening a TLS connection
+		'P1012', // Schema validation error (잘못된 연결 문자열 포함)
+		'P1013', // Invalid database string
+		'P1014', // Underlying model does not exist
+		'P1015', // Schema using features not supported
+		'P1016', // Raw query parameter count mismatch
+		'P1017', // Server has closed the connection
+		
+		// Query engine errors (P2xxx) - 연결 풀/타임아웃 관련
+		'P2024', // Timed out fetching a new connection from pool
+		'P2025', // Record not found (데이터 문제지만 연결 문제로 발생 가능)
+	]);
+
+	/**
+	 * PostgreSQL 에러 코드 (공식 문서 기반)
+	 * @see https://www.postgresql.org/docs/current/errcodes-appendix.html
+	 */
+	private static readonly POSTGRES_CONNECTION_ERROR_CODES = new Set([
+		// Class 08 — Connection Exception
+		'08000', // connection_exception
+		'08003', // connection_does_not_exist
+		'08006', // connection_failure
+		'08001', // sqlclient_unable_to_establish_sqlconnection
+		'08004', // sqlserver_rejected_establishment_of_sqlconnection
+		'08007', // transaction_resolution_unknown
+		'08P01', // protocol_violation
+		
+		// Class 53 — Insufficient Resources
+		'53000', // insufficient_resources
+		'53100', // disk_full
+		'53200', // out_of_memory
+		'53300', // too_many_connections
+		
+		// Class 57 — Operator Intervention
+		'57000', // operator_intervention
+		'57014', // query_canceled
+		'57P01', // admin_shutdown
+		'57P02', // crash_shutdown
+		'57P03', // cannot_connect_now (DB starting up)
+		'57P04', // database_dropped
+		
+		// Class 58 — System Error
+		'58000', // system_error
+		'58030', // io_error
+		
+		// Class XX — Internal Error
+		'XX000', // internal_error
+		'XX001', // data_corrupted
+		'XX002', // index_corrupted
+	]);
+
+	/**
+	 * Node.js 시스템 에러 코드
+	 */
+	private static readonly NODEJS_CONNECTION_ERROR_CODES = new Set([
+		'ECONNREFUSED',   // 연결 거부됨
+		'ECONNRESET',     // 연결이 리셋됨
+		'ENOTFOUND',      // DNS 조회 실패
+		'ETIMEDOUT',      // 연결 타임아웃
+		'ECONNABORTED',   // 연결이 중단됨
+		'EHOSTUNREACH',   // 호스트에 도달할 수 없음
+		'ENETUNREACH',    // 네트워크에 도달할 수 없음
+		'EPIPE',          // 파이프가 끊어짐
+		'EAI_AGAIN',      // DNS 일시적 실패
+	]);
+
+	/**
 	 * 연결 오류인지 판단 (서버리스 슬립 복구용)
+	 * 공식 에러 코드 기반으로 정확하게 판단
 	 */
 	private isConnectionError(error: any): boolean {
 		if (!error) return false;
-		
-		const errorMessage = error.message?.toLowerCase() || '';
-		const errorCode = error.code || '';
-		
-		return (
-			errorMessage.includes('connection') ||
-			errorMessage.includes('timeout') ||
-			errorMessage.includes('econnrefused') ||
-			errorMessage.includes('enotfound') ||
-			errorMessage.includes('server closed the connection') ||
-			errorMessage.includes('server has closed the connection') ||
-			errorCode === 'P1001' || // Connection error
-			errorCode === 'P1008' || // Operation timeout
-			errorCode === 'P1017'    // Server has closed the connection
-		);
+
+		// 1. Prisma 에러 코드 체크
+		const prismaCode = error.code;
+		if (prismaCode && PrismaManager.PRISMA_CONNECTION_ERROR_CODES.has(prismaCode)) {
+			return true;
+		}
+
+		// 2. PostgreSQL 에러 코드 체크 (Prisma가 내부적으로 전달하는 경우)
+		const pgCode = error.meta?.code || error.errorCode;
+		if (pgCode && PrismaManager.POSTGRES_CONNECTION_ERROR_CODES.has(pgCode)) {
+			return true;
+		}
+
+		// 3. Node.js 시스템 에러 코드 체크
+		const nodeCode = error.code || error.cause?.code;
+		if (nodeCode && PrismaManager.NODEJS_CONNECTION_ERROR_CODES.has(nodeCode)) {
+			return true;
+		}
+
+		// 4. PrismaClientKnownRequestError / PrismaClientInitializationError 체크
+		const errorName = error.constructor?.name || error.name;
+		if (errorName === 'PrismaClientInitializationError') {
+			return true; // 초기화 에러는 항상 연결 문제
+		}
+
+		// 5. 중첩된 cause 체크 (에러 체이닝)
+		if (error.cause && this.isConnectionError(error.cause)) {
+			return true;
+		}
+
+		return false;
 	}
 
 	/**
 	 * Get a wrapped client with automatic reconnection on connection errors
 	 * 성능 최적화: 정상 동작 시 오버헤드 없음, 연결 오류 시에만 재연결 시도
+	 * 서버리스 DB 슬립 복구를 위해 충분한 재시도 시간 확보
 	 * Synchronous version for use in repositories
 	 */
 	public getWrap(databaseName: string): any {
@@ -902,7 +1002,9 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 							
 							// Prisma 쿼리 메서드를 래핑 (findFirst, findMany, create, update 등)
 							return async function(...args: any[]) {
-								const maxRetries = 2;
+								// 서버리스 DB 슬립 복구를 위해 충분한 재시도 (최대 ~30초)
+								const maxRetries = 5;
+								const baseDelay = 2000; // 2초부터 시작
 								let lastError: Error | null = null;
 								
 								for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -916,16 +1018,21 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 										
 										// 연결 오류이고 재시도 가능하면 재연결 시도
 										if (manager.isConnectionError(error) && attempt < maxRetries) {
-											console.log(`🔄 DB 연결 끊김 감지, 재연결 시도 중... (${attempt + 1}/${maxRetries})`);
+											// 지수 백오프: 2초, 3초, 4.5초, 6.75초, 10초... (서버리스 DB 복구 대기)
+											const delay = Math.min(baseDelay * Math.pow(1.5, attempt), 10000);
+											console.log(`🔄 DB 연결 오류 감지 (${error.message?.substring(0, 50)}...), ${delay/1000}초 후 재시도... (${attempt + 1}/${maxRetries})`);
+											
+											// 먼저 대기 (DB가 깨어날 시간 확보)
+											await new Promise(resolve => setTimeout(resolve, delay));
 											
 											try {
 												await manager.reconnectDatabase(databaseName);
-												// 재연결 후 약간의 대기
-												await new Promise(resolve => setTimeout(resolve, 300));
 												continue;
 											} catch (reconnectError) {
-												console.error(`❌ 재연결 실패:`, reconnectError);
+												// 재연결 실패해도 다음 시도에서 다시 시도
+												console.log(`⏳ 재연결 대기 중... (${attempt + 1}/${maxRetries})`);
 											}
+											continue;
 										}
 										
 										// 연결 오류가 아니거나 재시도 횟수 초과

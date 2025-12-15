@@ -38,14 +38,6 @@ export default [
 
     /**
      * 클라이언트 IP 주소 오버라이드 미들웨어
-     * trust proxy 설정과 관계없이 프록시 헤더에서 실제 클라이언트 IP를 추출
-     * 
-     * 우선순위:
-     * 1. CF-Connecting-IP (Cloudflare)
-     * 2. True-Client-IP (Cloudflare Enterprise, Akamai)
-     * 3. X-Real-IP (Nginx)
-     * 4. X-Forwarded-For (일반 프록시/로드밸런서)
-     * 5. 기본 소켓 정보
      */
     clientIpMiddleware,
 

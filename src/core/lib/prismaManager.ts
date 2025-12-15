@@ -855,7 +855,7 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 		'P1009', // Database already exists
 		'P1010', // User was denied access
 		'P1011', // Error opening a TLS connection
-		'P1012', // Schema validation error (잘못된 연결 문자열 포함)
+		'P1012', // Schema validation error
 		'P1013', // Invalid database string
 		'P1014', // Underlying model does not exist
 		'P1015', // Schema using features not supported
@@ -864,7 +864,6 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 		
 		// Query engine errors (P2xxx) - 연결 풀/타임아웃 관련
 		'P2024', // Timed out fetching a new connection from pool
-		'P2025', // Record not found (데이터 문제지만 연결 문제로 발생 가능)
 	]);
 
 	/**
@@ -906,54 +905,98 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 	]);
 
 	/**
-	 * Node.js 시스템 에러 코드
+	 * Node.js 시스템 에러 코드 (공식 문서 기반)
+	 * @see https://nodejs.org/api/errors.html#common-system-errors
 	 */
 	private static readonly NODEJS_CONNECTION_ERROR_CODES = new Set([
-		'ECONNREFUSED',   // 연결 거부됨
-		'ECONNRESET',     // 연결이 리셋됨
-		'ENOTFOUND',      // DNS 조회 실패
-		'ETIMEDOUT',      // 연결 타임아웃
-		'ECONNABORTED',   // 연결이 중단됨
-		'EHOSTUNREACH',   // 호스트에 도달할 수 없음
-		'ENETUNREACH',    // 네트워크에 도달할 수 없음
-		'EPIPE',          // 파이프가 끊어짐
-		'EAI_AGAIN',      // DNS 일시적 실패
+		'ECONNREFUSED',   // Connection refused
+		'ECONNRESET',     // Connection reset by peer
+		'ENOTFOUND',      // DNS lookup failed
+		'ETIMEDOUT',      // Connection timed out
+		'ECONNABORTED',   // Connection aborted
+		'EHOSTUNREACH',   // Host is unreachable
+		'ENETUNREACH',    // Network is unreachable
+		'EPIPE',          // Broken pipe
+		'EAI_AGAIN',      // DNS temporary failure
+		'ENETDOWN',       // Network is down
+		'EHOSTDOWN',      // Host is down
+		'EPROTO',         // Protocol error
+		'ENOENT',         // No such file or directory (소켓 파일)
 	]);
 
 	/**
+	 * 재연결이 필요한 Prisma 에러 클래스명
+	 */
+	private static readonly PRISMA_RECONNECTABLE_ERROR_NAMES = new Set([
+		'PrismaClientInitializationError',      // 클라이언트 초기화 실패
+		'PrismaClientRustPanicError',           // Rust 엔진 패닉
+		'PrismaClientUnknownRequestError',      // 알 수 없는 요청 에러
+	]);
+
+	/**
+	 * 에러에서 코드를 추출하는 헬퍼 메서드
+	 * 다양한 에러 구조에서 코드를 찾음
+	 */
+	private extractErrorCodes(error: any): {
+		prismaCode?: string;
+		pgCode?: string;
+		nodeCode?: string;
+		errorName?: string;
+	} {
+		return {
+			// Prisma 에러 코드 (error.code)
+			prismaCode: error.code,
+			
+			// PostgreSQL 에러 코드 (다양한 위치에서 찾기)
+			pgCode: error.meta?.code 
+				|| error.meta?.error_code 
+				|| error.meta?.pg_code
+				|| error.errorCode
+				|| error.cause?.code
+				|| (error.cause?.meta?.code),
+			
+			// Node.js 시스템 에러 코드
+			nodeCode: (typeof error.code === 'string' && error.code.startsWith('E')) 
+				? error.code 
+				: error.cause?.code,
+			
+			// 에러 클래스명
+			errorName: error.constructor?.name || error.name,
+		};
+	}
+
+	/**
 	 * 연결 오류인지 판단 (서버리스 슬립 복구용)
-	 * 공식 에러 코드 기반으로 정확하게 판단
+	 * 오직 공식 에러 코드만 사용하여 판단
 	 */
 	private isConnectionError(error: any): boolean {
 		if (!error) return false;
 
+		const { prismaCode, pgCode, nodeCode, errorName } = this.extractErrorCodes(error);
+
 		// 1. Prisma 에러 코드 체크
-		const prismaCode = error.code;
 		if (prismaCode && PrismaManager.PRISMA_CONNECTION_ERROR_CODES.has(prismaCode)) {
 			return true;
 		}
 
-		// 2. PostgreSQL 에러 코드 체크 (Prisma가 내부적으로 전달하는 경우)
-		const pgCode = error.meta?.code || error.errorCode;
+		// 2. PostgreSQL 에러 코드 체크
 		if (pgCode && PrismaManager.POSTGRES_CONNECTION_ERROR_CODES.has(pgCode)) {
 			return true;
 		}
 
 		// 3. Node.js 시스템 에러 코드 체크
-		const nodeCode = error.code || error.cause?.code;
 		if (nodeCode && PrismaManager.NODEJS_CONNECTION_ERROR_CODES.has(nodeCode)) {
 			return true;
 		}
 
-		// 4. PrismaClientKnownRequestError / PrismaClientInitializationError 체크
-		const errorName = error.constructor?.name || error.name;
-		if (errorName === 'PrismaClientInitializationError') {
-			return true; // 초기화 에러는 항상 연결 문제
+		// 4. Prisma 에러 클래스명 체크 (재연결 필요한 에러 타입)
+		if (errorName && PrismaManager.PRISMA_RECONNECTABLE_ERROR_NAMES.has(errorName)) {
+			return true;
 		}
 
-		// 5. 중첩된 cause 체크 (에러 체이닝)
-		if (error.cause && this.isConnectionError(error.cause)) {
-			return true;
+		// 5. 중첩된 cause 체크 (에러 체이닝) - 최대 3단계까지만
+		if (error.cause && error !== error.cause) {
+			return this.isConnectionError(error.cause);
 		}
 
 		return false;

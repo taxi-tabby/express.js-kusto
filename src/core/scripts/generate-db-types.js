@@ -19,15 +19,16 @@ function generateDatabaseTypes() {
 
   console.log('Found databases:', dbFolders);
 
-  // Generate type imports
-  const typeImports = dbFolders.map(dbName => 
-    `type ${capitalize(dbName)}Client = typeof import('@app/db/${dbName}/client')['PrismaClient'];`
+  // Generate imports for PrismaClient from each database
+  const clientImports = dbFolders.map(dbName => 
+    `import { PrismaClient as ${capitalize(dbName)}PrismaClient } from '@app/db/${dbName}/client';`
   ).join('\n');
 
-  // Generate instance types
+  // Generate instance types (Prisma 7: PrismaClient is generic, use it directly)
   const instanceTypes = dbFolders.map(dbName => 
-    `type ${capitalize(dbName)}Instance = InstanceType<${capitalize(dbName)}Client>;`
+    `type ${capitalize(dbName)}Instance = ${capitalize(dbName)}PrismaClient;`
   ).join('\n');
+  
   // Generate DatabaseClientMap interface
   const clientMapEntries = dbFolders.map(dbName => 
     `  ${dbName}: ${capitalize(dbName)}Instance;`
@@ -60,14 +61,15 @@ ${getClientOverloads}
   // Generate the complete type file
   const typeFileContent = `// Auto-generated file - Do not edit manually
 // Generated from src/app/db folder structure
+// Prisma 7+ compatible
 
 /**
- * Import actual Prisma client types from each database
+ * Import PrismaClient from each database
  */
-${typeImports}
+${clientImports}
 
 /**
- * Instantiated client types
+ * Instance types for each database client
  */
 ${instanceTypes}
 

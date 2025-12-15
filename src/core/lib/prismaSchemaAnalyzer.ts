@@ -1,4 +1,3 @@
-import { PrismaClient } from '@prisma/client';
 import { 
   PrismaModelInfo, 
   PrismaFieldMetadata, 
@@ -7,23 +6,26 @@ import {
   PRISMA_TYPE_MAPPING 
 } from './crudSchemaTypes';
 
+// Prisma 7: PrismaClient는 생성된 클라이언트에서 가져오므로 any 타입 사용
+type PrismaClientAny = any;
+
 /**
  * Prisma 클라이언트를 분석하여 스키마 정보를 추출하는 서비스
  * 개발 모드에서만 사용됩니다.
  */
 export class PrismaSchemaAnalyzer {
   private static instances: Map<string, PrismaSchemaAnalyzer> = new Map();
-  private prismaClient: PrismaClient;
+  private prismaClient: PrismaClientAny;
   private modelCache: Map<string, PrismaModelInfo> = new Map();
   private databaseName: string;
   private loadedEnums: Record<string, any> = {};
 
-  constructor(prismaClient: PrismaClient, databaseName: string = 'unknown') {
+  constructor(prismaClient: PrismaClientAny, databaseName: string = 'unknown') {
     this.prismaClient = prismaClient;
     this.databaseName = databaseName;
   }
 
-  public static getInstance(prismaClient: PrismaClient, databaseName: string = 'default'): PrismaSchemaAnalyzer {
+  public static getInstance(prismaClient: PrismaClientAny, databaseName: string = 'default'): PrismaSchemaAnalyzer {
     if (!PrismaSchemaAnalyzer.instances.has(databaseName)) {
       PrismaSchemaAnalyzer.instances.set(databaseName, new PrismaSchemaAnalyzer(prismaClient, databaseName));
     }
@@ -305,7 +307,8 @@ export class PrismaSchemaAnalyzer {
       relationName: dmmfField.relationName,
       relationFromFields: dmmfField.relationFromFields,
       relationToFields: dmmfField.relationToFields,
-      documentation: dmmfField.documentation
+      documentation: dmmfField.documentation,
+      nativeType: dmmfField.nativeType // @db.Uuid, @db.VarChar 등의 네이티브 타입 정보
     };
   }
 
@@ -385,6 +388,18 @@ export class PrismaSchemaAnalyzer {
       !field.isUpdatedAt &&
       !field.relationName // 관계 필드 제외
     );
+  }
+
+  /**
+   * 모델의 Json 타입 필드 이름들을 반환합니다
+   */
+  public getJsonFields(modelName: string): string[] {
+    const model = this.getModel(modelName);
+    if (!model) return [];
+
+    return model.fields
+      .filter(field => field.type === 'Json')
+      .map(field => field.name);
   }
 
   /**

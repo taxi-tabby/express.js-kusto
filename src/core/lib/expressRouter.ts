@@ -2572,8 +2572,21 @@ export class ExpressRouter {
                 res.setHeader('Content-Type', 'application/vnd.api+json');
                 res.setHeader('Vary', 'Accept');
 
-                // 쿼리 파라미터 파싱
-                const queryParams = CrudQueryParser.parseQuery(req, modelName, this.schemaAnalyzer);
+                // 쿼리 파라미터 파싱 (UUID 검증 등의 에러 발생 가능)
+                let queryParams;
+                try {
+                    queryParams = CrudQueryParser.parseQuery(req, modelName, this.schemaAnalyzer);
+                } catch (parseError: any) {
+                    // UUID 검증 실패 등의 에러를 400으로 응답
+                    const errorResponse = this.formatJsonApiError(
+                        parseError,
+                        parseError.code || ERROR_CODES.VALIDATION_ERROR,
+                        parseError.statusCode || 400,
+                        req.path,
+                        req.method
+                    );
+                    return res.status(parseError.statusCode || 400).json(errorResponse);
+                }
                 
                 // 페이지네이션 방식 검증 - 반드시 지정되어야 함
                 if (!queryParams.page) {
@@ -2722,6 +2735,10 @@ export class ExpressRouter {
                     };
                 }
 
+                // Json 타입 필드 목록 가져오기
+                const jsonFieldsArray = this.schemaAnalyzer?.getJsonFields(modelName) || [];
+                const jsonFields = new Set(jsonFieldsArray);
+
                 // JSON:API ?�답 ?�성
                 const response: JsonApiResponse = JsonApiTransformer.createJsonApiResponse(
                     items,
@@ -2733,7 +2750,8 @@ export class ExpressRouter {
                         links,
                         meta,
                         included,
-                        includeMerge: options?.includeMerge || false
+                        includeMerge: options?.includeMerge || false,
+                        jsonFields
                     }
                 );
                 
@@ -2833,8 +2851,22 @@ export class ExpressRouter {
                 );
                 if (!success) return; // ?�러 ?�답?� ?��? ?�퍼?�서 처리??
                 
-                // 쿼리 파라미터에서 include 파싱
-                const queryParams = CrudQueryParser.parseQuery(req, modelName, this.schemaAnalyzer);
+                // 쿼리 파라미터에서 include 파싱 (UUID 검증 등의 에러 발생 가능)
+                let queryParams;
+                try {
+                    queryParams = CrudQueryParser.parseQuery(req, modelName, this.schemaAnalyzer);
+                } catch (parseError: any) {
+                    // UUID 검증 실패 등의 에러를 400으로 응답
+                    const errorResponse = this.formatJsonApiError(
+                        parseError,
+                        parseError.code || ERROR_CODES.VALIDATION_ERROR,
+                        parseError.statusCode || 400,
+                        req.path,
+                        req.method
+                    );
+                    return res.status(parseError.statusCode || 400).json(errorResponse);
+                }
+                
                 const includeOptions = queryParams.include 
                     ? PrismaQueryBuilder['buildIncludeOptions'](queryParams.include)
                     : undefined;
@@ -2918,6 +2950,10 @@ export class ExpressRouter {
                     );
                 }
 
+                // Json 타입 필드 목록 가져오기
+                const jsonFieldsArray = this.schemaAnalyzer?.getJsonFields(modelName) || [];
+                const jsonFields = new Set(jsonFieldsArray);
+
                 // JSON:API ?�답 ?�성
                 const response: JsonApiResponse = JsonApiTransformer.createJsonApiResponse(
                     item,
@@ -2927,7 +2963,8 @@ export class ExpressRouter {
                         fields: queryParams.fields,
                         baseUrl,
                         included,
-                        includeMerge: options?.includeMerge || false
+                        includeMerge: options?.includeMerge || false,
+                        jsonFields
                     }
                 );
                 
@@ -3065,7 +3102,7 @@ export class ExpressRouter {
                     }
                 }
 
-                // 관�??�이??처리 (relationships가 ?�는 경우)
+                // 관계 데이터 처리 (relationships가 있는 경우)
                 if (requestData.relationships) {
                     try {
                         data = await this.processRelationships(
@@ -3073,7 +3110,8 @@ export class ExpressRouter {
                             requestData.relationships, 
                             client, 
                             modelName,
-                            false // ?�성 모드
+                            false, // 생성 모드
+                            options // softDelete 옵션 전달 (생성 시에는 parentId 불필요)
                         );
                     } catch (relationshipError: any) {
                         const errorResponse = this.formatJsonApiError(
@@ -3104,6 +3142,10 @@ export class ExpressRouter {
                 // Base URL ?�성
                 const baseUrl = `${req.protocol}://${req.get('host')}${req.baseUrl}`;
 
+                // Json 타입 필드 목록 가져오기
+                const jsonFieldsArray = this.schemaAnalyzer?.getJsonFields(modelName) || [];
+                const jsonFields = new Set(jsonFieldsArray);
+
                 // JSON:API ?�답 ?�성
                 const response: JsonApiResponse = JsonApiTransformer.createJsonApiResponse(
                     result,
@@ -3111,7 +3153,8 @@ export class ExpressRouter {
                     {
                         primaryKey,
                         baseUrl,
-                        includeMerge: options?.includeMerge || false
+                        includeMerge: options?.includeMerge || false,
+                        jsonFields
                     }
                 );
                 
@@ -3528,144 +3571,297 @@ export class ExpressRouter {
 
     /**
      * JSON:API 관계 데이터 처리 - 최신 JSON:API 명세 준수
-     * ?�성/?�정 ??관�??�이?��? Prisma ?�식?�로 변??
+     * PATCH 요청 시 relationships는 "replace" 동작 (기존 관계를 완전히 대체)
+     * 생성/수정 시 관계 데이터를 Prisma 형식으로 변환
      * 기존 리소스 연결과 새 리소스 생성을 모두 지원
+     * 
+     * @param data 기존 데이터
+     * @param relationships JSON:API relationships 객체
+     * @param client Prisma 클라이언트
+     * @param modelName 모델명
+     * @param isUpdate 업데이트 여부
+     * @param options CRUD 옵션 (softDelete 등)
+     * @param parentId 부모 리소스 ID (관계 삭제 시 필요)
+     * @param parentIdField 부모 ID 필드명 (기본값: 'id')
      */
     private async processRelationships(
         data: any, 
         relationships: Record<string, JsonApiRelationship>, 
         client: any, 
         modelName: string,
-        isUpdate: boolean = false
+        isUpdate: boolean = false,
+        options?: any,
+        parentId?: any,
+        parentIdField: string = 'id'
     ): Promise<any> {
         const processedData = { ...data };
         
+        // softDelete 옵션 확인
+        const isSoftDelete = options?.softDelete?.enabled;
+        const softDeleteField = options?.softDelete?.field || 'deletedAt';
+        
         for (const [relationName, relationshipData] of Object.entries(relationships)) {
             if (relationshipData.data !== undefined) {
-                // null??경우 - 관�??�거 (?�데?�트 ?�에�?
+                // null인 경우 - 관계 제거 (업데이트 시에만)
                 if (relationshipData.data === null) {
                     if (isUpdate) {
-                        processedData[relationName] = {
-                            disconnect: true
-                        };
-                    }
-                    // ?�성 ?�에??null 관계�? 무시
-                }
-                // 배열??경우 - ?��???관�?
-                else if (Array.isArray(relationshipData.data)) {
-                    if (relationshipData.data.length === 0) {
-                        // �?배열 - 모든 관�??�거 (?�데?�트 ?�에�?
-                        if (isUpdate) {
+                        // softDelete인 경우 관계된 레코드를 soft delete
+                        if (isSoftDelete && parentId) {
+                            await this.softDeleteRelatedRecords(
+                                client, 
+                                modelName, 
+                                relationName, 
+                                parentId, 
+                                parentIdField,
+                                softDeleteField
+                            );
+                            // Prisma 관계는 disconnect하지 않음 (soft delete된 레코드 유지)
+                        } else {
                             processedData[relationName] = {
-                                set: []
+                                disconnect: true
                             };
                         }
+                    }
+                    // 생성 시에는 null 관계를 무시
+                }
+                // 배열인 경우 - 일대다 관계
+                else if (Array.isArray(relationshipData.data)) {
+                    if (relationshipData.data.length === 0) {
+                        // 빈 배열 - 모든 관계 제거 (업데이트 시에만)
+                        if (isUpdate) {
+                            if (isSoftDelete && parentId) {
+                                // 기존 모든 관계를 soft delete
+                                await this.softDeleteRelatedRecords(
+                                    client,
+                                    modelName,
+                                    relationName,
+                                    parentId,
+                                    parentIdField,
+                                    softDeleteField
+                                );
+                            } else {
+                                processedData[relationName] = {
+                                    set: []
+                                };
+                            }
+                        }
                     } else {
-                        // 관�??�이??처리
-                        const connectIds = [];
-                        const createData = [];
+                        // 관계 데이터 처리 - JSON:API 표준 준수
+                        // relationships.data는 Resource Identifier Objects만 포함
+                        // (type과 id만 있어야 함, attributes는 허용하지 않음)
+                        const connectIds: any[] = [];
+                        let relatedResourceType: string | null = null;
                         
                         for (const item of relationshipData.data) {
-                            // console.log(`Processing relationship item in ${relationName}:`, JSON.stringify(item, null, 2));
-                            
                             if (!item.type) {
                                 throw new Error(`Invalid relationship data: missing type in ${relationName}`);
                             }
                             
-                            // 기존 리소???�결 (id가 ?�는 경우)
-                            if (item.id) {
-                                // 관�?리소?��? ?�제�?존재?�는지 검�?(?�택??
-                                const relatedModel = this.getModelNameFromResourceType(item.type);
-                                if (relatedModel) {
-                                    try {
-                                        const exists = await client[relatedModel].findUnique({
-                                            where: { id: item.id }
-                                        });
-                                        if (!exists) {
-                                            throw new Error(`Related resource ${item.type}:${item.id} not found`);
-                                        }
-                                    } catch (error) {
-                                        console.warn(`Could not verify existence of ${item.type}:${item.id}`, error);
-                                    }
-                                }
+                            // 첫 번째 아이템의 type을 저장 (soft delete 시 사용)
+                            if (!relatedResourceType) {
+                                relatedResourceType = item.type;
+                            }
+                            
+                            // JSON:API 표준: id가 반드시 있어야 함
+                            if (!item.id) {
+                                throw new Error(`Invalid relationship data: missing id in ${relationName}. JSON:API requires resource identifier objects to have both type and id.`);
+                            }
+                            
+                            connectIds.push({ id: this.parseRelationshipId(item.id) });
+                        }
+                        
+                        // JSON:API 스펙: UPDATE 시 relationships는 "replace" 동작
+                        if (isUpdate) {
+                            if (isSoftDelete && parentId && relatedResourceType) {
+                                // 1. 기존 관계 중 새 목록에 없는 것들을 soft delete
+                                // relatedResourceType (요청의 type)에서 모델명 추출
+                                await this.replaceRelationshipsWithSoftDelete(
+                                    client,
+                                    modelName,
+                                    relatedResourceType, // relationName 대신 실제 type 사용
+                                    parentId,
+                                    parentIdField,
+                                    connectIds.map(c => c.id),
+                                    softDeleteField
+                                );
                                 
-                                connectIds.push({ id: item.id });
-                            }
-                            // ??리소???�성 (attributes가 ?�는 경우)
-                            else if (this.hasAttributes(item)) {
-                                // console.log(`Creating new resource for ${relationName} with attributes:`, item.attributes);
-                                createData.push(item.attributes);
+                                // 2. 새 연결 처리
+                                if (connectIds.length > 0) {
+                                    processedData[relationName] = {
+                                        connect: connectIds
+                                    };
+                                }
                             } else {
-                                // console.log(`Invalid relationship item in ${relationName}:`, JSON.stringify(item, null, 2));
-                                throw new Error(`Invalid relationship data: item must have either id (for connecting) or attributes (for creating) in ${relationName}`);
+                                // Hard delete: set으로 완전 대체
+                                processedData[relationName] = {
+                                    set: connectIds
+                                };
                             }
-                        }
-                        
-                        // Prisma 관�??�이??구성
-                        const relationshipConfig: any = {};
-                        
-                        if (connectIds.length > 0) {
-                            if (isUpdate) {
-                                relationshipConfig.connect = connectIds;
-                            } else {
-                                relationshipConfig.connect = connectIds;
-                            }
-                        }
-                        
-                        if (createData.length > 0) {
-                            relationshipConfig.create = createData;
-                        }
-                        
-                        // set ?�업?� ?�데?�트 ?�에�??�용 (기존 관계�? ?�전???��?
-                        if (isUpdate && connectIds.length > 0 && createData.length === 0) {
-                            processedData[relationName] = {
-                                set: connectIds
-                            };
                         } else {
-                            processedData[relationName] = relationshipConfig;
+                            // CREATE 시에는 connect 사용
+                            if (connectIds.length > 0) {
+                                processedData[relationName] = {
+                                    connect: connectIds
+                                };
+                            }
                         }
                     }
                 }
-                // ?�일 객체??경우 - ?��???관�?
+                // 단일 객체인 경우 - 일대일 관계
                 else if (typeof relationshipData.data === 'object') {
                     if (!relationshipData.data.type) {
                         throw new Error(`Invalid relationship data: missing type in ${relationName}`);
                     }
                     
-                    // 기존 리소???�결
-                    if (relationshipData.data.id) {
-                        // 관�?리소?��? ?�제�?존재?�는지 검�?(?�택??
-                        const relatedModel = this.getModelNameFromResourceType(relationshipData.data.type);
-                        if (relatedModel) {
-                            try {
-                                const exists = await client[relatedModel].findUnique({
-                                    where: { id: relationshipData.data.id }
-                                });
-                                if (!exists) {
-                                    throw new Error(`Related resource ${relationshipData.data.type}:${relationshipData.data.id} not found`);
-                                }
-                            } catch (error) {
-                                console.warn(`Could not verify existence of ${relationshipData.data.type}:${relationshipData.data.id}`, error);
-                            }
-                        }
-                        
-                        processedData[relationName] = {
-                            connect: { id: relationshipData.data.id }
-                        };
+                    // JSON:API 표준: id가 반드시 있어야 함
+                    if (!relationshipData.data.id) {
+                        throw new Error(`Invalid relationship data: missing id in ${relationName}. JSON:API requires resource identifier objects to have both type and id.`);
                     }
-                    // ??리소???�성
-                    else if (this.hasAttributes(relationshipData.data)) {
-                        processedData[relationName] = {
-                            create: relationshipData.data.attributes
-                        };
-                    } else {
-                        throw new Error(`Invalid relationship data: item must have either id (for connecting) or attributes (for creating) in ${relationName}`);
-                    }
+                    
+                    // 기존 리소스 연결
+                    processedData[relationName] = {
+                        connect: { id: this.parseRelationshipId(relationshipData.data.id) }
+                    };
                 }
             }
         }
         
         return processedData;
+    }
+
+    /**
+     * 관계 ID 파싱 (문자열 숫자는 숫자로 변환)
+     */
+    private parseRelationshipId(id: any): any {
+        if (typeof id === 'string') {
+            // UUID 형식인지 확인
+            const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+            if (uuidRegex.test(id)) {
+                return id; // UUID는 문자열 그대로
+            }
+            // 숫자 문자열인 경우
+            const numId = parseInt(id, 10);
+            if (!isNaN(numId)) {
+                return numId;
+            }
+        }
+        return id;
+    }
+
+    /**
+     * 관련 레코드들을 soft delete 처리
+     * @param resourceType 요청에서 전달된 리소스 타입 (예: "UserRole", "userRole")
+     */
+    private async softDeleteRelatedRecords(
+        client: any,
+        modelName: string,
+        resourceType: string,
+        parentId: any,
+        parentIdField: string,
+        softDeleteField: string
+    ): Promise<void> {
+        try {
+            // 리소스 타입에서 모델명 추론 (예: UserRole -> UserRole, userRole -> UserRole)
+            const relatedModelName = this.getModelNameFromResourceType(resourceType);
+            if (!relatedModelName || !client[relatedModelName]) {
+                console.warn(`Could not find model for resourceType: ${resourceType} (tried: ${relatedModelName})`);
+                return;
+            }
+
+            // 부모 참조 필드명 추론 (예: User -> userUuid, userId 등)
+            const parentRefField = this.inferParentReferenceField(modelName, parentIdField);
+            
+            // 관련 레코드들을 soft delete
+            await client[relatedModelName].updateMany({
+                where: {
+                    [parentRefField]: parentId,
+                    [softDeleteField]: null // 아직 삭제되지 않은 것만
+                },
+                data: {
+                    [softDeleteField]: new Date()
+                }
+            });
+        } catch (error) {
+            console.warn(`Failed to soft delete related records for ${resourceType}:`, error);
+        }
+    }
+
+    /**
+     * 관계를 soft delete 방식으로 대체 (replace)
+     * 새 목록에 없는 기존 관계만 soft delete
+     * @param resourceType 요청에서 전달된 리소스 타입 (예: "UserRole", "userRole")
+     */
+    private async replaceRelationshipsWithSoftDelete(
+        client: any,
+        modelName: string,
+        resourceType: string,
+        parentId: any,
+        parentIdField: string,
+        newIds: any[],
+        softDeleteField: string
+    ): Promise<void> {
+        try {
+            // 리소스 타입에서 모델명 추론 (예: UserRole -> UserRole, userRole -> UserRole)
+            const relatedModelName = this.getModelNameFromResourceType(resourceType);
+            if (!relatedModelName || !client[relatedModelName]) {
+                console.warn(`Could not find model for resourceType: ${resourceType} (tried: ${relatedModelName})`);
+                return;
+            }
+
+            const parentRefField = this.inferParentReferenceField(modelName, parentIdField);
+            
+            // 새 목록에 없는 기존 관계만 soft delete
+            const whereClause: any = {
+                [parentRefField]: parentId,
+                [softDeleteField]: null
+            };
+            
+            // newIds가 있으면 해당 ID들은 제외
+            if (newIds.length > 0) {
+                whereClause.id = { notIn: newIds };
+            }
+            
+            await client[relatedModelName].updateMany({
+                where: whereClause,
+                data: {
+                    [softDeleteField]: new Date()
+                }
+            });
+
+            // soft delete된 레코드 중 다시 연결해야 할 것들 복원
+            if (newIds.length > 0) {
+                await client[relatedModelName].updateMany({
+                    where: {
+                        [parentRefField]: parentId,
+                        id: { in: newIds },
+                        [softDeleteField]: { not: null }
+                    },
+                    data: {
+                        [softDeleteField]: null
+                    }
+                });
+            }
+        } catch (error) {
+            console.warn(`Failed to replace relationships with soft delete for ${resourceType}:`, error);
+        }
+    }
+
+    /**
+     * 부모 모델의 참조 필드명 추론
+     */
+    private inferParentReferenceField(modelName: string, parentIdField: string): string {
+        // 모델명을 camelCase로 변환 후 ID 필드 추가
+        const camelModelName = modelName.charAt(0).toLowerCase() + modelName.slice(1);
+        
+        // parentIdField가 'uuid'면 'userUuid' 형태, 'id'면 'userId' 형태
+        if (parentIdField === 'uuid') {
+            return `${camelModelName}Uuid`;
+        } else if (parentIdField === 'id') {
+            return `${camelModelName}Id`;
+        }
+        
+        // 기본값: camelCase + 첫글자 대문자 parentIdField
+        return `${camelModelName}${parentIdField.charAt(0).toUpperCase()}${parentIdField.slice(1)}`;
     }
 
     /**
@@ -3678,23 +3874,55 @@ export class ExpressRouter {
     }
 
     /**
-     * 리소???�?�에??모델명을 추론?�는 ?�퍼 메서??
+     * 리소스 타입에서 Prisma 모델명을 추론하는 헬퍼 메서드
+     * - userRole, userrole, user-role, user_role -> UserRole
+     * - users -> User
      */
     private getModelNameFromResourceType(resourceType: string): string | null {
-        // 캐�?케?�스�?변??(orderItem -> OrderItem)
-        const pascalCase = resourceType
-            .split(/[-_]/)
+        // 1. 먼저 kebab-case나 snake_case를 분리
+        let parts: string[];
+        
+        if (resourceType.includes('-') || resourceType.includes('_')) {
+            // kebab-case 또는 snake_case
+            parts = resourceType.split(/[-_]/);
+        } else {
+            // camelCase 또는 lowercase 처리
+            // userRole -> ['user', 'Role'] -> ['user', 'role']
+            // userrole -> ['userrole']
+            parts = resourceType.split(/(?=[A-Z])/).map(p => p.toLowerCase());
+            
+            // 전부 소문자인 경우 (userrole) 일반적인 패턴으로 분리 시도
+            if (parts.length === 1 && parts[0] === resourceType.toLowerCase()) {
+                // 알려진 패턴들을 체크
+                const knownPatterns = [
+                    { pattern: /^user(role|permission|session|token)s?$/i, split: ['user', '$1'] },
+                    { pattern: /^role(permission)s?$/i, split: ['role', '$1'] },
+                    { pattern: /^(.+)(item|detail|log|history)s?$/i, split: ['$1', '$2'] },
+                ];
+                
+                for (const { pattern, split } of knownPatterns) {
+                    const match = resourceType.match(pattern);
+                    if (match) {
+                        parts = split.map(s => s.startsWith('$') ? match[parseInt(s[1])] : s);
+                        break;
+                    }
+                }
+            }
+        }
+        
+        // 2. 각 부분을 PascalCase로 변환
+        let pascalCase = parts
             .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
             .join('');
         
-        // 복수??-> ?�수??변??
+        // 3. 복수형 -> 단수형 변환
         if (pascalCase.endsWith('ies')) {
-            return pascalCase.slice(0, -3) + 'y'; // Categories -> Category
+            pascalCase = pascalCase.slice(0, -3) + 'y'; // Categories -> Category
         } else if (pascalCase.endsWith('s') && !pascalCase.endsWith('ss')) {
-            return pascalCase.slice(0, -1); // Users -> User, Orders -> Order
+            pascalCase = pascalCase.slice(0, -1); // Users -> User, Orders -> Order
         }
         
-        return pascalCase; // OrderItem -> OrderItem (?�수??그�?�?
+        return pascalCase;
     }
 
     /**
@@ -3764,7 +3992,7 @@ export class ExpressRouter {
                 // attributes?�서 ?�이??추출
                 let data = requestData.attributes || {};
 
-                // 관�??�이??처리 (relationships가 ?�는 경우)
+                // 관계 데이터 처리 (relationships가 있는 경우)
                 if (requestData.relationships) {
                     try {
                         data = await this.processRelationships(
@@ -3772,7 +4000,10 @@ export class ExpressRouter {
                             requestData.relationships, 
                             client, 
                             modelName,
-                            true // ?�데?�트 모드
+                            true, // 업데이트 모드
+                            options, // softDelete 옵션 전달
+                            parsedIdentifier, // 부모 ID
+                            primaryKey // 부모 ID 필드명
                         );
                     } catch (relationshipError: any) {
                         const errorResponse = this.formatJsonApiError(
@@ -3808,6 +4039,10 @@ export class ExpressRouter {
                 // Base URL ?�성
                 const baseUrl = `${req.protocol}://${req.get('host')}${req.baseUrl}`;
 
+                // Json 타입 필드 목록 가져오기
+                const jsonFieldsArray = this.schemaAnalyzer?.getJsonFields(modelName) || [];
+                const jsonFields = new Set(jsonFieldsArray);
+
                 // JSON:API ?�답 ?�성
                 const response: JsonApiResponse = JsonApiTransformer.createJsonApiResponse(
                     result,
@@ -3815,7 +4050,8 @@ export class ExpressRouter {
                     {
                         primaryKey,
                         baseUrl,
-                        includeMerge: options?.includeMerge || false
+                        includeMerge: options?.includeMerge || false,
+                        jsonFields
                     }
                 );
                 
@@ -4622,8 +4858,21 @@ export class ExpressRouter {
 
                 const relationName = req.params.relationName;
                 
-                // 쿼리 파라미터 파싱 (include, fields, sort, pagination 지원)
-                const queryParams = CrudQueryParser.parseQuery(req, modelName, this.schemaAnalyzer);
+                // 쿼리 파라미터 파싱 (include, fields, sort, pagination 지원) (UUID 검증 등의 에러 발생 가능)
+                let queryParams;
+                try {
+                    queryParams = CrudQueryParser.parseQuery(req, modelName, this.schemaAnalyzer);
+                } catch (parseError: any) {
+                    // UUID 검증 실패 등의 에러를 400으로 응답
+                    const errorResponse = this.formatJsonApiError(
+                        parseError,
+                        parseError.code || ERROR_CODES.VALIDATION_ERROR,
+                        parseError.statusCode || 400,
+                        req.path,
+                        req.method
+                    );
+                    return res.status(parseError.statusCode || 400).json(errorResponse);
+                }
                 
                 // 기본 리소??조회
                 const item = await client[modelName].findUnique({
@@ -4656,11 +4905,18 @@ export class ExpressRouter {
                 // Base URL ?�성
                 const baseUrl = `${req.protocol}://${req.get('host')}${req.baseUrl}`;
                 
-                // 관�?리소???�??추론
-                const relationResourceType = JsonApiTransformer.inferResourceTypeFromRelationship(
+                // 관�?리소???�??추론 (실제 데이터 기반)
+                const isArray = Array.isArray(relationData);
+                const sampleData = isArray ? relationData[0] : relationData;
+                const relationResourceType = JsonApiTransformer.inferResourceTypeFromData(
+                    sampleData, 
                     relationName, 
-                    Array.isArray(relationData)
+                    isArray
                 );
+
+                // Json 타입 필드 목록 가져오기 (관계 리소스 타입 기준)
+                const jsonFieldsArray = this.schemaAnalyzer?.getJsonFields(relationResourceType) || [];
+                const jsonFields = new Set(jsonFieldsArray);
 
                 // JSON:API ?�답 ?�성
                 const response: JsonApiResponse = JsonApiTransformer.createJsonApiResponse(
@@ -4673,7 +4929,8 @@ export class ExpressRouter {
                         links: {
                             self: `${baseUrl}/${modelName.toLowerCase()}/${parsedIdentifier}/${relationName}`,
                             related: `${baseUrl}/${modelName.toLowerCase()}/${parsedIdentifier}/relationships/${relationName}`
-                        }
+                        },
+                        jsonFields
                     }
                 );
 
@@ -4717,17 +4974,17 @@ export class ExpressRouter {
 
                 const relationData = item[relationName];
                 
-                // 관�??�이?��? JSON:API ?�식?�로 변??
+                // 관�??�이?��? JSON:API ?�식?�로 변??(실제 데이터 기반 타입 추론)
                 let data = null;
                 if (relationData) {
                     if (Array.isArray(relationData)) {
                         data = relationData.map(relItem => ({
-                            type: JsonApiTransformer.inferResourceTypeFromRelationship(relationName, true),
+                            type: JsonApiTransformer.inferResourceTypeFromData(relItem, relationName, true),
                             id: String(relItem.id || relItem.uuid || relItem._id)
                         }));
                     } else {
                         data = {
-                            type: JsonApiTransformer.inferResourceTypeFromRelationship(relationName, false),
+                            type: JsonApiTransformer.inferResourceTypeFromData(relationData, relationName, false),
                             id: String(relationData.id || relationData.uuid || relationData._id)
                         };
                     }
@@ -4949,7 +5206,22 @@ export class ExpressRouter {
                 if (!success) return;
 
                 const relationName = req.params.relationName;
-                const queryParams = CrudQueryParser.parseQuery(req, modelName, this.schemaAnalyzer);
+                
+                // 쿼리 파라미터 파싱 (UUID 검증 등의 에러 발생 가능)
+                let queryParams;
+                try {
+                    queryParams = CrudQueryParser.parseQuery(req, modelName, this.schemaAnalyzer);
+                } catch (parseError: any) {
+                    // UUID 검증 실패 등의 에러를 400으로 응답
+                    const errorResponse = this.formatJsonApiError(
+                        parseError,
+                        parseError.code || ERROR_CODES.VALIDATION_ERROR,
+                        parseError.statusCode || 400,
+                        req.path,
+                        req.method
+                    );
+                    return res.status(parseError.statusCode || 400).json(errorResponse);
+                }
                 
                 // 기본 리소??조회
                 const item = await client[modelName].findUnique({
@@ -4982,7 +5254,17 @@ export class ExpressRouter {
 
                 // Base URL ?�성
                 const baseUrl = `${req.protocol}://${req.get('host')}${req.baseUrl}`;
-                const resourceType = JsonApiTransformer.inferResourceTypeFromRelationship(relationName, Array.isArray(relationData));
+                const isArrayRelation = Array.isArray(relationData);
+                const sampleRelationData = isArrayRelation ? relationData[0] : relationData;
+                const resourceType = JsonApiTransformer.inferResourceTypeFromData(
+                    sampleRelationData, 
+                    relationName, 
+                    isArrayRelation
+                );
+
+                // Json 타입 필드 목록 가져오기 (관계 리소스 타입 기준)
+                const jsonFieldsArray = this.schemaAnalyzer?.getJsonFields(resourceType) || [];
+                const jsonFields = new Set(jsonFieldsArray);
 
                 // JSON:API ?�답 ?�성
                 const response: JsonApiResponse = JsonApiTransformer.createJsonApiResponse(
@@ -4991,7 +5273,8 @@ export class ExpressRouter {
                     {
                         primaryKey: 'id', // 관??리소?�는 기본?�으�?id ?�용
                         fields: queryParams.fields,
-                        baseUrl
+                        baseUrl,
+                        jsonFields
                     }
                 );
 

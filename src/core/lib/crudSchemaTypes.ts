@@ -37,6 +37,7 @@ export interface PrismaFieldMetadata {
   relationFromFields?: string[];
   relationToFields?: string[];
   documentation?: string;
+  nativeType?: any; // @db.Uuid, @db.VarChar 등의 네이티브 타입 정보
 }
 
 /**

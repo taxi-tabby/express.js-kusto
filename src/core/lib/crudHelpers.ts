@@ -200,6 +200,7 @@ export class CrudQueryParser {
   
   /**
    * Express 요청 객체에서 CRUD 쿼리 파라미터를 파싱
+   * UUID 필드에 잘못된 값이 입력되면 해당 필터를 무시함
    */
   static parseQuery(req: Request, modelName?: string, schemaAnalyzer?: any): CrudQueryParams {
     const query = req.query;
@@ -355,6 +356,7 @@ export class CrudQueryParser {
    * ?filter[name_eq]=John&filter[age_gt]=18
    * 또는 중첩 객체 형태: { filter: { name_eq: "John", age_gt: 18 } }
    * OR 조건 지원: ?filter[or][0][name_eq]=John&filter[or][0][age_gt]=18&filter[or][1][name_eq]=Jane
+   * UUID 검증 실패 시 해당 필터를 무시함
    */
   private static parseFilter(query: any, modelName?: string, schemaAnalyzer?: any): Record<string, any> | undefined {
     const filters: Record<string, any> = {};
@@ -470,6 +472,7 @@ export class CrudQueryParser {
   /**
    * 필터 표현식 파싱 (field_operator 형태)
    * 관계 필터링도 지원: author.name_like, tags.name_in 등
+   * UUID 검증 실패 시 null 반환하여 필터 무시
    */
   private static parseFilterExpression(expression: string, value: any, modelName?: string, schemaAnalyzer?: any) {
     const operators = [
@@ -483,6 +486,12 @@ export class CrudQueryParser {
         const field = expression.slice(0, -(op.length + 1));
         const parsedValue = this.parseFilterValue(op as FilterOperator, value, field, modelName, schemaAnalyzer);
         
+        // 값이 null이면 필터 무시 (빈 배열 또는 UUID 검증 실패)
+        if (parsedValue === null) {
+          // console.warn(`Filter ignored for field "${field}" with operator "${op}": value validation failed`);
+          return null;
+        }
+        
         return {
           field,
           operator: op as FilterOperator,
@@ -493,11 +502,18 @@ export class CrudQueryParser {
 
     // 연산자가 명시되지 않은 경우 값의 패턴을 보고 자동 감지
     const autoDetectedOperator = this.autoDetectOperator(value);
+    const parsedValue = this.parseFilterValue(autoDetectedOperator, value, expression, modelName, schemaAnalyzer);
+    
+    // 값이 null이면 필터 무시 (빈 배열 또는 UUID 검증 실패)
+    if (parsedValue === null) {
+      // console.warn(`Filter ignored for field "${expression}": value validation failed`);
+      return null;
+    }
     
     return {
       field: expression,
       operator: autoDetectedOperator,
-      value: this.parseFilterValue(autoDetectedOperator, value, expression, modelName, schemaAnalyzer)
+      value: parsedValue
     };
   }
 
@@ -530,6 +546,7 @@ export class CrudQueryParser {
 
   /**
    * 필터 값을 올바른 타입으로 변환
+   * null 반환 시 필터가 무시됨
    */
   private static parseFilterValue(operator: FilterOperator, value: any, fieldName?: string, modelName?: string, schemaAnalyzer?: any): any {
     if (value === null || value === undefined) return value;
@@ -538,10 +555,14 @@ export class CrudQueryParser {
       case 'in':
       case 'not_in':
         if (typeof value === 'string') {
-          return value.split(',')
+          const converted = value.split(',')
             .map(v => v.trim())
             .filter(v => v.length > 0) // 빈 문자열 제거
-            .map(v => this.smartTypeConversion(v, fieldName, modelName, schemaAnalyzer)); // 각 값에 대해 타입 변환
+            .map(v => this.smartTypeConversion(v, fieldName, modelName, schemaAnalyzer)) // 각 값에 대해 타입 변환
+            .filter(v => v !== null); // null 값 제거 (UUID 검증 실패한 경우)
+          
+          // 빈 배열인 경우 null 반환
+          return converted.length > 0 ? converted : null;
         }
         return Array.isArray(value) ? value.filter(v => v !== '' && v != null) : value;
       
@@ -550,8 +571,11 @@ export class CrudQueryParser {
           const parts = value.split(',')
             .map(v => v.trim())
             .filter(v => v.length > 0) // 빈 문자열 제거
-            .map(v => this.smartTypeConversion(v, fieldName, modelName, schemaAnalyzer)); // 각 값에 대해 타입 변환
-          return parts.length === 2 ? parts : value;
+            .map(v => this.smartTypeConversion(v, fieldName, modelName, schemaAnalyzer)) // 각 값에 대해 타입 변환
+            .filter(v => v !== null); // null 값 제거 (UUID 검증 실패한 경우)
+          
+          // between은 정확히 2개의 값이 필요
+          return parts.length === 2 ? parts : null;
         }
         return value;
       
@@ -583,9 +607,9 @@ export class CrudQueryParser {
 
     // 스키마 정보가 있는 경우 정확한 타입 변환
     if (fieldName && modelName && schemaAnalyzer) {
-      const fieldType = this.getFieldTypeFromSchema(fieldName, modelName, schemaAnalyzer);
-      if (fieldType) {
-        return this.convertValueByType(value, fieldType);
+      const fieldTypeInfo = this.getFieldTypeFromSchema(fieldName, modelName, schemaAnalyzer);
+      if (fieldTypeInfo) {
+        return this.convertValueByType(value, fieldTypeInfo);
       }
     }
 
@@ -595,8 +619,9 @@ export class CrudQueryParser {
 
   /**
    * 스키마에서 필드 타입 정보 가져오기
+   * @returns { type: 'String', nativeType: 'Uuid' } 형태로 반환
    */
-  private static getFieldTypeFromSchema(fieldName: string, modelName: string, schemaAnalyzer: any): string | null {
+  private static getFieldTypeFromSchema(fieldName: string, modelName: string, schemaAnalyzer: any): { type: string; nativeType?: string } | null {
     try {
       const model = schemaAnalyzer.getModel(modelName);
       if (!model) return null;
@@ -604,11 +629,28 @@ export class CrudQueryParser {
       // 중첩된 필드 처리 (author.name 등)
       if (fieldName.includes('.')) {
         // 관계 필드는 현재 구현에서는 문자열로 처리
-        return 'String';
+        return { type: 'String' };
       }
 
       const field = model.fields.find((f: any) => f.name === fieldName);
-      return field ? field.type : null;
+      if (!field) return null;
+
+      // nativeType이 객체인 경우 name 속성 추출
+      let nativeTypeName: string | undefined;
+      if (field.nativeType) {
+        if (typeof field.nativeType === 'string') {
+          nativeTypeName = field.nativeType;
+        } else if (field.nativeType.name) {
+          nativeTypeName = field.nativeType.name;
+        } else if (Array.isArray(field.nativeType) && field.nativeType.length > 0) {
+          nativeTypeName = field.nativeType[0];
+        }
+      }
+
+      return {
+        type: field.type,
+        nativeType: nativeTypeName
+      };
     } catch (error) {
       // 스키마 분석 실패 시 null 반환
       return null;
@@ -616,9 +658,30 @@ export class CrudQueryParser {
   }
 
   /**
-   * 필드 타입에 따른 값 변환
+   * UUID 유효성 검증
    */
-  private static convertValueByType(value: string, fieldType: string): any {
+  private static isValidUUID(value: string): boolean {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    return uuidRegex.test(value);
+  }
+
+  /**
+   * 필드 타입에 따른 값 변환
+   * @returns 변환된 값 또는 null (UUID 검증 실패 시 null 반환으로 필터 무시)
+   */
+  private static convertValueByType(value: string, fieldTypeInfo: { type: string; nativeType?: string }): any {
+    const { type: fieldType, nativeType } = fieldTypeInfo;
+
+    // UUID 타입인 경우 유효성 검증
+    if (nativeType === 'Uuid' || fieldType === 'Uuid') {
+      // UUID가 아닌 값이 들어온 경우 null 반환 (필터 무시됨)
+      if (!this.isValidUUID(value)) {
+        // console.warn(`Invalid UUID format in filter: expected a valid UUID, but received "${value}". This filter will be ignored.`);
+        return null;
+      }
+      return value; // 유효한 UUID는 그대로 반환
+    }
+
     switch (fieldType) {
       case 'String':
         return value; // 문자열은 그대로 유지
@@ -1965,6 +2028,7 @@ export class JsonApiTransformer {
   
   /**
    * 원시 데이터를 JSON:API 리소스 객체로 변환
+   * @param jsonFields - Json 타입 필드 이름 목록 (관계 데이터로 간주하지 않음)
    */
   static transformToResource(
     item: any, 
@@ -1973,7 +2037,8 @@ export class JsonApiTransformer {
     fields?: string[],
     baseUrl?: string,
     id?: string,
-    includeMerge: boolean = false
+    includeMerge: boolean = false,
+    jsonFields?: Set<string>
   ): JsonApiResource {
     const resourceId = id || item[primaryKey] || item.id || item.uuid || item._id;
     
@@ -1992,7 +2057,8 @@ export class JsonApiTransformer {
       item, 
       primaryKey, 
       fields,
-      includeMerge
+      includeMerge,
+      jsonFields
     );
 
     // attributes가 있는 경우에만 추가
@@ -2017,6 +2083,7 @@ export class JsonApiTransformer {
 
   /**
    * 여러 리소스를 JSON:API 컬렉션으로 변환
+   * @param jsonFields - Json 타입 필드 이름 목록 (관계 데이터로 간주하지 않음)
    */
   static transformToCollection(
     items: any[], 
@@ -2024,10 +2091,11 @@ export class JsonApiTransformer {
     primaryKey: string = 'id',
     fields?: string[],
     baseUrl?: string,
-    includeMerge: boolean = false
+    includeMerge: boolean = false,
+    jsonFields?: Set<string>
   ): JsonApiResource[] {
     return items.map(item => 
-      this.transformToResource(item, resourceType, primaryKey, fields, baseUrl, undefined, includeMerge)
+      this.transformToResource(item, resourceType, primaryKey, fields, baseUrl, undefined, includeMerge, jsonFields)
     );
   }
 
@@ -2063,12 +2131,14 @@ export class JsonApiTransformer {
 
   /**
    * attributes와 relationships 분리
+   * @param jsonFields - Json 타입 필드 이름 목록 (관계 데이터로 간주하지 않음)
    */
   private static separateAttributesAndRelationships(
     item: any, 
     primaryKey: string, 
     fields?: string[],
-    includeMerge: boolean = false
+    includeMerge: boolean = false,
+    jsonFields?: Set<string>
   ): { attributes: Record<string, any>, relationships: Record<string, JsonApiRelationship> } {
     const attributes: Record<string, any> = {};
     const relationships: Record<string, JsonApiRelationship> = {};
@@ -2088,6 +2158,12 @@ export class JsonApiTransformer {
       // Sparse Fieldsets 적용 (fields가 지정된 경우)
       if (fields && !fields.includes(key)) {
         return; // 지정된 필드가 아니면 스킵
+      }
+
+      // Json 타입 필드는 관계 데이터가 아님
+      if (jsonFields && jsonFields.has(key)) {
+        attributes[key] = value;
+        return;
       }
       
       // 관계 데이터인지 확인
@@ -2141,20 +2217,26 @@ export class JsonApiTransformer {
 
   /**
    * 관계 데이터를 JSON:API 관계 객체로 변환
+   * JSON:API 스펙에 맞게 실제 모델 타입을 추론
    */
   private static transformToRelationship(value: any, relationshipName: string): JsonApiRelationship {
     const relationship: JsonApiRelationship = {};
 
     if (Array.isArray(value)) {
       // 일대다 관계
-      relationship.data = value.map(item => ({
-        type: this.inferResourceTypeFromRelationship(relationshipName, true),
-        id: String(item.id || item.uuid || item._id)
-      }));
+      relationship.data = value.map(item => {
+        // 실제 모델 타입 추론 (데이터 구조 기반)
+        const resourceType = this.inferResourceTypeFromData(item, relationshipName, true);
+        return {
+          type: resourceType,
+          id: String(item.id || item.uuid || item._id)
+        };
+      });
     } else {
       // 일대일 관계
+      const resourceType = this.inferResourceTypeFromData(value, relationshipName, false);
       relationship.data = {
-        type: this.inferResourceTypeFromRelationship(relationshipName, false),
+        type: resourceType,
         id: String(value.id || value.uuid || value._id)
       };
     }
@@ -2164,6 +2246,7 @@ export class JsonApiTransformer {
 
   /**
    * 관계 이름에서 리소스 타입 추론 (public 메서드로 변경)
+   * @deprecated inferResourceTypeFromData 사용 권장
    */
   static inferResourceTypeFromRelationship(relationshipName: string, isArray: boolean): string {
     let resourceType = relationshipName;
@@ -2179,6 +2262,106 @@ export class JsonApiTransformer {
     
     // JSON:API 스펙에 따라 소문자로 변환
     return resourceType.toLowerCase();
+  }
+
+  /**
+   * 관계 데이터에서 실제 리소스 타입 추론 (JSON:API 스펙 준수)
+   * 데이터 구조를 분석하여 실제 모델명을 추론
+   * @param data 관계 데이터 객체
+   * @param relationshipName 관계 필드명 (fallback용)
+   * @param isArray 배열 관계 여부
+   */
+  static inferResourceTypeFromData(data: any, relationshipName: string, isArray: boolean): string {
+    if (!data || typeof data !== 'object') {
+      return this.inferResourceTypeFromRelationship(relationshipName, isArray);
+    }
+
+    // 1. 명시적 _type 또는 __typename 필드가 있는 경우 (GraphQL 스타일)
+    if (data._type) {
+      return this.normalizeResourceType(data._type);
+    }
+    if (data.__typename) {
+      return this.normalizeResourceType(data.__typename);
+    }
+
+    // 2. 데이터 구조의 고유 필드 패턴으로 모델 추론
+    const modelType = this.inferModelFromDataStructure(data, relationshipName);
+    if (modelType) {
+      return modelType;
+    }
+
+    // 3. 관계명에서 모델명 추론 (camelCase 보존)
+    // 예: userRoles -> userRole (단수형), roles -> role
+    return this.inferResourceTypeFromRelationship(relationshipName, isArray);
+  }
+
+  /**
+   * 데이터 구조에서 모델 타입 추론
+   * 필드 시그니처를 분석하여 모델을 식별
+   */
+  private static inferModelFromDataStructure(data: any, relationshipName: string): string | null {
+    const keys = Object.keys(data).filter(k => !k.startsWith('_'));
+    
+    // 중간 테이블 패턴 감지 (예: UserRole은 userUuid, roleUuid 같은 FK 필드를 가짐)
+    // 외래키 필드 패턴: [model]Id, [model]Uuid, [model]_id 형태
+    const foreignKeyPattern = /^([a-zA-Z]+)(Id|Uuid|_id)$/;
+    const foreignKeys: string[] = [];
+    const modelNames: string[] = [];
+    
+    keys.forEach(k => {
+      const match = k.match(foreignKeyPattern);
+      if (match) {
+        foreignKeys.push(k);
+        // 외래키에서 모델명 추출 (userUuid -> user, roleId -> role)
+        modelNames.push(match[1].toLowerCase());
+      }
+    });
+    
+    // 2개 이상의 외래키가 있으면 중간 테이블로 판단
+    // 외래키 필드명에서 모델명 조합하여 중간 테이블명 생성
+    if (foreignKeys.length >= 2) {
+      // 외래키에서 추출한 모델명들을 조합하여 중간 테이블명 생성
+      // userUuid + roleUuid -> userrole (소문자 통일)
+      const combinedName = modelNames.join('');
+      
+      return combinedName.toLowerCase(); // 소문자로 통일
+    }
+
+    // 중첩된 관계 데이터가 있는 경우 (예: { id: 1, role: { id: 'xxx', name: 'admin' } })
+    // 이 경우도 중간 테이블일 가능성이 높음
+    const nestedRelations = keys.filter(k => {
+      const val = data[k];
+      return val && typeof val === 'object' && !Array.isArray(val) && !(val instanceof Date) &&
+             (val.id || val.uuid || val._id);
+    });
+    
+    // 외래키가 1개 이상 있고, 중첩 관계도 있으면 중간 테이블
+    if (foreignKeys.length >= 1 && nestedRelations.length > 0) {
+      // 외래키 모델명과 중첩 관계 이름을 조합
+      const allModelNames = [...modelNames];
+      nestedRelations.forEach(relName => {
+        if (!allModelNames.includes(relName.toLowerCase())) {
+          allModelNames.push(relName.toLowerCase());
+        }
+      });
+      
+      if (allModelNames.length >= 2) {
+        const combinedName = allModelNames.join('');
+        
+        return combinedName.toLowerCase(); // 소문자로 통일
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * 리소스 타입 정규화 (소문자, 하이픈 변환 등)
+   */
+  private static normalizeResourceType(type: string): string {
+    // PascalCase를 kebab-case로 변환하지 않고 소문자로만 변환
+    // JSON:API는 소문자를 권장하지만 형식을 강제하지 않음
+    return type.toLowerCase();
   }
 
   /**
@@ -2230,6 +2413,7 @@ export class JsonApiTransformer {
       included?: JsonApiResource[];
       query?: any; // 요청 쿼리 정보 추가
       includeMerge?: boolean; // includeMerge 옵션 추가
+      jsonFields?: Set<string>; // Json 타입 필드 목록
     } = {}
   ): JsonApiResponse {
     const {
@@ -2240,7 +2424,8 @@ export class JsonApiTransformer {
       meta,
       included,
       query,
-      includeMerge = false // 기본값: false (표준 JSON:API 방식)
+      includeMerge = false, // 기본값: false (표준 JSON:API 방식)
+      jsonFields
     } = options;
 
     // 현재 리소스 타입의 필드 제한
@@ -2257,7 +2442,8 @@ export class JsonApiTransformer {
         primaryKey, 
         resourceFields, 
         baseUrl,
-        includeMerge
+        includeMerge,
+        jsonFields
       );
     } else {
       jsonApiData = this.transformToResource(
@@ -2267,7 +2453,8 @@ export class JsonApiTransformer {
         resourceFields, 
         baseUrl,
         undefined, // id 파라미터
-        includeMerge
+        includeMerge,
+        jsonFields
       );
     }
 
@@ -2355,6 +2542,7 @@ export class JsonApiTransformer {
 
   /**
    * 중첩된 include 경로를 재귀적으로 처리
+   * JSON:API 스펙에 맞게 실제 모델 타입을 추론하여 사용
    */
   private static processNestedIncludes(
     currentData: any,
@@ -2376,14 +2564,16 @@ export class JsonApiTransformer {
       return;
     }
 
-    const resourceType = this.inferResourceTypeFromRelationship(relationName, Array.isArray(relationData));
-    const resourceFields = fieldsParams?.[resourceType];
+    const isArray = Array.isArray(relationData);
     const isLastPart = currentIndex === pathParts.length - 1;
 
-    if (Array.isArray(relationData)) {
+    if (isArray) {
       relationData.forEach(relItem => {
         if (!relItem) return;
 
+        // 각 아이템에서 실제 모델 타입 추론
+        const resourceType = this.inferResourceTypeFromData(relItem, relationName, true);
+        const resourceFields = fieldsParams?.[resourceType];
         const resourceKey = `${resourceType}:${relItem.id || relItem.uuid || relItem._id}`;
         
         // 현재 레벨의 리소스를 included에 추가
@@ -2412,6 +2602,9 @@ export class JsonApiTransformer {
         }
       });
     } else {
+      // 단일 객체에서 실제 모델 타입 추론
+      const resourceType = this.inferResourceTypeFromData(relationData, relationName, false);
+      const resourceFields = fieldsParams?.[resourceType];
       const resourceKey = `${resourceType}:${relationData.id || relationData.uuid || relationData._id}`;
       
       // 현재 레벨의 리소스를 included에 추가

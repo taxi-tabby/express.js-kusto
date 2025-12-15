@@ -5,6 +5,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { config } from 'dotenv';
+import { PrismaPg } from '@prisma/adapter-pg';
 import {
 	DatabaseClientMap,
 	DatabaseClientType,
@@ -171,10 +172,11 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 			let clientModule;
 			let DatabasePrismaClient;			
 			
-			// Enhanced serverless environment detection and handling
+			// Webpack/Production 환경 감지: dist/server.js 존재만으로 판단하지 않음
+			// NODE_ENV가 development면 무조건 개발 경로 사용
 			const isWebpackBuild = process.env.WEBPACK_BUILD === 'true' || 
-								   process.env.NODE_ENV === 'production' ||
-								   fs.existsSync(path.join(process.cwd(), 'dist', 'server.js'));
+								   (process.env.NODE_ENV === 'production' && 
+								    fs.existsSync(path.join(process.cwd(), 'dist', 'server.js')));
 			
 			if (isWebpackBuild) {
 				// In webpack build/production environment
@@ -333,17 +335,11 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 				throw urlError;
 			}
 
-			// Get datasource name
-			const datasourceName = this.getDatasourceName(folderName);
-
-			// Create Prisma client instance with database URL and connection pool settings
+			// Create Prisma client instance with driver adapter
+			// Prisma 7: Use @prisma/adapter-pg for PostgreSQL connections
+			const adapter = new PrismaPg({ connectionString: connectionUrl });
 			const prismaClient = new DatabasePrismaClient({
-				datasources: {
-					[datasourceName]: {
-						url: connectionUrl
-					}
-				},
-				// 올바른 연결 풀 설정
+				adapter,
 				log: process.env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error'],
 				errorFormat: 'minimal'
 			});
@@ -428,7 +424,8 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 			const hasGenerator = /generator\s+\w+\s*{[\s\S]*?provider\s*=\s*["']prisma-client-js["'][\s\S]*?}/m.test(schemaContent);
 
 			// Check for datasource block (any name, not just "db")
-			const hasDatasource = /datasource\s+\w+\s*{[\s\S]*?provider\s*=[\s\S]*?url\s*=[\s\S]*?}/m.test(schemaContent);
+			// Prisma 7: url is optional in schema (moved to prisma.config.ts)
+			const hasDatasource = /datasource\s+\w+\s*{[\s\S]*?provider\s*=/m.test(schemaContent);
 
 			if (!hasGenerator || !hasDatasource) {
 				return false;
@@ -453,20 +450,27 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 
 	/**
 	 * Get database URL by parsing schema.prisma file to extract environment variable
+	 * Supports both Prisma 6 (url in schema) and Prisma 7 (url in prisma.config.ts) formats
 	 */
 	private getDatabaseUrl(folderName: string): string {
 		try {
 			const schemaPath = path.join(process.cwd(), 'src', 'app', 'db', folderName, 'schema.prisma');
 			const schemaContent = fs.readFileSync(schemaPath, 'utf-8');
 
-			// Parse the schema to extract the env variable name
+			// Parse the schema to extract the env variable name (Prisma 6 format)
 			const urlMatch = schemaContent.match(/url\s*=\s*env\("([^"]+)"\)/);
 
-			if (!urlMatch || !urlMatch[1]) {
-				throw new Error(`Could not parse database URL from schema for ${folderName}`);
+			let envVarName: string;
+			if (urlMatch && urlMatch[1]) {
+				// Prisma 6 format: url = env("DEFAULT_URL")
+				envVarName = urlMatch[1];
+			} else {
+				// Prisma 7 format: url is provided via CLI --url option
+				// Use folder name convention to determine env variable
+				// Convert folder name to env variable: default -> DEFAULT__KUSTO_RDB_URL, myDatabase -> MY_DATABASE__KUSTO_RDB_URL
+				envVarName = folderName.replace(/([a-z])([A-Z])/g, '$1_$2').toUpperCase() + '__KUSTO_RDB_URL';
 			}
 
-			const envVarName = urlMatch[1];
 			let url = process.env[envVarName];
 			
 
@@ -615,8 +619,9 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 
 	/**
 	 * Reconnect to a specific database
+	 * 서버리스 환경에서 슬립 복구 시 자동 재연결을 위해 public으로 노출
 	 */
-	private async reconnectDatabase(databaseName: string): Promise<boolean> {
+	public async reconnectDatabase(databaseName: string): Promise<boolean> {
 		const attempts = this.reconnectionAttempts.get(databaseName) || 0;
 		
 		// 빠른 포기: 최대 시도 횟수에 도달하면 즉시 실패 처리 (성능 개선)
@@ -659,10 +664,8 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 				lastChecked: Date.now()
 			});
 
-			// 개발 환경에서만 재연결 성공 로그 출력
-			if (process.env.NODE_ENV === 'development') {
-				console.log(`✅ Successfully reconnected to database '${databaseName}'`);
-			}
+			// 프로덕션에서도 재연결 성공 로그 출력 (중요 이벤트)
+			console.log(`✅ Successfully reconnected to database '${databaseName}'`);
 			return true;
 
 		} catch (error) {
@@ -677,6 +680,8 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 
 	/**
 	 * Recreate a client for a specific database
+	 * Prisma 7: PrismaPg adapter를 사용하여 연결 재생성
+	 * 서버리스 DB 슬립 복구를 위해 충분한 재시도 시간 확보
 	 */
 	private async recreateClient(databaseName: string): Promise<void> {
 		const config = this.configs.get(databaseName);
@@ -690,23 +695,38 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 			throw new Error(`Cannot recreate client for '${databaseName}': client type not found`);
 		}
 
-		// Create new Prisma client instance
+		// Create new Prisma client instance with PrismaPg adapter (Prisma 7 방식)
 		const connectionUrl = this.getDatabaseUrl(databaseName);
-		const datasourceName = this.getDatasourceName(databaseName);
-
+		
+		// Prisma 7: @prisma/adapter-pg 사용
+		const adapter = new PrismaPg({ connectionString: connectionUrl });
+		
 		const prismaClient = new DatabasePrismaClient({
-			datasources: {
-				[datasourceName]: {
-					url: connectionUrl
-				}
-			},
-			// 올바른 연결 풀 설정
+			adapter,
 			log: process.env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error'],
 			errorFormat: 'minimal'
 		});
 
-		// Test the connection
-		await prismaClient.$connect();
+		// Test the connection with retry (서버리스 DB 복구 대기)
+		let connectionAttempts = 0;
+		const maxAttempts = 5;
+		const baseDelay = 2000; // 2초부터 시작
+		
+		while (connectionAttempts < maxAttempts) {
+			try {
+				await prismaClient.$connect();
+				break; // Connection successful
+			} catch (connectError: any) {
+				connectionAttempts++;
+				if (connectionAttempts >= maxAttempts) {
+					throw connectError;
+				}
+				// 지수 백오프: 서버리스 DB가 깨어날 시간을 위해 대기
+				const delay = Math.min(baseDelay * Math.pow(1.5, connectionAttempts - 1), 8000);
+				console.log(`⏳ DB 연결 대기 중 (${connectError.message?.substring(0, 40)}...), ${delay/1000}초 후 재시도... (${connectionAttempts}/${maxAttempts})`);
+				await new Promise(resolve => setTimeout(resolve, delay));
+			}
+		}
 
 		// Store the new client instance
 		this.databases.set(databaseName, prismaClient);
@@ -823,8 +843,126 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 	}
 
 	/**
-	 * Get a wrapped client with enhanced type information and runtime type checking
-	 * This method provides the best TypeScript intellisense by preserving the original client type
+	 * Prisma 에러 코드 (공식 문서 기반)
+	 * @see https://www.prisma.io/docs/reference/api-reference/error-reference
+	 */
+	private static readonly PRISMA_CONNECTION_ERROR_CODES = new Set([
+		// Common errors (P1xxx) - 연결 관련
+		'P1001', // Can't reach database server
+		'P1002', // Database server was reached but timed out
+		'P1003', // Database does not exist
+		'P1008', // Operations timed out
+		'P1009', // Database already exists
+		'P1010', // User was denied access
+		'P1011', // Error opening a TLS connection
+		'P1012', // Schema validation error (잘못된 연결 문자열 포함)
+		'P1013', // Invalid database string
+		'P1014', // Underlying model does not exist
+		'P1015', // Schema using features not supported
+		'P1016', // Raw query parameter count mismatch
+		'P1017', // Server has closed the connection
+		
+		// Query engine errors (P2xxx) - 연결 풀/타임아웃 관련
+		'P2024', // Timed out fetching a new connection from pool
+		'P2025', // Record not found (데이터 문제지만 연결 문제로 발생 가능)
+	]);
+
+	/**
+	 * PostgreSQL 에러 코드 (공식 문서 기반)
+	 * @see https://www.postgresql.org/docs/current/errcodes-appendix.html
+	 */
+	private static readonly POSTGRES_CONNECTION_ERROR_CODES = new Set([
+		// Class 08 — Connection Exception
+		'08000', // connection_exception
+		'08003', // connection_does_not_exist
+		'08006', // connection_failure
+		'08001', // sqlclient_unable_to_establish_sqlconnection
+		'08004', // sqlserver_rejected_establishment_of_sqlconnection
+		'08007', // transaction_resolution_unknown
+		'08P01', // protocol_violation
+		
+		// Class 53 — Insufficient Resources
+		'53000', // insufficient_resources
+		'53100', // disk_full
+		'53200', // out_of_memory
+		'53300', // too_many_connections
+		
+		// Class 57 — Operator Intervention
+		'57000', // operator_intervention
+		'57014', // query_canceled
+		'57P01', // admin_shutdown
+		'57P02', // crash_shutdown
+		'57P03', // cannot_connect_now (DB starting up)
+		'57P04', // database_dropped
+		
+		// Class 58 — System Error
+		'58000', // system_error
+		'58030', // io_error
+		
+		// Class XX — Internal Error
+		'XX000', // internal_error
+		'XX001', // data_corrupted
+		'XX002', // index_corrupted
+	]);
+
+	/**
+	 * Node.js 시스템 에러 코드
+	 */
+	private static readonly NODEJS_CONNECTION_ERROR_CODES = new Set([
+		'ECONNREFUSED',   // 연결 거부됨
+		'ECONNRESET',     // 연결이 리셋됨
+		'ENOTFOUND',      // DNS 조회 실패
+		'ETIMEDOUT',      // 연결 타임아웃
+		'ECONNABORTED',   // 연결이 중단됨
+		'EHOSTUNREACH',   // 호스트에 도달할 수 없음
+		'ENETUNREACH',    // 네트워크에 도달할 수 없음
+		'EPIPE',          // 파이프가 끊어짐
+		'EAI_AGAIN',      // DNS 일시적 실패
+	]);
+
+	/**
+	 * 연결 오류인지 판단 (서버리스 슬립 복구용)
+	 * 공식 에러 코드 기반으로 정확하게 판단
+	 */
+	private isConnectionError(error: any): boolean {
+		if (!error) return false;
+
+		// 1. Prisma 에러 코드 체크
+		const prismaCode = error.code;
+		if (prismaCode && PrismaManager.PRISMA_CONNECTION_ERROR_CODES.has(prismaCode)) {
+			return true;
+		}
+
+		// 2. PostgreSQL 에러 코드 체크 (Prisma가 내부적으로 전달하는 경우)
+		const pgCode = error.meta?.code || error.errorCode;
+		if (pgCode && PrismaManager.POSTGRES_CONNECTION_ERROR_CODES.has(pgCode)) {
+			return true;
+		}
+
+		// 3. Node.js 시스템 에러 코드 체크
+		const nodeCode = error.code || error.cause?.code;
+		if (nodeCode && PrismaManager.NODEJS_CONNECTION_ERROR_CODES.has(nodeCode)) {
+			return true;
+		}
+
+		// 4. PrismaClientKnownRequestError / PrismaClientInitializationError 체크
+		const errorName = error.constructor?.name || error.name;
+		if (errorName === 'PrismaClientInitializationError') {
+			return true; // 초기화 에러는 항상 연결 문제
+		}
+
+		// 5. 중첩된 cause 체크 (에러 체이닝)
+		if (error.cause && this.isConnectionError(error.cause)) {
+			return true;
+		}
+
+		return false;
+	}
+
+	/**
+	 * Get a wrapped client with automatic reconnection on connection errors
+	 * 성능 최적화: 정상 동작 시 오버헤드 없음, 연결 오류 시에만 재연결 시도
+	 * 서버리스 DB 슬립 복구를 위해 충분한 재시도 시간 확보
 	 * Synchronous version for use in repositories
 	 */
 	public getWrap(databaseName: string): any {
@@ -833,7 +971,6 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 				throw new Error('데이터베이스 관리자가 초기화되지 않았습니다. 애플리케이션 시작 시 initialize()를 호출했는지 확인하세요.');
 			}
 
-			// 기존 클라이언트를 재사용 - 새로운 인스턴스를 생성하지 않음
 			const existingClient = this.databases.get(databaseName);
 			if (!existingClient) {
 				const availableDbs = Array.from(this.databases.keys());
@@ -841,7 +978,74 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 				throw new Error(`데이터베이스 '${databaseName}'를 찾을 수 없습니다. 사용 가능한 데이터베이스: ${dbList}`);
 			}
 
-			return existingClient;
+			// Proxy를 사용하여 모든 모델 접근에 자동 재연결 로직 적용
+			const manager = this;
+			
+			return new Proxy(existingClient, {
+				get(target, prop, receiver) {
+					const value = Reflect.get(target, prop, receiver);
+					
+					// 함수가 아니거나 내부 메서드($로 시작)면 그대로 반환
+					if (typeof value !== 'object' || value === null) {
+						return value;
+					}
+					
+					// Prisma 모델 객체 (user, userRateLimit 등)에 대한 Proxy
+					return new Proxy(value, {
+						get(modelTarget, modelProp, modelReceiver) {
+							const modelValue = Reflect.get(modelTarget, modelProp, modelReceiver);
+							
+							// 함수가 아니면 그대로 반환
+							if (typeof modelValue !== 'function') {
+								return modelValue;
+							}
+							
+							// Prisma 쿼리 메서드를 래핑 (findFirst, findMany, create, update 등)
+							return async function(...args: any[]) {
+								// 서버리스 DB 슬립 복구를 위해 충분한 재시도 (최대 ~30초)
+								const maxRetries = 5;
+								const baseDelay = 2000; // 2초부터 시작
+								let lastError: Error | null = null;
+								
+								for (let attempt = 0; attempt <= maxRetries; attempt++) {
+									try {
+										// 재시도 시 최신 클라이언트 사용
+										const currentClient = manager.databases.get(databaseName);
+										const currentModel = (currentClient as any)[prop];
+										return await currentModel[modelProp](...args);
+									} catch (error: any) {
+										lastError = error;
+										
+										// 연결 오류이고 재시도 가능하면 재연결 시도
+										if (manager.isConnectionError(error) && attempt < maxRetries) {
+											// 지수 백오프: 2초, 3초, 4.5초, 6.75초, 10초... (서버리스 DB 복구 대기)
+											const delay = Math.min(baseDelay * Math.pow(1.5, attempt), 10000);
+											console.log(`🔄 DB 연결 오류 감지 (${error.message?.substring(0, 50)}...), ${delay/1000}초 후 재시도... (${attempt + 1}/${maxRetries})`);
+											
+											// 먼저 대기 (DB가 깨어날 시간 확보)
+											await new Promise(resolve => setTimeout(resolve, delay));
+											
+											try {
+												await manager.reconnectDatabase(databaseName);
+												continue;
+											} catch (reconnectError) {
+												// 재연결 실패해도 다음 시도에서 다시 시도
+												console.log(`⏳ 재연결 대기 중... (${attempt + 1}/${maxRetries})`);
+											}
+											continue;
+										}
+										
+										// 연결 오류가 아니거나 재시도 횟수 초과
+										throw error;
+									}
+								}
+								
+								throw lastError;
+							};
+						}
+					});
+				}
+			});
 
 		} catch (error) {
 			if (error instanceof Error) {

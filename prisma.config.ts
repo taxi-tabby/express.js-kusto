@@ -1,6 +1,6 @@
 import 'dotenv/config'
-import type { PrismaConfig } from 'prisma'
+import { defineConfig, env } from 'prisma/config'
 
-export default {
+export default defineConfig({
 
-} satisfies PrismaConfig
+})

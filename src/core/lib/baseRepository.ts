@@ -132,20 +132,18 @@ export abstract class BaseRepository<T extends DatabaseNamesUnion> {
                 const isConnectionError = this.isConnectionError(error);
                 
                 if (isConnectionError && attempt < maxRetries) {
-                    // 개발 환경에서만 재연결 시도 로그 출력
-                    if (process.env.NODE_ENV === 'development') {
-                        console.log(`🔄 DB connection error, attempting reconnection (${attempt + 1}/${maxRetries + 1})`);
-                    }
+                    // 서버리스 슬립 복구를 위한 재연결 시도 로그
+                    console.log(`🔄 DB connection lost (serverless wake-up?), reconnecting... (${attempt + 1}/${maxRetries + 1})`);
                     
                     // 재연결 시도
                     try {
-                        await this.db['reconnectDatabase'](this.repositoryDatabaseName);
+                        await this.db.reconnectDatabase(this.repositoryDatabaseName);
                     } catch (reconnectError) {
-                        // 재연결 실패 로그 제거 (성능상 불필요)
+                        console.error(`❌ Reconnection attempt failed:`, reconnectError);
                     }
                     
-                    // 짧은 대기 후 재시도
-                    await new Promise(resolve => setTimeout(resolve, 100));
+                    // 서버리스 DB가 깨어날 시간을 위해 약간의 대기
+                    await new Promise(resolve => setTimeout(resolve, 500));
                     continue;
                 }
                 

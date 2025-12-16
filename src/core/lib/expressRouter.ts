@@ -2319,6 +2319,14 @@ export class ExpressRouter {
                 field: string;
             };
 
+            /**
+             * 관계 리소스의 식별자 키 설정
+             * 기본값은 schemaAnalyzer를 통해 자동 감지 (uuid 필드가 있으면 uuid, 없으면 id)
+             * 특정 관계에 대해 다른 키를 사용하려면 relationName: keyName 형태로 지정
+             * @example { permissions: 'uuid', users: 'id' }
+             */
+            relationshipKey?: string | Record<string, string>;
+
             /** 미들웨어 */
             middleware?: {
                 index?: MiddlewareHandlerFunction[];
@@ -4833,8 +4841,47 @@ export class ExpressRouter {
     }
 
     /**
-     * JSON:API Relationship ?�우???�정
-     * 관�??�체�?관리하???�우?��? 관??리소?��? 조회?�는 ?�우?��? ?�성
+     * 관계 모델의 식별자 키를 결정합니다
+     * 우선순위: options.relationshipKey > schemaAnalyzer (uuid 우선) > 기본값 'id'
+     */
+    private getRelationshipKey(modelName: string, relationName: string, options?: any): string {
+        // 1. 옵션에서 명시적으로 지정된 경우
+        if (options?.relationshipKey) {
+            if (typeof options.relationshipKey === 'string') {
+                return options.relationshipKey;
+            }
+            if (typeof options.relationshipKey === 'object' && options.relationshipKey[relationName]) {
+                return options.relationshipKey[relationName];
+            }
+        }
+
+        // 2. schemaAnalyzer를 통해 관계 모델 정보 확인
+        if (this.schemaAnalyzer) {
+            // 현재 모델에서 관계 정보 가져오기
+            const model = this.schemaAnalyzer.getModel(modelName);
+            if (model) {
+                const relation = model.relations.find(r => r.name === relationName);
+                if (relation && relation.model) {
+                    // 관계 모델의 필드 정보 확인
+                    const relatedModel = this.schemaAnalyzer.getModel(relation.model);
+                    if (relatedModel) {
+                        // uuid 필드가 있고 unique인지 확인
+                        const uuidField = relatedModel.fields.find(f => f.name === 'uuid' && f.isUnique);
+                        if (uuidField) {
+                            return 'uuid';
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3. 기본값
+        return 'id';
+    }
+
+    /**
+     * JSON:API Relationship 라우트 설정
+     * 관계 자체를 관리하는 라우트와 관계 리소스를 조회하는 라우트를 생성
      */
     private setupRelationshipRoutes(
         client: any, 
@@ -5047,12 +5094,15 @@ export class ExpressRouter {
                 }
 
                 const relationshipData = req.body.data;
+                
+                // 관계 모델의 식별자 키 결정
+                const relationKey = this.getRelationshipKey(modelName, relationName, options);
                 let connectData;
 
                 if (Array.isArray(relationshipData)) {
-                    connectData = { [relationName]: { connect: relationshipData.map((item: any) => ({ id: item.id })) } };
+                    connectData = { [relationName]: { connect: relationshipData.map((item: any) => ({ [relationKey]: item.id })) } };
                 } else {
-                    connectData = { [relationName]: { connect: { id: relationshipData.id } } };
+                    connectData = { [relationName]: { connect: { [relationKey]: relationshipData.id } } };
                 }
 
                 await client[modelName].update({
@@ -5063,7 +5113,7 @@ export class ExpressRouter {
                 res.status(204).end();
 
             } catch (error: any) {
-                console.error(`Relationship Update Error for ${modelName}:`, error);
+                console.error(`Relationship Add Error for ${modelName}:`, error);
                 const { code, status } = ErrorFormatter.mapPrismaError(error);
                 const errorResponse = this.formatJsonApiError(error, code, status, req.path, req.method);
                 res.status(status).json(errorResponse);
@@ -5105,21 +5155,24 @@ export class ExpressRouter {
                 }
 
                 const relationshipData = req.body.data;
+                
+                // 관계 모델의 식별자 키 결정
+                const relationKey = this.getRelationshipKey(modelName, relationName, options);
                 let updateData;
 
                 if (relationshipData === null) {
-                    // 관�??�거
+                    // 관계 제거
                     updateData = { [relationName]: { disconnect: true } };
                 } else if (Array.isArray(relationshipData)) {
-                    // ?��???관�?교체
+                    // 다대다 관계 교체
                     updateData = { 
                         [relationName]: { 
-                            set: relationshipData.map((item: any) => ({ id: item.id })) 
+                            set: relationshipData.map((item: any) => ({ [relationKey]: item.id })) 
                         } 
                     };
                 } else {
-                    // ?��???관�?교체
-                    updateData = { [relationName]: { connect: { id: relationshipData.id } } };
+                    // 일대일 관계 교체
+                    updateData = { [relationName]: { connect: { [relationKey]: relationshipData.id } } };
                 }
 
                 await client[modelName].update({
@@ -5172,12 +5225,15 @@ export class ExpressRouter {
                 }
 
                 const relationshipData = req.body.data;
+                
+                // 관계 모델의 식별자 키 결정
+                const relationKey = this.getRelationshipKey(modelName, relationName, options);
                 let disconnectData;
 
                 if (Array.isArray(relationshipData)) {
-                    disconnectData = { [relationName]: { disconnect: relationshipData.map((item: any) => ({ id: item.id })) } };
+                    disconnectData = { [relationName]: { disconnect: relationshipData.map((item: any) => ({ [relationKey]: item.id })) } };
                 } else {
-                    disconnectData = { [relationName]: { disconnect: { id: relationshipData.id } } };
+                    disconnectData = { [relationName]: { disconnect: { [relationKey]: relationshipData.id } } };
                 }
 
                 await client[modelName].update({

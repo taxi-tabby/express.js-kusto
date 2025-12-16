@@ -2698,7 +2698,8 @@ export class ExpressRouter {
                         items,
                         queryParams.include,
                         queryParams.fields,
-                        baseUrl
+                        baseUrl,
+                        options?.relationshipKey
                     );
                 }
 
@@ -2759,7 +2760,8 @@ export class ExpressRouter {
                         meta,
                         included,
                         includeMerge: options?.includeMerge || false,
-                        jsonFields
+                        jsonFields,
+                        relationshipKey: options?.relationshipKey
                     }
                 );
                 
@@ -2954,7 +2956,8 @@ export class ExpressRouter {
                         [item],
                         queryParams.include,
                         queryParams.fields,
-                        baseUrl
+                        baseUrl,
+                        options?.relationshipKey
                     );
                 }
 
@@ -2972,7 +2975,8 @@ export class ExpressRouter {
                         baseUrl,
                         included,
                         includeMerge: options?.includeMerge || false,
-                        jsonFields
+                        jsonFields,
+                        relationshipKey: options?.relationshipKey
                     }
                 );
                 
@@ -3162,7 +3166,8 @@ export class ExpressRouter {
                         primaryKey,
                         baseUrl,
                         includeMerge: options?.includeMerge || false,
-                        jsonFields
+                        jsonFields,
+                        relationshipKey: options?.relationshipKey
                     }
                 );
                 
@@ -4059,7 +4064,8 @@ export class ExpressRouter {
                         primaryKey,
                         baseUrl,
                         includeMerge: options?.includeMerge || false,
-                        jsonFields
+                        jsonFields,
+                        relationshipKey: options?.relationshipKey
                     }
                 );
                 
@@ -4880,6 +4886,58 @@ export class ExpressRouter {
     }
 
     /**
+     * 관계 모델의 정보를 반환합니다
+     * 중간 테이블 여부, 필수 관계 여부 등을 판단합니다
+     */
+    private getRelationModelInfo(modelName: string, relationName: string): {
+        modelName: string;
+        isJoinTable: boolean;
+        hasRequiredRelation: boolean;
+    } | null {
+        if (!this.schemaAnalyzer) {
+            return null;
+        }
+
+        const model = this.schemaAnalyzer.getModel(modelName);
+        if (!model) {
+            return null;
+        }
+
+        const relation = model.relations.find(r => r.name === relationName);
+        if (!relation || !relation.model) {
+            return null;
+        }
+
+        const relatedModel = this.schemaAnalyzer.getModel(relation.model);
+        if (!relatedModel) {
+            return null;
+        }
+
+        // 중간 테이블 판단: 
+        // 1. 두 개 이상의 필수 관계 필드를 가지고 있음
+        // 2. 또는 FK 필드가 optional이 아님
+        const requiredRelationFields = relatedModel.fields.filter(f => 
+            f.relationName && !f.isOptional
+        );
+        
+        // FK 필드 확인 (예: roleUuid, permissionUuid)
+        const foreignKeyFields = relatedModel.fields.filter(f => 
+            (f.name.endsWith('Uuid') || f.name.endsWith('Id')) && 
+            !f.isOptional &&
+            !f.isId
+        );
+
+        const isJoinTable = requiredRelationFields.length >= 2 || foreignKeyFields.length >= 2;
+        const hasRequiredRelation = foreignKeyFields.length > 0;
+
+        return {
+            modelName: relation.model,
+            isJoinTable,
+            hasRequiredRelation
+        };
+    }
+
+    /**
      * JSON:API Relationship 라우트 설정
      * 관계 자체를 관리하는 라우트와 관계 리소스를 조회하는 라우트를 생성
      */
@@ -4970,14 +5028,15 @@ export class ExpressRouter {
                     relationData,
                     relationResourceType,
                     {
-                        primaryKey: 'id',
+                        primaryKey: this.getRelationshipKey(relationName, options?.relationshipKey),
                         fields: queryParams.fields,
                         baseUrl,
                         links: {
                             self: `${baseUrl}/${modelName.toLowerCase()}/${parsedIdentifier}/${relationName}`,
                             related: `${baseUrl}/${modelName.toLowerCase()}/${parsedIdentifier}/relationships/${relationName}`
                         },
-                        jsonFields
+                        jsonFields,
+                        relationshipKey: options?.relationshipKey
                     }
                 );
 
@@ -5190,12 +5249,12 @@ export class ExpressRouter {
             }
         });
 
-        // DELETE /:identifier/relationships/:relationName - 관�??�거
+        // DELETE /:identifier/relationships/:relationName - 관계 제거
         this.router.delete(`/:${primaryKey}/relationships/:relationName`, async (req, res) => {
             try {
                 res.setHeader('Content-Type', 'application/vnd.api+json');
                 
-                // Content-Type 검�?
+                // Content-Type 검사
                 const contentType = req.get('Content-Type');
                 if (contentType && !contentType.includes('application/vnd.api+json')) {
                     const errorResponse = this.formatJsonApiError(
@@ -5228,18 +5287,71 @@ export class ExpressRouter {
                 
                 // 관계 모델의 식별자 키 결정
                 const relationKey = this.getRelationshipKey(modelName, relationName, options);
-                let disconnectData;
-
-                if (Array.isArray(relationshipData)) {
-                    disconnectData = { [relationName]: { disconnect: relationshipData.map((item: any) => ({ [relationKey]: item.id })) } };
+                
+                // 관계 모델 정보 확인
+                const relationInfo = this.getRelationModelInfo(modelName, relationName);
+                const isSoftDelete = options?.softDelete?.enabled;
+                const softDeleteField = options?.softDelete?.field || 'deletedAt';
+                
+                // 중간 테이블(조인 테이블)인지 확인 - 필수 관계가 있는 경우
+                const isJoinTable = relationInfo?.isJoinTable || false;
+                
+                if (isJoinTable || relationInfo?.hasRequiredRelation) {
+                    // 중간 테이블: disconnect 대신 직접 soft delete 또는 hard delete
+                    const idsToRemove = Array.isArray(relationshipData) 
+                        ? relationshipData.map((item: any) => item.id)
+                        : [relationshipData.id];
+                    
+                    if (relationInfo?.modelName && client[relationInfo.modelName]) {
+                        const relatedClient = client[relationInfo.modelName];
+                        
+                        // soft delete가 활성화되어 있고, 관계 모델에 해당 필드가 있으면 soft delete
+                        const relatedModel = this.schemaAnalyzer?.getModel(relationInfo.modelName);
+                        const hasSoftDeleteField = relatedModel?.fields.some(f => f.name === softDeleteField);
+                        
+                        if (isSoftDelete && hasSoftDeleteField) {
+                            // Soft Delete: deletedAt 업데이트
+                            await relatedClient.updateMany({
+                                where: {
+                                    [relationKey]: { in: idsToRemove }
+                                },
+                                data: {
+                                    [softDeleteField]: new Date()
+                                }
+                            });
+                        } else {
+                            // Hard Delete: 레코드 삭제
+                            await relatedClient.deleteMany({
+                                where: {
+                                    [relationKey]: { in: idsToRemove }
+                                }
+                            });
+                        }
+                    } else {
+                        // 관계 모델을 찾을 수 없는 경우 에러
+                        const errorResponse = this.formatJsonApiError(
+                            new Error(`Cannot find related model for relationship '${relationName}'`),
+                            'RELATIONSHIP_MODEL_NOT_FOUND',
+                            500,
+                            req.path
+                        );
+                        return res.status(500).json(errorResponse);
+                    }
                 } else {
-                    disconnectData = { [relationName]: { disconnect: { [relationKey]: relationshipData.id } } };
-                }
+                    // 일반 관계: disconnect 사용
+                    let disconnectData;
 
-                await client[modelName].update({
-                    where: { [primaryKey]: parsedIdentifier },
-                    data: disconnectData
-                });
+                    if (Array.isArray(relationshipData)) {
+                        disconnectData = { [relationName]: { disconnect: relationshipData.map((item: any) => ({ [relationKey]: item.id })) } };
+                    } else {
+                        disconnectData = { [relationName]: { disconnect: { [relationKey]: relationshipData.id } } };
+                    }
+
+                    await client[modelName].update({
+                        where: { [primaryKey]: parsedIdentifier },
+                        data: disconnectData
+                    });
+                }
 
                 res.status(204).end();
 
@@ -5327,10 +5439,11 @@ export class ExpressRouter {
                     relationData,
                     resourceType,
                     {
-                        primaryKey: 'id', // 관??리소?�는 기본?�으�?id ?�용
+                        primaryKey: this.getRelationshipKey(relationName, options?.relationshipKey),
                         fields: queryParams.fields,
                         baseUrl,
-                        jsonFields
+                        jsonFields,
+                        relationshipKey: options?.relationshipKey
                     }
                 );
 

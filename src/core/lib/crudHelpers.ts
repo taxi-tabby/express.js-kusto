@@ -2029,6 +2029,7 @@ export class JsonApiTransformer {
   /**
    * 원시 데이터를 JSON:API 리소스 객체로 변환
    * @param jsonFields - Json 타입 필드 이름 목록 (관계 데이터로 간주하지 않음)
+   * @param relationshipKey - 관계 리소스의 식별자 키 설정 (예: { permissions: 'uuid' })
    */
   static transformToResource(
     item: any, 
@@ -2038,7 +2039,8 @@ export class JsonApiTransformer {
     baseUrl?: string,
     id?: string,
     includeMerge: boolean = false,
-    jsonFields?: Set<string>
+    jsonFields?: Set<string>,
+    relationshipKey?: string | Record<string, string>
   ): JsonApiResource {
     const resourceId = id || item[primaryKey] || item.id || item.uuid || item._id;
     
@@ -2058,7 +2060,8 @@ export class JsonApiTransformer {
       primaryKey, 
       fields,
       includeMerge,
-      jsonFields
+      jsonFields,
+      relationshipKey
     );
 
     // attributes가 있는 경우에만 추가
@@ -2084,6 +2087,7 @@ export class JsonApiTransformer {
   /**
    * 여러 리소스를 JSON:API 컬렉션으로 변환
    * @param jsonFields - Json 타입 필드 이름 목록 (관계 데이터로 간주하지 않음)
+   * @param relationshipKey - 관계 리소스의 식별자 키 설정 (예: { permissions: 'uuid' })
    */
   static transformToCollection(
     items: any[], 
@@ -2092,10 +2096,11 @@ export class JsonApiTransformer {
     fields?: string[],
     baseUrl?: string,
     includeMerge: boolean = false,
-    jsonFields?: Set<string>
+    jsonFields?: Set<string>,
+    relationshipKey?: string | Record<string, string>
   ): JsonApiResource[] {
     return items.map(item => 
-      this.transformToResource(item, resourceType, primaryKey, fields, baseUrl, undefined, includeMerge, jsonFields)
+      this.transformToResource(item, resourceType, primaryKey, fields, baseUrl, undefined, includeMerge, jsonFields, relationshipKey)
     );
   }
 
@@ -2132,13 +2137,15 @@ export class JsonApiTransformer {
   /**
    * attributes와 relationships 분리
    * @param jsonFields - Json 타입 필드 이름 목록 (관계 데이터로 간주하지 않음)
+   * @param relationshipKey - 관계 리소스의 식별자 키 설정 (예: { permissions: 'uuid' })
    */
   private static separateAttributesAndRelationships(
     item: any, 
     primaryKey: string, 
     fields?: string[],
     includeMerge: boolean = false,
-    jsonFields?: Set<string>
+    jsonFields?: Set<string>,
+    relationshipKey?: string | Record<string, string>
   ): { attributes: Record<string, any>, relationships: Record<string, JsonApiRelationship> } {
     const attributes: Record<string, any> = {};
     const relationships: Record<string, JsonApiRelationship> = {};
@@ -2170,10 +2177,11 @@ export class JsonApiTransformer {
       if (this.isRelationshipData(value)) {
         if (includeMerge) {
           // includeMerge가 true면 관계 데이터를 attributes에 병합
-          attributes[key] = value;
+          // relationshipKey가 설정된 경우 해당 키를 id로 사용하도록 변환
+          attributes[key] = this.transformMergedRelationship(value, key, relationshipKey);
         } else {
           // includeMerge가 false면 relationships에 추가 (표준 JSON:API 방식)
-          relationships[key] = this.transformToRelationship(value, key);
+          relationships[key] = this.transformToRelationship(value, key, relationshipKey);
         }
       } else {
         // 관계 데이터가 아니면 attributes에 추가
@@ -2216,32 +2224,116 @@ export class JsonApiTransformer {
   }
 
   /**
+   * includeMerge 모드에서 관계 데이터 변환
+   * relationshipKey가 설정된 경우 해당 키를 id로 사용하도록 변환
+   * @param value - 관계 데이터 (배열 또는 단일 객체)
+   * @param relationshipName - 관계 이름
+   * @param relationshipKey - 관계 리소스의 식별자 키 설정 (예: { permissions: 'uuid' })
+   */
+  private static transformMergedRelationship(
+    value: any,
+    relationshipName: string,
+    relationshipKey?: string | Record<string, string>
+  ): any {
+    // relationshipKey가 없으면 원본 반환
+    if (!relationshipKey) {
+      return value;
+    }
+
+    // 해당 관계에 대한 키 결정
+    const keyForRelation = this.getRelationKeyName(relationshipName, relationshipKey);
+    
+    // 기본 키(id)와 같으면 변환 불필요
+    if (keyForRelation === 'id') {
+      return value;
+    }
+
+    if (Array.isArray(value)) {
+      // 배열인 경우: 각 아이템에서 지정된 키를 id로 매핑
+      return value.map(item => {
+        if (!item || typeof item !== 'object') return item;
+        
+        const transformed = { ...item };
+        // 지정된 키 값을 id로 설정
+        if (item[keyForRelation] !== undefined) {
+          transformed.id = item[keyForRelation];
+        }
+        return transformed;
+      });
+    } else {
+      // 단일 객체인 경우
+      if (!value || typeof value !== 'object') return value;
+      
+      const transformed = { ...value };
+      // 지정된 키 값을 id로 설정
+      if (value[keyForRelation] !== undefined) {
+        transformed.id = value[keyForRelation];
+      }
+      return transformed;
+    }
+  }
+
+  /**
    * 관계 데이터를 JSON:API 관계 객체로 변환
    * JSON:API 스펙에 맞게 실제 모델 타입을 추론
+   * @param relationshipKey - 관계 리소스의 식별자 키 설정 (예: { permissions: 'uuid' })
    */
-  private static transformToRelationship(value: any, relationshipName: string): JsonApiRelationship {
+  private static transformToRelationship(
+    value: any, 
+    relationshipName: string,
+    relationshipKey?: string | Record<string, string>
+  ): JsonApiRelationship {
     const relationship: JsonApiRelationship = {};
+    
+    // 해당 관계에 대한 키 결정
+    const keyForRelation = this.getRelationKeyName(relationshipName, relationshipKey);
 
     if (Array.isArray(value)) {
       // 일대다 관계
       relationship.data = value.map(item => {
         // 실제 모델 타입 추론 (데이터 구조 기반)
         const resourceType = this.inferResourceTypeFromData(item, relationshipName, true);
+        // 지정된 키를 우선 사용, 없으면 fallback
+        const itemId = item[keyForRelation] || item.id || item.uuid || item._id;
         return {
           type: resourceType,
-          id: String(item.id || item.uuid || item._id)
+          id: String(itemId)
         };
       });
     } else {
       // 일대일 관계
       const resourceType = this.inferResourceTypeFromData(value, relationshipName, false);
+      // 지정된 키를 우선 사용, 없으면 fallback
+      const itemId = value[keyForRelation] || value.id || value.uuid || value._id;
       relationship.data = {
         type: resourceType,
-        id: String(value.id || value.uuid || value._id)
+        id: String(itemId)
       };
     }
 
     return relationship;
+  }
+
+  /**
+   * 관계명에 대한 식별자 키 이름 결정
+   */
+  private static getRelationKeyName(
+    relationshipName: string, 
+    relationshipKey?: string | Record<string, string>
+  ): string {
+    if (!relationshipKey) {
+      return 'id'; // 기본값
+    }
+    
+    if (typeof relationshipKey === 'string') {
+      return relationshipKey;
+    }
+    
+    if (typeof relationshipKey === 'object' && relationshipKey[relationshipName]) {
+      return relationshipKey[relationshipName];
+    }
+    
+    return 'id'; // 기본값
   }
 
   /**
@@ -2414,6 +2506,7 @@ export class JsonApiTransformer {
       query?: any; // 요청 쿼리 정보 추가
       includeMerge?: boolean; // includeMerge 옵션 추가
       jsonFields?: Set<string>; // Json 타입 필드 목록
+      relationshipKey?: string | Record<string, string>; // 관계형 데이터에서 사용할 키
     } = {}
   ): JsonApiResponse {
     const {
@@ -2425,7 +2518,8 @@ export class JsonApiTransformer {
       included,
       query,
       includeMerge = false, // 기본값: false (표준 JSON:API 방식)
-      jsonFields
+      jsonFields,
+      relationshipKey
     } = options;
 
     // 현재 리소스 타입의 필드 제한
@@ -2443,7 +2537,8 @@ export class JsonApiTransformer {
         resourceFields, 
         baseUrl,
         includeMerge,
-        jsonFields
+        jsonFields,
+        relationshipKey
       );
     } else {
       jsonApiData = this.transformToResource(
@@ -2454,7 +2549,8 @@ export class JsonApiTransformer {
         baseUrl,
         undefined, // id 파라미터
         includeMerge,
-        jsonFields
+        jsonFields,
+        relationshipKey
       );
     }
 
@@ -2500,7 +2596,8 @@ export class JsonApiTransformer {
     data: any | any[],
     includeParams: string[],
     fieldsParams?: Record<string, string[]>,
-    baseUrl?: string
+    baseUrl?: string,
+    relationshipKey?: string | Record<string, string>
   ): JsonApiResource[] {
     const included: JsonApiResource[] = [];
     const processedResources = new Set<string>(); // 중복 방지
@@ -2515,7 +2612,8 @@ export class JsonApiTransformer {
           included, 
           processedResources, 
           fieldsParams, 
-          baseUrl
+          baseUrl,
+          relationshipKey
         );
       });
     });
@@ -2532,12 +2630,13 @@ export class JsonApiTransformer {
     included: JsonApiResource[],
     processedResources: Set<string>,
     fieldsParams?: Record<string, string[]>,
-    baseUrl?: string
+    baseUrl?: string,
+    relationshipKey?: string | Record<string, string>
   ): void {
     const pathParts = includePath.split('.');
     
     // 재귀적으로 중첩된 관계 처리
-    this.processNestedIncludes(item, pathParts, 0, included, processedResources, fieldsParams, baseUrl);
+    this.processNestedIncludes(item, pathParts, 0, included, processedResources, fieldsParams, baseUrl, relationshipKey);
   }
 
   /**
@@ -2551,7 +2650,8 @@ export class JsonApiTransformer {
     included: JsonApiResource[],
     processedResources: Set<string>,
     fieldsParams?: Record<string, string[]>,
-    baseUrl?: string
+    baseUrl?: string,
+    relationshipKey?: string | Record<string, string>
   ): void {
     if (currentIndex >= pathParts.length || !currentData) {
       return;
@@ -2567,6 +2667,9 @@ export class JsonApiTransformer {
     const isArray = Array.isArray(relationData);
     const isLastPart = currentIndex === pathParts.length - 1;
 
+    // 현재 관계의 키 이름 결정
+    const keyName = this.getRelationKeyName(relationName, relationshipKey);
+
     if (isArray) {
       relationData.forEach(relItem => {
         if (!relItem) return;
@@ -2574,7 +2677,8 @@ export class JsonApiTransformer {
         // 각 아이템에서 실제 모델 타입 추론
         const resourceType = this.inferResourceTypeFromData(relItem, relationName, true);
         const resourceFields = fieldsParams?.[resourceType];
-        const resourceKey = `${resourceType}:${relItem.id || relItem.uuid || relItem._id}`;
+        const itemId = relItem[keyName] ?? relItem.id ?? relItem.uuid ?? relItem._id;
+        const resourceKey = `${resourceType}:${itemId}`;
         
         // 현재 레벨의 리소스를 included에 추가
         if (!processedResources.has(resourceKey)) {
@@ -2582,9 +2686,13 @@ export class JsonApiTransformer {
           included.push(this.transformToResource(
             relItem, 
             resourceType, 
-            'id', 
+            keyName, 
             resourceFields, 
-            baseUrl
+            baseUrl,
+            undefined,
+            false,
+            undefined,
+            relationshipKey
           ));
         }
 
@@ -2597,7 +2705,8 @@ export class JsonApiTransformer {
             included, 
             processedResources, 
             fieldsParams, 
-            baseUrl
+            baseUrl,
+            relationshipKey
           );
         }
       });
@@ -2605,7 +2714,8 @@ export class JsonApiTransformer {
       // 단일 객체에서 실제 모델 타입 추론
       const resourceType = this.inferResourceTypeFromData(relationData, relationName, false);
       const resourceFields = fieldsParams?.[resourceType];
-      const resourceKey = `${resourceType}:${relationData.id || relationData.uuid || relationData._id}`;
+      const itemId = relationData[keyName] ?? relationData.id ?? relationData.uuid ?? relationData._id;
+      const resourceKey = `${resourceType}:${itemId}`;
       
       // 현재 레벨의 리소스를 included에 추가
       if (!processedResources.has(resourceKey)) {
@@ -2613,9 +2723,13 @@ export class JsonApiTransformer {
         included.push(this.transformToResource(
           relationData, 
           resourceType, 
-          'id', 
+          keyName, 
           resourceFields, 
-          baseUrl
+          baseUrl,
+          undefined,
+          false,
+          undefined,
+          relationshipKey
         ));
       }
 
@@ -2628,7 +2742,8 @@ export class JsonApiTransformer {
           included, 
           processedResources, 
           fieldsParams, 
-          baseUrl
+          baseUrl,
+          relationshipKey
         );
       }
     }

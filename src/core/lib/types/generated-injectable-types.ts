@@ -1,5 +1,4 @@
 // Auto-generated file - DO NOT EDIT MANUALLY
-// Generated on: 2026-03-11T08:52:20.155Z
 // Source: src/app/injectable/
 
 // Injectable modules interface (empty - no modules found)

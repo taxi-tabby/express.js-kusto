@@ -140,7 +140,6 @@ export type GetRepositoryType<T extends RepositoryName> = T extends keyof Reposi
  */
 function generateDefaultTypes() {
 	const typeDefinition = `// Auto-generated file - DO NOT EDIT MANUALLY
-// Generated on: ${new Date().toISOString()}
 // Source: src/app/repos/
 
 // Repository type map for getRepository return types (empty - no repositories found)

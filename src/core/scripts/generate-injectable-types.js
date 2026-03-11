@@ -532,7 +532,6 @@ export type GetMiddlewareParamType<T extends MiddlewareParamName> = T extends ke
  * Generate default types when no injectable modules exist
  */
 function generateDefaultTypes() {	const typeDefinition = `// Auto-generated file - DO NOT EDIT MANUALLY
-// Generated on: ${new Date().toISOString()}
 // Source: src/app/injectable/
 
 // Injectable modules interface (empty - no modules found)

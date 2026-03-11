@@ -25,7 +25,9 @@ export class Application {
     constructor(config?: Partial<CoreConfig>) {
         this.core = Core.getInstance();
         this.config = config || {};
-    }    /**
+    }
+
+    /**
      * Initialize and start the application
      */
     public async start(): Promise<Server> {
@@ -43,7 +45,9 @@ export class Application {
             log.Error('Failed to start application', { error });
             throw error;
         }
-    }/**
+    }
+
+    /**
      * Stop the application gracefully
      */
     public async stop(): Promise<void> {
@@ -82,7 +86,9 @@ export class Application {
      */
     public get configuration(): Required<CoreConfig> {
         return this.core.config;
-    }    /**
+    }
+
+    /**
      * Check if application is running
      */
     public get isRunning(): boolean {
@@ -122,11 +128,11 @@ export function createApplication(config?: Partial<CoreConfig>): Application {
  * Legacy support for existing initExpressCore_V1 function
  * @deprecated Use Application class instead
  */
-export function initExpressCore_V1(app: Express): void {
+export async function initExpressCore_V1(app: Express): Promise<void> {
     log.Warn('initExpressCore_V1 is deprecated. Use Application class instead.');
-    
+
     const core = Core.getInstance();
-    
+
     // Initialize core without starting server (for legacy compatibility)
-    core.initialize();
+    await core.initialize();
 }

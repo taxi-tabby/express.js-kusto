@@ -1,14 +1,15 @@
 {
   "watch": ["src", ".env*"],
-  "ext": "ts,js,json,env",
+  "ext": "ts,js,json,env,prisma",
   "ignore": [
     "src/core/tmp/**/*",
     "src/core/lib/types/**/*",
+    "src/app/db/*/client/**/*",
     "**/*.test.ts",
     "**/*.spec.ts",
     "**/node_modules/**"
   ],
-  "exec": "npm run generate && ts-node ./src/index.ts",
+  "exec": "npm run db -- generate --all && npm run generate && ts-node ./src/index.ts",
   "env": {
     "NODE_ENV": "development"
   },

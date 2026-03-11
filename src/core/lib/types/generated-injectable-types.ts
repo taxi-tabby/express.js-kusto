@@ -1,19 +1,16 @@
 // Auto-generated file - DO NOT EDIT MANUALLY
 // Source: src/app/injectable/
 
-import TestMathModule from '@app/injectable/test/math.module';
-
-// Type definitions
-type TestMathModuleType = InstanceType<typeof TestMathModule>;
-
-// Injectable modules interface
+// Injectable modules interface (empty - no modules found)
 export interface Injectable {
-  testMath: TestMathModuleType;
+  // No injectable modules found
+  // Add TypeScript files to src/app/injectable/ and regenerate types
 }
 
-// Middleware interface
+// Middleware interface (empty - no middlewares found)
 export interface Middleware {
-
+  // No middleware modules found
+  // Add *.middleware.ts files to src/app/injectable/ and regenerate types
 }
 
 // Middleware parameters interface (empty - no middleware interfaces found)
@@ -22,17 +19,17 @@ export interface MiddlewareParams {
   // Add *.middleware.interface.ts files to src/app/injectable/ and regenerate types
 }
 
-// Module registry for dynamic loading
+// Module registry for dynamic loading (empty)
 export const MODULE_REGISTRY = {
-  'testMath': () => import('@app/injectable/test/math.module'),
+  // No modules available
 } as const;
 
-// Middleware registry for dynamic loading
+// Middleware registry for dynamic loading (empty)
 export const MIDDLEWARE_REGISTRY = {
-
+  // No middlewares available
 } as const;
 
-// Middleware parameter mapping
+// Middleware parameter mapping (empty)
 export const MIDDLEWARE_PARAM_MAPPING = {
   // No middleware parameter mappings found
 } as const;

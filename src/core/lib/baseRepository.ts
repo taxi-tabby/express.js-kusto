@@ -105,76 +105,11 @@ export abstract class BaseRepository<T extends DatabaseNamesUnion> {
 
     /**
      * 비동기 데이터베이스 클라이언트 (재연결 로직 포함)
+     * getWrap()을 사용하여 서버리스 환경에서 자동 재연결을 지원합니다.
      * @returns 타입 안전한 Prisma 클라이언트 (Promise)
      */
     protected async getAsyncClient(): Promise<DatabaseClientMap[T]> {
-        return await this.db.getClient(this.repositoryDatabaseName) as DatabaseClientMap[T];
-    }
-
-    /**
-     * 서버리스 최적화: DB 쿼리 실행 시 자동 재연결 래퍼
-     * 연결 오류 발생 시 자동으로 재연결 후 재시도
-     */
-    protected async executeWithAutoReconnect<R>(
-        operation: (client: DatabaseClientMap[T]) => Promise<R>,
-        maxRetries: number = 1
-    ): Promise<R> {
-        let lastError: Error | null = null;
-        
-        for (let attempt = 0; attempt <= maxRetries; attempt++) {
-            try {
-                const client = await this.getAsyncClient();
-                return await operation(client);
-            } catch (error: any) {
-                lastError = error;
-                
-                // 연결 관련 오류인지 확인
-                const isConnectionError = this.isConnectionError(error);
-                
-                if (isConnectionError && attempt < maxRetries) {
-                    // 서버리스 슬립 복구를 위한 재연결 시도 로그
-                    console.log(`🔄 DB connection lost (serverless wake-up?), reconnecting... (${attempt + 1}/${maxRetries + 1})`);
-                    
-                    // 재연결 시도
-                    try {
-                        await this.db.reconnectDatabase(this.repositoryDatabaseName);
-                    } catch (reconnectError) {
-                        console.error(`❌ Reconnection attempt failed:`, reconnectError);
-                    }
-                    
-                    // 서버리스 DB가 깨어날 시간을 위해 약간의 대기
-                    await new Promise(resolve => setTimeout(resolve, 500));
-                    continue;
-                }
-                
-                // 재시도 불가능하거나 재시도 횟수 초과
-                throw error;
-            }
-        }
-        
-        throw lastError || new Error('Unknown error during database operation');
-    }
-
-    /**
-     * 연결 관련 오류인지 판단하는 헬퍼 메서드
-     */
-    private isConnectionError(error: any): boolean {
-        if (!error) return false;
-        
-        const errorMessage = error.message?.toLowerCase() || '';
-        const errorCode = error.code || '';
-        
-        // Prisma/PostgreSQL 연결 오류 패턴
-        return (
-            errorMessage.includes('connection') ||
-            errorMessage.includes('timeout') ||
-            errorMessage.includes('econnrefused') ||
-            errorMessage.includes('enotfound') ||
-            errorMessage.includes('server closed the connection') ||
-            errorCode === 'P1001' || // Connection error
-            errorCode === 'P1008' || // Operation timeout
-            errorCode === 'P1017'    // Server has closed the connection
-        );
+        return this.db.getWrap(this.repositoryDatabaseName) as DatabaseClientMap[T];
     }
 
 
@@ -360,7 +295,7 @@ export abstract class BaseRepository<T extends DatabaseNamesUnion> {
         if (!(error instanceof Error)) return 'unknown';
         const message = error.message.toLowerCase();
 
-        const errorMap = {
+        const errorMap: Record<string, string> = {
             deadlock: 'deadlock',
             timeout: 'timeout',
             connection: 'connection',
@@ -369,9 +304,8 @@ export abstract class BaseRepository<T extends DatabaseNamesUnion> {
             syntax: 'syntax_error'
         };
 
-        return Object.keys(errorMap).find(key => message.includes(key))
-            ? errorMap[Object.keys(errorMap).find(key => message.includes(key)) as keyof typeof errorMap]
-            : 'database_error';
+        const matchedKey = Object.keys(errorMap).find(key => message.includes(key));
+        return matchedKey ? errorMap[matchedKey] : 'database_error';
     }
     /**
      * Saga Pattern 분산 트랜잭션 실행 (내부 메서드)
@@ -380,7 +314,8 @@ export abstract class BaseRepository<T extends DatabaseNamesUnion> {
      * @param operations 각 데이터베이스별 실행할 작업들
      * @param options Saga 실행 옵션
      * @returns 분산 트랜잭션 실행 결과
-     */    private async distributedTransaction<TResult = any>(
+     */
+    private async distributedTransaction<TResult = any>(
         operations: readonly DistributedTransactionOperation<any>[],
         options: TransactionCommitOptions = {}
     ): Promise<TransactionCommitResult<TResult>> {

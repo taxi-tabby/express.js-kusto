@@ -5,7 +5,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { config } from 'dotenv';
-import { PrismaPg } from '@prisma/adapter-pg';
 import {
 	DatabaseClientMap,
 	DatabaseClientType,
@@ -33,9 +32,10 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 	private configs: Map<string, DatabaseConfig> = new Map();
 	private clientTypes: Map<string, any> = new Map(); // Store client type constructors
 	private initialized: boolean = false;
-	private connectionStates: Map<string, { connected: boolean; lastChecked: number }> = new Map();
 	private reconnectionAttempts: Map<string, number> = new Map();
-	private readonly MAX_RECONNECTION_ATTEMPTS = 2; // 빠른 실패
+	private reconnectionCooldowns: Map<string, number> = new Map(); // 쿨다운 타임스탬프
+	private readonly MAX_RECONNECTION_ATTEMPTS = 3;
+	private readonly RECONNECTION_COOLDOWN_MS = 30000; // 30초 쿨다운
 
 
 	/**
@@ -335,14 +335,16 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 				throw urlError;
 			}
 
-			// Create Prisma client instance with driver adapter
-			// Prisma 7: Use @prisma/adapter-pg for PostgreSQL connections
-			const adapter = new PrismaPg({ connectionString: connectionUrl });
-			const prismaClient = new DatabasePrismaClient({
-				adapter,
+			// Create Prisma client instance with provider-specific driver adapter
+			const adapter = await this.createDriverAdapter(folderName, connectionUrl);
+			const clientOptions: any = {
 				log: process.env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error'],
 				errorFormat: 'minimal'
-			});
+			};
+			if (adapter) {
+				clientOptions.adapter = adapter;
+			}
+			const prismaClient = new DatabasePrismaClient(clientOptions);
 
 			// Test the connection with retry logic
 			let connectionAttempts = 0;
@@ -373,12 +375,9 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 				isGenerated: true
 			});
 
-			// Initialize connection state
-			this.connectionStates.set(folderName, {
-				connected: true,
-				lastChecked: Date.now()
-			});
+			// Initialize reconnection state
 			this.reconnectionAttempts.set(folderName, 0);
+			this.reconnectionCooldowns.delete(folderName);
 			
 			// Dynamically extend the DatabaseClientMap interface with the actual client type
 			this.extendDatabaseClientMap(folderName, DatabasePrismaClient);
@@ -447,6 +446,63 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 		}
 	}
 
+	/**
+	 * Read the datasource provider from schema.prisma for a given database folder
+	 */
+	private getSchemaProvider(folderName: string): string {
+		try {
+			const schemaPath = path.join(process.cwd(), 'src', 'app', 'db', folderName, 'schema.prisma');
+			const schemaContent = fs.readFileSync(schemaPath, 'utf-8');
+			// datasource 블록 내의 provider 값만 추출
+			const dsBlock = schemaContent.match(/datasource\s+\w+\s*{([\s\S]*?)}/m);
+			if (dsBlock) {
+				const providerMatch = dsBlock[1].match(/provider\s*=\s*["']([^"']+)["']/);
+				if (providerMatch) return providerMatch[1];
+			}
+		} catch { /* ignore */ }
+		return 'postgresql';
+	}
+
+	/**
+	 * Create a driver adapter based on the schema provider.
+	 * Dynamically imports the adapter package only when needed.
+	 * Returns null for providers that don't require an adapter (e.g. sqlite).
+	 */
+	private async createDriverAdapter(folderName: string, connectionUrl: string): Promise<any | null> {
+		const provider = this.getSchemaProvider(folderName);
+
+		switch (provider) {
+			case 'postgresql':
+			case 'postgres': {
+				try {
+					const { PrismaPg } = await import('@prisma/adapter-pg');
+					return new PrismaPg({ connectionString: connectionUrl });
+				} catch {
+					throw new Error(
+						`'@prisma/adapter-pg' 패키지가 필요합니다.\n` +
+						`  npm install @prisma/adapter-pg`
+					);
+				}
+			}
+			case 'mysql': {
+				try {
+					const { PrismaMysql } = await import('@prisma/adapter-mysql' as string);
+					return new PrismaMysql({ connectionString: connectionUrl });
+				} catch {
+					throw new Error(
+						`'@prisma/adapter-mysql' 패키지가 필요합니다.\n` +
+						`  npm install @prisma/adapter-mysql`
+					);
+				}
+			}
+			case 'sqlite':
+				// SQLite는 어댑터 없이 직접 연결
+				return null;
+			default:
+				console.warn(`⚠️ Unknown provider '${provider}' for ${folderName}, attempting connection without adapter`);
+				return null;
+		}
+	}
 
 	/**
 	 * Get database URL by parsing schema.prisma file to extract environment variable
@@ -579,101 +635,57 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 	}
 
 	/**
-	 * 서버리스 최적화: 사전 헬스체크 없이 요청 시점에만 연결 확인
-	 * Check if connection is healthy and reconnect if necessary
-	 */
-	private async ensureConnection(databaseName: string): Promise<boolean> {
-		const connectionState = this.connectionStates.get(databaseName);
-		const now = Date.now();
-
-		// 서버리스 최적화: 사전 헬스체크를 완전히 제거
-		// 단순히 연결 상태만 확인하고, 실제 연결은 getClient에서 시도
-		if (connectionState && connectionState.connected) {
-			return true;
-		}
-
-		// 연결 상태가 없거나 연결되지 않은 상태라면 연결된 것으로 가정
-		// 실제 연결 실패는 getClient()에서 catch하여 재연결 처리
-		this.connectionStates.set(databaseName, {
-			connected: true,
-			lastChecked: now
-		});
-
-		return true;
-	}
-
-	/**
-	 * 서버리스 최적화: 간단한 연결 상태 체크 (실제 쿼리 없음)
-	 * Check if a specific database connection is healthy
-	 */
-	private async checkConnectionHealth(databaseName: string): Promise<boolean> {
-		try {
-			// 서버리스에서는 실제 헬스체크 쿼리를 실행하지 않음
-			// 단순히 클라이언트가 존재하는지만 확인
-			const client = this.databases.get(databaseName);
-			return !!client;
-		} catch (error) {
-			return false;
-		}
-	}
-
-	/**
 	 * Reconnect to a specific database
 	 * 서버리스 환경에서 슬립 복구 시 자동 재연결을 위해 public으로 노출
 	 */
 	public async reconnectDatabase(databaseName: string): Promise<boolean> {
+		const now = Date.now();
 		const attempts = this.reconnectionAttempts.get(databaseName) || 0;
-		
-		// 빠른 포기: 최대 시도 횟수에 도달하면 즉시 실패 처리 (성능 개선)
+
+		// 쿨다운 확인: 최근 실패 후 일정 시간 내에는 즉시 실패 반환 (불필요한 재시도 방지)
+		const cooldownUntil = this.reconnectionCooldowns.get(databaseName) || 0;
+		if (now < cooldownUntil) {
+			const remainingSec = Math.ceil((cooldownUntil - now) / 1000);
+			console.warn(`⏳ Database '${databaseName}' reconnection in cooldown (${remainingSec}s remaining)`);
+			return false;
+		}
+
+		// 최대 시도 횟수에 도달하면 쿨다운 설정 후 실패
 		if (attempts >= this.MAX_RECONNECTION_ATTEMPTS) {
-			console.error(`❌ Max reconnection attempts (${this.MAX_RECONNECTION_ATTEMPTS}) reached for database '${databaseName}'`);
-			this.connectionStates.set(databaseName, {
-				connected: false,
-				lastChecked: Date.now()
-			});
-			// 재연결 시도 카운터를 리셋하여 일정 시간 후 다시 시도 가능하게 함
+			console.error(`❌ Max reconnection attempts (${this.MAX_RECONNECTION_ATTEMPTS}) reached for database '${databaseName}', cooldown ${this.RECONNECTION_COOLDOWN_MS / 1000}s`);
+			this.reconnectionCooldowns.set(databaseName, now + this.RECONNECTION_COOLDOWN_MS);
 			this.reconnectionAttempts.set(databaseName, 0);
 			return false;
 		}
 
 		try {
-			// Increment attempt counter
 			this.reconnectionAttempts.set(databaseName, attempts + 1);
 
-			// 기존 클라이언트 정리를 더 간단하게 처리 (성능 개선)
+			// 기존 클라이언트 정리 (타임아웃 3초)
 			const existingClient = this.databases.get(databaseName);
 			if (existingClient) {
 				try {
-					// 타임아웃을 짧게 설정하여 빠른 정리
 					await Promise.race([
 						existingClient.$disconnect(),
 						new Promise((_, reject) => setTimeout(() => reject(new Error('Disconnect timeout')), 3000))
 					]);
-				} catch (disconnectError) {
-					// 연결 끊기 실패는 무시하고 계속 진행 (로그 제거)
+				} catch {
+					// 연결 끊기 실패는 무시하고 계속 진행
 				}
 			}
 
 			// Recreate the client
 			await this.recreateClient(databaseName);
 
-			// Reset attempt counter on successful reconnection
+			// 성공 시 카운터 및 쿨다운 리셋
 			this.reconnectionAttempts.set(databaseName, 0);
-			this.connectionStates.set(databaseName, {
-				connected: true,
-				lastChecked: Date.now()
-			});
+			this.reconnectionCooldowns.delete(databaseName);
 
-			// 프로덕션에서도 재연결 성공 로그 출력 (중요 이벤트)
 			console.log(`✅ Successfully reconnected to database '${databaseName}'`);
 			return true;
 
 		} catch (error) {
-			console.error(`❌ Failed to reconnect to database '${databaseName}':`, error);
-			this.connectionStates.set(databaseName, {
-				connected: false,
-				lastChecked: Date.now()
-			});
+			console.error(`❌ Failed to reconnect to database '${databaseName}' (attempt ${attempts + 1}/${this.MAX_RECONNECTION_ATTEMPTS}):`, error instanceof Error ? error.message : error);
 			return false;
 		}
 	}
@@ -695,34 +707,34 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 			throw new Error(`Cannot recreate client for '${databaseName}': client type not found`);
 		}
 
-		// Create new Prisma client instance with PrismaPg adapter (Prisma 7 방식)
+		// Create new Prisma client instance with provider-specific adapter
 		const connectionUrl = this.getDatabaseUrl(databaseName);
-		
-		// Prisma 7: @prisma/adapter-pg 사용
-		const adapter = new PrismaPg({ connectionString: connectionUrl });
-		
-		const prismaClient = new DatabasePrismaClient({
-			adapter,
+
+		const adapter = await this.createDriverAdapter(databaseName, connectionUrl);
+		const clientOptions: any = {
 			log: process.env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error'],
 			errorFormat: 'minimal'
-		});
+		};
+		if (adapter) {
+			clientOptions.adapter = adapter;
+		}
+		const prismaClient = new DatabasePrismaClient(clientOptions);
 
-		// Test the connection with retry (서버리스 DB 복구 대기)
+		// 연결 테스트 (재시도 3회, 지수 백오프)
+		// 상위 레이어(getWrap, reconnectDatabase)에서도 재시도하므로 여기서는 짧게
 		let connectionAttempts = 0;
-		const maxAttempts = 5;
-		const baseDelay = 2000; // 2초부터 시작
-		
+		const maxAttempts = 3;
+
 		while (connectionAttempts < maxAttempts) {
 			try {
 				await prismaClient.$connect();
-				break; // Connection successful
+				break;
 			} catch (connectError: any) {
 				connectionAttempts++;
 				if (connectionAttempts >= maxAttempts) {
 					throw connectError;
 				}
-				// 지수 백오프: 서버리스 DB가 깨어날 시간을 위해 대기
-				const delay = Math.min(baseDelay * Math.pow(1.5, connectionAttempts - 1), 8000);
+				const delay = 1000 * connectionAttempts; // 1초, 2초
 				console.log(`⏳ DB 연결 대기 중 (${connectError.message?.substring(0, 40)}...), ${delay/1000}초 후 재시도... (${connectionAttempts}/${maxAttempts})`);
 				await new Promise(resolve => setTimeout(resolve, delay));
 			}
@@ -765,8 +777,6 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 				}
 			}
 
-			// 서버리스 최적화: 사전 연결 체크 제거, 실제 사용 시점에 재연결 시도
-			// ensureConnection을 생략하고 바로 클라이언트 사용 시도
 			const client = this.databases.get(databaseName);
 			if (!client) {
 				console.error(`❌ Database client '${databaseName}' not found`);
@@ -774,7 +784,8 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 				throw new Error(`데이터베이스 '${databaseName}' 클라이언트를 찾을 수 없습니다.`);
 			}
 
-			// 클라이언트 반환 - 실제 쿼리 실행 시 연결 오류가 발생하면 그때 재연결
+			// raw 클라이언트 반환 (재연결 없음, 성능 우선 경로)
+			// 서버리스 환경에서 자동 재연결이 필요하면 getWrap() 사용
 			return client as T;
 		} catch (error) {
 			if (error instanceof Error) {
@@ -864,7 +875,6 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 		
 		// Query engine errors (P2xxx) - 연결 풀/타임아웃 관련
 		'P2024', // Timed out fetching a new connection from pool
-		'P2025', // Record not found (데이터 문제지만 연결 문제로 발생 가능)
 	]);
 
 	/**
@@ -978,70 +988,89 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 				throw new Error(`데이터베이스 '${databaseName}'를 찾을 수 없습니다. 사용 가능한 데이터베이스: ${dbList}`);
 			}
 
-			// Proxy를 사용하여 모든 모델 접근에 자동 재연결 로직 적용
+			// Proxy를 사용하여 모든 접근에 자동 재연결 로직 적용
 			const manager = this;
-			
+
+			/**
+			 * 연결 오류 시 재연결 후 재시도하는 래퍼 함수 생성
+			 * @param executeFn 실제 실행할 함수 (최신 클라이언트에서 호출)
+			 */
+			const createRetryWrapper = (executeFn: (...args: any[]) => Promise<any>) => {
+				return async function(...args: any[]) {
+					const maxRetries = 3;
+					const baseDelay = 2000; // 2초부터 시작
+					let lastError: Error | null = null;
+
+					for (let attempt = 0; attempt <= maxRetries; attempt++) {
+						try {
+							return await executeFn(...args);
+						} catch (error: any) {
+							lastError = error;
+
+							if (manager.isConnectionError(error) && attempt < maxRetries) {
+								const delay = Math.min(baseDelay * Math.pow(1.5, attempt), 8000);
+								console.log(`🔄 DB 연결 오류 감지 (${error.message?.substring(0, 50)}...), ${delay/1000}초 후 재시도... (${attempt + 1}/${maxRetries})`);
+
+								await new Promise(resolve => setTimeout(resolve, delay));
+
+								try {
+									await manager.reconnectDatabase(databaseName);
+								} catch {
+									// 재연결 실패해도 다음 시도에서 다시 시도
+								}
+								continue;
+							}
+
+							throw error;
+						}
+					}
+
+					throw lastError;
+				};
+			};
+
+			// 재연결 래핑이 불필요한 $ 메서드 (연결 관리용)
+			const noWrapMethods = new Set(['$connect', '$disconnect', '$on', '$extends']);
+
 			return new Proxy(existingClient, {
 				get(target, prop, receiver) {
 					const value = Reflect.get(target, prop, receiver);
-					
-					// 함수가 아니거나 내부 메서드($로 시작)면 그대로 반환
+					const propStr = String(prop);
+
+					// Symbol이나 래핑 불필요한 메서드는 그대로 반환
+					if (typeof prop === 'symbol' || noWrapMethods.has(propStr)) {
+						return value;
+					}
+
+					// $ 접두사 함수 ($transaction, $queryRaw, $queryRawUnsafe, $executeRaw 등)
+					// 연결 오류 시 재연결 후 재시도
+					if (propStr.startsWith('$') && typeof value === 'function') {
+						return createRetryWrapper(async (...args: any[]) => {
+							const currentClient = manager.databases.get(databaseName);
+							return await (currentClient as any)[prop](...args);
+						});
+					}
+
+					// 비-객체 (string, number, boolean 등) 그대로 반환
 					if (typeof value !== 'object' || value === null) {
 						return value;
 					}
-					
-					// Prisma 모델 객체 (user, userRateLimit 등)에 대한 Proxy
+
+					// Prisma 모델 객체 (user, post 등)에 대한 Proxy
 					return new Proxy(value, {
 						get(modelTarget, modelProp, modelReceiver) {
 							const modelValue = Reflect.get(modelTarget, modelProp, modelReceiver);
-							
-							// 함수가 아니면 그대로 반환
+
 							if (typeof modelValue !== 'function') {
 								return modelValue;
 							}
-							
+
 							// Prisma 쿼리 메서드를 래핑 (findFirst, findMany, create, update 등)
-							return async function(...args: any[]) {
-								// 서버리스 DB 슬립 복구를 위해 충분한 재시도 (최대 ~30초)
-								const maxRetries = 5;
-								const baseDelay = 2000; // 2초부터 시작
-								let lastError: Error | null = null;
-								
-								for (let attempt = 0; attempt <= maxRetries; attempt++) {
-									try {
-										// 재시도 시 최신 클라이언트 사용
-										const currentClient = manager.databases.get(databaseName);
-										const currentModel = (currentClient as any)[prop];
-										return await currentModel[modelProp](...args);
-									} catch (error: any) {
-										lastError = error;
-										
-										// 연결 오류이고 재시도 가능하면 재연결 시도
-										if (manager.isConnectionError(error) && attempt < maxRetries) {
-											// 지수 백오프: 2초, 3초, 4.5초, 6.75초, 10초... (서버리스 DB 복구 대기)
-											const delay = Math.min(baseDelay * Math.pow(1.5, attempt), 10000);
-											console.log(`🔄 DB 연결 오류 감지 (${error.message?.substring(0, 50)}...), ${delay/1000}초 후 재시도... (${attempt + 1}/${maxRetries})`);
-											
-											// 먼저 대기 (DB가 깨어날 시간 확보)
-											await new Promise(resolve => setTimeout(resolve, delay));
-											
-											try {
-												await manager.reconnectDatabase(databaseName);
-												continue;
-											} catch (reconnectError) {
-												// 재연결 실패해도 다음 시도에서 다시 시도
-												console.log(`⏳ 재연결 대기 중... (${attempt + 1}/${maxRetries})`);
-											}
-											continue;
-										}
-										
-										// 연결 오류가 아니거나 재시도 횟수 초과
-										throw error;
-									}
-								}
-								
-								throw lastError;
-							};
+							return createRetryWrapper(async (...args: any[]) => {
+								const currentClient = manager.databases.get(databaseName);
+								const currentModel = (currentClient as any)[prop];
+								return await currentModel[modelProp](...args);
+							});
 						}
 					});
 				}
@@ -1056,62 +1085,13 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 	}
 
 	/**
-	 * Get a wrapped client with enhanced type information and runtime type checking (async version)
-	 * This method provides the best TypeScript intellisense by preserving the original client type
-	 * Includes automatic reconnection logic
+	 * Get a wrapped client (async version)
+	 * getWrap()과 동일한 재연결 로직을 포함하며, 추가로 타입 정보를 보존합니다.
+	 * 내부적으로 getWrap()을 사용하여 재연결 Proxy를 적용합니다.
 	 */
 	public async getWrapAsync(databaseName: string): Promise<any> {
-		try {
-			// getClient 내부에서 이미 예외 처리를 하므로 여기서 추가로 할 필요는 없음
-			const client = await this.getClient(databaseName);
-			const clientType = this.clientTypes.get(databaseName);
-
-			if (!clientType) {
-				console.warn(`⚠️ Database '${databaseName}' client type not found, returning basic client.`);
-				return client;
-			}
-
-			// Create a proxy that preserves the original client prototype and type information
-			const wrappedClient = new Proxy(client, {
-				get(target, prop, receiver) {
-					try {
-						const value = Reflect.get(target, prop, receiver);
-
-						// If it's a function, bind it to the original target
-						if (typeof value === 'function') {
-							return value.bind(target);
-						}
-
-						return value;
-					} catch (error) {
-						console.error(`❌ Error accessing property '${String(prop)}' on database client: ${error}`);
-						throw new Error(`데이터베이스 클라이언트 속성 '${String(prop)}' 접근 중 오류: ${error}`);
-					}
-				},
-
-				getPrototypeOf() {
-					return clientType.prototype;
-				},
-
-				has(target, prop) {
-					return prop in target || prop in clientType.prototype;
-				},
-
-				getOwnPropertyDescriptor(target, prop) {
-					const desc = Reflect.getOwnPropertyDescriptor(target, prop);
-					if (desc) return desc;
-					return Reflect.getOwnPropertyDescriptor(clientType.prototype, prop);
-				}
-			});
-
-			return wrappedClient;
-
-		} catch (error) {
-			if (error instanceof Error) {
-				throw error; // getClient에서 이미 처리된 오류는 그대로 전달
-			}
-			throw new Error(`데이터베이스 래핑된 클라이언트 획득 중 오류가 발생했습니다: ${error}`);
-		}
+		// getWrap이 이미 모든 재연결 로직을 가지고 있으므로 위임
+		return this.getWrap(databaseName);
 	}
 
 	/**
@@ -1234,7 +1214,8 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 	): Promise<T[]> {
 		const results: T[] = [];
 		for (const { database, operation } of operations) {
-			const client = await this.getClient(database);
+			// getWrap을 사용하여 서버리스 재연결 지원
+			const client = this.getWrap(database);
 			const result = await client.$transaction(async (tx: any) => {
 				return operation(tx);
 			});
@@ -1246,13 +1227,14 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 
 	/**
 	 * Get raw database connection for custom queries
+	 * 서버리스 재연결을 지원하기 위해 getWrap을 사용합니다.
 	 */
 	public async executeRawQuery<T = any>(
 		database: string,
 		query: string,
 		params?: any[]
 	): Promise<T[]> {
-		const client = await this.getClient(database);
+		const client = this.getWrap(database);
 		return client.$queryRawUnsafe(query, ...(params || []));
 	}
 
@@ -1274,7 +1256,13 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 			const start = Date.now();
 			try {
 				const client = await this.getClient(dbName);
-				await client.$queryRaw`SELECT 1 as health_check`;
+				// 프로바이더별 헬스체크 쿼리
+				const provider = this.getSchemaProvider(dbName);
+				if (provider === 'sqlite') {
+					await client.$queryRawUnsafe('SELECT 1');
+				} else {
+					await client.$queryRaw`SELECT 1 as health_check`;
+				}
 				const responseTime = Date.now() - start;
 
 				results.push({
@@ -1351,8 +1339,8 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 
 		// Clear from cache
 		this.databases.delete(databaseName);
-		this.connectionStates.delete(databaseName);
 		this.reconnectionAttempts.delete(databaseName);
+		this.reconnectionCooldowns.delete(databaseName);
 
 		// 개발 모드에서 더 적극적인 캐시 클리어
 		if (process.env.NODE_ENV === 'development') {

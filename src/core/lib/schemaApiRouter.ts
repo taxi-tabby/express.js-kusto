@@ -1,5 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { CrudSchemaRegistry } from './crudSchemaRegistry';
+import { createPaginationCursor } from '../external/util';
+import { log } from '../external/winston';
 
 /**
  * 개발 모드에서만 활성화되는 스키마 API 라우터
@@ -12,8 +14,7 @@ export class SchemaApiRouter {
   constructor() {
     this.router = Router();
     this.registry = CrudSchemaRegistry.getInstance();
-    console.log('🔧 SchemaApiRouter 생성 중...');
-    console.log(`🎯 스키마 API 활성화 상태: ${this.registry.isSchemaApiEnabled()}`);
+    log.Debug('SchemaApiRouter initialized', { enabled: this.registry.isSchemaApiEnabled() });
     this.setupRoutes();
   }
 
@@ -202,7 +203,7 @@ export class SchemaApiRouter {
               page: 1,
               pages: 1,
               offset: filteredEntities.length,
-              nextCursor: Buffer.from(`{"nextCursor":"${Buffer.from(filteredEntities.length.toString()).toString('base64')}","total":${filteredEntities.length}}`).toString('base64')
+              nextCursor: createPaginationCursor(filteredEntities.length)
             }
           }
         });
@@ -312,14 +313,14 @@ export class SchemaApiRouter {
         }
       };
 
-      console.log('🏥 헬스체크 요청됨:', healthData);
+      log.Debug('Health check requested', healthData);
 
       res.json({
         success: true,
         data: healthData
       });
     } catch (error) {
-      console.error('헬스체크 오류:', error);
+      log.Error('Health check error', { error });
       this.handleError(res, error);
     }
   };
@@ -479,7 +480,7 @@ export class SchemaApiRouter {
    * 에러 처리
    */
   private handleError(res: Response, error: any): void {
-    console.error('Schema API Error:', error);
+    log.Error('Schema API Error', { error });
 
     const statusCode = error.message?.includes('찾을 수 없습니다') ? 404 : 500;
 

@@ -140,16 +140,8 @@ export const log: CustomLevels = createLogger({
 			handleRejections: true
 		}),
 
-		new DailyRotateFile({
-			level: 'error',
-			filename: './logs/error-%DATE%.log',
-			datePattern: 'YYYY-MM-DD',
-			zippedArchive: true,
-			maxSize: '20m',
-			maxFiles: '30d',
-			handleExceptions: true,
-			handleRejections: true
-		})
+		// Note: 'Error' (custom level 0) already covers 'error' (built-in level 0)
+		// Duplicate transport removed to prevent double-writing to error log
 	],
 	
 	// 예외 처리

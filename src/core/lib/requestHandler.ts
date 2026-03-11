@@ -115,7 +115,9 @@ export class RequestHandler {
             req.validatedData = validatedData;
             next();
         };
-    }    /**
+    }
+
+    /**
      * 응답 데이터 검증 및 필터링
      * 스키마에 정의되지 않은 추가 필드가 있는지도 검사
      */
@@ -281,9 +283,12 @@ export class RequestHandler {
         }
         
         return missingImplementations;
-    }    /**
+    }
+
+    /**
      * 핸들러 래퍼 - 검증과 응답을 자동으로 처리 (Dependency Injection 지원)
-     */    static createHandler(
+     */
+    static createHandler(
         config: HandlerConfig,
         handler: (req: ValidatedRequest, res: Response, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => Promise<any> | any
     ) {
@@ -349,19 +354,20 @@ export class RequestHandler {
                 });
                 
                 if (!res.headersSent) {
-                    if (error instanceof Error) {
-                        this.sendError(res, 500, error.message);
-                    } else {
-                        this.sendError(res, 500, 'Internal server error');
-                    }
+                    const isProduction = process.env.NODE_ENV === 'production';
+                    const message = (!isProduction && error instanceof Error) ? error.message : 'Internal server error';
+                    this.sendError(res, 500, message);
                 }
             }
         });
 
         return middlewares;
-    }    /**
+    }
+
+    /**
      * 간단한 핸들러 생성 (요청 검증만)
-     */    static withValidation(
+     */
+    static withValidation(
         requestConfig: RequestConfig,
         handler: (req: ValidatedRequest, res: Response, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => void
     ) {
@@ -370,7 +376,8 @@ export class RequestHandler {
 
     /**
      * 완전한 핸들러 생성 (요청 검증 + 응답 필터링)
-     */    static withFullValidation(
+     */
+    static withFullValidation(
         requestConfig: RequestConfig,
         responseConfig: ResponseConfig,
         handler: (req: ValidatedRequest, res: Response, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => Promise<any> | any
@@ -383,10 +390,10 @@ export class RequestHandler {
 }
 
 /**
- * 편의 함수들
+ * 편의 함수들 (클래스에 바인딩하여 this 컨텍스트 유지)
  */
-export const createValidatedHandler = RequestHandler.createHandler;
-export const withValidation = RequestHandler.withValidation;
-export const withFullValidation = RequestHandler.withFullValidation;
-export const sendSuccess = RequestHandler.sendSuccess;
-export const sendError = RequestHandler.sendError;
+export const createValidatedHandler = RequestHandler.createHandler.bind(RequestHandler);
+export const withValidation = RequestHandler.withValidation.bind(RequestHandler);
+export const withFullValidation = RequestHandler.withFullValidation.bind(RequestHandler);
+export const sendSuccess = RequestHandler.sendSuccess.bind(RequestHandler);
+export const sendError = RequestHandler.sendError.bind(RequestHandler);

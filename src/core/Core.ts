@@ -1,7 +1,6 @@
 import { Express } from 'express';
 import express from 'express';
 import { Server } from 'http';
-import { config } from 'dotenv';
 import * as path from 'path';
 import { log } from './external/winston';
 import { getElapsedTimeInString } from './external/util';
@@ -32,9 +31,6 @@ export class Core {
     private _isInitialized = false;
 
     private constructor() {
-        // Load environment variables first
-        config();
-        
         this._app = expressApp.getApp();
         this._config = this.getDefaultConfig();
     }
@@ -55,7 +51,7 @@ export class Core {
             viewEngine: 'ejs',
             port: parseInt(process.env.PORT || '3000'),
             host: process.env.HOST || '0.0.0.0',
-            trustProxy: process.env.TRUST_PROXY === 'true' || true
+            trustProxy: process.env.TRUST_PROXY === 'true'
         };
     }    
     
@@ -86,7 +82,6 @@ export class Core {
 
         
         this.setupExpress();
-        // this.setupDbConnectionMiddleware(); // DB 연결 미들웨어 설정
         this.setupDocumentationRoutes(); // 문서화 라우트를 먼저 등록
         this.loadRoutes();
         this.setupViews();
@@ -132,23 +127,6 @@ export class Core {
             });
         }
     }
-
-    /**
-     * Setup database connection middleware for serverless environments
-     * 서버리스 환경에서는 헬스체크 대신 on-demand 재연결 방식 사용
-     */
-    // private setupDbConnectionMiddleware(): void {
-    //     try {
-    //         // 서버리스 환경에서는 미들웨어 헬스체크를 사용하지 않음
-    //         // 대신 PrismaManager에서 요청 시점에 연결 실패 시 재연결 처리
-    //         log.Info('� Serverless-optimized DB connection: on-demand reconnection enabled');
-    //         log.Info('✅ Database connection configured for serverless environment');
-            
-    //     } catch (error) {
-    //         log.Error('❌ Failed to setup database connection middleware:', error);
-    //         // Don't throw error - continue without middleware
-    //     }
-    // }
 
     private loadRoutes(): void {
         const startTime = process.hrtime();
@@ -219,40 +197,7 @@ export class Core {
                 res.status(500).json({ error: 'Failed to generate development info' });
             }
         });        
-        
-        
-        // 테스트 리포트 HTML 페이지
-        this._app.get('/docs/test-report', async (req, res) => {
-            try {
-                const testReport = await DocumentationGenerator.generateTestReport();
-                res.type('html').send(testReport);
-            } catch (error) {
-                log.Error('Failed to generate test report', { error });
-                res.status(500).json({ error: 'Failed to generate test report' });
-            }
-        });
 
-        // 테스트 케이스 JSON
-        this._app.get('/docs/test-cases.json', (req, res) => {
-            try {
-                const testCases = DocumentationGenerator.generateTestCasesJSON();
-                res.json(testCases);
-            } catch (error) {
-                log.Error('Failed to generate test cases JSON', { error });
-                res.status(500).json({ error: 'Failed to generate test cases' });
-            }
-        });
-
-        // Postman Collection JSON
-        this._app.get('/docs/postman-collection.json', (req, res) => {
-            try {
-                const postmanCollection = DocumentationGenerator.generatePostmanCollection();
-                res.json(postmanCollection);
-            } catch (error) {
-                log.Error('Failed to generate Postman collection', { error });
-                res.status(500).json({ error: 'Failed to generate Postman collection' });
-            }
-        });
 
         log.Info('📚 Documentation routes enabled at /docs');
     }
@@ -289,27 +234,28 @@ export class Core {
                 reject(error);
             });
         });
-    }    /**
+    }
+
+    /**
      * Stop the server gracefully
      */
     public async stop(): Promise<void> {
-        return new Promise(async (resolve) => {
-            if (!this._server) {
-                log.Info('Server is not running');
-                resolve();
-                return;
-            }
+        if (!this._server) {
+            log.Info('Server is not running');
+            return;
+        }
 
-            // Disconnect all Prisma clients first
-            try {
-                log.Info('🗄️ Disconnecting Prisma Manager...');
-                await prismaManager.disconnectAll();
-                log.Info('Prisma Manager disconnected successfully');
-            } catch (error) {
-                log.Error('Error disconnecting Prisma Manager', { error });
-            }
+        // Disconnect all Prisma clients first
+        try {
+            log.Info('🗄️ Disconnecting Prisma Manager...');
+            await prismaManager.disconnectAll();
+            log.Info('Prisma Manager disconnected successfully');
+        } catch (error) {
+            log.Error('Error disconnecting Prisma Manager', { error });
+        }
 
-            this._server.close(() => {
+        return new Promise((resolve) => {
+            this._server!.close(() => {
                 log.Info('🛑 Server stopped gracefully');
                 this._server = undefined;
                 resolve();
@@ -376,21 +322,14 @@ export class Core {
                 databases: status.databases
             });
 
-            // Log each database connection status
-            status.databases.forEach(db => {
-                if (db.connected) {
-                    log.Info(`✅ Database '${db.name}' connected successfully`);
-                } else if (!db.generated) {
-                    log.Warn(`⚠️ Database '${db.name}' skipped - Prisma client not generated`);
-                } else {
-                    log.Error(`❌ Database '${db.name}' failed to connect`);
-                }
-            });        } catch (error) {
+        } catch (error) {
             log.Error('Failed to initialize Prisma Manager', { error });
             // Don't throw error here to allow application to continue without database
             log.Warn('Application will continue without database connections');
         }
-    }    /**
+    }
+
+    /**
      * Initialize Repository Manager to handle repository loading and management
      */
     private async initializeRepositoryManager(): Promise<void> {

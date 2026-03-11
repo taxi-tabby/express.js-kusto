@@ -403,241 +403,33 @@ export class PrismaSchemaAnalyzer {
   }
 
   /**
-   * TypeORM 호환 형식으로 모든 스키마 정보를 반환합니다
-   */
-  public getTypeOrmCompatibleSchema(): any {
-    const models = this.getAllModels();
-    
-    const entities = models.map(model => this.convertPrismaModelToTypeOrmEntity(model));
-    
-    return {
-      data: entities,
-      metadata: {
-        timestamp: new Date().toISOString(),
-        affectedCount: entities.length,
-        pagination: {
-          type: "offset",
-          total: entities.length,
-          page: 1,
-          pages: 1,
-          offset: entities.length,
-          nextCursor: Buffer.from(`{"nextCursor":"${Buffer.from(entities.length.toString()).toString('base64')}","total":${entities.length}}`).toString('base64')
-        }
-      }
-    };
-  }
-
-  /**
-   * Prisma 모델을 TypeORM 엔티티 형식으로 변환합니다
-   */
-  private convertPrismaModelToTypeOrmEntity(model: PrismaModelInfo): any {
-    // 컬럼 변환
-    const columns = model.fields
-      .filter(field => !field.relationName) // 관계 필드 제외
-      .map(field => this.convertPrismaFieldToTypeOrmColumn(field));
-
-    // 관계 변환
-    const relations = model.relations.map(relation => this.convertPrismaRelationToTypeOrmRelation(relation));
-
-    // 인덱스 변환
-    const indices = model.indexes.map(index => ({
-      name: `IDX_${model.name.toUpperCase()}_${index.fields.join('_').toUpperCase()}`,
-      columns: index.fields,
-      isUnique: index.type === 'unique'
-    }));
-
-    // 기본 키 변환
-    const primaryKeys = model.primaryKey ? 
-      model.primaryKey.fields.map(fieldName => {
-        const field = model.fields.find(f => f.name === fieldName);
-        return {
-          name: fieldName,
-          databaseName: fieldName,
-          type: this.mapPrismaTypeToTypeOrmType(field?.type || 'String'),
-          isGenerated: field?.isGenerated || false,
-          generationStrategy: field?.isGenerated ? "increment" : undefined
-        };
-      }) : [];
-
-    // 고유 제약조건 변환
-    const uniques = model.uniqueConstraints.map(constraint => ({
-      name: `UQ_${Math.random().toString(36).substr(2, 23)}`, // TypeORM 스타일 고유 이름
-      columns: constraint.fields
-    }));
-
-    return {
-      entityName: model.name,
-      tableName: model.dbName || model.name.toLowerCase() + 's',
-      targetName: model.name,
-      primaryKeys,
-      columns,
-      relations,
-      indices,
-      checks: [],
-      uniques,
-      foreignKeys: [], // 관계에서 추출 가능
-      synchronize: true,
-      withoutRowid: false
-    };
-  }
-
-  /**
-   * Prisma 필드를 TypeORM 컬럼 형식으로 변환합니다
-   */
-  private convertPrismaFieldToTypeOrmColumn(field: PrismaFieldMetadata): any {
-    const typeOrmType = this.mapPrismaTypeToTypeOrmType(field.type);
-    const jsType = field.jsType;
-
-    const column: any = {
-      name: field.name,
-      databaseName: field.name,
-      type: typeOrmType,
-      jsType: jsType,
-      isPrimary: field.isId,
-      isGenerated: field.isGenerated,
-      generationStrategy: field.isGenerated ? "increment" : undefined,
-      isNullable: field.isOptional,
-      isArray: field.isList,
-      length: this.getFieldLength(field.type),
-      zerofill: false,
-      unsigned: false,
-      metadata: {
-        type: typeOrmType,
-        jsType: jsType,
-        isEnum: this.isEnumType(field.type),
-        enumValues: this.getEnumValues(field.type),
-        isNullable: field.isOptional,
-        isPrimary: field.isId,
-        isGenerated: field.isGenerated,
-        length: this.getFieldLength(field.type),
-        default: field.default
-      }
-    };
-
-    // 기본값이 있는 경우 추가
-    if (field.default !== undefined) {
-      column.default = field.default;
-      column.metadata.default = field.default;
-    }
-
-    // Enum 타입인 경우 enum 값들 추가
-    if (this.isEnumType(field.type)) {
-      column.enum = this.getEnumValues(field.type);
-    }
-
-    return column;
-  }
-
-  /**
-   * Prisma 관계를 TypeORM 관계 형식으로 변환합니다
-   */
-  private convertPrismaRelationToTypeOrmRelation(relation: PrismaRelationInfo): any {
-    return {
-      name: relation.name,
-      type: relation.type,
-      target: relation.model,
-      inverseSide: this.getInverseSideName(relation),
-      isOwner: relation.fields && relation.fields.length > 0,
-      isLazy: false,
-      isCascade: {
-        insert: false,
-        update: false,
-        remove: false,
-        softRemove: false,
-        recover: false
-      },
-      onDelete: relation.onDelete,
-      onUpdate: relation.onUpdate,
-      nullable: true,
-      joinColumns: relation.fields ? relation.fields.map(field => ({
-        name: field,
-        referencedColumnName: relation.references?.[0] || 'id'
-      })) : [],
-      joinTable: relation.type === 'many-to-many' ? `${relation.name}_${relation.model.toLowerCase()}` : null
-    };
-  }
-
-  /**
-   * Prisma 타입을 TypeORM 타입으로 매핑합니다
-   */
-  private mapPrismaTypeToTypeOrmType(prismaType: string): any {
-    const typeMapping: Record<string, any> = {
-      'String': 'varchar',
-      'Int': 0,
-      'Float': 'float',
-      'Boolean': 'boolean',
-      'DateTime': 'timestamp',
-      'Json': 'json',
-      'Bytes': 'blob'
-    };
-
-    return typeMapping[prismaType] || 'varchar';
-  }
-
-  /**
-   * 필드 길이를 반환합니다
-   */
-  private getFieldLength(type: string): string {
-    const lengthMapping: Record<string, string> = {
-      'String': '255',
-      'Int': '',
-      'Float': '',
-      'Boolean': '',
-      'DateTime': '',
-      'Json': '',
-      'Bytes': ''
-    };
-
-    return lengthMapping[type] || '';
-  }
-
-  /**
    * Enum 타입인지 확인합니다
    */
-  private isEnumType(type: string): boolean {
+  public isEnumType(type: string): boolean {
     // Prisma에서 Enum은 보통 대문자로 시작하고 내장 타입이 아닙니다
-    const builtInTypes = ['String', 'Int', 'Float', 'Boolean', 'DateTime', 'Json', 'Bytes'];
+    const builtInTypes = ['String', 'Int', 'Float', 'Boolean', 'DateTime', 'Json', 'Bytes', 'BigInt', 'Decimal'];
     return !builtInTypes.includes(type) && type.charAt(0).toUpperCase() === type.charAt(0);
   }
 
   /**
-   * Enum 값들을 반환합니다 (실제로는 Prisma 스키마에서 추출해야 함)
+   * Enum 값들을 반환합니다 (DMMF에서 로드된 실제 enum 사용)
    */
-  private getEnumValues(type: string): string[] | undefined {
-    // 실제 로드된 enum에서 값 찾기
+  public getEnumValues(type: string): string[] | undefined {
+    // DMMF에서 로드된 실제 enum 값 사용
     if (this.loadedEnums[type] && Array.isArray(this.loadedEnums[type].values)) {
       return this.loadedEnums[type].values;
     }
-    
+
     // 로드된 enum이 다른 형식인 경우 처리
     if (this.loadedEnums[type] && typeof this.loadedEnums[type] === 'object') {
       const enumObj = this.loadedEnums[type];
       if (enumObj.values) {
         return Array.isArray(enumObj.values) ? enumObj.values : Object.values(enumObj.values);
       }
-      // enum 객체 자체가 값들을 가지고 있는 경우
-      return Object.values(enumObj).filter(value => typeof value === 'string');
+      return Object.values(enumObj).filter(value => typeof value === 'string') as string[];
     }
-    
-    // 폴백: 하드코딩된 enum 매핑 (기존 로직)
-    const enumMapping: Record<string, string[]> = {
-      'Provider': ['local', 'google', 'apple', 'kakao', 'naver'],
-      'Category': ['user', 'admin', 'content', 'system', 'analytics'],
-      'Action': ['create', 'read', 'update', 'delete', 'manage']
-    };
 
-    return enumMapping[type];
-  }
-
-  /**
-   * 관계의 역방향 이름을 추정합니다
-   */
-  private getInverseSideName(relation: PrismaRelationInfo): string {
-    // 간단한 추정 로직 - 실제로는 더 정교해야 합니다
-    if (relation.type === 'many-to-many') {
-      return relation.name;
-    }
-    return relation.name + 's';
+    return undefined;
   }
 
   /**

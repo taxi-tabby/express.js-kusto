@@ -27,8 +27,8 @@
 ### 초기 실행 방법
 1. git clone 또는 수동으로 파일을 받아서 npm 또는 패키지 매니저로 의존성을 설치
 2. DB 연결 `app/db/...` 에서 연결 정보를 확인 후 `.env` 또는 `.env.prod`, `.env.dev` 로 연결 정보를 입력
-3. `npm run db --- generate -a` 를 실행하여 prisma client 를 설치
-4. `npm run db --- migrate -t dev -n "init" -d <db이름>` 또는 `npm run db --- push -d <db이름>` 를 실행하여 DB에 스키마를 배포
+3. `npm run db -- generate -a` 를 실행하여 prisma client 를 설치
+4. `npm run db -- migrate -t dev -n "init" -d <db이름>` 또는 `npm run db -- push -d <db이름>` 를 실행하여 DB에 스키마를 배포
 5. `npm run dev` 를 실행하여 서비스를 실행 
 
 
@@ -41,7 +41,7 @@
 
 - **API 문서**: http://localhost:3000/docs
 - **개발 대시보드**: http://localhost:3000/docs/dev
-- **테스트 리포트**: http://localhost:3000/docs/test-report
+- **OpenAPI 스펙**: http://localhost:3000/docs/openapi.json
 - **CRUD 스키마 API** (개발 모드 전용): http://localhost:3000/api/schema
 
 ## 📞 도움이 필요하다면

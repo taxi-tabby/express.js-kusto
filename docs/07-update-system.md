@@ -26,5 +26,5 @@ GitHub에서 새로운 버전이 있는지 확인합니다.
 
 ## 📖 문서 네비게이션
 
-**◀️ 이전**: [🔄 CRUD 라우터](./06-crud-router.md)  
-**🏠 처음**: [📋 문서 색인](./00-documentation-index.md)
+**◀️ 이전**: [🔄 CRUD 라우터](./06-crud-router.md)
+**▶️ 다음**: [📋 CRUD 스키마 API](./08-crud-schema-api.md)

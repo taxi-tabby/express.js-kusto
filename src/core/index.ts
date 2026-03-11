@@ -18,7 +18,6 @@ export { CrudSchemaRegistry } from './lib/crudSchemaRegistry';
 export { PrismaSchemaAnalyzer } from './lib/prismaSchemaAnalyzer';
 export { SchemaApiRouter } from './lib/schemaApiRouter';
 export { SchemaApiSetup } from './lib/schemaApiSetup';
-export { SchemaApiDebugger } from './lib/schemaApiDebugger';
 export * from './lib/crudSchemaTypes';
 
 // Validation system

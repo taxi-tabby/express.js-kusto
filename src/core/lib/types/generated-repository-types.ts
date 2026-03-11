@@ -1,16 +1,19 @@
 // Auto-generated file - DO NOT EDIT MANUALLY
-// Generated on: 2025-09-04T05:04:19.860Z
 // Source: src/app/repos/
 
-// Repository type map for getRepository return types (empty - no repositories found)
+import ExampleRepository from '@app/repos/example.repository';
+
+// Repository type definitions
+type ExampleRepositoryType = InstanceType<typeof ExampleRepository>;
+
+// Repository type map for getRepository return types
 export interface RepositoryTypeMap {
-  // No repository files found
-  // Add TypeScript files ending with .repository.ts to src/app/repos/ and regenerate types
+  'example': ExampleRepositoryType;
 }
 
-// Repository registry for dynamic loading (empty)
+// Repository registry for dynamic loading
 export const REPOSITORY_REGISTRY = {
-  // No repositories available
+  'example': () => import('@app/repos/example.repository'),
 } as const;
 
 // Repository names type

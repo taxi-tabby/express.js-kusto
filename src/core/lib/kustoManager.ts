@@ -57,6 +57,8 @@ export interface KustoDbProxy {
 export class KustoManager {
     private static instance: KustoManager;
     private dependencyInjector: DependencyInjector;
+    private _repoProxy: RepositoryTypeMap | null = null;
+    private _dbProxy: KustoDbProxy | null = null;
 
     private constructor() {
         this.dependencyInjector = DependencyInjector.getInstance();
@@ -74,32 +76,34 @@ export class KustoManager {
      */
     public get injectable(): Injectable {
         return this.dependencyInjector.getInjectedModules();
-    }    /**
+    }
+
+    /**
      * 레포지토리들에 접근
      * 동적으로 모든 등록된 레포지토리에 접근할 수 있는 프록시 객체를 반환
      */
     public get repo(): RepositoryTypeMap {
-        const loadedRepositories = repositoryManager.getLoadedRepositoryNames();
-        
-        // 동적으로 레포지토리 이름을 속성으로 접근할 수 있는 프록시 객체 생성
+        if (this._repoProxy) return this._repoProxy;
+
+        // Proxy 객체는 캐시하되, 내부 조회는 항상 live 상태를 확인
         const repoProxy = new Proxy({}, {
             get(target, prop) {
-                if (typeof prop === 'string' && loadedRepositories.includes(prop)) {
+                if (typeof prop === 'string' && repositoryManager.getLoadedRepositoryNames().includes(prop)) {
                     return repositoryManager.getRepository(prop as RepositoryName);
                 }
                 return undefined;
             },
-            
+
             has(target, prop) {
-                return typeof prop === 'string' && loadedRepositories.includes(prop);
+                return typeof prop === 'string' && repositoryManager.getLoadedRepositoryNames().includes(prop);
             },
-            
+
             ownKeys(target) {
-                return loadedRepositories;
+                return repositoryManager.getLoadedRepositoryNames();
             },
-            
+
             getOwnPropertyDescriptor(target, prop) {
-                if (typeof prop === 'string' && loadedRepositories.includes(prop)) {
+                if (typeof prop === 'string' && repositoryManager.getLoadedRepositoryNames().includes(prop)) {
                     return {
                         enumerable: true,
                         configurable: true,
@@ -109,41 +113,35 @@ export class KustoManager {
                 return undefined;
             }
         });
-        
-        return repoProxy as RepositoryTypeMap;
+
+        this._repoProxy = repoProxy as RepositoryTypeMap;
+        return this._repoProxy;
     }
-    
+
     /**
      * 데이터베이스 클라이언트 접근 인터페이스
      * 사용법: kusto.db.getClient('admin') 또는 kusto.db.user (동적 접근)
      */
     public get db(): KustoDbProxy {
-        const availableDbs = prismaManager.getAvailableDatabases();
-        
-        // 동적으로 데이터베이스 이름을 속성으로 접근할 수 있는 프록시 객체 생성
+        if (this._dbProxy) return this._dbProxy;
+
+        // Proxy 객체는 캐시하되, 동적 DB 접근은 항상 live 상태를 확인
         const dbProxy = new Proxy({
-            // 메서드로 클라이언트 가져오기 (async) - hint 추적 포함
             getClient: async (name: string) => {
-                // prismaManager의 getClient 메서드가 자동으로 hint 추적을 수행함
                 return await prismaManager.getClient(name);
             },
-            
-            // 동기 버전 (연결 상태 확인 없이) - hint 추적 포함
+
             getClientSync: (name: string) => {
-                // prismaManager의 getClientSync 메서드가 자동으로 hint 추적을 수행함
                 return prismaManager.getClientSync(name);
             },
-            
-            // 래핑된 클라이언트 가져오기 (Repository에서 사용)
-            getWrap: (name: string) => prismaManager.getClientSync(name),
-            
-            // 사용 가능한 데이터베이스 목록
-            available: availableDbs,
-            
-            // 상태 정보
+
+            getWrap: (name: string) => prismaManager.getWrap(name),
+
+            // available은 getter로 동적 반환
+            get available() { return prismaManager.getAvailableDatabases(); },
+
             status: () => prismaManager.getStatus(),
-            
-            // 헬스체크
+
             healthCheck: () => prismaManager.healthCheck()
         }, {
             get(target, prop) {
@@ -151,18 +149,18 @@ export class KustoManager {
                 if (prop in target) {
                     return target[prop as keyof typeof target];
                 }
-                
-                // 데이터베이스 이름으로 직접 접근하는 경우 (동기 버전 사용) - hint 추적 포함
-                if (typeof prop === 'string' && availableDbs.includes(prop)) {
-                    // prismaManager의 getClientSync 메서드가 자동으로 hint 추적을 수행함
+
+                // 데이터베이스 이름으로 직접 접근 — live 상태 확인
+                if (typeof prop === 'string' && prismaManager.getAvailableDatabases().includes(prop)) {
                     return prismaManager.getClientSync(prop);
                 }
-                
+
                 return undefined;
             }
         });
-        
-        return dbProxy;
+
+        this._dbProxy = dbProxy;
+        return this._dbProxy;
     }
 
     /**

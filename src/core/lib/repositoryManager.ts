@@ -103,7 +103,9 @@ export class RepositoryManager {
             .split(/[-_\s]+/)
             .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
             .join('');
-    }    /**
+    }
+
+    /**
      * Get a repository instance by name
      */
     public getRepository<T extends RepositoryName>(name: T): GetRepositoryType<T> {

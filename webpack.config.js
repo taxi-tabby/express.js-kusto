@@ -102,16 +102,9 @@ module.exports = (env, argv) => {
                         to: 'views'
                     },
                     {
-                        from: 'src/core/lib/views',
-                        to: 'views'
-                    },
-                    {
                         from: 'public',
                         to: 'public',
-                    }, {
-                        from: 'src/core/lib/static',
-                        to: 'public',
-                    },                    
+                    },
                     
                     // Prisma 클라이언트 파일들 복사
                     {

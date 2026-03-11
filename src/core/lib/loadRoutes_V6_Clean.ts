@@ -225,23 +225,6 @@ function convertToVirtualPath(filePath: string): string {
             return result;
         }
 
-        // 만약 경로에 많은 구조가 있다면 직접 처리
-        // 예: many_route_test/deep1/deep9/9 같은 패턴
-        if (pathWithoutFile.startsWith('/many_route_test') || pathWithoutFile.includes('many_route_test')) {
-            // many_route_test부터 시작하는 전체 경로 사용
-            let result = pathWithoutFile;
-            if (!result.startsWith('/')) {
-                result = '/' + result;
-            }
-            // 앞에 불필요한 경로가 있다면 제거
-            if (result.includes('/many_route_test')) {
-                const startIndex = result.indexOf('/many_route_test');
-                result = result.substring(startIndex);
-            }
-            console.log(`✅ Found many_route_test pattern, result: ${result}`);
-            return result;
-        }
-
         // routes가 없는 경우에도 전체 경로 시도 (app, src 등이 포함된 절대 경로인 경우)
         // Windows 드라이브 문자 제거 (C:, D: 등)
         let cleanPath = pathWithoutFile.replace(/^[A-Za-z]:/, '');

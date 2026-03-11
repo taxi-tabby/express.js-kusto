@@ -5,7 +5,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { config } from 'dotenv';
-import { PrismaPg } from '@prisma/adapter-pg';
 import {
 	DatabaseClientMap,
 	DatabaseClientType,
@@ -335,14 +334,16 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 				throw urlError;
 			}
 
-			// Create Prisma client instance with driver adapter
-			// Prisma 7: Use @prisma/adapter-pg for PostgreSQL connections
-			const adapter = new PrismaPg({ connectionString: connectionUrl });
-			const prismaClient = new DatabasePrismaClient({
-				adapter,
+			// Create Prisma client instance with provider-specific driver adapter
+			const adapter = await this.createDriverAdapter(folderName, connectionUrl);
+			const clientOptions: any = {
 				log: process.env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error'],
 				errorFormat: 'minimal'
-			});
+			};
+			if (adapter) {
+				clientOptions.adapter = adapter;
+			}
+			const prismaClient = new DatabasePrismaClient(clientOptions);
 
 			// Test the connection with retry logic
 			let connectionAttempts = 0;
@@ -447,6 +448,63 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 		}
 	}
 
+	/**
+	 * Read the datasource provider from schema.prisma for a given database folder
+	 */
+	private getSchemaProvider(folderName: string): string {
+		try {
+			const schemaPath = path.join(process.cwd(), 'src', 'app', 'db', folderName, 'schema.prisma');
+			const schemaContent = fs.readFileSync(schemaPath, 'utf-8');
+			// datasource 블록 내의 provider 값만 추출
+			const dsBlock = schemaContent.match(/datasource\s+\w+\s*{([\s\S]*?)}/m);
+			if (dsBlock) {
+				const providerMatch = dsBlock[1].match(/provider\s*=\s*["']([^"']+)["']/);
+				if (providerMatch) return providerMatch[1];
+			}
+		} catch { /* ignore */ }
+		return 'postgresql';
+	}
+
+	/**
+	 * Create a driver adapter based on the schema provider.
+	 * Dynamically imports the adapter package only when needed.
+	 * Returns null for providers that don't require an adapter (e.g. sqlite).
+	 */
+	private async createDriverAdapter(folderName: string, connectionUrl: string): Promise<any | null> {
+		const provider = this.getSchemaProvider(folderName);
+
+		switch (provider) {
+			case 'postgresql':
+			case 'postgres': {
+				try {
+					const { PrismaPg } = await import('@prisma/adapter-pg');
+					return new PrismaPg({ connectionString: connectionUrl });
+				} catch {
+					throw new Error(
+						`'@prisma/adapter-pg' 패키지가 필요합니다.\n` +
+						`  npm install @prisma/adapter-pg`
+					);
+				}
+			}
+			case 'mysql': {
+				try {
+					const { PrismaMysql } = await import('@prisma/adapter-mysql' as string);
+					return new PrismaMysql({ connectionString: connectionUrl });
+				} catch {
+					throw new Error(
+						`'@prisma/adapter-mysql' 패키지가 필요합니다.\n` +
+						`  npm install @prisma/adapter-mysql`
+					);
+				}
+			}
+			case 'sqlite':
+				// SQLite는 어댑터 없이 직접 연결
+				return null;
+			default:
+				console.warn(`⚠️ Unknown provider '${provider}' for ${folderName}, attempting connection without adapter`);
+				return null;
+		}
+	}
 
 	/**
 	 * Get database URL by parsing schema.prisma file to extract environment variable
@@ -695,17 +753,18 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 			throw new Error(`Cannot recreate client for '${databaseName}': client type not found`);
 		}
 
-		// Create new Prisma client instance with PrismaPg adapter (Prisma 7 방식)
+		// Create new Prisma client instance with provider-specific adapter
 		const connectionUrl = this.getDatabaseUrl(databaseName);
-		
-		// Prisma 7: @prisma/adapter-pg 사용
-		const adapter = new PrismaPg({ connectionString: connectionUrl });
-		
-		const prismaClient = new DatabasePrismaClient({
-			adapter,
+
+		const adapter = await this.createDriverAdapter(databaseName, connectionUrl);
+		const clientOptions: any = {
 			log: process.env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error'],
 			errorFormat: 'minimal'
-		});
+		};
+		if (adapter) {
+			clientOptions.adapter = adapter;
+		}
+		const prismaClient = new DatabasePrismaClient(clientOptions);
 
 		// Test the connection with retry (서버리스 DB 복구 대기)
 		let connectionAttempts = 0;

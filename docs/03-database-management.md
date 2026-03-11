@@ -201,10 +201,25 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("RDS_USER_URL")
+  url      = env("DEFAULT__KUSTO_RDB_URL")  // 방식 1: 환경변수 직접 지정
 }
 
 // 여기에 모델 정의...
+```
+
+또는 Prisma 7 스타일로 `url`을 생략하면 폴더명 컨벤션이 자동 적용됩니다:
+
+```prisma
+generator client {
+  provider = "prisma-client-js"
+  output   = "client"
+}
+
+datasource db {
+  provider = "postgresql"
+  // url 생략 → 폴더명 기반 자동 결정 (방식 2)
+  // 예: src/app/db/default/ → DEFAULT__KUSTO_RDB_URL 환경변수 사용
+}
 ```
 
 ### 🔧 스키마 구성 규칙
@@ -213,17 +228,39 @@ datasource db {
 |------|----|----|------|
 | `generator.provider` | `"prisma-client-js"` | ❌ 필수 | Prisma 클라이언트 생성기 |
 | `generator.output` | `"client"` | ❌ 필수 | 클라이언트 출력 폴더 |
-| `datasource.provider` | `"postgresql"` | Prisma 지원 내에서 자율 | 데이터베이스 타입 |
-| `datasource.url` | `env("RDS_DB_URL")` | ✅ 변경 가능 | **환경변수 이름만 변경 가능** |
+| `datasource.provider` | `"postgresql"` 등 | Prisma 지원 내에서 자율 | 데이터베이스 타입 (자동 감지됨) |
+| `datasource.url` | `env("변수명")` 또는 생략 | ✅ 선택 | 생략 시 폴더명 컨벤션 자동 적용 |
 
-> **⚠️ 중요**: `datasource.url`에서는 환경변수 이름(예: `RDS_USER_URL`)만 변경할 수 있습니다. 나머지 설정은 프레임워크 동작을 위해 반드시 유지해야 합니다.
+> **⚠️ 중요**: `generator` 설정은 프레임워크 동작을 위해 반드시 유지해야 합니다. `datasource.provider`는 자동 감지되어 적절한 드라이버 어댑터(pg/mysql/sqlite)가 동적 로드됩니다.
 
-### 📌 환경변수 명명 규칙
-- 패턴: `RDS_{DATABASE_NAME}_URL`
-- 예시: 
-  - `user` 데이터베이스 → `RDS_USER_URL`
-  - `temporary` 데이터베이스 → `RDS_TEMPORARY_URL`
-  - `admin` 데이터베이스 → `RDS_ADMIN_URL`
+### 📌 환경변수 결정 규칙
+
+DB URL 환경변수는 **두 가지 방식**으로 결정됩니다:
+
+#### 방식 1: `schema.prisma`에 직접 지정 (우선)
+
+`datasource.url`에 `env("변수명")`이 있으면 해당 변수명을 그대로 사용합니다.
+
+```prisma
+datasource db {
+  provider = "postgresql"
+  url      = env("MY_CUSTOM_DB_URL")  // → MY_CUSTOM_DB_URL 환경변수 사용
+}
+```
+
+#### 방식 2: 폴더명 기반 컨벤션 (자동)
+
+`schema.prisma`에 `url = env(...)` 구문이 없는 경우 (Prisma 7 스타일 등), 폴더명에서 자동으로 환경변수명을 생성합니다.
+
+**규칙**: `{FOLDER_NAME}__KUSTO_RDB_URL` (폴더명을 `UPPER_SNAKE_CASE`로 변환 + `__KUSTO_RDB_URL`)
+
+| DB 폴더 | 환경변수명 |
+|---------|-----------|
+| `src/app/db/default/` | `DEFAULT__KUSTO_RDB_URL` |
+| `src/app/db/user/` | `USER__KUSTO_RDB_URL` |
+| `src/app/db/myDatabase/` | `MY_DATABASE__KUSTO_RDB_URL` |
+
+> **참고**: `.env.template` 파일에 예시가 포함되어 있습니다.
 
 ---
 

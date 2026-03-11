@@ -17,6 +17,19 @@
 
 프레임워크는 **설정보다는 관례**를 따릅니다. 복잡한 설정 파일 없이도 정해진 폴더 구조만 따르면 자동으로 동작합니다.
 
+#### 관례 적용 수준
+
+| 영역 | 수준 | 설명 |
+|------|------|------|
+| **라우팅** | 완전 자동 | 폴더 구조 = URL 경로. `route.ts`/`middleware.ts` 배치만으로 동작 |
+| **DB 발견** | 완전 자동 | `src/app/db/` 하위에 `schema.prisma` 폴더 존재만으로 자동 등록. Provider(pg/mysql/sqlite) 자동 감지 |
+| **Repository** | 관례 + Codegen | `*.repository.ts` 네이밍 → 키 자동 매핑. 단, 파일 추가/변경 시 `npm run generate` 실행 필요 |
+| **Injectable/DI** | 관례 + Codegen | 폴더 경로 → camelCase 키 자동 매핑. 단, 파일 추가/변경 시 `npm run generate` 실행 필요 |
+| **DB URL** | 명시적 설정 | `schema.prisma`에 `env("변수명")` 지정 또는 `{FOLDER}__KUSTO_RDB_URL` 컨벤션. [상세](./03-database-management.md) |
+| **Views** | 부분 자동 | 경로는 basePath에서 파생. 엔진은 `ejs` 기본값 |
+
+> **Codegen 주의사항**: `npm run dev`는 시작 시 자동으로 `npm run generate`를 실행합니다. 하지만 서버 실행 중 파일을 추가하면 서버를 재시작하거나 수동으로 `npm run generate`를 실행해야 합니다.
+
 ### 자동화 우선
 
 개발자가 반복적으로 해야 하는 작업들을 프레임워크가 자동으로 처리합니다:
@@ -176,9 +189,13 @@ app/repos/
 **Ruby on Rails**에서 유명해진 설계 원칙을 따릅니다. 복잡한 설정 파일 없이 폴더 구조가 곧 URL 경로가 되는 관례 기반 시스템입니다.
 
 ```
-app/routes/api/users/route.ts → GET /api/users
-app/routes/admin/dashboard/route.ts → GET /admin/dashboard
+app/routes/api/users/route.ts       → GET /api/users          (완전 자동)
+app/db/default/schema.prisma        → DB 'default' 자동 등록   (완전 자동)
+app/repos/user.repository.ts        → repo.getRepository('user') (codegen 필요)
+app/injectable/auth/jwt/export.module.ts → injected.authJwtExport   (codegen 필요)
 ```
+
+라우팅과 DB 발견은 **제로 설정**(파일 배치만으로 동작)이며, Repository와 DI는 **관례 + 코드 생성** 방식으로 동작합니다. 자세한 수준별 구분은 [관례 적용 수준](#관례-적용-수준) 표를 참고하세요.
 
 ### 2. Multi-tenant Architecture (멀티 테넌트 아키텍처)
 

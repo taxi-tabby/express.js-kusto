@@ -121,9 +121,11 @@ Key method categories:
 ### Multi-Database Layer
 
 Each subfolder in `src/app/db/` represents an independent database:
-- `src/app/db/user/schema.prisma` → requires `RDS_USER_URL` env var
 - Prisma clients generated into `src/app/db/{name}/client/`
-- Naming convention: folder name `foo` → env var `RDS_FOO_URL`
+- DB URL resolution (2 modes):
+  1. `schema.prisma`에 `url = env("VAR_NAME")` → 해당 환경변수 사용
+  2. `url` 생략 시 → 폴더명 컨벤션 `{FOLDER}__KUSTO_RDB_URL` 자동 적용 (camelCase → UPPER_SNAKE_CASE)
+- 예: `src/app/db/default/` → `DEFAULT__KUSTO_RDB_URL`, `src/app/db/myData/` → `MY_DATA__KUSTO_RDB_URL`
 
 Required schema structure:
 ```prisma
@@ -132,8 +134,8 @@ generator client {
   output   = "client"          # Must be "client"
 }
 datasource db {
-  provider = "postgresql"
-  url      = env("RDS_FOO_URL")
+  provider = "postgresql"       # Auto-detected for driver adapter
+  url      = env("DEFAULT__KUSTO_RDB_URL")  # Or omit url for folder-name convention
 }
 ```
 

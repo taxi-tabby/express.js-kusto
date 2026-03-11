@@ -61,7 +61,7 @@ router.CRUD('default', 'User', {
   }
 });
 
-export default router;
+export default router.build();
 ```
 
 ## API 엔드포인트

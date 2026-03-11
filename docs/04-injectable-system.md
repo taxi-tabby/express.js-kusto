@@ -130,36 +130,9 @@ export default () => {
 
 ```typescript
 // auth/jwt/export.module.ts
-import * as jwt from 'jsonwebtoken';
-import * as bcrypt from 'bcrypt';
-import { JWTConfig, TokenPayload, SignInResult } from './type';
-
-export type {SignInResult}
+// 필요한 패키지를 import하여 사용 (npm install 필요)
 
 export default class JWTService {
-    private readonly config: JWTConfig;
-
-    constructor() {
-        this.config = {
-            accessTokenSecret: process.env.JWT_ACCESS_SECRET || 'please-input-your-access-token-secret-0000',
-            refreshTokenSecret: process.env.JWT_REFRESH_SECRET || 'please-input-your-refresh-token-secret-9999',
-            accessTokenExpiry: process.env.JWT_ACCESS_EXPIRY || '15m',
-            refreshTokenExpiry: process.env.JWT_REFRESH_EXPIRY || '7d',
-            saltRounds: parseInt(process.env.BCRYPT_SALT_ROUNDS || '10')
-        };
-    }
-
-    /**
-     * 비밀번호를 해시화합니다
-     */
-    public async hashPassword(password: string): Promise<string> {
-        try {
-            return await bcrypt.hash(password, this.config.saltRounds);
-        } catch (error) {
-            throw new Error('비밀번호 해시 생성 중 오류가 발생했습니다');
-        }
-    }
-
     /**
      * 토큰에서 헤더 추출
      */
@@ -170,16 +143,7 @@ export default class JWTService {
         return authHeader.substring(7);
     }
 
-    /**
-     * Access Token 검증
-     */
-    public verifyAccessToken(token: string): TokenPayload | null {
-        try {
-            return jwt.verify(token, this.config.accessTokenSecret) as TokenPayload;
-        } catch (error) {
-            return null;
-        }
-    }
+    // 비즈니스 로직 메서드 구현...
 }
 ```
 

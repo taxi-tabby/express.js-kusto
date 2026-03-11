@@ -234,13 +234,13 @@ router.NOTFOUND((req, res) => {
 });
 
 // 파일 업로드 (단일)
-router.POST_FILE('avatar', async (req, res, injected, repo, db) => {
+router.POST_SINGLE_FILE(storage, 'avatar', async (req, res, injected, repo, db) => {
     const file = req.file; // 업로드된 파일
     // 파일 처리 로직...
 });
 
-// 파일 업로드 (여러 개)
-router.POST_FILES([
+// 파일 업로드 (필드별)
+router.POST_FIELD_FILE(storage, [
     { name: 'avatar', maxCount: 1 },
     { name: 'documents', maxCount: 5 }
 ], async (req, res, injected, repo, db) => {
@@ -382,9 +382,8 @@ export default [
 - **Kusto Manager 초기화**: 모든 요청에 kusto 인스턴스 제공
 - **보안 헤더**: Helmet을 통한 보안 설정
 - **CORS 처리**: 동적 화이트리스트 관리
-- **요청 파싱**: JSON, URL-encoded 데이터 파싱
-- **IP 추적**: 클라이언트 IP 식별 및 로깅
-- **CSRF 보호**: 토큰 기반 CSRF 방어
+- **요청 파싱**: JSON, URL-encoded 데이터 파싱 (`application/vnd.api+json` 지원)
+- **IP 추적**: 클라이언트 IP 식별 및 Footwalk 로깅
 - **에러 핸들링**: 전역 에러 처리
 
 ### 계층적 미들웨어 적용

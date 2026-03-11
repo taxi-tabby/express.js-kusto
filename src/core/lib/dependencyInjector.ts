@@ -47,7 +47,7 @@ export class DependencyInjector {
                 
                 // Skip if module loader is not found
                 if (!moduleLoader) {
-                    log.warn(`⚠️ Module loader not found for: ${moduleName}, skipping...`);
+                    log.Warn(`⚠️ Module loader not found for: ${moduleName}, skipping...`);
                     continue;
                 }
                 
@@ -62,7 +62,7 @@ export class DependencyInjector {
                     // Already instantiated object or module
                     this.modules[moduleName] = ModuleClass;
                 } else {
-                    log.warn(`Module ${moduleName} resolved to unexpected type: ${typeof ModuleClass}`);
+                    log.Warn(`Module ${moduleName} resolved to unexpected type: ${typeof ModuleClass}`);
                     this.modules[moduleName] = ModuleClass;
                 }
 
@@ -91,7 +91,7 @@ export class DependencyInjector {
                 
                 // Skip if middleware loader is not found
                 if (!middlewareLoader) {
-                    log.warn(`⚠️ Middleware loader not found for: ${middlewareName}, skipping...`);
+                    log.Warn(`⚠️ Middleware loader not found for: ${middlewareName}, skipping...`);
                     continue;
                 }
                 
@@ -109,7 +109,7 @@ export class DependencyInjector {
                     this.middlewares[middlewareName] = MiddlewareFunction();
                     log.Debug(`Executed middleware function for ${middlewareName}, result:`, typeof this.middlewares[middlewareName]);
                 } else {
-                    log.warn(`Middleware ${middlewareName} resolved to unexpected type: ${typeof MiddlewareFunction}`);
+                    log.Warn(`Middleware ${middlewareName} resolved to unexpected type: ${typeof MiddlewareFunction}`);
                     this.middlewares[middlewareName] = MiddlewareFunction;
                 }
 

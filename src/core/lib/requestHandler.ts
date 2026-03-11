@@ -354,11 +354,9 @@ export class RequestHandler {
                 });
                 
                 if (!res.headersSent) {
-                    if (error instanceof Error) {
-                        this.sendError(res, 500, error.message);
-                    } else {
-                        this.sendError(res, 500, 'Internal server error');
-                    }
+                    const isProduction = process.env.NODE_ENV === 'production';
+                    const message = (!isProduction && error instanceof Error) ? error.message : 'Internal server error';
+                    this.sendError(res, 500, message);
                 }
             }
         });
@@ -392,10 +390,10 @@ export class RequestHandler {
 }
 
 /**
- * 편의 함수들
+ * 편의 함수들 (클래스에 바인딩하여 this 컨텍스트 유지)
  */
-export const createValidatedHandler = RequestHandler.createHandler;
-export const withValidation = RequestHandler.withValidation;
-export const withFullValidation = RequestHandler.withFullValidation;
-export const sendSuccess = RequestHandler.sendSuccess;
-export const sendError = RequestHandler.sendError;
+export const createValidatedHandler = RequestHandler.createHandler.bind(RequestHandler);
+export const withValidation = RequestHandler.withValidation.bind(RequestHandler);
+export const withFullValidation = RequestHandler.withFullValidation.bind(RequestHandler);
+export const sendSuccess = RequestHandler.sendSuccess.bind(RequestHandler);
+export const sendError = RequestHandler.sendError.bind(RequestHandler);

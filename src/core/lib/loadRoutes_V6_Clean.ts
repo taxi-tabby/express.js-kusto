@@ -19,7 +19,7 @@ async function loadDynamicRouteMap(): Promise<void> {
     }
 
     try {
-        console.log(`🔄 Loading dynamic route map in webpack build...`);
+        log.Debug(`🔄 Loading dynamic route map in webpack build...`);
         // @ts-ignore - 런타임에 생성되는 파일이므로 TypeScript가 찾을 수 없음
         const routeMapModule = await import('../tmp/routes-map');
         routesMap = routeMapModule.routesMap;
@@ -31,11 +31,11 @@ async function loadDynamicRouteMap(): Promise<void> {
         virtualFS.middlewares = middlewaresMap;
         virtualFS.structure = directoryStructure;
 
-        console.log(`✅ Successfully loaded dynamic route map with ${Object.keys(routesMap).length} routes`);
+        log.Debug(`✅ Successfully loaded dynamic route map with ${Object.keys(routesMap).length} routes`);
 
 
     } catch (error) {
-        console.error(`❌ Error loading dynamic route map:`, error);
+        log.Error(`❌ Error loading dynamic route map:`, error);
         // 빈 맵으로 초기화
         routesMap = {};
         middlewaresMap = {};
@@ -182,7 +182,7 @@ function convertToVirtualPath(filePath: string): string {
     }
 
     // 디버깅을 위한 로그
-    console.log(`🔍 Converting path: ${filePath}`);
+    log.Debug(`🔍 Converting path: ${filePath}`);
 
     // 경로 정규화: 백슬래시를 슬래시로 변환하고 연속 슬래시 제거
     let normalizedPath = filePath.replace(/\\/g, '/').replace(/\/+/g, '/');
@@ -191,27 +191,27 @@ function convertToVirtualPath(filePath: string): string {
     if (normalizedPath.endsWith('/route.ts') || normalizedPath.endsWith('/route.js')) {
         const pathWithoutFile = normalizedPath.replace(/\/route\.(ts|js)$/, '');
 
-        console.log(`🔍 Path without file: ${pathWithoutFile}`);
+        log.Debug(`🔍 Path without file: ${pathWithoutFile}`);
 
         // 절대 경로를 상대 경로로 변환
         if (pathWithoutFile.includes('/app/routes/')) {
             const relativePath = pathWithoutFile.split('/app/routes/')[1] || '';
             const result = relativePath ? `/${relativePath}` : '/';
-            console.log(`✅ Found /app/routes/ pattern, result: ${result}`);
+            log.Debug(`✅ Found /app/routes/ pattern, result: ${result}`);
             return result;
         }
 
         if (pathWithoutFile.includes('/src/app/routes/')) {
             const relativePath = pathWithoutFile.split('/src/app/routes/')[1] || '';
             const result = relativePath ? `/${relativePath}` : '/';
-            console.log(`✅ Found /src/app/routes/ pattern, result: ${result}`);
+            log.Debug(`✅ Found /src/app/routes/ pattern, result: ${result}`);
             return result;
         }
 
         if (pathWithoutFile.includes('/routes/')) {
             const relativePath = pathWithoutFile.split('/routes/')[1] || '';
             const result = relativePath ? `/${relativePath}` : '/';
-            console.log(`✅ Found /routes/ pattern, result: ${result}`);
+            log.Debug(`✅ Found /routes/ pattern, result: ${result}`);
             return result;
         }
 
@@ -221,7 +221,7 @@ function convertToVirtualPath(filePath: string): string {
         if (routesIndex !== -1 && routesIndex < parts.length - 1) {
             const relativePath = parts.slice(routesIndex + 1).join('/');
             const result = `/${relativePath}`;
-            console.log(`✅ Found routes index pattern, result: ${result}`);
+            log.Debug(`✅ Found routes index pattern, result: ${result}`);
             return result;
         }
 
@@ -245,7 +245,7 @@ function convertToVirtualPath(filePath: string): string {
 
         // 시작 슬래시 보장
         const result = cleanPath.startsWith('/') ? cleanPath : `/${cleanPath}`;
-        console.log(`✅ Fallback pattern, result: ${result}`);
+        log.Debug(`✅ Fallback pattern, result: ${result}`);
         return result;
     }
 
@@ -376,7 +376,7 @@ function loadMiddleware(dir: string): any[] {
         middlewareCache.set(dir, result);
         return result;
     } catch (error) {
-        console.warn(`⚠️ Failed to load middleware: ${middlewarePath}`, error);
+        log.Warn(`⚠️ Failed to load middleware: ${middlewarePath}`, error);
         middlewareCache.set(dir, []);
         return [];
     }
@@ -403,11 +403,11 @@ function loadRoute(filePath: string): Router {
         // 경로에서 연속된 슬래시 제거
         virtualPath = virtualPath.replace(/\/+/g, '/');
 
-        console.log(`📌 Looking for route in virtual FS: ${filePath.replace(/\\/g, '/')} => ${virtualPath}`);
+        log.Debug(`📌 Looking for route in virtual FS: ${filePath.replace(/\\/g, '/')} => ${virtualPath}`);
 
         // 정확한 경로로 먼저 시도
         if (virtualFS.routes[virtualPath]) {
-            console.log(`✅ Found route in virtual FS: ${virtualPath}`);
+            log.Debug(`✅ Found route in virtual FS: ${virtualPath}`);
             const route = virtualFS.routes[virtualPath];
             routeCache.set(filePath, route);
             return route;
@@ -423,11 +423,11 @@ function loadRoute(filePath: string): Router {
 
         // 라우트 맵에 등록된 모든 키를 체크하여 비슷한 경로가 있는지 확인
         const availableRoutes = Object.keys(virtualFS.routes);
-        console.log(`🔍 Available routes in virtual FS: ${availableRoutes.join(', ')}`);
+        log.Debug(`🔍 Available routes in virtual FS: ${availableRoutes.join(', ')}`);
 
         for (const altPath of alternativePaths) {
             if (virtualFS.routes[altPath]) {
-                console.log(`✅ Found route in virtual FS (alternative path): ${altPath}`);
+                log.Debug(`✅ Found route in virtual FS (alternative path): ${altPath}`);
                 const route = virtualFS.routes[altPath];
                 routeCache.set(filePath, route);
                 return route;
@@ -435,7 +435,7 @@ function loadRoute(filePath: string): Router {
         }
 
         // 확인용: 모든 디렉토리 구조 출력
-        console.log('📊 Virtual FS Directory Structure:', JSON.stringify(virtualFS.structure, null, 2));
+        log.Debug('📊 Virtual FS Directory Structure:', JSON.stringify(virtualFS.structure, null, 2));
 
         throw new Error(`Failed to load route from virtual FS: ${virtualPath}`);
     }
@@ -453,7 +453,7 @@ function loadRoute(filePath: string): Router {
         routeCache.set(filePath, route);
         return route;
     } catch (error) {
-        console.error(`❌ Failed to load route: ${filePath}`, error);
+        log.Error(`❌ Failed to load route: ${filePath}`, error);
         throw error;
     }
 }
@@ -649,7 +649,7 @@ async function loadRoutes(app: Express, dir?: string): Promise<void> {
                     log.Route(`📦 Loaded: ${routeFilePath} (${middlewares.length} middlewares)`);
                 }
             } catch (error) {
-                console.error(`❌ Failed to load route: ${routeFilePath}`, error);
+                log.Error(`❌ Failed to load route: ${routeFilePath}`, error);
             }
         }
 
@@ -715,7 +715,7 @@ async function loadRoutes(app: Express, dir?: string): Promise<void> {
         log.Route(`   Routes: ${stats.routes}, Middlewares: ${stats.middlewares}`);
 
     } catch (error) {
-        console.error(`❌ Route loading failed:`, error);
+        log.Error(`❌ Route loading failed:`, error);
         throw error;
     }
 }

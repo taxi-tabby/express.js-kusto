@@ -15,6 +15,7 @@ import { serializeBigInt, serialize } from './serializer';
 import { ERROR_CODES, getHttpStatusForErrorCode } from './errorCodes';
 import { CrudSchemaRegistry } from './crudSchemaRegistry';
 import { PrismaSchemaAnalyzer } from './prismaSchemaAnalyzer';
+import { log } from '../external/winston';
 import './types/express-extensions';
 
 
@@ -127,7 +128,7 @@ export class ExpressRouter {
         this.schemaRegistry = CrudSchemaRegistry.getInstance();
         // 비동기 초기화는 별도로 처리
         this.initializeSchemaAnalyzer().catch(error => {
-            console.error('스키마 분석기 초기화 실패:', error);
+            log.Error('스키마 분석기 초기화 실패:', error);
         });
     }
 
@@ -145,7 +146,7 @@ export class ExpressRouter {
             const availableDatabases = prismaManager.getAvailableDatabases();
             
             if (availableDatabases.length === 0) {
-                console.warn('사용 가능한 Prisma 클라이언트가 없습니다. 스키마 분석기를 초기화할 수 없습니다.');
+                log.Warn('사용 가능한 Prisma 클라이언트가 없습니다. 스키마 분석기를 초기화할 수 없습니다.');
                 return;
             }
 
@@ -182,7 +183,7 @@ export class ExpressRouter {
             //     console.log(`📊 사용 가능한 데이터베이스: ${availableDatabases.join(', ')}`);
             // }
         } catch (error) {
-            console.warn('스키마 분석기 초기화 실패:', error instanceof Error ? error.message : String(error));
+            log.Warn('스키마 분석기 초기화 실패:', error instanceof Error ? error.message : String(error));
         }
     }
     
@@ -191,14 +192,14 @@ export class ExpressRouter {
      * MiddlewareHandlerFunction을 Express 호환 미들웨어로 래핑하는 헬퍼 메서드
      */
     private wrapMiddleware(handler: MiddlewareHandlerFunction): RequestHandler {
-        return (req: Request, res: Response, next: NextFunction) => {
+        return async (req: Request, res: Response, next: NextFunction) => {
             try {
                 // Kusto 매니저를 Request 객체에 설정
                 req.kusto = kustoManager;
-                
+
                 // Dependency injector에서 모든 injectable 모듈 가져오기
                 const injected = DependencyInjector.getInstance().getInjectedModules();
-                handler(req, res, next, injected, repositoryManager, prismaManager);
+                await handler(req, res, next, injected, repositoryManager, prismaManager);
             } catch (error) {
                 next(error);
             }
@@ -209,11 +210,11 @@ export class ExpressRouter {
      * HandlerFunction을 Express 호환 핸들러로 래핑하는 헬퍼 메서드
      */    
     private wrapHandler(handler: HandlerFunction): RequestHandler {
-        return (req: Request, res: Response, next) => {
+        return async (req: Request, res: Response, next: NextFunction) => {
             try {
                 // Dependency injector에서 모든 injectable 모듈 가져오기
                 const injected = DependencyInjector.getInstance().getInjectedModules();
-                handler(req, res, injected, repositoryManager, prismaManager);
+                await handler(req, res, injected, repositoryManager, prismaManager);
             } catch (error) {
                 next(error);
             }
@@ -1213,7 +1214,7 @@ export class ExpressRouter {
             return this;
             
         } catch (error) {
-            console.error(`Error applying middleware '${middlewareName}':`, error);
+            log.Error(`Error applying middleware '${middlewareName}':`, error);
             throw error;
         }
     }
@@ -2365,7 +2366,7 @@ export class ExpressRouter {
         // 개발 모드에서 스키마 등록 (비동기로 백그라운드 실행)
         this.registerSchemaInDevelopment(databaseName, modelName as string, options)
             .catch(error => {
-                console.error(`스키마 등록 실패 (${databaseName}.${modelName}):`, error.message);
+                log.Error(`스키마 등록 실패 (${databaseName}.${modelName}):`, error.message);
             });
 
         const enabledActions = this.getEnabledActions(options);
@@ -2434,7 +2435,7 @@ export class ExpressRouter {
                 if (requestedClient) {
                     analyzer = PrismaSchemaAnalyzer.getInstance(requestedClient, databaseName);
                 } else {
-                    console.warn(`요청된 데이터베이스 '${databaseName}'를 찾을 수 없습니다. 기본 분석기를 사용합니다.`);
+                    log.Warn(`요청된 데이터베이스 '${databaseName}'를 찾을 수 없습니다. 기본 분석기를 사용합니다.`);
                 }
             }
 
@@ -2450,7 +2451,7 @@ export class ExpressRouter {
                 analyzer
             );
         } catch (error) {
-            console.warn(
+            log.Warn(
                 `스키마 등록 실패 (${databaseName}.${modelName}):`, 
                 error instanceof Error ? error.message : String(error)
             );
@@ -2484,7 +2485,7 @@ export class ExpressRouter {
             // 기본적으로 스마트 파서 사용 (숫자인지 UUID인지 자동 판단)
             return this.parseIdSmart;
         } catch (error) {
-            console.warn(`Failed to determine primary key type for ${modelName}.${primaryKey}, using string parser`);
+            log.Warn(`Failed to determine primary key type for ${modelName}.${primaryKey}, using string parser`);
             return ExpressRouter.parseString;
         }
     }
@@ -2536,7 +2537,7 @@ export class ExpressRouter {
         
         // only와 except가 모두 지정된 경우 경고
         if (options?.only && options?.except) {
-            console.warn(
+            log.Warn(
                 '[CRUD Warning] Both "only" and "except" options are specified. ' +
                 '"only" takes precedence and "except" will be ignored.'
             );
@@ -2771,7 +2772,7 @@ export class ExpressRouter {
                 res.json(serializedResponse);
                 
             } catch (error: any) {
-                console.error(`CRUD Index Error for ${modelName}:`, error);
+                log.Error(`CRUD Index Error for ${modelName}:`, error);
                 
                 const { code, status } = ErrorFormatter.mapPrismaError(error);
                 const errorResponse = this.formatJsonApiError(error, code, status, req.path, req.method);
@@ -2989,7 +2990,7 @@ export class ExpressRouter {
                 res.json(serializedResponse);
                 
             } catch (error: any) {
-                console.error(`CRUD Show Error for ${modelName}:`, error);
+                log.Error(`CRUD Show Error for ${modelName}:`, error);
                 
                 const { code, status } = ErrorFormatter.mapPrismaError(error);
                 const errorResponse = this.formatJsonApiError(error, code, status, req.path, req.method);
@@ -3174,7 +3175,7 @@ export class ExpressRouter {
                 res.status(201).json(serializedResponse);
                 
             } catch (error: any) {
-                console.error(`CRUD Create Error for ${modelName}:`, error);
+                log.Error(`CRUD Create Error for ${modelName}:`, error);
                 
                 const { code, status } = ErrorFormatter.mapPrismaError(error);
                 const errorResponse = this.formatJsonApiError(error, code, status, req.path, req.method);
@@ -3300,7 +3301,7 @@ export class ExpressRouter {
                 res.status(200).json(response);
 
             } catch (error: any) {
-                console.error(`Atomic Operations Error for ${modelName}:`, error);
+                log.Error(`Atomic Operations Error for ${modelName}:`, error);
                 const { code, status } = ErrorFormatter.mapPrismaError(error);
                 const errorResponse = this.formatJsonApiError(error, code, status, req.path, req.method);
                 res.status(status).json(errorResponse);
@@ -3764,7 +3765,7 @@ export class ExpressRouter {
             // 리소스 타입에서 모델명 추론 (예: UserRole -> UserRole, userRole -> UserRole)
             const relatedModelName = this.getModelNameFromResourceType(resourceType);
             if (!relatedModelName || !client[relatedModelName]) {
-                console.warn(`Could not find model for resourceType: ${resourceType} (tried: ${relatedModelName})`);
+                log.Warn(`Could not find model for resourceType: ${resourceType} (tried: ${relatedModelName})`);
                 return;
             }
 
@@ -3782,7 +3783,7 @@ export class ExpressRouter {
                 }
             });
         } catch (error) {
-            console.warn(`Failed to soft delete related records for ${resourceType}:`, error);
+            log.Warn(`Failed to soft delete related records for ${resourceType}:`, error);
         }
     }
 
@@ -3804,7 +3805,7 @@ export class ExpressRouter {
             // 리소스 타입에서 모델명 추론 (예: UserRole -> UserRole, userRole -> UserRole)
             const relatedModelName = this.getModelNameFromResourceType(resourceType);
             if (!relatedModelName || !client[relatedModelName]) {
-                console.warn(`Could not find model for resourceType: ${resourceType} (tried: ${relatedModelName})`);
+                log.Warn(`Could not find model for resourceType: ${resourceType} (tried: ${relatedModelName})`);
                 return;
             }
 
@@ -3842,7 +3843,7 @@ export class ExpressRouter {
                 });
             }
         } catch (error) {
-            console.warn(`Failed to replace relationships with soft delete for ${resourceType}:`, error);
+            log.Warn(`Failed to replace relationships with soft delete for ${resourceType}:`, error);
         }
     }
 
@@ -4071,7 +4072,7 @@ export class ExpressRouter {
                 res.json(serializedResponse);
                 
             } catch (error: any) {
-                console.error(`CRUD Update Error for ${modelName}:`, error);
+                log.Error(`CRUD Update Error for ${modelName}:`, error);
                 
                 const { code, status } = ErrorFormatter.mapPrismaError(error);
                 const errorResponse = this.formatJsonApiError(error, code, status, req.path, req.method);
@@ -4267,7 +4268,7 @@ export class ExpressRouter {
                 }
                 
             } catch (error: any) {
-                console.error(`CRUD Destroy Error for ${modelName}:`, error);
+                log.Error(`CRUD Destroy Error for ${modelName}:`, error);
                 
                 const { code, status } = ErrorFormatter.mapPrismaError(error);
                 const errorResponse = this.formatJsonApiError(error, code, status, req.path, req.method);
@@ -4421,7 +4422,7 @@ export class ExpressRouter {
                 res.json(serializedResponse);
                 
             } catch (error: any) {
-                console.error(`CRUD Recover Error for ${modelName}:`, error);
+                log.Error(`CRUD Recover Error for ${modelName}:`, error);
                 
                 const { code, status } = ErrorFormatter.mapPrismaError(error);
                 const errorResponse = this.formatJsonApiError(error, code, status, req.path, req.method);
@@ -4937,7 +4938,7 @@ export class ExpressRouter {
                 res.json(serialize(response));
 
             } catch (error: any) {
-                console.error(`Related Resource Error for ${modelName}:`, error);
+                log.Error(`Related Resource Error for ${modelName}:`, error);
                 const { code, status } = ErrorFormatter.mapPrismaError(error);
                 const errorResponse = this.formatJsonApiError(error, code, status, req.path, req.method);
                 res.status(status).json(errorResponse);
@@ -5005,7 +5006,7 @@ export class ExpressRouter {
                 res.json(serialize(response));
 
             } catch (error: any) {
-                console.error(`Relationship Error for ${modelName}:`, error);
+                log.Error(`Relationship Error for ${modelName}:`, error);
                 const { code, status } = ErrorFormatter.mapPrismaError(error);
                 const errorResponse = this.formatJsonApiError(error, code, status, req.path, req.method);
                 res.status(status).json(errorResponse);
@@ -5063,7 +5064,7 @@ export class ExpressRouter {
                 res.status(204).end();
 
             } catch (error: any) {
-                console.error(`Relationship Update Error for ${modelName}:`, error);
+                log.Error(`Relationship Update Error for ${modelName}:`, error);
                 const { code, status } = ErrorFormatter.mapPrismaError(error);
                 const errorResponse = this.formatJsonApiError(error, code, status, req.path, req.method);
                 res.status(status).json(errorResponse);
@@ -5130,7 +5131,7 @@ export class ExpressRouter {
                 res.status(204).end();
 
             } catch (error: any) {
-                console.error(`Relationship Replace Error for ${modelName}:`, error);
+                log.Error(`Relationship Replace Error for ${modelName}:`, error);
                 const { code, status } = ErrorFormatter.mapPrismaError(error);
                 const errorResponse = this.formatJsonApiError(error, code, status, req.path, req.method);
                 res.status(status).json(errorResponse);
@@ -5188,7 +5189,7 @@ export class ExpressRouter {
                 res.status(204).end();
 
             } catch (error: any) {
-                console.error(`Relationship Delete Error for ${modelName}:`, error);
+                log.Error(`Relationship Delete Error for ${modelName}:`, error);
                 const { code, status } = ErrorFormatter.mapPrismaError(error);
                 const errorResponse = this.formatJsonApiError(error, code, status, req.path, req.method);
                 res.status(status).json(errorResponse);
@@ -5281,7 +5282,7 @@ export class ExpressRouter {
                 res.json(serialize(response));
 
             } catch (error: any) {
-                console.error(`Related Resource Error for ${modelName}:`, error);
+                log.Error(`Related Resource Error for ${modelName}:`, error);
                 const { code, status } = ErrorFormatter.mapPrismaError(error);
                 const errorResponse = this.formatJsonApiError(error, code, status, req.path, req.method);
                 res.status(status).json(errorResponse);

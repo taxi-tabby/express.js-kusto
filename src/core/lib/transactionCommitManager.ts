@@ -588,12 +588,12 @@ export class TransactionCommitManager {
                 }
 
             } else {
-                console.warn(`Unsupported lock format: ${lockName}`);
+                log.Warn(`Unsupported lock format: ${lockName}`);
                 return false; // 형식이 잘못된 경우 사용 가능으로 간주
             }
 
         } catch (error) {
-            console.error(`Failed to check PostgreSQL lock for ${lockName}:`, error);
+            log.Error(`Failed to check PostgreSQL lock for ${lockName}:`, error);
             return true; // 에러 시 안전하게 차단된 것으로 간주
         }
     }
@@ -657,7 +657,7 @@ export class TransactionCommitManager {
 
             return false;
         } catch (error) {
-            console.error(`Failed to check MySQL lock for ${lockName}:`, error);
+            log.Error(`Failed to check MySQL lock for ${lockName}:`, error);
             return true;
         }
     }
@@ -674,11 +674,10 @@ export class TransactionCommitManager {
         try {
             // SQLite는 파일 레벨 락킹만 지원하므로 간단한 구현
             // 실제로는 WAL 모드에서의 동시성을 확인
-            const result = await client.$queryRaw`
-                PRAGMA busy_timeout = 1000;
-                BEGIN IMMEDIATE;
-                ROLLBACK;
-            `;
+            // Prisma $queryRaw는 단일 문만 지원하므로 분리하여 실행
+            await client.$queryRaw`PRAGMA busy_timeout = 1000`;
+            await client.$queryRaw`BEGIN IMMEDIATE`;
+            await client.$queryRaw`ROLLBACK`;
 
             return false; // 성공하면 락 사용 가능
         } catch (error) {

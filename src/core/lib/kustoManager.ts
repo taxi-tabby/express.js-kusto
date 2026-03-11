@@ -136,8 +136,8 @@ export class KustoManager {
                 return prismaManager.getClientSync(name);
             },
             
-            // 래핑된 클라이언트 가져오기 (Repository에서 사용)
-            getWrap: (name: string) => prismaManager.getClientSync(name),
+            // 래핑된 클라이언트 가져오기 (서버리스 자동 재연결 지원)
+            getWrap: (name: string) => prismaManager.getWrap(name),
             
             // 사용 가능한 데이터베이스 목록
             available: availableDbs,

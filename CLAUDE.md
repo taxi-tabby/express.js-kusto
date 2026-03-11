@@ -162,7 +162,7 @@ export default class FooRepository extends BaseRepository<'dbname'> {
 
 File naming: `{name}.repository.ts` — the `{name}` part becomes the key for `repo.getRepository('name')`.
 
-Key inherited features: `this.client` (typed Prisma client), `this.$transaction()`, `this.$batchOperation()`, `this.executeWithAutoReconnect()`.
+Key inherited features: `this.client` (typed Prisma client via `getWrap`, 서버리스 자동 재연결), `this.getAsyncClient()`, `this.$transaction()`, `this.$batchOperation()`.
 
 Avoid `$runDistributedTransaction()` — unreliable due to Prisma connection pool limitations.
 

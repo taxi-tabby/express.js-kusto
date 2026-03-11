@@ -594,39 +594,31 @@ export class PrismaSchemaAnalyzer {
   /**
    * Enum 타입인지 확인합니다
    */
-  private isEnumType(type: string): boolean {
+  public isEnumType(type: string): boolean {
     // Prisma에서 Enum은 보통 대문자로 시작하고 내장 타입이 아닙니다
-    const builtInTypes = ['String', 'Int', 'Float', 'Boolean', 'DateTime', 'Json', 'Bytes'];
+    const builtInTypes = ['String', 'Int', 'Float', 'Boolean', 'DateTime', 'Json', 'Bytes', 'BigInt', 'Decimal'];
     return !builtInTypes.includes(type) && type.charAt(0).toUpperCase() === type.charAt(0);
   }
 
   /**
-   * Enum 값들을 반환합니다 (실제로는 Prisma 스키마에서 추출해야 함)
+   * Enum 값들을 반환합니다 (DMMF에서 로드된 실제 enum 사용)
    */
-  private getEnumValues(type: string): string[] | undefined {
-    // 실제 로드된 enum에서 값 찾기
+  public getEnumValues(type: string): string[] | undefined {
+    // DMMF에서 로드된 실제 enum 값 사용
     if (this.loadedEnums[type] && Array.isArray(this.loadedEnums[type].values)) {
       return this.loadedEnums[type].values;
     }
-    
+
     // 로드된 enum이 다른 형식인 경우 처리
     if (this.loadedEnums[type] && typeof this.loadedEnums[type] === 'object') {
       const enumObj = this.loadedEnums[type];
       if (enumObj.values) {
         return Array.isArray(enumObj.values) ? enumObj.values : Object.values(enumObj.values);
       }
-      // enum 객체 자체가 값들을 가지고 있는 경우
-      return Object.values(enumObj).filter(value => typeof value === 'string');
+      return Object.values(enumObj).filter(value => typeof value === 'string') as string[];
     }
-    
-    // 폴백: 하드코딩된 enum 매핑 (기존 로직)
-    const enumMapping: Record<string, string[]> = {
-      'Provider': ['local', 'google', 'apple', 'kakao', 'naver'],
-      'Category': ['user', 'admin', 'content', 'system', 'analytics'],
-      'Action': ['create', 'read', 'update', 'delete', 'manage']
-    };
 
-    return enumMapping[type];
+    return undefined;
   }
 
   /**

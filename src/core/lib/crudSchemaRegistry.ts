@@ -17,6 +17,7 @@ export class CrudSchemaRegistry {
   private schemas: Map<string, CrudSchemaInfo> = new Map();
   private isEnabled: boolean = false;
   private relationshipManager: RelationshipConfigManager;
+  private analyzers: Map<string, PrismaSchemaAnalyzer> = new Map();
 
   private constructor() {
     this.checkEnvironment();
@@ -70,6 +71,11 @@ export class CrudSchemaRegistry {
 
     const dbName = databaseName || analyzer.getDatabaseName();
     const allModels = analyzer.getAllModels();
+
+    // analyzer 캐시 (enum 조회용)
+    if (!this.analyzers.has(dbName)) {
+      this.analyzers.set(dbName, analyzer);
+    }
 
     // 간단한 로그만 출력
     // console.log(`🔍 [${dbName}] 모든 모델 자동 등록 시작: ${allModels.length}개 모델 발견`);
@@ -266,7 +272,10 @@ export class CrudSchemaRegistry {
       const schemaKey = `${databaseName}.${modelName}`;
       this.schemas.set(schemaKey, schemaInfo);
 
-      // console.log(`✅ CRUD 스키마 등록: ${schemaKey} (${enabledActions.length}개 액션)`);
+      // analyzer 캐시 (enum 조회용)
+      if (!this.analyzers.has(databaseName)) {
+        this.analyzers.set(databaseName, analyzer);
+      }
     } catch (error) {
       console.error(`CRUD 스키마 등록 실패 (${databaseName}.${modelName}):`, error);
     }
@@ -501,7 +510,7 @@ export class CrudSchemaRegistry {
     // 컬럼 변환
     const columns = model.fields
       .filter(field => !field.relationName) // 관계 필드 제외
-      .map(field => this.convertFieldToTypeOrmColumn(field));
+      .map(field => this.convertFieldToTypeOrmColumn(field, schema.databaseName));
 
     // console.log(`   - 변환된 컬럼 수: ${columns.length}`);
 
@@ -691,10 +700,12 @@ export class CrudSchemaRegistry {
   /**
    * Prisma 필드를 TypeORM 컬럼 형식으로 변환합니다
    */
-  private convertFieldToTypeOrmColumn(field: any): any {
+  private convertFieldToTypeOrmColumn(field: any, databaseName?: string): any {
     const typeOrmType = this.mapPrismaTypeToTypeOrmType(field.type);
     const jsType = field.jsType;
     const fieldLength = this.getFieldLength(field.type, field.name);
+    const isEnum = this.isEnumType(field.type);
+    const enumValues = isEnum ? this.getEnumValues(field.type, databaseName) : undefined;
 
     const column: any = {
       name: field.name,
@@ -712,8 +723,8 @@ export class CrudSchemaRegistry {
       metadata: {
         type: typeOrmType,
         jsType: jsType,
-        isEnum: this.isEnumType(field.type),
-        enumValues: this.getEnumValues(field.type),
+        isEnum,
+        enumValues,
         isNullable: field.isOptional,
         isPrimary: field.isId,
         isGenerated: field.isGenerated,
@@ -729,8 +740,8 @@ export class CrudSchemaRegistry {
     }
 
     // Enum 타입인 경우 enum 값들 추가
-    if (this.isEnumType(field.type)) {
-      column.enum = this.getEnumValues(field.type);
+    if (isEnum) {
+      column.enum = enumValues;
     }
 
     return column;
@@ -957,23 +968,24 @@ export class CrudSchemaRegistry {
    */
   private isEnumType(type: string): boolean {
     // Prisma에서 Enum은 보통 대문자로 시작하고 내장 타입이 아닙니다
-    const builtInTypes = ['String', 'Int', 'Float', 'Boolean', 'DateTime', 'Json', 'Bytes'];
+    const builtInTypes = ['String', 'Int', 'Float', 'Boolean', 'DateTime', 'Json', 'Bytes', 'BigInt', 'Decimal'];
     return !builtInTypes.includes(type) && type.charAt(0).toUpperCase() === type.charAt(0);
   }
 
   /**
-   * Enum 값들을 반환합니다 (실제로는 Prisma 스키마에서 추출해야 함)
+   * Enum 값들을 반환합니다 (PrismaSchemaAnalyzer에서 로드된 DMMF 데이터 사용)
    */
-  private getEnumValues(type: string): string[] | undefined {
-    // 실제 구현에서는 Prisma DMMF의 enum 정보를 사용해야 합니다
-    // 지금은 예시 값들을 반환합니다
-    const enumMapping: Record<string, string[]> = {
-      'Provider': ['local', 'google', 'apple', 'kakao', 'naver'],
-      'Category': ['user', 'admin', 'content', 'system', 'analytics'],
-      'Action': ['create', 'read', 'update', 'delete', 'manage']
-    };
-
-    return enumMapping[type];
+  private getEnumValues(type: string, databaseName?: string): string[] | undefined {
+    // 저장된 analyzer에서 실제 enum 값 조회
+    if (databaseName && this.analyzers.has(databaseName)) {
+      return this.analyzers.get(databaseName)!.getEnumValues(type);
+    }
+    // databaseName이 없으면 모든 analyzer를 순회하여 찾기
+    for (const analyzer of this.analyzers.values()) {
+      const values = analyzer.getEnumValues(type);
+      if (values) return values;
+    }
+    return undefined;
   }
 
   /**

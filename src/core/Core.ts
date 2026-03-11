@@ -219,40 +219,7 @@ export class Core {
                 res.status(500).json({ error: 'Failed to generate development info' });
             }
         });        
-        
-        
-        // 테스트 리포트 HTML 페이지
-        this._app.get('/docs/test-report', async (req, res) => {
-            try {
-                const testReport = await DocumentationGenerator.generateTestReport();
-                res.type('html').send(testReport);
-            } catch (error) {
-                log.Error('Failed to generate test report', { error });
-                res.status(500).json({ error: 'Failed to generate test report' });
-            }
-        });
 
-        // 테스트 케이스 JSON
-        this._app.get('/docs/test-cases.json', (req, res) => {
-            try {
-                const testCases = DocumentationGenerator.generateTestCasesJSON();
-                res.json(testCases);
-            } catch (error) {
-                log.Error('Failed to generate test cases JSON', { error });
-                res.status(500).json({ error: 'Failed to generate test cases' });
-            }
-        });
-
-        // Postman Collection JSON
-        this._app.get('/docs/postman-collection.json', (req, res) => {
-            try {
-                const postmanCollection = DocumentationGenerator.generatePostmanCollection();
-                res.json(postmanCollection);
-            } catch (error) {
-                log.Error('Failed to generate Postman collection', { error });
-                res.status(500).json({ error: 'Failed to generate Postman collection' });
-            }
-        });
 
         log.Info('📚 Documentation routes enabled at /docs');
     }

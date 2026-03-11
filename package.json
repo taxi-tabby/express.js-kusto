@@ -3,9 +3,6 @@
   "version": "0.1.45",
   "description": "Express based custom server for simple backend service",
   "main": "index.js",
-  "bin": {
-    "kusto-db": "./kusto-db.js"
-  },
   "scripts": {
     "start": "ts-node ./src/index.ts",
     "dev": "npm run generate && nodemon",

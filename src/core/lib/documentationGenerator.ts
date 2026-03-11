@@ -3,7 +3,7 @@ import { RequestConfig, ResponseConfig } from './requestHandler';
 import fs from 'fs';
 import path from 'path';
 import { log } from '../external/winston';
-import { TestGenerator } from './testGenerator';
+
 
 export interface RouteDocumentation {
     method: string;
@@ -353,42 +353,6 @@ export class DocumentationGenerator {
     static reset(): void {
         this.routes = [];
         this.schemas = {};
-    }    /**
-     * 테스트 리포트 HTML 생성
-     */
-    static async generateTestReport(): Promise<string> {
-        if (!this.isDocumentationEnabled()) {
-            return '<h1>Testing is not enabled</h1>';
-        }
-
-        try {
-            return await TestGenerator.generateTestReport();
-        } catch (error) {
-            log.Error('Failed to generate test report', { error });
-            return TestGenerator.generateTestReportSync(); // fallback to sync version
-        }
-    }
-
-    /**
-     * 테스트 케이스 JSON 생성
-     */
-    static generateTestCasesJSON(): any {
-        if (!this.isDocumentationEnabled()) {
-            return { error: 'Testing is not enabled' };
-        }
-
-        return TestGenerator.generateTestCasesJSON();
-    }
-
-    /**
-     * Postman Collection 생성
-     */
-    static generatePostmanCollection(): any {
-        if (!this.isDocumentationEnabled()) {
-            return { error: 'Testing is not enabled' };
-        }
-
-        return TestGenerator.generatePostmanCollection();
     }
 
     /**
@@ -458,10 +422,6 @@ export class DocumentationGenerator {
         </div>
         `).join('')}
     </div>    <div class="links">
-        <a href="/docs/test-report" class="link-button">🧪 Test Report</a>
-        <a href="/docs/test-cases.json" class="link-button">📋 Test Cases JSON</a>
-        <a href="/docs/postman-collection.json" class="link-button">📮 Postman Collection</a>
-        <!--<a href="/docs/swagger" class="link-button">📖 Swagger UI</a>-->
         <a href="/docs/openapi.json" class="link-button">📄 OpenAPI JSON</a>
     </div>
 

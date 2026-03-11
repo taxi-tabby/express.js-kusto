@@ -1,21 +1,22 @@
 // Auto-generated file - Do not edit manually
 // Generated from src/app/db folder structure
+// Prisma 7+ compatible
 
 /**
- * Import actual Prisma client types from each database
+ * Import PrismaClient from each database
  */
-type TemporaryClient = typeof import('@app/db/temporary/client')['PrismaClient'];
+import { PrismaClient as DefaultPrismaClient } from '@app/db/default/client';
 
 /**
- * Instantiated client types
+ * Instance types for each database client
  */
-type TemporaryInstance = InstanceType<TemporaryClient>;
+type DefaultInstance = DefaultPrismaClient;
 
 /**
  * Type mapping for database names to their corresponding Prisma client instances
  */
 export interface DatabaseClientMap {
-  temporary: TemporaryInstance;
+  default: DefaultInstance;
   [key: string]: any; // Allow for additional databases
 }
 
@@ -34,13 +35,13 @@ export type DatabaseName = keyof DatabaseClientMap;
 /**
  * Database names as Union type
  */
-export type DatabaseNamesUnion = 'temporary';
+export type DatabaseNamesUnion = 'default';
 
 /**
  * Method overloads for getWrap
  */
 export interface PrismaManagerWrapOverloads {
-  getWrap(databaseName: 'temporary'): TemporaryInstance;
+  getWrap(databaseName: 'default'): DefaultInstance;
   getWrap<T extends string>(databaseName: T): DatabaseClientType<T>;
 }
 
@@ -48,7 +49,7 @@ export interface PrismaManagerWrapOverloads {
  * Method overloads for getClient
  */
 export interface PrismaManagerClientOverloads {
-  getClient(databaseName: 'temporary'): Promise<TemporaryInstance>;
+  getClient(databaseName: 'default'): Promise<DefaultInstance>;
   getClient<T = any>(databaseName: string): Promise<T>;
 }
 
@@ -58,7 +59,7 @@ export interface PrismaManagerClientOverloads {
  */
 declare module '../prismaManager' {
   interface PrismaManager {
-  getWrap(databaseName: 'temporary'): TemporaryInstance;
-  getClient(databaseName: 'temporary'): Promise<TemporaryInstance>;
+  getWrap(databaseName: 'default'): DefaultInstance;
+  getClient(databaseName: 'default'): Promise<DefaultInstance>;
   }
 }

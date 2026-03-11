@@ -1,3 +1,5 @@
+import { pluralize, singularize } from '../external/util';
+
 /**
  * 관계형 데이터베이스의 관계 설정을 위한 구성 타입과 인터페이스
  */
@@ -116,14 +118,14 @@ export class RelationshipConfigManager {
         return intermediate.replace(sourceModel, '').replace(/^(\w)/, (match: string) => match.toUpperCase());
       },
       generateJoinTable: (sourceModel, targetModel) => 
-        `${sourceModel.toLowerCase()}_${this.pluralize(targetModel.toLowerCase())}`,
+        `${sourceModel.toLowerCase()}_${pluralize(targetModel.toLowerCase())}`,
       generateJoinColumns: (sourceModel) => [
         {
           name: `${sourceModel.toLowerCase()}_id`,
           referencedColumnName: 'id'
         }
       ],
-      generateInverseSide: (sourceModel) => this.pluralize(sourceModel.toLowerCase())
+      generateInverseSide: (sourceModel) => pluralize(sourceModel.toLowerCase())
     });
   }
 
@@ -239,19 +241,6 @@ export class RelationshipConfigManager {
   }
 
   /**
-   * 단어를 복수형으로 변환합니다
-   */
-  private pluralize(word: string): string {
-    if (word.endsWith('s') || word.endsWith('x') || word.endsWith('ch') || word.endsWith('sh')) {
-      return word + 'es';
-    }
-    if (word.endsWith('y')) {
-      return word.slice(0, -1) + 'ies';
-    }
-    return word + 's';
-  }
-
-  /**
    * 관계에서 역방향 이름을 생성합니다
    */
   public generateInverseSideName(relation: any, sourceModel: string): string {
@@ -266,36 +255,20 @@ export class RelationshipConfigManager {
     
     // many-to-many 관계인 경우
     if (this.isManyToManyRelation(relation, sourceModel)) {
-      return this.pluralize(sourceModel.toLowerCase());
+      return pluralize(sourceModel.toLowerCase());
     }
     
     // one-to-many 관계인 경우
     if (relation.type === 'one-to-many') {
-      return this.singularize(relationName);
+      return singularize(relationName);
     }
     
     // many-to-one 관계인 경우
     if (relation.type === 'many-to-one') {
-      return this.pluralize(relationName);
+      return pluralize(relationName);
     }
     
     return relationName;
-  }
-
-  /**
-   * 단어를 단수형으로 변환합니다
-   */
-  private singularize(word: string): string {
-    if (word.endsWith('ies')) {
-      return word.slice(0, -3) + 'y';
-    }
-    if (word.endsWith('es')) {
-      return word.slice(0, -2);
-    }
-    if (word.endsWith('s') && !word.endsWith('ss')) {
-      return word.slice(0, -1);
-    }
-    return word;
   }
 
   /**

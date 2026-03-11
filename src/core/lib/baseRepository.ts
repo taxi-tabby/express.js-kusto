@@ -295,7 +295,7 @@ export abstract class BaseRepository<T extends DatabaseNamesUnion> {
         if (!(error instanceof Error)) return 'unknown';
         const message = error.message.toLowerCase();
 
-        const errorMap = {
+        const errorMap: Record<string, string> = {
             deadlock: 'deadlock',
             timeout: 'timeout',
             connection: 'connection',
@@ -304,9 +304,8 @@ export abstract class BaseRepository<T extends DatabaseNamesUnion> {
             syntax: 'syntax_error'
         };
 
-        return Object.keys(errorMap).find(key => message.includes(key))
-            ? errorMap[Object.keys(errorMap).find(key => message.includes(key)) as keyof typeof errorMap]
-            : 'database_error';
+        const matchedKey = Object.keys(errorMap).find(key => message.includes(key));
+        return matchedKey ? errorMap[matchedKey] : 'database_error';
     }
     /**
      * Saga Pattern 분산 트랜잭션 실행 (내부 메서드)

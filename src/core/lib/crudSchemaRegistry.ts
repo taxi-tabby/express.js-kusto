@@ -1,12 +1,12 @@
-import { 
-  CrudSchemaInfo, 
-  CrudEndpointInfo, 
-  PrismaModelInfo,
+import {
+  CrudSchemaInfo,
   SchemaApiResponse,
   AllSchemasResponse
 } from './crudSchemaTypes';
 import { PrismaSchemaAnalyzer } from './prismaSchemaAnalyzer';
 import { RelationshipConfigManager } from './relationshipConfig';
+import { pluralize, createPaginationCursor } from '../external/util';
+import { log } from '../external/winston';
 
 /**
  * CRUD 스키마 정보를 등록하고 관리하는 레지스트리
@@ -44,13 +44,8 @@ export class CrudSchemaRegistry {
       enableSchemaApi === 'true' ||
       enableSchemaApi === '1';
 
-    console.log('🔍 CrudSchemaRegistry 환경 확인:');
-    console.log(`   NODE_ENV: ${nodeEnv || 'undefined'}`);
-    console.log(`   ENABLE_SCHEMA_API: ${enableSchemaApi || 'undefined'}`);
-    console.log(`   스키마 API 활성화: ${this.isEnabled}`);
-
     if (this.isEnabled) {
-      console.log('🔧 CRUD Schema API가 개발 모드에서 활성화되었습니다.');
+      log.Info('CRUD Schema API enabled', { nodeEnv, enableSchemaApi });
     }
   }
 
@@ -104,7 +99,7 @@ export class CrudSchemaRegistry {
     try {
       const modelInfo = analyzer.getModel(modelName);
       if (!modelInfo) {
-        console.warn(`⚠️  [${databaseName}] 모델 정보를 찾을 수 없음: ${modelName}`);
+        log.Warn(`Model not found: ${modelName}`, { databaseName });
         return;
       }
 
@@ -155,7 +150,7 @@ export class CrudSchemaRegistry {
 
       // console.log(`✅ [${databaseName}] 자동 등록 완료: ${modelName} -> ${basePath}`);
     } catch (error) {
-      console.error(`❌ [${databaseName}] 자동 등록 실패: ${modelName}`, error);
+      log.Error(`Auto-register failed: ${modelName}`, { databaseName, error });
     }
   }
 
@@ -169,7 +164,7 @@ export class CrudSchemaRegistry {
       .toLowerCase()
       .replace(/^-/, '');
     
-    return this.pluralize(kebabCase);
+    return pluralize(kebabCase);
   }
 
   /**
@@ -223,7 +218,7 @@ export class CrudSchemaRegistry {
     try {
       const modelInfo = analyzer.getModel(modelName);
       if (!modelInfo) {
-        console.warn(`모델 '${modelName}'을 ${analyzer.getDatabaseName()} 데이터베이스에서 찾을 수 없습니다. 스키마 등록을 건너뜁니다.`);
+        log.Warn(`Model '${modelName}' not found in ${analyzer.getDatabaseName()}, skipping schema registration`);
         return;
       }
 
@@ -277,7 +272,7 @@ export class CrudSchemaRegistry {
         this.analyzers.set(databaseName, analyzer);
       }
     } catch (error) {
-      console.error(`CRUD 스키마 등록 실패 (${databaseName}.${modelName}):`, error);
+      log.Error(`CRUD schema registration failed: ${databaseName}.${modelName}`, { error });
     }
   }
 
@@ -489,7 +484,7 @@ export class CrudSchemaRegistry {
           page: 1,
           pages: 1,
           offset: entities.length,
-          nextCursor: Buffer.from(`{"nextCursor":"${Buffer.from(entities.length.toString()).toString('base64')}","total":${entities.length}}`).toString('base64')
+          nextCursor: createPaginationCursor(entities.length)
         }
       }
     };
@@ -541,7 +536,7 @@ export class CrudSchemaRegistry {
 
     // 고유 제약조건 변환
     const uniques = model.uniqueConstraints.map(constraint => ({
-      name: `UQ_${Math.random().toString(36).substr(2, 23)}`, // TypeORM 스타일 고유 이름
+      name: `UQ_${model.name.toUpperCase()}_${constraint.fields.join('_').toUpperCase()}`,
       columns: constraint.fields
     }));
 
@@ -794,37 +789,24 @@ export class CrudSchemaRegistry {
             joinTable: manyToManyConfig.joinTable
           });
         } else {
-          console.log(`❌ [${modelName}] Many-to-Many 설정 실패: ${relation.name} -> ${relation.model}`);
+          log.Warn(`Many-to-Many config failed: ${modelName}.${relation.name} -> ${relation.model}`);
         }
       } 
       // 일반 관계들 처리
       else {
         // 중간 테이블과의 직접 관계가 아닌 경우에만 포함
         if (!this.relationshipManager.isIntermediateTableRelation(relation, modelName)) {
-          console.log(`🔗 [${modelName}] 일반 관계 처리: ${relation.name} -> ${relation.model}`);
-          
           const convertedRelation = this.convertRelationToTypeOrmRelation(relation, modelName);
           if (convertedRelation) {
             convertedRelations.push(convertedRelation);
-            console.log(`✅ [${modelName}] 일반 관계 추가됨: ${relation.name}`);
-          } else {
-            console.log(`❌ [${modelName}] 일반 관계 변환 실패: ${relation.name}`);
           }
         } else {
-          console.log(`🚫 [${modelName}] 중간 테이블 관계 숨김: ${relation.name} -> ${relation.model}`);
         }
       }
     }
 
     // console.log(`✅ [${modelName}] 관계 변환 완료: ${convertedRelations.length}개 관계 변환됨`);
     return convertedRelations;
-  }
-
-  /**
-   * 중간 테이블과의 관계인지 확인합니다 (동적 패턴 사용)
-   */
-  private isIntermediateTableRelation(relation: any, modelName: string): boolean {
-    return this.relationshipManager.isIntermediateTableRelation(relation, modelName);
   }
 
   /**
@@ -964,10 +946,14 @@ export class CrudSchemaRegistry {
   }
 
   /**
-   * Enum 타입인지 확인합니다
+   * Enum 타입인지 확인합니다 (PrismaSchemaAnalyzer에 위임)
    */
   private isEnumType(type: string): boolean {
-    // Prisma에서 Enum은 보통 대문자로 시작하고 내장 타입이 아닙니다
+    for (const analyzer of this.analyzers.values()) {
+      if (analyzer.isEnumType(type)) return true;
+    }
+    if (this.analyzers.size > 0) return false;
+    // analyzer가 없는 경우 fallback
     const builtInTypes = ['String', 'Int', 'Float', 'Boolean', 'DateTime', 'Json', 'Bytes', 'BigInt', 'Decimal'];
     return !builtInTypes.includes(type) && type.charAt(0).toUpperCase() === type.charAt(0);
   }
@@ -989,179 +975,11 @@ export class CrudSchemaRegistry {
   }
 
   /**
-   * 관계에서 소스 모델을 추출합니다
-   */
-  private getSourceModelFromRelation(relation: any): string {
-    // many-to-many 관계에서 실제 소스 모델 추정
-    if (relation.name === 'roles' && relation.model === 'UserRole') {
-      return 'User';
-    }
-    if (relation.name === 'permissions' && relation.model === 'UserPermission') {
-      return 'User';
-    }
-    if (relation.name === 'rolePermissions' && relation.model === 'RolePermission') {
-      return 'Role';
-    }
-    
-    // 기본적으로 관계 이름에서 추정
-    return relation.name.charAt(0).toUpperCase() + relation.name.slice(1);
-  }
-
-  /**
-   * 관계에서 타겟 모델을 추출합니다
-   */
-  private getTargetModelFromRelation(relation: any): string {
-    // many-to-many 관계에서 실제 타겟 모델 추정
-    if (relation.name === 'roles' && relation.model === 'UserRole') {
-      return 'Role';
-    }
-    if (relation.name === 'permissions' && relation.model === 'UserPermission') {
-      return 'Permission';
-    }
-    if (relation.name === 'userRoles' && relation.model === 'UserRole') {
-      return 'User';
-    }
-    
-    // 기본적으로 중간 테이블에서 타겟 추정
-    const intermediateModel = relation.model;
-    
-    // UserRole -> Role, UserPermission -> Permission 등
-    if (intermediateModel.startsWith('User')) {
-      return intermediateModel.replace('User', '');
-    }
-    if (intermediateModel.startsWith('Role')) {
-      return intermediateModel.replace('Role', '');
-    }
-    
-    return relation.model;
-  }
-
-  /**
-   * Many-to-many 관계인지 확인합니다
-   */
-  private isManyToManyRelation(relation: any): boolean {
-    const modelName = relation.model;
-    const relationName = relation.name;
-    
-    // 특정 관계 이름과 타겟 모델 조합을 정의
-    const specificManyToManyPatterns = [
-      // User와 Role 간의 관계 (UserRole 중간 테이블)
-      { relation: 'roles', target: 'UserRole', isManyToMany: true },
-      { relation: 'userRoles', target: 'UserRole', isManyToMany: false }, // 실제 중간 테이블 관계
-      
-      // 권한 관련
-      { relation: 'permissions', target: 'UserPermission', isManyToMany: true },
-      { relation: 'rolePermissions', target: 'RolePermission', isManyToMany: false },
-    ];
-
-    // 특정 관계 이름과 타겟 모델 조합 확인
-    const specificPattern = specificManyToManyPatterns.find(pattern => 
-      pattern.relation === relationName && pattern.target === modelName
-    );
-    
-    if (specificPattern) {
-      return specificPattern.isManyToMany;
-    }
-
-    // 관계가 이미 many-to-many로 정의된 경우
-    if (relation.type === 'many-to-many') {
-      return true;
-    }
-
-    // 일반적인 many-to-many 중간 테이블 패턴들
-    const regexPatterns = [
-      /^User.*Role.*$/,     // UserRole, UserRoleMapping 등
-      /^.*Permission.*$/,   // 권한 관련 중간 테이블
-      /^.*Mapping$/,        // ~Mapping으로 끝나는 테이블
-      /^.*Bridge$/,         // ~Bridge로 끝나는 테이블
-      /^.*Link$/           // ~Link로 끝나는 테이블
-    ];
-
-    // 중간 테이블 패턴에 매치되는지 확인
-    return regexPatterns.some(pattern => pattern.test(modelName));
-  }
-
-  /**
-   * 관계의 역방향 이름을 추정합니다
-   */
-  private getInverseSideName(relation: any): string {
-    const relationName = relation.name;
-    const targetModel = relation.model;
-    
-    // many-to-many 관계인 경우 특별 처리
-    if (this.isManyToManyRelation(relation)) {
-      // User의 roles -> Role의 users
-      if (relationName === 'roles' && targetModel === 'UserRole') {
-        return 'users';
-      }
-      // User의 permissions -> Permission의 users  
-      if (relationName === 'permissions' && targetModel === 'UserPermission') {
-        return 'users';
-      }
-      // Role의 users -> User의 roles
-      if (relationName === 'users' && targetModel === 'UserRole') {
-        return 'roles';
-      }
-      
-      // 기본적으로 소스 모델의 복수형
-      const sourceModel = this.getSourceModelFromRelation(relation);
-      return this.pluralize(sourceModel.toLowerCase());
-    }
-    
-    // one-to-many 관계인 경우
-    if (relation.type === 'one-to-many') {
-      // UserSession[] -> User 모델에서는 sessions, UserSession에서는 user
-      const targetModelName = targetModel.toLowerCase();
-      if (targetModelName.startsWith('user')) {
-        return 'user';
-      }
-      return this.singularize(relationName);
-    }
-    
-    // many-to-one 관계인 경우
-    if (relation.type === 'many-to-one') {
-      return this.pluralize(relationName);
-    }
-    
-    // one-to-one 관계인 경우
-    return relationName;
-  }
-
-  /**
-   * 단어를 복수형으로 변환합니다 (간단한 구현)
-   */
-  private pluralize(word: string): string {
-    if (word.endsWith('s') || word.endsWith('x') || word.endsWith('ch') || word.endsWith('sh')) {
-      return word + 'es';
-    }
-    if (word.endsWith('y')) {
-      return word.slice(0, -1) + 'ies';
-    }
-    return word + 's';
-  }
-
-  /**
-   * 단어를 단수형으로 변환합니다 (간단한 구현)
-   */
-  private singularize(word: string): string {
-    if (word.endsWith('ies')) {
-      return word.slice(0, -3) + 'y';
-    }
-    if (word.endsWith('es')) {
-      return word.slice(0, -2);
-    }
-    if (word.endsWith('s') && !word.endsWith('ss')) {
-      return word.slice(0, -1);
-    }
-    return word;
-  }
-
-  /**
    * 모든 스키마를 삭제합니다 (테스트용)
    */
   public clearAllSchemas(): void {
     this.schemas.clear();
-    console.log('모든 CRUD 스키마가 삭제되었습니다.');
+    log.Info('All CRUD schemas cleared');
   }
 
   /**
@@ -1169,7 +987,7 @@ export class CrudSchemaRegistry {
    */
   public debugRegisteredSchemas(): void {
     if (!this.isEnabled) {
-      console.log('🚫 스키마 API가 비활성화되어 있습니다.');
+      log.Warn('Schema API is disabled');
       return;
     }
 
@@ -1177,29 +995,11 @@ export class CrudSchemaRegistry {
     const autoRegistered = schemas.filter(s => s.isAutoRegistered);
     const manualRegistered = schemas.filter(s => !s.isAutoRegistered);
 
-    console.log('🔍 등록된 CRUD 스키마 목록:');
-    console.log(`   총 스키마 수: ${this.schemas.size}개`);
-    console.log(`   📝 수동 등록: ${manualRegistered.length}개`);
-    console.log(`   🤖 자동 등록: ${autoRegistered.length}개`);
-    
-    if (manualRegistered.length > 0) {
-      console.log('\n📝 수동 등록된 모델들 (CRUD 기능 활성화):');
-      for (const schema of manualRegistered) {
-        const key = `${schema.databaseName}.${schema.modelName}`;
-        console.log(`   ✅ ${key}: ${schema.basePath} (${schema.enabledActions.join(', ')})`);
-      }
-    }
-
-    if (autoRegistered.length > 0) {
-      console.log('\n🤖 자동 등록된 모델들 (스키마 구조만 제공):');
-      for (const schema of autoRegistered) {
-        const key = `${schema.databaseName}.${schema.modelName}`;
-        console.log(`   📋 ${key}: ${schema.basePath} (구조만, CRUD 미활성화)`);
-      }
-    }
-
-    const registeredModels = this.getRegisteredModelNames();
-    console.log(`\n� 등록된 모든 모델들: ${registeredModels.join(', ')}`);
+    log.Debug('Registered CRUD schemas', {
+      total: this.schemas.size,
+      manual: manualRegistered.map(s => `${s.databaseName}.${s.modelName}`),
+      auto: autoRegistered.map(s => `${s.databaseName}.${s.modelName}`)
+    });
   }
 
   /**

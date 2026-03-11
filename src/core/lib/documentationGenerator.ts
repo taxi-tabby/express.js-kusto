@@ -38,7 +38,9 @@ export interface ApiDocumentation {
 
 export class DocumentationGenerator {
     private static routes: RouteDocumentation[] = [];
-    private static schemas: Record<string, any> = {};    /**
+    private static schemas: Record<string, any> = {};
+
+    /**
      * 라우트 문서 등록
      */
     static registerRoute(route: RouteDocumentation): void {
@@ -297,7 +299,8 @@ export class DocumentationGenerator {
 
     /**
      * HTML 문서 생성
-     */    static generateHTMLDocumentation(): string {
+     */
+    static generateHTMLDocumentation(): string {
         if (!this.isDocumentationEnabled()) {
             return '<h1>Documentation is not enabled</h1>';
         }

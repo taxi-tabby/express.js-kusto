@@ -380,7 +380,8 @@ export abstract class BaseRepository<T extends DatabaseNamesUnion> {
      * @param operations 각 데이터베이스별 실행할 작업들
      * @param options Saga 실행 옵션
      * @returns 분산 트랜잭션 실행 결과
-     */    private async distributedTransaction<TResult = any>(
+     */
+    private async distributedTransaction<TResult = any>(
         operations: readonly DistributedTransactionOperation<any>[],
         options: TransactionCommitOptions = {}
     ): Promise<TransactionCommitResult<TResult>> {

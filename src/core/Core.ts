@@ -256,7 +256,9 @@ export class Core {
                 reject(error);
             });
         });
-    }    /**
+    }
+
+    /**
      * Stop the server gracefully
      */
     public async stop(): Promise<void> {
@@ -357,7 +359,9 @@ export class Core {
             // Don't throw error here to allow application to continue without database
             log.Warn('Application will continue without database connections');
         }
-    }    /**
+    }
+
+    /**
      * Initialize Repository Manager to handle repository loading and management
      */
     private async initializeRepositoryManager(): Promise<void> {

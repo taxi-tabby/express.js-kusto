@@ -292,7 +292,8 @@ export class TransactionCommitManager {
     /**
      * 개별 참여자의 Validation 단계 실행 (시뮬레이션 방식)
      * Interactive Transaction을 사용하여 작업을 검증하고 롤백
-     */    private async prepareParticipant(
+     */
+    private async prepareParticipant(
         participant: TransactionParticipant,
         config: TransactionCommitOptions,
         globalTxId: string
@@ -906,7 +907,8 @@ export class TransactionCommitManager {
     /**
      * Abort 단계 - 검증 실패 시 정리 작업
      * Saga Pattern에서는 아직 커밋되지 않았으므로 상태 정리만 수행
-     */    private async abortPhase(
+     */
+    private async abortPhase(
         participants: TransactionParticipant[],
         config: TransactionCommitOptions,
         globalTxId: string

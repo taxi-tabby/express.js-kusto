@@ -74,7 +74,9 @@ export class KustoManager {
      */
     public get injectable(): Injectable {
         return this.dependencyInjector.getInjectedModules();
-    }    /**
+    }
+
+    /**
      * 레포지토리들에 접근
      * 동적으로 모든 등록된 레포지토리에 접근할 수 있는 프록시 객체를 반환
      */

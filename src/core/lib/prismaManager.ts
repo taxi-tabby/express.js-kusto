@@ -460,7 +460,10 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 				const providerMatch = dsBlock[1].match(/provider\s*=\s*["']([^"']+)["']/);
 				if (providerMatch) return providerMatch[1];
 			}
-		} catch { /* ignore */ }
+		} catch (error: any) {
+			// schema.prisma 파싱 실패 시 잘못된 driver adapter 가 선택될 수 있음 — 가시화.
+			log.Warn(`schema.prisma provider 파싱 실패, 'postgresql' 로 폴백: ${folderName}`, { message: error?.message });
+		}
 		return 'postgresql';
 	}
 
@@ -670,8 +673,9 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 						existingClient.$disconnect(),
 						new Promise((_, reject) => setTimeout(() => reject(new Error('Disconnect timeout')), 3000))
 					]);
-				} catch {
-					// 연결 끊기 실패는 무시하고 계속 진행
+				} catch (disconnectError: any) {
+					// 재연결 직전이라 무시하고 계속 진행하되, 연결 누수 추적용으로 기록.
+					log.Debug(`재연결 전 기존 클라이언트 disconnect 실패: ${databaseName}`, { message: disconnectError?.message });
 				}
 			}
 
@@ -1017,8 +1021,9 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 
 								try {
 									await manager.reconnectDatabase(databaseName);
-								} catch {
-									// 재연결 실패해도 다음 시도에서 다시 시도
+								} catch (reconnectError: any) {
+									// 재연결 실패해도 다음 시도에서 다시 시도하지만, 누적되면 root cause 추적이 어려우므로 기록.
+									log.Warn(`재연결 시도 실패 (다음 시도에서 재시도): ${databaseName}`, { attempt: attempt + 1, message: reconnectError?.message });
 								}
 								continue;
 							}

@@ -3,6 +3,8 @@
  * BigInt와 기타 직렬화 불가능한 타입들을 처리합니다.
  */
 
+import { log } from '@ext/winston';
+
 /**
  * BigInt를 문자열로 변환하는 직렬화 함수
  * 중첩된 객체와 배열도 재귀적으로 처리합니다.
@@ -88,8 +90,9 @@ export function serialize(obj: any): any {
                         return date.toISOString().split('T')[0];
                     }
                 }
-            } catch (e) {
-                // valueOf() 실패 시 원본 반환
+            } catch (e: any) {
+                // valueOf() 실패 시 원본 반환. 빈 객체가 응답에 포함될 수 있으니 디버그용 흔적은 남긴다.
+                log.Debug('serialize: Date 후보 객체의 valueOf() 실패, 원본 반환', { message: e?.message });
             }
         }
     }
@@ -139,8 +142,9 @@ export function serializePrismaDate(obj: any): any {
                     }
                 }
             }
-        } catch (e) {
-            // 변환 실패 시 원본 반환
+        } catch (e: any) {
+            // 변환 실패 시 원본 반환. 빈 객체가 응답에 포함될 수 있으니 디버그용 흔적은 남긴다.
+            log.Debug('serializePrismaDate: Prisma Date 후보 객체 변환 실패, 원본 반환', { message: e?.message });
         }
     }
     

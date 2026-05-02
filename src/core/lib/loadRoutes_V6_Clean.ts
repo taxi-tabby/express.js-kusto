@@ -167,7 +167,11 @@ function fileExists(filePath: string): boolean {
         fs.accessSync(filePath);
         fileExistsCache.set(filePath, true);
         return true;
-    } catch {
+    } catch (error: any) {
+        // ENOENT 만 "없음" 으로 캐시. 권한 거부 등은 경고 로그를 남긴다.
+        if (error?.code !== 'ENOENT') {
+            log.Warn(`fileExists 검사 중 비정상 fs 에러: ${filePath}`, { code: error?.code, message: error?.message });
+        }
         fileExistsCache.set(filePath, false);
         return false;
     }
@@ -330,7 +334,11 @@ function getDirectories(dir: string): string[] {
         return fs.readdirSync(dir, { withFileTypes: true })
             .filter(entry => entry.isDirectory())
             .map(entry => entry.name);
-    } catch {
+    } catch (error: any) {
+        // ENOENT 는 "없음" 으로 처리. 권한 거부 등은 라우트 누락의 흔적이라 경고.
+        if (error?.code !== 'ENOENT') {
+            log.Warn(`디렉토리 읽기 비정상 실패: ${dir}`, { code: error?.code, message: error?.message });
+        }
         return [];
     }
 }

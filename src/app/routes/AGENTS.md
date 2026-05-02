@@ -41,7 +41,7 @@ router
         )
     )
     .POST('/', ...handler)
-    .WITH('rateLimiterDefault', { maxRequests: 100 })  // 미들웨어 이름 + 옵션
+    .WITH('authRateLimiterDefault', { maxRequests: 100 })  // 미들웨어 이름 + 옵션
     .CRUD('default', 'User', { softDelete: { enabled: true, field: 'deletedAt' } });
 
 export default router.build();

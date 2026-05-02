@@ -97,18 +97,20 @@ export interface RateLimiterParams {
 
 When creating repositories:
 - Extend BaseRepository with database generic: `BaseRepository<'databaseName'>`
+  - 제네릭 인자는 `src/app/db/` 의 폴더명 (예: `'default'`). 모델명이 아니다.
 - Implement getDatabaseName() method returning exact database name
-- Use this.client for type-safe Prisma access
-- Use this.$transaction() for complex operations
+- Use this.client for type-safe Prisma access (lazy 자동 재연결 포함)
+- Use this.$transaction() for complex operations (재시도는 `retryAttempts >= 2` 옵션 시에만 활성화)
 - Single database per repository (one-to-one or one-to-many relationship)
+- 분산 트랜잭션 (`$createDistributedOperation`/`$runDistributedTransaction`) 은 Prisma 커넥션 풀 한계로 신뢰성이 낮으므로 사용하지 말 것
 
 Example:
 ```typescript
 import { BaseRepository } from '@lib/baseRepository';
 
-export default class UserRepository extends BaseRepository<'user'> {
-    protected getDatabaseName(): 'user' {
-        return 'user';
+export default class UserRepository extends BaseRepository<'default'> {
+    protected getDatabaseName(): 'default' {
+        return 'default';
     }
 
     async findByEmail(email: string) {
@@ -131,7 +133,10 @@ When creating repository types:
 When modifying Prisma schemas:
 - Use exact required structure with generator and datasource
 - Set output = "client" for generator
-- Environment variable pattern: RDS_{DATABASE_NAME}_URL
+- Environment variable pattern: `{FOLDER_NAME_UPPER_SNAKE}__KUSTO_RDB_URL`
+  - 폴더명을 camelCase → UPPER_SNAKE_CASE 로 변환 후 `__KUSTO_RDB_URL` 접미사
+  - 예: `default` → `DEFAULT__KUSTO_RDB_URL`, `myData` → `MY_DATA__KUSTO_RDB_URL`
+  - `schema.prisma` 의 `url` 을 생략하면 위 패턴이 자동 적용된다 (PrismaManager.resolveDatabaseUrl)
 - Each folder represents one independent database
 - Only define models, relations in schema (no business logic)
 
@@ -144,7 +149,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("RDS_USER_URL")
+  url      = env("DEFAULT__KUSTO_RDB_URL")
 }
 ```
 
@@ -153,15 +158,21 @@ datasource db {
 
 When using CRUD router:
 - Use router.CRUD(databaseName, modelName, options)
+  - `databaseName` 은 `src/app/db/` 의 폴더명, `modelName` 은 Prisma 모델 이름 (PascalCase)
 - Specify primaryKey and primaryKeyParser for non-default keys
 - Use 'only' or 'except' to control generated endpoints
 - Apply middleware per operation: middleware: { index: [...], create: [...] }
 - Add validation schemas for create/update operations
 - Implement hooks for before/after operations
+- Include 정책으로 DoS / 정보 노출 방지 (선택):
+  - `maxIncludeCount` — `?include=` 토큰 최대 개수
+  - `maxIncludeDepth` — 단일 항목 점 깊이 (`a.b.c` → 3) 제한
+  - `allowedIncludes` — 화이트리스트 (정확 일치 또는 prefix 허용)
+  - `defaultIncludes` — 서버 강제 eager-load (정책 검증 우회)
 
 Example:
 ```typescript
-router.CRUD('user', 'user', {
+router.CRUD('default', 'User', {
     primaryKey: 'uuid',
     primaryKeyParser: ExpressRouter.parseUuid,
     only: ['index', 'show', 'create'],
@@ -175,7 +186,10 @@ router.CRUD('user', 'user', {
                 name: { required: true, type: 'string' }
             }
         }
-    }
+    },
+    maxIncludeCount: 5,
+    maxIncludeDepth: 3,
+    allowedIncludes: ['profile', 'roles']
 });
 ```
 
@@ -183,7 +197,8 @@ router.CRUD('user', 'user', {
 **/.env*
 
 When setting up environment variables:
-- Database URLs: RDS_{DATABASE_NAME}_URL pattern
+- Database URLs: `{FOLDER}__KUSTO_RDB_URL` pattern (camelCase → UPPER_SNAKE_CASE 로 변환된 폴더명 + `__KUSTO_RDB_URL` 접미사)
+- 예: 폴더 `default` → `DEFAULT__KUSTO_RDB_URL`, 폴더 `myData` → `MY_DATA__KUSTO_RDB_URL`
 - JWT secrets: JWT_ACCESS_SECRET, JWT_REFRESH_SECRET
 - Use appropriate names for each database connection
 - Follow the naming convention strictly for auto-detection
@@ -192,10 +207,11 @@ When setting up environment variables:
 **kusto-db commands
 
 When using kusto-db CLI:
-- Always specify database with -d flag: `kusto-db generate -d user`
-- Use meaningful migration names: `kusto-db migrate -t dev -n "add_user_profile"`
+- Always specify database with -d flag: `kusto-db generate -d default`
+- Use meaningful migration names: `kusto-db migrate -t dev -n "add_user_profile" -d default`
 - Generate all clients after schema changes: `kusto-db generate -a`
-- Use studio for database inspection: `kusto-db studio -d user`
+- Use studio for database inspection: `kusto-db studio -d default`
+- `-d` 의 인자는 `src/app/db/` 의 폴더명이며, 코드베이스에 실제 존재하는 폴더여야 한다.
 
 # Test Files
 **/test-*.ts

@@ -107,13 +107,17 @@ router.CRUD('user', 'user', {
             }
         },
         recover: {
-            params: {
-                id: { required: true, type: 'uuid' }
+            // recover 의 :id 경로 파라미터는 primaryKeyParser 가 파싱·검증하므로
+            // 별도 params 검증을 정의하지 않아도 된다. body 검증이 필요하면 여기에 작성.
+            body: {
+                reason: { type: 'string' }
             }
         }
     }
 });
 ```
+
+> **note**: `validation.recover` 의 등록 경로는 `withValidation` 의 `body` 슬롯뿐이다 (`expressRouter.ts` 의 setupRecoverRoute 참고). `params.id` 형태로 정의해도 적용되지 않는다.
 
 ### 훅(Hooks) 설정
 ```typescript
@@ -360,12 +364,11 @@ GET /posts?filter[tags.name_in]=javascript,typescript
 
 ### 배열 관계 조건
 ```bash
-# 모든 태그가 조건을 만족하는 포스트 (every)
-GET /posts?filter[tags.name_every_in]=javascript,react
-
-# 일부 태그가 조건을 만족하는 포스트 (some) - 기본값
-GET /posts?filter[tags.name_some_in]=javascript,react
+# 일부 태그가 조건을 만족하는 포스트 (Prisma 의 some 으로 자동 매핑)
+GET /posts?filter[tags.name_in]=javascript,react
 ```
+
+> 배열/일대다 관계의 필터는 `crudHelpers.ts` 의 `isArrayRelation` 분기에서 자동으로 Prisma `some` 으로 빌드된다. 모든 항목이 조건을 만족해야 하는 `every` 시맨틱은 별도 쿼리 토큰으로 노출되어 있지 않으므로, 필요하면 `beforeIndex` 훅에서 직접 `where` 를 가공하라.
 
 ### 중첩 관계 필터링
 ```bash
@@ -440,26 +443,35 @@ GET /posts?filter[tags.name_in]=javascript,react&include=author,tags&page[number
 
 ## 6. 지원되는 필터 연산자
 
+연산자 이름은 `?filter[field_OPERATOR]=value` 형태로 필드명 뒤 `_` 다음에 붙는다. 매처는 정확한 토큰 매칭이므로 아래 이름과 정확히 일치해야 한다 (`crudHelpers.ts:547-551` 참고).
+
 ### 텍스트 연산자
-- `eq` (equals): 정확히 일치
-- `ne` (not equals): 일치하지 않음
-- `like`: 부분 일치 (LIKE %value%)
-- `ilike`: 대소문자 무시 부분 일치
-- `in`: 값 목록 중 하나
-- `notin`: 값 목록에 없음
-- `contains`: 포함 (문자열)
-- `startswith`: 시작 문자열
-- `endswith`: 끝 문자열
+- `eq` — 정확히 일치 (기본값, 연산자 생략 가능)
+- `ne` — 일치하지 않음
+- `like` — 부분 일치 (LIKE %value%)
+- `ilike` — 대소문자 무시 부분 일치
+- `in` — 값 목록 중 하나 (콤마 구분)
+- `not_in` — 값 목록에 없음
+- `contains` — 포함 (문자열)
+- `start` — 시작 문자열 (LIKE value%)
+- `end` — 끝 문자열 (LIKE %value)
+- `regex` — 정규식 매칭
 
 ### 숫자/날짜 연산자
-- `gt` (greater than): 초과
-- `gte` (greater than or equal): 이상
-- `lt` (less than): 미만
-- `lte` (less than or equal): 이하
+- `gt` / `gte` — 초과 / 이상
+- `lt` / `lte` — 미만 / 이하
+- `between` — 범위 (콤마 구분 두 값)
 
-### 기타 연산자
-- `null`: null 값
-- `notnull`: null이 아닌 값
+### Null / 존재 연산자
+- `null` — null 값
+- `not_null` — null 이 아닌 값
+- `present` — null 도 빈 문자열도 아님
+- `blank` — null 또는 빈 문자열
+
+### 컬렉션/문서 연산자 (MongoDB 스타일)
+- `exists` / `size` / `all` / `elemMatch`
+
+> **주의**: 옛 문서에 있던 `notin`, `notnull`, `startswith`, `endswith` 는 코드와 일치하지 않아 동작하지 않는다. `not_in`, `not_null`, `start`, `end` 로 사용해야 한다.
 
 ## 7. 실제 사용 예제
 
@@ -568,46 +580,60 @@ GET /posts?filter[category.name_eq]=기술&select=title,author.name
 
 ## 8. 에러 처리
 
-관계 쿼리에서 발생할 수 있는 에러들과 환경별 응답:
+CRUD 라우터의 에러 응답은 JSON:API v1.1 errors[] 형식을 따른다 (`errorHandler.formatJsonApiError`). 단일 객체 `error` 필드가 아니라 `errors` 배열에 들어 있으니 클라이언트는 `errors[0].code`/`errors[0].status` 로 접근해야 한다.
 
-### 개발 환경에서의 에러 응답
+### 응답 구조
+
 ```json
 {
-  "error": {
-    "message": "Invalid `client[modelName].findUnique()` invocation...",
-    "code": "VALIDATION_ERROR",
-    "status": 400,
+  "jsonapi": {
+    "version": "1.1",
+    "meta": { "implementation": "express.js-kusto v2.0" }
+  },
+  "errors": [
+    {
+      "id": "error_1731234567890_abc123",
+      "links": { "about": "", "type": "" },
+      "status": "400",
+      "code": "VALIDATION_ERROR",
+      "title": "Bad Request",
+      "detail": "Invalid `client[modelName].findUnique()` invocation...",
+      "source": { "parameter": "filter[id_eq]" },
+      "meta": {
+        "timestamp": "2025-07-14T07:47:16.694Z",
+        "errorType": "PrismaClientValidationError",
+        "stack": "PrismaClientValidationError: ...",
+        "environment": "development"
+      }
+    }
+  ],
+  "meta": {
     "timestamp": "2025-07-14T07:47:16.694Z",
-    "path": "/users/invalid-id",
-    "details": {
-      "type": "VALIDATION_ERROR",
-      "invalidField": "xzcxcz",
-      "prismaVersion": "6.11.0"
-    },
-    "stack": "PrismaClientValidationError: ..."
+    "errorCount": 1,
+    "requestInfo": { "path": "/users/invalid-id", "method": "GET" }
   },
-  "success": false
+  "links": { "self": "/users/invalid-id" }
 }
 ```
 
-### 프로덕션 환경에서의 에러 응답
-```json
-{
-  "error": {
-    "message": "입력 데이터가 올바르지 않습니다.",
-    "code": "VALIDATION_ERROR",
-    "status": 400,
-    "timestamp": "2025-07-14T07:47:16.694Z"
-  },
-  "success": false
-}
-```
+`errors[].status` 는 JSON:API 스펙대로 **문자열**이다. `errors[].meta.stack` 과 `errors[].meta.errorType` 은 개발 환경에서만 채워진다 (프로덕션에서는 자동으로 sanitize).
 
-### 주요 에러 코드들
-- `VALIDATION_ERROR`: 잘못된 쿼리 파라미터
-- `NOT_FOUND`: 리소스를 찾을 수 없음
-- `INVALID_UUID`: 잘못된 UUID 형식
-- `DATABASE_ERROR`: 데이터베이스 처리 오류
+### 자주 사용되는 에러 코드 (`errorCodes.ts`)
+
+| code | 의미 | HTTP |
+|------|------|------|
+| `VALIDATION_ERROR` | 쿼리/입력 검증 실패 | 400 |
+| `INVALID_REQUEST` | 잘못된 JSON:API 요청 형식 | 400 |
+| `INVALID_UUID` | UUID 형식 오류 | 400 |
+| `INCLUDE_LIMIT_EXCEEDED` / `INCLUDE_DEPTH_EXCEEDED` / `INCLUDE_NOT_ALLOWED` | include 정책 위반 | 400 |
+| `NOT_FOUND` / `RESOURCE_NOT_FOUND` | 리소스 없음 | 404 |
+| `RELATIONSHIP_NOT_FOUND` | 관계 자원 없음 | 404 |
+| `RESOURCE_DELETED` | soft delete 된 리소스 (410 Gone) | 410 |
+| `INVALID_RELATIONSHIP` | 잘못된 관계 데이터 | 422 |
+| `DUPLICATE_ENTRY` / `UNIQUE_CONSTRAINT_VIOLATION` | 유니크 제약 충돌 | 409 |
+| `DATABASE_ERROR` | 그 외 Prisma 에러 | 500 |
+
+전체 목록은 `src/core/lib/errorCodes.ts` 의 `ERROR_CODES` 상수 참고.
 
 ## 9. JSON:API v1.1 스펙 준수
 

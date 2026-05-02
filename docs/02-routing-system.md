@@ -359,17 +359,19 @@ router.POST_VALIDATED(
 
 ```typescript
 import { Request, Response, NextFunction } from "express";
+import { log } from "@ext/winston";
 
 export default [
     (req: Request, res: Response, next: NextFunction) => {
-        // 미들웨어 로직
-        console.log(`요청 경로: ${req.path}`);
+        // 미들웨어 로직 — winston 로거 사용 (프레임워크 컨벤션)
+        log.Info(`요청 경로: ${req.path}`);
         next();
     },
-    
+
     (req: Request, res: Response, next: NextFunction) => {
-        // 또 다른 미들웨어
-        req.customData = "some data";
+        // 다음 핸들러로 값을 넘기려면 declaration merging 으로 Request 를 확장하거나
+        // (권장) WITH 미들웨어 체인을 사용해 req.with.<name> 슬롯을 활용한다.
+        (req as any).customData = "some data";
         next();
     }
 ];
@@ -910,7 +912,8 @@ router
 
 - **`USE`** - Express 기본 미들웨어를 등록합니다.
 - **`MIDDLEWARE`** - 커스텀 미들웨어 함수를 등록합니다.
-- **`WITH`** - Injectable 미들웨어를 등록합니다 (의존성 주입 지원).
+- **`WITH`** - Injectable 미들웨어를 등록합니다 (의존성 주입 지원). 첫 인자는 `injectable/` 에 등록된 미들웨어의 이름 문자열, 두 번째 인자는 옵션. arrow function 직접 전달은 지원하지 않음.
+- **`USE_HANDLER`** _(deprecated)_ — `HandlerFunction` 타입의 미들웨어를 등록한다. next 함수가 없어 다음으로 넘어가지 못하므로 일반적으로 사용하지 않는다. 대부분의 경우 `MIDDLEWARE` 또는 `USE` 를 사용한다.
 
 ### 프록시 및 정적 파일 메서드
 > http-proxy-middleware 라이브러리를 사용한 프록시 처리입니다.

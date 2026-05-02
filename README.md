@@ -11,7 +11,7 @@ cd express.js-kusto
 npm install
 
 # 환경 설정
-cp .env.example .env
+cp .env.template .env
 
 # 개발 서버 실행
 npm run dev

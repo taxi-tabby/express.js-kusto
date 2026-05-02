@@ -123,16 +123,3 @@ export class Application {
 export function createApplication(config?: Partial<CoreConfig>): Application {
     return new Application(config);
 }
-
-/**
- * Legacy support for existing initExpressCore_V1 function
- * @deprecated Use Application class instead
- */
-export async function initExpressCore_V1(app: Express): Promise<void> {
-    log.Warn('initExpressCore_V1 is deprecated. Use Application class instead.');
-
-    const core = Core.getInstance();
-
-    // Initialize core without starting server (for legacy compatibility)
-    await core.initialize();
-}

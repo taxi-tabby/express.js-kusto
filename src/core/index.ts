@@ -2,7 +2,7 @@
 
 // Core exports
 export { Core, CoreConfig } from './Core';
-export { Application, createApplication, initExpressCore_V1 } from './Application';
+export { Application, createApplication } from './Application';
 
 // Environment and utilities
 export { EnvironmentLoader } from './lib/environmentLoader';

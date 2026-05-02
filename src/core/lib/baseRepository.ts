@@ -89,16 +89,6 @@ export abstract class BaseRepository<T extends DatabaseNamesUnion> {
     }
 
     /**
-     * @deprecated 이제 getDatabaseName() 추상 메서드를 구현하세요
-     * 리포지터리 데이터베이스 이름 설정
-     * 상속받은 클래스에서 생성자에서 호출해야 함
-     */
-    protected setRepositoryDatabase(databaseName: T): void {
-        log.Warn(`setRepositoryDatabase is deprecated. Implement getDatabaseName() abstract method instead in ${this.constructor.name}`);
-        this.repositoryDatabaseName = databaseName;
-    }
-
-    /**
      * 리포지터리의 데이터베이스 클라이언트
      * @returns 타입 안전한 Prisma 클라이언트
      */

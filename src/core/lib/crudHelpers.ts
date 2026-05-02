@@ -1,5 +1,6 @@
-import { Request } from 'express';
+﻿import { Request } from 'express';
 
+import { log } from '@ext/winston';
 import { ErrorHandler, ErrorResponseFormat } from './errorHandler';
 import { ERROR_CODES, PRISMA_ERROR_CODES } from './errorCodes';
 
@@ -556,7 +557,7 @@ export class CrudQueryParser {
         
         // 값이 null이면 필터 무시 (빈 배열 또는 UUID 검증 실패)
         if (parsedValue === null) {
-          // console.warn(`Filter ignored for field "${field}" with operator "${op}": value validation failed`);
+          // log.Warn(`Filter ignored for field "${field}" with operator "${op}": value validation failed`);
           return null;
         }
         
@@ -574,7 +575,7 @@ export class CrudQueryParser {
     
     // 값이 null이면 필터 무시 (빈 배열 또는 UUID 검증 실패)
     if (parsedValue === null) {
-      // console.warn(`Filter ignored for field "${expression}": value validation failed`);
+      // log.Warn(`Filter ignored for field "${expression}": value validation failed`);
       return null;
     }
     
@@ -744,7 +745,7 @@ export class CrudQueryParser {
     if (nativeType === 'Uuid' || fieldType === 'Uuid') {
       // UUID가 아닌 값이 들어온 경우 null 반환 (필터 무시됨)
       if (!this.isValidUUID(value)) {
-        // console.warn(`Invalid UUID format in filter: expected a valid UUID, but received "${value}". This filter will be ignored.`);
+        // log.Warn(`Invalid UUID format in filter: expected a valid UUID, but received "${value}". This filter will be ignored.`);
         return null;
       }
       return value; // 유효한 UUID는 그대로 반환
@@ -1321,7 +1322,7 @@ export class PrismaQueryBuilder {
           break;
           
         default:
-          console.warn(`Unknown filter operator: ${operator}`);
+          log.Warn(`Unknown filter operator: ${operator}`);
           break;
       }
     });

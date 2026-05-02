@@ -167,7 +167,7 @@ export class ExpressRouter {
                     
                     // 초기화 완료 표시
                     ExpressRouter.initializedDatabases.add(databaseName);
-                    // console.log(`🔍 Prisma 스키마 분석기가 초기화되었습니다. (데이터베이스: ${databaseName})`);
+                    // log.Info(`🔍 Prisma 스키마 분석기가 초기화되었습니다. (데이터베이스: ${databaseName})`);
                 }
             }
 
@@ -180,7 +180,7 @@ export class ExpressRouter {
 
             // // 한 번만 출력
             // if (ExpressRouter.initializedDatabases.size === availableDatabases.length) {
-            //     console.log(`📊 사용 가능한 데이터베이스: ${availableDatabases.join(', ')}`);
+            //     log.Info(`📊 사용 가능한 데이터베이스: ${availableDatabases.join(', ')}`);
             // }
         } catch (error) {
             log.Warn('스키마 분석기 초기화 실패:', error instanceof Error ? error.message : String(error));
@@ -2719,7 +2719,7 @@ export class ExpressRouter {
                 delete totalCountOptions.take;
                 delete totalCountOptions.cursor;
                  
-                // console.log(modelName, Object.keys(client))
+                // log.Info(modelName, Object.keys(client))
 
                 const [items, total] = await Promise.all([
                     client[modelName].findMany(findManyOptions),
@@ -3967,7 +3967,7 @@ export class ExpressRouter {
      */
     private hasAttributes(obj: any): obj is JsonApiResource {
         const result = obj && typeof obj === 'object' && 'attributes' in obj && obj.attributes != null;
-        // console.log(`hasAttributes check for:`, JSON.stringify(obj, null, 2), `Result: ${result}`);
+        // log.Info(`hasAttributes check for:`, JSON.stringify(obj, null, 2), `Result: ${result}`);
         return result;
     }
 

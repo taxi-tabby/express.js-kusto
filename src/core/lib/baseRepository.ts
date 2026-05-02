@@ -94,7 +94,7 @@ export abstract class BaseRepository<T extends DatabaseNamesUnion> {
      * 상속받은 클래스에서 생성자에서 호출해야 함
      */
     protected setRepositoryDatabase(databaseName: T): void {
-        console.warn(`setRepositoryDatabase is deprecated. Implement getDatabaseName() abstract method instead in ${this.constructor.name}`);
+        log.Warn(`setRepositoryDatabase is deprecated. Implement getDatabaseName() abstract method instead in ${this.constructor.name}`);
         this.repositoryDatabaseName = databaseName;
     }
 

@@ -1,4 +1,5 @@
-import { Request, Response, NextFunction } from 'express';
+﻿import { Request, Response, NextFunction } from 'express';
+import { log } from '@ext/winston';
 import { serialize } from './serializer';
 
 /**
@@ -16,7 +17,7 @@ export function serializationMiddleware(req: Request, res: Response, next: NextF
             const serializedBody = serialize(body);
             return originalJson.call(this, serializedBody);
         } catch (error) {
-            console.error('Serialization error:', error);
+            log.Error('Serialization error:', error);
             // 직렬화 실패 시 원본 데이터로 시도
             return originalJson.call(this, body);
         }

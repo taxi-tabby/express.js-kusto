@@ -344,8 +344,13 @@ export class TransactionCommitManager {
                     error: participant.error.message
                 });
             }
+
+            // 호출자(`preparePhase` 의 Promise.all)가 즉시 인지하고 abort phase 로 이동할 수 있도록 재던진다.
+            // 던지지 않으면 Promise.all 이 정상 resolve 되어 다른 참여자들의 트랜잭션이 어정쩡한 상태로 남는다.
+            throw participant.error;
         }
-    }    
+    }
+
     
     
     /**

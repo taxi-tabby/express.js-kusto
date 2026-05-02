@@ -3880,7 +3880,11 @@ export class ExpressRouter {
                 }
             });
         } catch (error) {
-            log.Warn(`Failed to soft delete related records for ${resourceType}:`, error);
+            // 호출자(destroy 핸들러)가 데이터 일관성을 인지할 수 있도록 재던진다.
+            // 예전에는 Warn 로그만 남기고 부모 삭제는 성공(204) 응답을 보냈는데, 이는 orphan 관계를 만들고
+            // 클라이언트가 "성공" 으로 오해하게 한다.
+            log.Error(`Failed to soft delete related records for ${resourceType}`, { error: error instanceof Error ? error.message : String(error), parentId });
+            throw error;
         }
     }
 
@@ -3940,7 +3944,9 @@ export class ExpressRouter {
                 });
             }
         } catch (error) {
-            log.Warn(`Failed to replace relationships with soft delete for ${resourceType}:`, error);
+            // 부모 update 가 성공한 뒤 자식 관계 갱신만 실패하면 데이터 일관성이 깨진다 — 호출자가 인지하도록 재던진다.
+            log.Error(`Failed to replace relationships with soft delete for ${resourceType}`, { error: error instanceof Error ? error.message : String(error), parentId, newIdsCount: newIds.length });
+            throw error;
         }
     }
 

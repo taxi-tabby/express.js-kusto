@@ -4551,7 +4551,7 @@ export class ExpressRouter {
                 const response = {
                     data: this.transformToJsonApiResource(result, modelName, req, primaryKey),
                     jsonapi: {
-                        version: "1.0"
+                        version: "1.1"
                     },
                     meta: {
                         operation: 'recover',

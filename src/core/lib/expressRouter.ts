@@ -2972,7 +2972,7 @@ export class ExpressRouter {
                             // Soft delete된 경우에는 410 Gone 응답 (JSON:API 확장)
                             const errorResponse = this.formatJsonApiError(
                                 new Error(`${modelName} has been deleted`),
-                                'RESOURCE_DELETED',
+                                ERROR_CODES.RESOURCE_DELETED,
                                 410,
                                 req.path,
                                 req.method
@@ -2983,7 +2983,7 @@ export class ExpressRouter {
                     
                     const errorResponse = this.formatJsonApiError(
                         new Error(`${modelName} not found`),
-                        'NOT_FOUND',
+                        ERROR_CODES.NOT_FOUND,
                         404,
                         req.path,
                         req.method
@@ -3149,7 +3149,7 @@ export class ExpressRouter {
                 if (!req.body || !req.body.data) {
                     const errorResponse = this.formatJsonApiError(
                         new Error('Request must contain a data object'),
-                        'INVALID_REQUEST',
+                        ERROR_CODES.INVALID_REQUEST,
                         400,
                         req.path,
                         req.method
@@ -3195,7 +3195,7 @@ export class ExpressRouter {
                     } catch (relationshipError: any) {
                         const errorResponse = this.formatJsonApiError(
                             relationshipError,
-                            'INVALID_RELATIONSHIP',
+                            ERROR_CODES.INVALID_RELATIONSHIP,
                             422,
                             req.path,
                             req.method
@@ -3368,7 +3368,7 @@ export class ExpressRouter {
                 if (!req.body || !req.body['atomic:operations']) {
                     const errorResponse = this.formatJsonApiError(
                         new Error('Request must contain atomic:operations'),
-                        'INVALID_REQUEST',
+                        ERROR_CODES.INVALID_REQUEST,
                         400,
                         req.path,
                         req.method
@@ -4093,7 +4093,7 @@ export class ExpressRouter {
                     const errorDetail = `Request must contain a data object following JSON:API specification. Expected format: ${JSON.stringify(exampleRequest, null, 2)}`;
                     const errorResponse = this.formatJsonApiError(
                         new Error(errorDetail),
-                        'INVALID_REQUEST',
+                        ERROR_CODES.INVALID_REQUEST,
                         400,
                         req.path
                     );
@@ -4130,7 +4130,7 @@ export class ExpressRouter {
                     } catch (relationshipError: any) {
                         const errorResponse = this.formatJsonApiError(
                             relationshipError,
-                            'INVALID_RELATIONSHIP',
+                            ERROR_CODES.INVALID_RELATIONSHIP,
                             422,
                             req.path
                         );
@@ -4384,7 +4384,7 @@ export class ExpressRouter {
                     if (!existingItem) {
                         const errorResponse = this.formatJsonApiError(
                             new Error(`${modelName} not found`),
-                            'NOT_FOUND',
+                            ERROR_CODES.NOT_FOUND,
                             404,
                             req.path
                         );
@@ -4509,7 +4509,7 @@ export class ExpressRouter {
                     } else {
                         const errorResponse = this.formatJsonApiError(
                             new Error(`${modelName} not found`),
-                            'NOT_FOUND',
+                            ERROR_CODES.NOT_FOUND,
                             404,
                             req.path
                         );
@@ -4856,7 +4856,7 @@ export class ExpressRouter {
             } else {
                 const errorResponse = this.formatJsonApiError(
                     new Error(`Missing ${primaryKey} parameter`),
-                    'VALIDATION_ERROR',
+                    ERROR_CODES.VALIDATION_ERROR,
                     400,
                     req.path
                 );
@@ -4869,7 +4869,7 @@ export class ExpressRouter {
         if (!identifier || identifier.trim() === '') {
             const errorResponse = this.formatJsonApiError(
                 new Error(`Invalid ${primaryKey} parameter`),
-                'VALIDATION_ERROR',
+                ERROR_CODES.VALIDATION_ERROR,
                 400,
                 req.path
             );
@@ -5023,7 +5023,7 @@ export class ExpressRouter {
                 if (!item) {
                     const errorResponse = this.formatJsonApiError(
                         new Error(`${modelName} not found`),
-                        'NOT_FOUND',
+                        ERROR_CODES.NOT_FOUND,
                         404,
                         req.path
                     );
@@ -5035,7 +5035,7 @@ export class ExpressRouter {
                 if (!relationData) {
                     const errorResponse = this.formatJsonApiError(
                         new Error(`Relationship '${relationName}' not found`),
-                        'RELATIONSHIP_NOT_FOUND',
+                        ERROR_CODES.RELATIONSHIP_NOT_FOUND,
                         404,
                         req.path
                     );
@@ -5105,7 +5105,7 @@ export class ExpressRouter {
                 if (!item) {
                     const errorResponse = this.formatJsonApiError(
                         new Error(`${modelName} not found`),
-                        'NOT_FOUND',
+                        ERROR_CODES.NOT_FOUND,
                         404,
                         req.path
                     );
@@ -5179,7 +5179,7 @@ export class ExpressRouter {
                 if (!req.body || !req.body.data) {
                     const errorResponse = this.formatJsonApiError(
                         new Error('Request must contain data field with relationship identifiers'),
-                        'INVALID_REQUEST',
+                        ERROR_CODES.INVALID_REQUEST,
                         400,
                         req.path
                     );
@@ -5237,7 +5237,7 @@ export class ExpressRouter {
                 if (!req.body || req.body.data === undefined) {
                     const errorResponse = this.formatJsonApiError(
                         new Error('Request must contain data field'),
-                        'INVALID_REQUEST',
+                        ERROR_CODES.INVALID_REQUEST,
                         400,
                         req.path
                     );
@@ -5304,7 +5304,7 @@ export class ExpressRouter {
                 if (!req.body || !req.body.data) {
                     const errorResponse = this.formatJsonApiError(
                         new Error('Request must contain data field with relationship identifiers to remove'),
-                        'INVALID_REQUEST',
+                        ERROR_CODES.INVALID_REQUEST,
                         400,
                         req.path
                     );
@@ -5373,7 +5373,7 @@ export class ExpressRouter {
                 if (!item) {
                     const errorResponse = this.formatJsonApiError(
                         new Error(`${modelName} not found`),
-                        'NOT_FOUND',
+                        ERROR_CODES.NOT_FOUND,
                         404,
                         req.path
                     );

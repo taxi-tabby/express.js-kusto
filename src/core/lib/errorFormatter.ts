@@ -4,6 +4,7 @@
  */
 
 import { EnvironmentLoader } from './environmentLoader';
+import { ERROR_CODES } from './errorCodes';
 
 export interface ErrorResponse {
   error: {
@@ -37,7 +38,7 @@ export class ErrorFormatter {
    */
   static formatError(
     error: Error,
-    code: string = 'INTERNAL_ERROR',
+    code: string = ERROR_CODES.INTERNAL_ERROR,
     status: number = 500,
     path?: string
   ): ErrorResponse {
@@ -119,7 +120,7 @@ export class ErrorFormatter {
 
     // Prisma 에러 처리 (개발 환경에서만)
     if (error.constructor.name === 'PrismaClientValidationError') {
-      details.type = 'VALIDATION_ERROR';
+      details.type = ERROR_CODES.VALIDATION_ERROR;
       
       // 필드 관련 에러 파싱 (개발용)
       const message = error.message;
@@ -143,7 +144,7 @@ export class ErrorFormatter {
 
     // UUID 파싱 에러 (개발용)
     if (error.message.includes('Invalid UUID')) {
-      details.type = 'INVALID_UUID';
+      details.type = ERROR_CODES.INVALID_UUID;
       details.expectedFormat = 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx';
     }
 
@@ -201,32 +202,32 @@ export class ErrorFormatter {
     const message = error.message;
 
     if (errorName === 'PrismaClientValidationError') {
-      return { code: 'VALIDATION_ERROR', status: 400 };
+      return { code: ERROR_CODES.VALIDATION_ERROR, status: 400 };
     }
-    
+
     if (errorName === 'PrismaClientKnownRequestError') {
       const prismaCode = (error as any).code;
-      
+
       switch (prismaCode) {
         case 'P2001':
         case 'P2015':
         case 'P2018':
         case 'P2025':
-          return { code: 'NOT_FOUND', status: 404 };
+          return { code: ERROR_CODES.NOT_FOUND, status: 404 };
         case 'P2002':
-          return { code: 'DUPLICATE_ENTRY', status: 409 };
+          return { code: ERROR_CODES.DUPLICATE_ENTRY, status: 409 };
         case 'P2003':
         case 'P2004':
-          return { code: 'VALIDATION_ERROR', status: 400 };
+          return { code: ERROR_CODES.VALIDATION_ERROR, status: 400 };
         default:
-          return { code: 'DATABASE_ERROR', status: 500 };
+          return { code: ERROR_CODES.DATABASE_ERROR, status: 500 };
       }
     }
 
     if (message.includes('Invalid UUID')) {
-      return { code: 'INVALID_UUID', status: 400 };
+      return { code: ERROR_CODES.INVALID_UUID, status: 400 };
     }
 
-    return { code: 'INTERNAL_ERROR', status: 500 };
+    return { code: ERROR_CODES.INTERNAL_ERROR, status: 500 };
   }
 }

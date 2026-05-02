@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { CrudSchemaRegistry } from './crudSchemaRegistry';
 import { createPaginationCursor } from '../external/util';
 import { log } from '../external/winston';
+import { ERROR_CODES } from './errorCodes';
 
 /**
  * 개발 모드에서만 활성화되는 스키마 API 라우터
@@ -26,7 +27,7 @@ export class SchemaApiRouter {
       res.status(403).json({
         success: false,
         error: {
-          code: 'SCHEMA_API_DISABLED',
+          code: ERROR_CODES.FEATURE_DISABLED,
           message: '스키마 API는 개발 환경에서만 사용할 수 있습니다.',
           hint: 'NODE_ENV=development로 설정하거나 ENABLE_SCHEMA_API=true 환경변수를 설정하세요.'
         }
@@ -47,7 +48,7 @@ export class SchemaApiRouter {
       res.status(403).json({
         success: false,
         error: {
-          code: 'IP_ACCESS_DENIED',
+          code: ERROR_CODES.FORBIDDEN,
           message: '스키마 API는 로컬호스트에서만 접근 가능합니다.',
           hint: 'localhost에서 접근하거나 ENABLE_SCHEMA_API=true로 설정하세요.',
           clientIP: clientIP
@@ -488,7 +489,7 @@ export class SchemaApiRouter {
       success: false,
       error: {
         message: error.message || '내부 서버 오류가 발생했습니다.',
-        code: statusCode === 404 ? 'NOT_FOUND' : 'INTERNAL_ERROR',
+        code: statusCode === 404 ? ERROR_CODES.NOT_FOUND : ERROR_CODES.INTERNAL_ERROR,
         timestamp: new Date()
       }
     });

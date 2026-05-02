@@ -456,7 +456,7 @@ export class ErrorHandler {
     return {
       error: {
         message: normalizedError.message,
-        code: normalizedError.code || 'UNKNOWN_ERROR',
+        code: normalizedError.code || ERROR_CODES.UNKNOWN_ERROR,
         details: normalizedError.meta
       },
       metadata: {
@@ -477,7 +477,7 @@ export class ErrorHandler {
   ): JsonApiErrorResponse {
     const errorId = `error_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const status = context?.status || 500;
-    const code = context?.code || 'INTERNAL_ERROR';
+    const code = context?.code || ERROR_CODES.INTERNAL_ERROR;
 
     return {
       jsonapi: {
@@ -531,7 +531,7 @@ export class ErrorHandler {
   ): any {
     return {
       error: normalizedError.message,
-      code: normalizedError.code || 'UNKNOWN_ERROR',
+      code: normalizedError.code || ERROR_CODES.UNKNOWN_ERROR,
       status: context?.status || 500,
       timestamp: new Date().toISOString(),
       path: context?.path || 'unknown',

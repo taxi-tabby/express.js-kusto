@@ -1537,7 +1537,7 @@ export class CrudResponseFormatter {
       format: ErrorResponseFormat.CRUD,
       context: {
         operation,
-        code: code || 'UNKNOWN_ERROR'
+        code: code || ERROR_CODES.UNKNOWN_ERROR
       },
       security: securityOptions
     });
@@ -2010,20 +2010,20 @@ export class CrudResponseFormatter {
    * 일반적인 에러 코드 매핑
    */
   private static mapGenericErrorCodes(code: string): string {
-    const genericCodeMap = new Map([
-      ['400', 'BAD_REQUEST'],
-      ['401', 'UNAUTHORIZED'],
-      ['403', 'FORBIDDEN'],
-      ['404', 'NOT_FOUND'],
-      ['409', 'CONFLICT'],
-      ['422', 'UNPROCESSABLE_ENTITY'],
-      ['500', 'INTERNAL_SERVER_ERROR'],
-      ['502', 'BAD_GATEWAY'],
-      ['503', 'SERVICE_UNAVAILABLE'],
-      ['504', 'GATEWAY_TIMEOUT']
+    const genericCodeMap = new Map<string, string>([
+      ['400', ERROR_CODES.BAD_REQUEST],
+      ['401', ERROR_CODES.UNAUTHORIZED],
+      ['403', ERROR_CODES.FORBIDDEN],
+      ['404', ERROR_CODES.NOT_FOUND],
+      ['409', ERROR_CODES.CONFLICT],
+      ['422', ERROR_CODES.UNPROCESSABLE_ENTITY],
+      ['500', ERROR_CODES.INTERNAL_SERVER_ERROR],
+      ['502', ERROR_CODES.BAD_GATEWAY],
+      ['503', ERROR_CODES.SERVICE_UNAVAILABLE],
+      ['504', ERROR_CODES.GATEWAY_TIMEOUT]
     ]);
 
-    return genericCodeMap.get(code) || 'UNKNOWN_ERROR';
+    return genericCodeMap.get(code) || ERROR_CODES.UNKNOWN_ERROR;
   }
 
   /**
@@ -2187,7 +2187,7 @@ export class JsonApiTransformer {
     return ErrorHandler.handleError(error, {
       format: ErrorResponseFormat.JSON_API,
       context: {
-        code: options.code || 'INTERNAL_ERROR',
+        code: options.code || ERROR_CODES.INTERNAL_ERROR,
         status: options.status || 500,
         title: options.title,
         source: options.source

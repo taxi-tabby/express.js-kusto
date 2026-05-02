@@ -1,75 +1,56 @@
 # 🗄️ 데이터베이스 관리
 
-> **멀티 데이터베이스 지원과 Prisma 통합**  
-> 폴더 기반 스키마 관리와 npm run db CLI를 통한 효율적인 데이터베이스 운영  
-> **Serverless 환경 자동 재연결 지원**
+> **멀티 데이터베이스 지원과 Prisma 통합**
+> 폴더 기반 스키마 관리와 `npm run db` CLI 를 통한 효율적인 데이터베이스 운영
+> **연결 에러 발생 시 lazy 자동 재연결 (서버리스/긴 idle 환경 지원)**
 
-## 🔌 Serverless 환경 DB 연결 관리
+## 🔌 자동 재연결 정책
 
-Express.js-Kusto는 **AWS Lambda**, **Vercel**, **Google Cloud Functions** 등의 serverless 환경에서 발생하는 데이터베이스 연결 문제를 자동으로 해결합니다.
+Express.js-Kusto 의 `PrismaManager` 는 **쿼리 실행 중 연결 에러를 감지하면** 자동으로 재연결을 시도하고 같은 쿼리를 재시도한다. AWS Lambda / Vercel / Cloud Run 같이 인스턴스가 idle 후 깨어나는 환경에서 첫 쿼리가 깨지는 문제를 자동으로 흡수하기 위한 설계.
 
-### 🚀 핵심 기능
+### 동작 모델
 
-#### 1. 자동 연결 상태 확인
-- 각 요청마다 DB 연결 상태를 지능적으로 확인
-- 설정된 간격 내에서는 캐시된 상태 사용으로 성능 최적화
-- Serverless: 15초, Traditional: 60초 기본 간격
+| 항목 | 동작 |
+|------|------|
+| 트리거 | `getWrap()` Proxy 가 감싼 클라이언트의 쿼리 실행 중 connection-class 에러 발생 시 |
+| 백오프 | 지수 백오프 (시도당 약 ×1.5, 상한 8초) |
+| 최대 재시도 | `MAX_RECONNECTION_ATTEMPTS = 3` |
+| 누적 실패 후 쿨다운 | `RECONNECTION_COOLDOWN_MS = 30000` (30초) |
+| 주기적 헬스 체크 | **없음** — 재연결은 실패한 쿼리 경로에서만 trigger |
+| 환경 자동 감지 | **없음** — 모든 환경에서 동일한 정책 사용 |
 
-#### 2. 지능형 재연결 로직
-- 연결이 끊어진 경우 자동으로 재연결 시도
-- 최대 재시도 횟수 제한으로 무한 루프 방지
-- 재연결 실패 시 적절한 에러 응답
+`prismaManager.ts` 의 상수 (`MAX_RECONNECTION_ATTEMPTS`, `RECONNECTION_COOLDOWN_MS`) 가 단일 진실의 원천. 환경별 분기나 별도의 `checkInterval` 설정은 코드에 존재하지 않는다.
 
-#### 3. Connection Pool 최적화
-- Serverless 환경에 맞는 연결 풀 관리
-- Cold start 시 빠른 연결 복구
-- 메모리 효율적인 연결 관리
-
-### 🛠️ 환경별 자동 설정
+### 사용 방법
 
 ```typescript
-// Serverless 환경 자동 감지
-const isServerless = process.env.AWS_LAMBDA_FUNCTION_NAME || 
-                    process.env.VERCEL || 
-                    process.env.FUNCTIONS_WORKER ||
-                    process.env.NODE_ENV === 'production';
+// 1) Repository 내부에서 사용 — 권장
+//    BaseRepository.client getter 가 내부적으로 getWrap() 사용 → 재연결 자동
+class UserRepository extends BaseRepository<'default'> {
+    protected getDatabaseName(): 'default' { return 'default'; }
+    async list() { return this.client.user.findMany(); }
+}
 
-// 환경별 최적화된 설정 자동 적용
-if (isServerless) {
-    // 더 자주 연결 상태 확인, 빠른 재연결
-    checkInterval: 15000,
-    continueOnFailure: false
-} else {
-    // 덜 자주 체크, 에러 허용적
-    checkInterval: 60000,
-    continueOnFailure: true
+// 2) 라우트 핸들러에서 직접 — 재연결이 필요한 경우 getWrap() 명시
+async (req, res, injected, repo, db) => {
+    const wrapped = req.kusto.db.getWrap('default');
+    const users = await wrapped.user.findMany();  // 연결 에러 시 자동 재연결
 }
 ```
 
-###  사용 방법
+### `getClient()` / `getClientSync()` vs `getWrap()`
 
-#### 1. 자동 재연결 포함 (권장)
-```typescript
-// getClient는 자동으로 연결 상태를 확인하고 필요시 재연결합니다
-const userDb = await kusto.db.getClient('user');
-const users = await userDb.user.findMany();
-```
+| 메서드 | 반환 | 자동 재연결 | 비고 |
+|--------|------|-------------|------|
+| `getWrap(name)` | 재연결 Proxy 로 감싼 클라이언트 | ✅ | Repository / 라우트 권장 경로 |
+| `getClient(name)` | raw 클라이언트 (Promise) | ❌ | 성능 우선 / dev 모드 무결성 검증만 추가 |
+| `getClientSync(name)` | raw 클라이언트 (sync) | ❌ | 동기 접근이 필요한 내부 도구용 |
 
-#### 2. 동기 버전 (빠른 응답, 재연결 없음)
-```typescript
-// 이미 연결된 상태에서 빠른 접근이 필요한 경우
-const userDb = kusto.db.getClientSync('user'); 
-const users = await userDb.user.findMany();
-```
+서버리스 환경에서 자동 재연결을 받으려면 `getWrap()` 또는 Repository 의 `this.client` 를 사용한다. `getClient()` 의 JSDoc 도 동일한 안내를 명시.
 
+### 헬스 체크
 
-### 🎯 Best Practices
-
-1. **Serverless 환경에서는 `getClient()` 사용**: 자동 재연결 포함
-2. **Traditional 서버에서는 `getClientSync()` 사용**: 성능 최적화
-3. **Health check 엔드포인트 활용**: 모니터링 시스템 연동
-4. **Connection pool 설정**: DATABASE_URL에 적절한 pool 설정 추가
-5. **에러 처리**: 연결 실패 시 적절한 fallback 로직 구현
+`PrismaManager.healthCheck()` 는 외부 호출용 on-demand 메서드다. 자동으로 주기 실행되지 않으며, 모니터링 엔드포인트나 readiness probe 에서 명시적으로 호출해 사용한다.
 
 ## 📂 폴더 기반 데이터베이스 구조
 
@@ -77,17 +58,14 @@ Express.js-Kusto는 `src/app/db/` 폴더 구조를 기반으로 자동으로 데
 
 ```
 src/app/db/
-├── user/                    # 사용자 관련 데이터베이스
+├── default/                # 기본 데이터베이스 (저장소 기본 포함)
 │   ├── schema.prisma       # Prisma 스키마 파일
-│   ├── seed.ts            # 초기 데이터 시딩
-│   └── client/            # 생성된 Prisma 클라이언트 (자동 생성)
-└── temporary/              # 임시 데이터 저장소
-    ├── schema.prisma
-    ├── seed.ts
-    └── client/
+│   ├── seed.ts             # 초기 데이터 시딩 (선택)
+│   └── client/             # 생성된 Prisma 클라이언트 (자동 생성)
+└── ...                     # 추가 데이터베이스 폴더 (예: analytics, audit 등)
 ```
 
-각 폴더는 독립적인 데이터베이스를 나타내며, 각자의 스키마와 클라이언트를 가집니다.
+각 폴더는 독립적인 데이터베이스를 나타내며, 각자의 스키마와 클라이언트를 가집니다. 폴더명은 `BaseRepository<'폴더명'>` 의 제네릭 인자와 `router.CRUD('폴더명', ...)` 의 첫 인자로 그대로 사용됩니다.
 
 ## 🛠️ 데이터베이스 CLI 사용법
 
@@ -104,20 +82,22 @@ npm run db -- <명령어> [옵션]
 |--------|------|------|------|
 | **기본 명령어** |
 | `list` | 사용 가능한 모든 데이터베이스 목록 표시 | - | `npm run db -- list` |
-| `generate` | Prisma 클라이언트 생성 | `-a` (전체), `-d <db>` (특정 DB) | `npm run db -- generate -a`<br>`npm run db -- generate -d user` |
-| `studio` | Prisma Studio 열기 | `-d <db>` (필수) | `npm run db -- studio -d user` |
+| `generate` | Prisma 클라이언트 생성 | `-a` (전체), `-d <db>` (특정 DB) | `npm run db -- generate -a`<br>`npm run db -- generate -d default` |
+| `studio` | Prisma Studio 열기 | `-d <db>` (필수) | `npm run db -- studio -d default` |
 | **마이그레이션 관리** |
-| `migrate` | 스키마 변경사항 관리 | `-t <type>`, `-n <name>`, `-d <db>` | `npm run db -- migrate -t dev -n "add_profile" -d user`<br>`npm run db -- migrate -t reset -d user`<br>`npm run db -- migrate -t status -d user` |
+| `migrate` | 스키마 변경사항 관리 | `-t <type>`, `-n <name>`, `-d <db>` | `npm run db -- migrate -t dev -n "add_profile" -d default`<br>`npm run db -- migrate -t reset -d default`<br>`npm run db -- migrate -t status -d default` |
 | **데이터 관리** |
-| `seed` | 초기 데이터 삽입 | `-a` (전체), `-d <db>` (특정 DB) | `npm run db -- seed -d user`<br>`npm run db -- seed -a` |
-| `pull` ⚠️ | DB 스키마를 Prisma 스키마로 가져오기 | `-d <db>` (필수) | `npm run db -- pull -d user` |
-| `push` ⚠️ | Prisma 스키마를 DB에 강제 적용 | `-d <db>`, `--accept-data-loss` | `npm run db -- push -d user --accept-data-loss` |
+| `seed` | 초기 데이터 삽입 | `-a` (전체), `-d <db>` (특정 DB) | `npm run db -- seed -d default`<br>`npm run db -- seed -a` |
+| `pull` ⚠️ | DB 스키마를 Prisma 스키마로 가져오기 | `-d <db>` (필수) | `npm run db -- pull -d default` |
+| `push` ⚠️ | Prisma 스키마를 DB에 강제 적용 | `-d <db>`, `--accept-data-loss` | `npm run db -- push -d default --accept-data-loss` |
 | **유틸리티** |
-| `validate` | Prisma 스키마 파일 유효성 검사 | `-d <db>` (필수) | `npm run db -- validate -d user` |
-| `execute` | 원시 SQL 명령 실행 | `-d <db>`, `-c <command>` | `npm run db -- execute -d user -c "SELECT COUNT(*) FROM User;"` |
+| `validate` | Prisma 스키마 파일 유효성 검사 | `-d <db>` (필수) | `npm run db -- validate -d default` |
+| `execute` | 원시 SQL 명령 실행 | `-d <db>`, `-c <command>` | `npm run db -- execute -d default -c "SELECT COUNT(*) FROM User;"` |
 | `debug` | 디버깅 정보 표시 | - | `npm run db -- debug` |
 | `version` | Prisma CLI 버전 정보 | - | `npm run db -- version` |
-| `rollback` ⚠️ | 마이그레이션 롤백 (위험) | `-d <db>`, `-t <target>` | `npm run db -- rollback -d user -t 1` |
+| `rollback` ⚠️ | 마이그레이션 롤백 (위험) | `-d <db>`, `-t <target>` | `npm run db -- rollback -d default -t 1` |
+
+> `-d` 인자는 `src/app/db/` 의 폴더명이며 코드베이스에 실제 존재해야 한다. 기본 저장소에는 `default` 폴더만 들어 있다.
 
 > **⚠️ 위험 표시**: 해당 명령어는 데이터 손실 위험이 있어 이중 보안 확인이 필요합니다.
 
@@ -141,10 +121,10 @@ npm run db -- list
 npm run db -- generate -a
 
 # 3. 스키마 검증
-npm run db -- validate -d temporary
+npm run db -- validate -d default
 
 # 4. 마이그레이션 생성 및 적용
-npm run db -- migrate -t dev -n "initial_schema" -d temporary
+npm run db -- migrate -t dev -n "initial_schema" -d default
 ```
 
 ### 🔄 개발 중 스키마 변경
@@ -152,10 +132,10 @@ npm run db -- migrate -t dev -n "initial_schema" -d temporary
 # 1. schema.prisma 파일 수정
 
 # 2. 변경사항 마이그레이션 생성
-npm run db -- migrate -t dev -n "add_user_field" -d temporary
+npm run db -- migrate -t dev -n "add_user_field" -d default
 
 # 3. 마이그레이션 상태 확인
-npm run db -- migrate -t status -d temporary
+npm run db -- migrate -t status -d default
 ```
 
 ### 🌱 초기 데이터 세팅
@@ -163,22 +143,22 @@ npm run db -- migrate -t status -d temporary
 # 1. seed.ts 파일 작성
 
 # 2. 시드 데이터 실행
-npm run db -- seed -d temporary
+npm run db -- seed -d default
 
 # 3. Prisma Studio로 데이터 확인
-npm run db -- studio -d temporary
+npm run db -- studio -d default
 ```
 
 ### 🔍 개발 시 유용한 명령어
 ```bash
 # 스키마 검증
-npm run db -- validate -d temporary
+npm run db -- validate -d default
 
 # SQL 직접 실행 (예: 데이터 개수 확인)
-npm run db -- execute -d temporary -c "SELECT COUNT(*) FROM User;"
+npm run db -- execute -d default -c "SELECT COUNT(*) FROM User;"
 
 # 디버그 정보 확인
-npm run db -- debug -d temporary
+npm run db -- debug -d default
 ```
 
 ## ⚡ 자동 타입 생성
@@ -257,7 +237,7 @@ datasource db {
 | DB 폴더 | 환경변수명 |
 |---------|-----------|
 | `src/app/db/default/` | `DEFAULT__KUSTO_RDB_URL` |
-| `src/app/db/user/` | `USER__KUSTO_RDB_URL` |
+| `src/app/db/analytics/` | `ANALYTICS__KUSTO_RDB_URL` |
 | `src/app/db/myDatabase/` | `MY_DATABASE__KUSTO_RDB_URL` |
 
 > **참고**: `.env.template` 파일에 예시가 포함되어 있습니다.

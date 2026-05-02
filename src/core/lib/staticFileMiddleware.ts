@@ -1,7 +1,7 @@
-import { Request, Response, NextFunction } from 'express';
+﻿import { Request, Response, NextFunction } from 'express';
 import path from 'path';
 import fs from 'fs';
-import { log } from '../external/winston';
+import { log } from '@ext/winston';
 
 /**
  * Static file serving middleware for development documentation assets

@@ -1,4 +1,4 @@
-import { log } from '../external/winston';
+﻿import { log } from '@ext/winston';
 
 export interface ValidationError {
     field: string;

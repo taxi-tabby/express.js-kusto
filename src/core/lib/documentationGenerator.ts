@@ -1,8 +1,8 @@
-import { Schema, FieldSchema } from './validator';
+﻿import { Schema, FieldSchema } from './validator';
 import { RequestConfig, ResponseConfig } from './requestHandler';
 import fs from 'fs';
 import path from 'path';
-import { log } from '../external/winston';
+import { log } from '@ext/winston';
 
 
 export interface RouteDocumentation {

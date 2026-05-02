@@ -1,7 +1,7 @@
-import { Router, Request, Response, NextFunction } from 'express';
+﻿import { Router, Request, Response, NextFunction } from 'express';
 import { CrudSchemaRegistry } from './crudSchemaRegistry';
-import { createPaginationCursor } from '../external/util';
-import { log } from '../external/winston';
+import { createPaginationCursor } from '@ext/util';
+import { log } from '@ext/winston';
 import { ERROR_CODES } from './errorCodes';
 
 /**

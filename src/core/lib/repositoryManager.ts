@@ -1,4 +1,4 @@
-import { log } from '../external/winston';
+﻿import { log } from '@ext/winston';
 import { REPOSITORY_REGISTRY, RepositoryName, GetRepositoryType } from './types/generated-repository-types';
 import { PrismaManager } from './prismaManager';
 

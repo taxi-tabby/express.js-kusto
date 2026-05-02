@@ -1,7 +1,7 @@
-import { Express } from 'express';
+﻿import { Express } from 'express';
 import { Server } from 'http';
 import { Core, CoreConfig } from './Core';
-import { log } from './external/winston';
+import { log } from '@ext/winston';
 
 /**
  * Application class - Simple and intuitive interface for the core functionality

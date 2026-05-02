@@ -1,6 +1,6 @@
-import { Request, Response, NextFunction } from 'express';
+﻿import { Request, Response, NextFunction } from 'express';
 import { Validator, Schema, ValidationResult, FieldSchema } from './validator';
-import { log } from '../external/winston';
+import { log } from '@ext/winston';
 import { DependencyInjector } from './dependencyInjector';
 import { Injectable } from './types/generated-injectable-types';
 import { prismaManager } from './prismaManager';

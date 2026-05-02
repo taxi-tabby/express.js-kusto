@@ -1,4 +1,4 @@
-import 'module-alias/register';
+﻿import 'module-alias/register';
 
 // Core exports
 export { Core, CoreConfig } from './Core';
@@ -10,8 +10,8 @@ export { ErrorFormatter } from './lib/errorFormatter';
 
 // Router and utilities
 export { ExpressRouter } from './lib/expressRouter';
-export { log, logger } from './external/winston';
-export * from './external/util';
+export { log, logger } from '@ext/winston';
+export * from '@ext/util';
 
 // Schema API (개발 모드 전용)
 export { CrudSchemaRegistry } from './lib/crudSchemaRegistry';

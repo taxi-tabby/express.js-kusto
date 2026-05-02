@@ -1,4 +1,4 @@
-import { log } from '../external/winston';
+﻿import { log } from '@ext/winston';
 import { Injectable, Middleware, MODULE_REGISTRY, MIDDLEWARE_REGISTRY, ModuleName, MiddlewareName } from './types/generated-injectable-types';
 
 export class DependencyInjector {

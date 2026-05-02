@@ -1,12 +1,12 @@
-import {
+﻿import {
   CrudSchemaInfo,
   SchemaApiResponse,
   AllSchemasResponse
 } from './crudSchemaTypes';
 import { PrismaSchemaAnalyzer } from './prismaSchemaAnalyzer';
 import { RelationshipConfigManager } from './relationshipConfig';
-import { pluralize, createPaginationCursor } from '../external/util';
-import { log } from '../external/winston';
+import { pluralize, createPaginationCursor } from '@ext/util';
+import { log } from '@ext/winston';
 
 /**
  * CRUD 스키마 정보를 등록하고 관리하는 레지스트리

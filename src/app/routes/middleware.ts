@@ -1,5 +1,5 @@
-import '@lib/types/express-extensions';
-import { log } from '@/src/core/external/winston';
+﻿import '@lib/types/express-extensions';
+import { log } from '@ext/winston';
 import { Request, Response, NextFunction } from 'express';
 import { kustoManager } from '@lib/kustoManager';
 

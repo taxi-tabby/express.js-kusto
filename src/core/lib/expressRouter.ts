@@ -1,4 +1,4 @@
-import { Router, Request, Response, RequestHandler, NextFunction, static as static_ } from 'express';
+﻿import { Router, Request, Response, RequestHandler, NextFunction, static as static_ } from 'express';
 import { createProxyMiddleware, Options } from 'http-proxy-middleware';
 import multer from 'multer';
 import { DocumentationGenerator } from './documentationGenerator';
@@ -15,7 +15,7 @@ import { serializeBigInt, serialize } from './serializer';
 import { ERROR_CODES, getHttpStatusForErrorCode } from './errorCodes';
 import { CrudSchemaRegistry } from './crudSchemaRegistry';
 import { PrismaSchemaAnalyzer } from './prismaSchemaAnalyzer';
-import { log } from '../external/winston';
+import { log } from '@ext/winston';
 import './types/express-extensions';
 
 

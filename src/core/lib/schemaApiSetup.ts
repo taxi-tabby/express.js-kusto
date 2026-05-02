@@ -1,6 +1,6 @@
-import { Application } from 'express';
+﻿import { Application } from 'express';
 import { SchemaApiRouter } from './schemaApiRouter';
-import { log } from '../external/winston';
+import { log } from '@ext/winston';
 
 /**
  * Express 애플리케이션에 스키마 API를 등록하는 헬퍼 함수

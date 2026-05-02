@@ -1,4 +1,4 @@
-import { pluralize, singularize } from '../external/util';
+﻿import { pluralize, singularize } from '@ext/util';
 
 /**
  * 관계형 데이터베이스의 관계 설정을 위한 구성 타입과 인터페이스

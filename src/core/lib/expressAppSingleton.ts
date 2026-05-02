@@ -1,6 +1,6 @@
-import express, { Express } from 'express';
+﻿import express, { Express } from 'express';
 import http from 'http';
-import { log } from '../external/winston';
+import { log } from '@ext/winston';
 
 /**
  * @deprecated Use Core class instead. This is kept for backward compatibility.

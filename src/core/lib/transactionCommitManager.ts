@@ -1,6 +1,6 @@
-import { DatabaseClientMap, DatabaseNamesUnion } from './types/generated-db-types';
+﻿import { DatabaseClientMap, DatabaseNamesUnion } from './types/generated-db-types';
 import { PrismaManager } from './prismaManager';
-import { log } from '../external/winston';
+import { log } from '@ext/winston';
 
 /**
  * 트랜잭션 참여자의 상태

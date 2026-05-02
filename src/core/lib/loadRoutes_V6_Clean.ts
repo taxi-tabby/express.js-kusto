@@ -1,8 +1,8 @@
-import { Express, Router } from 'express';
+﻿import { Express, Router } from 'express';
 import fs from 'fs';
 import path from 'path';
-import { log } from '../external/winston';
-import { normalizeSlash, getElapsedTimeInString } from '../external/util';
+import { log } from '@ext/winston';
+import { normalizeSlash, getElapsedTimeInString } from '@ext/util';
 import { DocumentationGenerator } from './documentationGenerator';
 
 // Webpack 빌드 환경에서 자동 생성된 라우트 맵 가져오기 (빌드 타임에 생성된 파일)

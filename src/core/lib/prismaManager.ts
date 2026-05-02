@@ -745,9 +745,10 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 	}
 
 	/**
-	 * Get a Prisma client instance by database name with proper typing
-	 * Includes automatic reconnection logic for serverless environments
-	 * Returns the actual client with full type information preserved from dynamic import
+	 * Get a Prisma client instance by database name with proper typing.
+	 *
+	 * NOTE: This is the raw client without the lazy reconnect proxy. Use `getWrap()`
+	 * if you need the auto-reconnect behavior used in serverless environments.
 	 */
 	public async getClient<T = any>(databaseName: string): Promise<T> {
 		try {

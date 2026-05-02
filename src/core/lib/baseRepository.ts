@@ -39,16 +39,19 @@ export interface DistributedTransactionOperation<TDatabase extends DatabaseNames
  */
 export abstract class BaseRepository<T extends DatabaseNamesUnion> {
 
-    /// PrismaManager 인스턴스
-    /// 이 인스턴스는 생성자에서 주입받거나 기본값으로 설정됩니다.
+    /**
+     * PrismaManager 인스턴스. 생성자에서 주입받거나 싱글턴 기본값으로 설정된다.
+     */
     protected db: PrismaManager;
 
-    /// 2PC 매니저 인스턴스
+    /** 2PC 매니저 인스턴스 */
     private twoPhaseCommitManager: TransactionCommitManager;
 
 
-    /// 리포지터리의 데이터베이스 이름
-    /// 이 값은 생성자에서 설정되어야 하며, 타입 안전성을 보장합니다.
+    /**
+     * 리포지터리의 데이터베이스 이름. 하위 클래스의 `getDatabaseName()` 구현 결과로
+     * 생성자에서 설정되며, 타입 안전성을 보장한다.
+     */
     protected repositoryDatabaseName!: T;
 
 
@@ -104,8 +107,8 @@ export abstract class BaseRepository<T extends DatabaseNamesUnion> {
     }
 
     /**
-     * 비동기 데이터베이스 클라이언트 (재연결 로직 포함)
-     * getWrap()을 사용하여 서버리스 환경에서 자동 재연결을 지원합니다.
+     * `client` 와 동일한 인스턴스를 Promise 로 래핑한 변형 (await 컨텍스트용 편의 함수).
+     * 별도의 비동기 작업을 수행하지 않으며, 재연결 로직은 `client` 와 동일하게 `getWrap()` 의 lazy 프록시에 위임된다.
      * @returns 타입 안전한 Prisma 클라이언트 (Promise)
      */
     protected async getAsyncClient(): Promise<DatabaseClientMap[T]> {
@@ -145,8 +148,8 @@ export abstract class BaseRepository<T extends DatabaseNamesUnion> {
 
 
     /**
-     * 고급 트랜잭션 처리 메서드
-     * 자동 재시도, 성능 모니터링, 에러 핸들링 통합
+     * 고급 트랜잭션 처리 메서드 — 성능 모니터링, 에러 핸들링 통합.
+     * 자동 재시도는 `options.retryAttempts >= 2` 로 명시 지정한 경우에만 동작한다 (기본 1 = 재시도 없음).
      */
     public async $transaction<R>(
         callback: (prisma: DatabaseClientMap[T]) => Promise<R>,

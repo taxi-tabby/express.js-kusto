@@ -41,11 +41,13 @@ router
         )
     )
     .POST('/', ...handler)
-    .WITH(injected => injected.someMiddleware())  // 미들웨어 체이닝
+    .WITH('rateLimiterDefault', { maxRequests: 100 })  // 미들웨어 이름 + 옵션
     .CRUD('default', 'User', { softDelete: { enabled: true, field: 'deletedAt' } });
 
-export default router;
+export default router.build();
 ```
+
+`WITH` 의 첫 인자는 `injectable/` 에 등록된 미들웨어의 이름 문자열이며, 두 번째 인자는 해당 미들웨어가 받는 옵션이다. arrow function 을 직접 넘기는 형태는 지원하지 않는다.
 
 ## Handler Signature
 

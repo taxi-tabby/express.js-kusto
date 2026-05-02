@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Express.js-Kusto (v0.1.45) is a TypeScript framework for building REST APIs using Convention over Configuration. It wraps Express.js with a fluent routing API, multi-database Prisma management, dependency injection, and JSON:API v1.1 compliant CRUD generation.
+Express.js-Kusto is a TypeScript framework for building REST APIs using Convention over Configuration. It wraps Express.js with a fluent routing API, multi-database Prisma management, dependency injection, and JSON:API v1.1 compliant CRUD generation. (Current version: see `package.json`.)
 
 **Language**: Korean is used in commit messages and some documentation. Follow this convention.
 
@@ -80,12 +80,13 @@ Route files must `export default router.build()` using `ExpressRouter`.
 
 Exports an array of Express middleware applied to all routes, in order:
 1. KustoManager initialization (`req.kusto`)
-2. Helmet security headers
-3. CORS (dynamic whitelist from `CORS_WHITELIST` env)
-4. Cookie parser
-5. Body parser (JSON + URL-encoded, 50mb limit, supports `application/vnd.api+json`)
-6. Footwalk logging (IP detection + request logging)
-7. Error handler
+2. Client IP extraction (`clientIpMiddleware`) — populates `req.ip`/`req.ips` honoring proxy headers
+3. Helmet security headers
+4. CORS (dynamic whitelist from `CORS_WHITELIST` env)
+5. Cookie parser
+6. Body parser (JSON + URL-encoded, 50mb limit, supports `application/vnd.api+json`)
+7. Footwalk request logging (winston `Footwalk` level)
+8. Error handler (catches downstream errors, returns 500 JSON)
 
 ### Handler Signature
 
@@ -139,7 +140,7 @@ datasource db {
 }
 ```
 
-PrismaManager handles serverless-optimized connections with auto-reconnection (detects Lambda/Vercel/GCP environments). Health check intervals: 15s for serverless, 60s for traditional.
+PrismaManager uses lazy auto-reconnection: connection errors during `getWrap()` calls trigger up to 3 reconnect attempts with a 30s cooldown per database. There is no periodic health-check polling — `healthCheck()` is an on-demand call. (See `prismaManager.ts` for `MAX_RECONNECTION_ATTEMPTS` / `RECONNECTION_COOLDOWN_MS`.)
 
 ### Dependency Injection (`src/app/injectable/`)
 
@@ -210,7 +211,7 @@ Configured via `.env` (see `.env.template`), with `.env.dev` / `.env.prod` overr
 - `AUTO_DOCS` — Enable auto documentation (dev only, serves at `/docs`)
 - `ENABLE_SCHEMA_API` — Enable `/api/schema` endpoint
 - `STRICT_STATUS_CODE_CHECK` — Validate response status codes
-- `RDS_{NAME}_URL` — Database connection strings per DB folder name
+- `{FOLDER}__KUSTO_RDB_URL` — Database connection string per `src/app/db/{folder}/`. Folder name is converted camelCase → UPPER_SNAKE_CASE (e.g. `myData` → `MY_DATA__KUSTO_RDB_URL`). Override by setting `url = env(...)` in the schema directly.
 
 ## Error Handling
 

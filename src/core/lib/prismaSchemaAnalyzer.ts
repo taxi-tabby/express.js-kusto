@@ -100,7 +100,7 @@ export class PrismaSchemaAnalyzer {
 
   /**
    * DMMF(Data Model Meta Format)에서 모델 정보를 로드합니다
-   * Prisma v6에서는 _runtimeDataModel을 사용합니다
+   * Prisma v6 이상에서는 _runtimeDataModel을 사용합니다
    */
   private loadModelsFromDMMF(): void {
     try {
@@ -178,7 +178,7 @@ export class PrismaSchemaAnalyzer {
       else if ((this.prismaClient as any).Prisma && (this.prismaClient as any).Prisma.dmmf) {
         dmmf = (this.prismaClient as any).Prisma.dmmf;
       }
-      // 방법 4: 정적 DMMF 접근 (Prisma v6 방식)
+      // 방법 4: 정적 DMMF 접근 (Prisma v6 이상 방식)
       else {
         try {
           const PrismaClass = this.prismaClient.constructor as any;

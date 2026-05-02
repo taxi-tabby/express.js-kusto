@@ -1046,7 +1046,7 @@ export class ExpressRouter {
      * HandlerFunction 타입의 미들웨어를 적용하는 메서드
      * @param middleware HandlerFunction 타입의 미들웨어 함수 또는 배열
      * @returns ExpressRouter 인스턴스
-     * @deprecated 보통의 경우 USE_MIDDLEWARE를 사용하니다. 이걸 사용하는 경우는 드뭅니다. (미들웨어에서는 NEXT 함수가 없으므로 다음으로 넘어가지 못합니다)
+     * @deprecated 보통의 경우 `MIDDLEWARE` 또는 `USE` 를 사용한다. 이 메서드는 거의 쓸 일이 없다 (미들웨어에서는 next 함수가 없으므로 다음으로 넘어가지 못한다).
      */
     public USE_HANDLER(middleware: HandlerFunction | HandlerFunction[]): ExpressRouter {
         if (Array.isArray(middleware)) {
@@ -2304,7 +2304,10 @@ export class ExpressRouter {
             primaryKeyParser?: (value: string) => any;
 
 
-            /** JSON:API 리소스 타입(기본값: modelName.toLowerCase()) */
+            /**
+             * JSON:API 리소스 타입.
+             * 기본값: 라우트 baseUrl 의 마지막 세그먼트 (없으면 `modelName.toLowerCase()`).
+             */
             resourceType?: string;
 
 

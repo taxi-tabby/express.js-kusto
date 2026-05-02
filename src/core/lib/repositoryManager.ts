@@ -50,7 +50,7 @@ export class RepositoryManager {
                 
                 // Skip if repository loader is not found
                 if (!repositoryLoader) {
-                    log.warn(`⚠️ Repository loader not found for: ${repositoryName}, skipping...`);
+                    log.Warn(`⚠️ Repository loader not found for: ${repositoryName}, skipping...`);
                     continue;
                 }
                 

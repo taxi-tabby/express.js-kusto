@@ -227,6 +227,74 @@ export class CrudQueryParser {
   }
 
   /**
+   * include 정책 검증 (개수/깊이/화이트리스트)
+   *
+   * 정책 위반 시 code/statusCode 가 부착된 Error 를 throw 한다.
+   * 핸들러 측 try/catch 에서 parseError 와 동일한 흐름으로 처리할 수 있다.
+   */
+  static validateIncludes(
+    includes: string[] | undefined,
+    policy?: { maxDepth?: number; maxCount?: number; allowed?: string[] }
+  ): void {
+    if (!includes || includes.length === 0 || !policy) return;
+
+    const { maxDepth, maxCount, allowed } = policy;
+
+    if (maxCount !== undefined && includes.length > maxCount) {
+      const error: any = new Error(
+        `Too many include parameters: ${includes.length} (maximum: ${maxCount})`
+      );
+      error.code = ERROR_CODES.INCLUDE_LIMIT_EXCEEDED;
+      error.statusCode = 400;
+      throw error;
+    }
+
+    for (const path of includes) {
+      if (maxDepth !== undefined) {
+        const depth = path.split('.').length;
+        if (depth > maxDepth) {
+          const error: any = new Error(
+            `Include depth exceeded for "${path}": ${depth} (maximum: ${maxDepth})`
+          );
+          error.code = ERROR_CODES.INCLUDE_DEPTH_EXCEEDED;
+          error.statusCode = 400;
+          throw error;
+        }
+      }
+
+      if (allowed !== undefined && !this.isIncludePathAllowed(path, allowed)) {
+        const error: any = new Error(`Include path not allowed: "${path}"`);
+        error.code = ERROR_CODES.INCLUDE_NOT_ALLOWED;
+        error.statusCode = 400;
+        throw error;
+      }
+    }
+  }
+
+  /**
+   * 화이트리스트 매칭: 정확 일치 또는 더 깊은 허용 경로의 prefix 인 경우 허용.
+   * 예: allowed = ['comments.author'] 이면 'comments' 도 허용된다 (얕은 부분 경로).
+   */
+  private static isIncludePathAllowed(path: string, allowed: string[]): boolean {
+    return allowed.some(allowedPath =>
+      allowedPath === path || allowedPath.startsWith(path + '.')
+    );
+  }
+
+  /**
+   * 클라이언트 include 와 서버 강제 defaultIncludes 를 병합 (중복 제거).
+   * defaultIncludes 는 신뢰된 서버 설정이라 정책 검증을 거치지 않는다.
+   */
+  static mergeDefaultIncludes(
+    clientIncludes: string[] | undefined,
+    defaults: string[] | undefined
+  ): string[] | undefined {
+    if (!defaults || defaults.length === 0) return clientIncludes;
+    if (!clientIncludes || clientIncludes.length === 0) return [...defaults];
+    return Array.from(new Set([...clientIncludes, ...defaults]));
+  }
+
+  /**
    * select 파라미터 파싱
    * ?select=id,name,author.name,author.email
    */

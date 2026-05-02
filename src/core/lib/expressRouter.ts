@@ -2314,6 +2314,39 @@ export class ExpressRouter {
             includeMerge?: boolean;
 
 
+            /**
+             * 클라이언트 ?include= 의 최대 개수 (DoS 방지).
+             * 미지정 시 무제한.
+             */
+            maxIncludeCount?: number;
+
+
+            /**
+             * 클라이언트 ?include= 한 항목의 최대 점 깊이 (예: a.b.c → 3).
+             * 미지정 시 무제한.
+             */
+            maxIncludeDepth?: number;
+
+
+            /**
+             * 허용된 include 경로 화이트리스트.
+             * 미지정 시 모든 관계 허용. 지정 시 목록에 없는 경로는 400 으로 거부.
+             * 정확 일치 또는 허용 경로의 얕은 부분 경로(prefix)가 허용된다.
+             */
+            allowedIncludes?: string[];
+
+
+            /**
+             * 서버에서 항상 함께 로드할 관계 (eager-load).
+             * 클라이언트 요청과 병합되며 정책 검증을 우회한다.
+             *
+             * NOTE: 클라이언트가 ?select= 를 보내면 Prisma 쿼리는 select 우선 정책으로
+             *       include 가 무시된다 (PrismaQueryBuilder.buildFindManyOptions 참고).
+             *       즉 select 사용 시 defaultIncludes 의 eager-load 효과는 보장되지 않는다.
+             */
+            defaultIncludes?: string[];
+
+
             /** Soft Delete 설정 */
             softDelete?: {
                 enabled: boolean;
@@ -2577,6 +2610,15 @@ export class ExpressRouter {
                 let queryParams;
                 try {
                     queryParams = CrudQueryParser.parseQuery(req, modelName, this.schemaAnalyzer);
+                    CrudQueryParser.validateIncludes(queryParams.include, {
+                        maxCount: options?.maxIncludeCount,
+                        maxDepth: options?.maxIncludeDepth,
+                        allowed: options?.allowedIncludes,
+                    });
+                    queryParams.include = CrudQueryParser.mergeDefaultIncludes(
+                        queryParams.include,
+                        options?.defaultIncludes
+                    );
                 } catch (parseError: any) {
                     // UUID 검증 실패 등의 에러를 400으로 응답
                     const errorResponse = this.formatJsonApiError(
@@ -2856,6 +2898,15 @@ export class ExpressRouter {
                 let queryParams;
                 try {
                     queryParams = CrudQueryParser.parseQuery(req, modelName, this.schemaAnalyzer);
+                    CrudQueryParser.validateIncludes(queryParams.include, {
+                        maxCount: options?.maxIncludeCount,
+                        maxDepth: options?.maxIncludeDepth,
+                        allowed: options?.allowedIncludes,
+                    });
+                    queryParams.include = CrudQueryParser.mergeDefaultIncludes(
+                        queryParams.include,
+                        options?.defaultIncludes
+                    );
                 } catch (parseError: any) {
                     // UUID 검증 실패 등의 에러를 400으로 응답
                     const errorResponse = this.formatJsonApiError(
@@ -3061,12 +3112,36 @@ export class ExpressRouter {
                 // JSON:API Content-Type 헤더 설정
                 res.setHeader('Content-Type', 'application/vnd.api+json');
                 res.setHeader('Vary', 'Accept');
-                
+
+                // 쿼리 파라미터 파싱 + include 정책 적용 (응답 included 지원)
+                let queryParams;
+                try {
+                    queryParams = CrudQueryParser.parseQuery(req, modelName, this.schemaAnalyzer);
+                    CrudQueryParser.validateIncludes(queryParams.include, {
+                        maxCount: options?.maxIncludeCount,
+                        maxDepth: options?.maxIncludeDepth,
+                        allowed: options?.allowedIncludes,
+                    });
+                    queryParams.include = CrudQueryParser.mergeDefaultIncludes(
+                        queryParams.include,
+                        options?.defaultIncludes
+                    );
+                } catch (parseError: any) {
+                    const errorResponse = this.formatJsonApiError(
+                        parseError,
+                        parseError.code || ERROR_CODES.VALIDATION_ERROR,
+                        parseError.statusCode || 400,
+                        req.path,
+                        req.method
+                    );
+                    return res.status(parseError.statusCode || 400).json(errorResponse);
+                }
+
                 // Content Negotiation 검증
                 // if (!this.validateJsonApiContentType(req, res)) {
                 //     return;
                 // }
-                
+
                 // JSON:API 요청 형식 검증
                 if (!req.body || !req.body.data) {
                     const errorResponse = this.formatJsonApiError(
@@ -3080,11 +3155,11 @@ export class ExpressRouter {
                 }
 
                 const { data: requestData } = req.body;
-                
+
                 // 리소스 타입 검증 (라우트 경로에서 추출 또는 옵션 사용)
                 const routeResourceType = req.baseUrl.split('/').filter(Boolean).pop() || modelName.toLowerCase();
                 const expectedType = options?.resourceType || routeResourceType;
-                
+
                 // JSON:API 리소스 구조 검증
                 if (!this.validateJsonApiResource(requestData, expectedType, req, res, false)) {
                     return;
@@ -3131,8 +3206,14 @@ export class ExpressRouter {
                     data = await options.hooks.beforeCreate(data, req);
                 }
 
+                // include 옵션 빌드 (?include= 또는 defaultIncludes 적용 시)
+                const createIncludeOptions = queryParams.include && queryParams.include.length > 0
+                    ? PrismaQueryBuilder['buildIncludeOptions'](queryParams.include)
+                    : undefined;
+
                 const result = await client[modelName].create({
-                    data
+                    data,
+                    ...(createIncludeOptions && { include: createIncludeOptions })
                 });
 
                 // After hook 실행
@@ -3142,6 +3223,17 @@ export class ExpressRouter {
 
                 // Base URL 생성
                 const baseUrl = `${req.protocol}://${req.get('host')}${req.baseUrl}`;
+
+                // 포함된 리소스 생성 (include 파라미터가 있는 경우)
+                let createIncluded: JsonApiResource[] | undefined;
+                if (queryParams.include && queryParams.include.length > 0 && !options?.includeMerge) {
+                    createIncluded = JsonApiTransformer.createIncludedResources(
+                        [result],
+                        queryParams.include,
+                        queryParams.fields,
+                        baseUrl
+                    );
+                }
 
                 // Json 타입 필드 목록 가져오기
                 const jsonFieldsArray = this.schemaAnalyzer?.getJsonFields(modelName) || [];
@@ -3153,20 +3245,22 @@ export class ExpressRouter {
                     modelName,
                     {
                         primaryKey,
+                        fields: queryParams.fields,
                         baseUrl,
+                        included: createIncluded,
                         includeMerge: options?.includeMerge || false,
                         jsonFields
                     }
                 );
-                
+
                 // metadata 객체 생성 - 기존 헬퍼 함수 사용
                 const metadata = CrudResponseFormatter.createPaginationMeta(
                     [result], // 단일 항목을 배열로 감싸서 전달
                     1,        // total count = 1
                     undefined, // page 파라미터 없음 (단일 생성)
                     'create',
-                    undefined, // includedRelations 없음
-                    undefined, // includedRelations 없음
+                    queryParams.include,
+                    queryParams,
                 );
                 
                 // BigInt와 DATE 타입 직렬화 처리
@@ -3943,12 +4037,36 @@ export class ExpressRouter {
             try {
                 // JSON:API Content-Type 헤더 설정
                 res.setHeader('Content-Type', 'application/vnd.api+json');
-                
+
+                // 쿼리 파라미터 파싱 + include 정책 적용 (응답 included 지원)
+                let queryParams;
+                try {
+                    queryParams = CrudQueryParser.parseQuery(req, modelName, this.schemaAnalyzer);
+                    CrudQueryParser.validateIncludes(queryParams.include, {
+                        maxCount: options?.maxIncludeCount,
+                        maxDepth: options?.maxIncludeDepth,
+                        allowed: options?.allowedIncludes,
+                    });
+                    queryParams.include = CrudQueryParser.mergeDefaultIncludes(
+                        queryParams.include,
+                        options?.defaultIncludes
+                    );
+                } catch (parseError: any) {
+                    const errorResponse = this.formatJsonApiError(
+                        parseError,
+                        parseError.code || ERROR_CODES.VALIDATION_ERROR,
+                        parseError.statusCode || 400,
+                        req.path,
+                        req.method
+                    );
+                    return res.status(parseError.statusCode || 400).json(errorResponse);
+                }
+
                 // Content Negotiation 검증
                 // if (!this.validateJsonApiContentType(req, res)) {
                 //     return;
                 // }
-                
+
                 // 파라미터 추출 검사
                 const extractResult = this.extractAndParsePrimaryKey(req, res, primaryKey, primaryKeyParser, modelName);
                 // 파라미터 추출 및 검증
@@ -4025,11 +4143,15 @@ export class ExpressRouter {
                     data = await options.hooks.beforeUpdate(data, req);
                 }
 
-                
+                // include 옵션 빌드 (?include= 또는 defaultIncludes 적용 시)
+                const updateIncludeOptions = queryParams.include && queryParams.include.length > 0
+                    ? PrismaQueryBuilder['buildIncludeOptions'](queryParams.include)
+                    : undefined;
 
                 const result = await client[modelName].update({
                     where: { [primaryKey]: parsedIdentifier },
-                    data
+                    data,
+                    ...(updateIncludeOptions && { include: updateIncludeOptions })
                 });
 
                 // After hook 실행
@@ -4039,6 +4161,17 @@ export class ExpressRouter {
 
                 // Base URL 생성
                 const baseUrl = `${req.protocol}://${req.get('host')}${req.baseUrl}`;
+
+                // 포함된 리소스 생성 (include 파라미터가 있는 경우)
+                let updateIncluded: JsonApiResource[] | undefined;
+                if (queryParams.include && queryParams.include.length > 0 && !options?.includeMerge) {
+                    updateIncluded = JsonApiTransformer.createIncludedResources(
+                        [result],
+                        queryParams.include,
+                        queryParams.fields,
+                        baseUrl
+                    );
+                }
 
                 // Json 타입 필드 목록 가져오기
                 const jsonFieldsArray = this.schemaAnalyzer?.getJsonFields(modelName) || [];
@@ -4050,20 +4183,22 @@ export class ExpressRouter {
                     modelName,
                     {
                         primaryKey,
+                        fields: queryParams.fields,
                         baseUrl,
+                        included: updateIncluded,
                         includeMerge: options?.includeMerge || false,
                         jsonFields
                     }
                 );
-                
+
                 // metadata 객체 생성 - 기존 헬퍼 함수 사용
                 const metadata = CrudResponseFormatter.createPaginationMeta(
                     [result], // 단일 항목을 배열로 감싸서 전달
                     1,        // total count = 1
                     undefined, // page 파라미터 없음 (단일 수정)
                     'update',
-                    undefined, // includedRelations 없음
-                    undefined, // includedRelations 없음
+                    queryParams.include,
+                    queryParams,
                 );
                 
                 // BigInt와 DATE 타입 직렬화 처리
@@ -4860,6 +4995,7 @@ export class ExpressRouter {
                 const relationName = req.params.relationName;
                 
                 // 쿼리 파라미터 파싱 (include, fields, sort, pagination 지원) (UUID 검증 등의 에러 발생 가능)
+                // NOTE: 이 라우트는 클라이언트의 ?include= 를 소비하지 않으므로 include 정책 적용 생략.
                 let queryParams;
                 try {
                     queryParams = CrudQueryParser.parseQuery(req, modelName, this.schemaAnalyzer);
@@ -5209,6 +5345,7 @@ export class ExpressRouter {
                 const relationName = req.params.relationName;
                 
                 // 쿼리 파라미터 파싱 (UUID 검증 등의 에러 발생 가능)
+                // NOTE: 이 라우트는 클라이언트의 ?include= 를 소비하지 않으므로 include 정책 적용 생략.
                 let queryParams;
                 try {
                     queryParams = CrudQueryParser.parseQuery(req, modelName, this.schemaAnalyzer);
@@ -5223,7 +5360,7 @@ export class ExpressRouter {
                     );
                     return res.status(parseError.statusCode || 400).json(errorResponse);
                 }
-                
+
                 // 기본 리소??조회
                 const item = await client[modelName].findUnique({
                     where: { [primaryKey]: parsedIdentifier },
@@ -5241,7 +5378,7 @@ export class ExpressRouter {
                 }
 
                 const relationData = item[relationName];
-                
+
                 if (!relationData) {
                     // 관계가 없는 경우 빈 데이터 반환
                     const response = {

@@ -54,3 +54,27 @@ async (req: ValidatedRequest, res: Response, injected: Injectable, repo: Reposit
 ```
 
 5개 파라미터가 자동 주입되며, `req.validatedData`에 검증된 body/query/params가 담김.
+
+## CRUD include 정책
+
+`router.CRUD()` 는 클라이언트의 `?include=author,comments.author` 를 Prisma `include` 로 변환해 한 쿼리로 관계를 로드한다 (Prisma 자체가 lazy loading 을 지원하지 않으므로 N+1 위험은 구조적으로 없음). 다만 무제한 허용은 DoS / 정보 노출 위험이 있어 다음 4개 옵션을 통해 정책을 강제할 수 있다.
+
+```typescript
+router.CRUD('default', 'Post', {
+    maxIncludeCount: 5,                // ?include= 항목 개수 상한
+    maxIncludeDepth: 3,                // 점 경로 깊이 상한 (a.b.c → 3)
+    allowedIncludes: ['author', 'comments.author'],  // 화이트리스트
+    defaultIncludes: ['author'],       // 서버 강제 eager-load
+});
+```
+
+| 옵션 | 동작 | 위반 시 |
+|---|---|---|
+| `maxIncludeCount` | 클라이언트가 보낸 include 항목 수 검증 | 400 `INCLUDE_LIMIT_EXCEEDED` |
+| `maxIncludeDepth` | 각 항목의 점 깊이 검증 | 400 `INCLUDE_DEPTH_EXCEEDED` |
+| `allowedIncludes` | 화이트리스트 매칭 — 정확 일치 또는 허용 경로의 prefix 허용. 예: `['comments.author']` 이면 `comments` 도 허용, `comments.posts` 는 거부 | 400 `INCLUDE_NOT_ALLOWED` |
+| `defaultIncludes` | 클라이언트 요청과 병합되어 항상 로드. 정책 검증 우회 (서버 신뢰) | — |
+
+검증/병합은 `index`, `show`, `create`, `update` 4개 작업에 적용된다. **`create` / `update` 도 `?include=` 쿼리를 받아 응답의 `included` 배열을 채운다.**
+
+주의: 클라이언트가 `?select=` 를 동시에 보내면 Prisma 가 select 우선 정책을 사용하므로 `defaultIncludes` 의 eager-load 효과는 보장되지 않는다.

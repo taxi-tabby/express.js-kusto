@@ -1,3 +1,4 @@
+﻿export {};
 // Suppress CLI side effects before importing module:
 // 1) program.parse(process.argv) at the bottom of kusto-db-cli.ts
 //    interprets jest argv as CLI args and calls process.exit.

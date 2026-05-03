@@ -1,3 +1,4 @@
+﻿export {};
 // Suppress CLI side effects before importing the module
 const originalArgv = process.argv;
 const originalExit = process.exit;

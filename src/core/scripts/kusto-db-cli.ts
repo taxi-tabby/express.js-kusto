@@ -23,7 +23,7 @@ const FORCE_WAIT_OPERATIONS = ['deploy'];
 /**
  * Generate a random 4-character alphanumeric code
  */
-function generateSecurityCode(): string {
+export function generateSecurityCode(): string {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     let result = '';
     for (let i = 0; i < 4; i++) {
@@ -35,17 +35,24 @@ function generateSecurityCode(): string {
 /**
  * Prompt user for security code confirmation
  */
-async function promptSecurityCode(operation: string): Promise<boolean> {
-    const rl = readline.createInterface({
-        input: process.stdin,
-        output: process.stdout
-    });
+export async function promptSecurityCode(
+    operation: string,
+    getInput?: (prompt: string) => Promise<string>
+): Promise<boolean> {
+    let rl: any = null;
+    let question: (prompt: string) => Promise<string>;
 
-    const question = (prompt: string): Promise<string> => {
-        return new Promise((resolve) => {
-            rl.question(prompt, resolve);
+    if (getInput) {
+        question = getInput;
+    } else {
+        rl = readline.createInterface({
+            input: process.stdin,
+            output: process.stdout
         });
-    };
+        question = (prompt: string) => new Promise((resolve) => {
+            rl!.question(prompt, resolve);
+        });
+    }
 
     try {
         console.log(`\n🚨 SECURITY WARNING: You are about to perform a DANGEROUS operation: "${operation}"`);
@@ -76,14 +83,14 @@ async function promptSecurityCode(operation: string): Promise<boolean> {
         console.log('✅ Both confirmations successful. Proceeding with operation...\n');
         return true;
     } finally {
-        rl.close();
+        if (rl) rl.close();
     }
 }
 
 /**
  * Check if operation requires security confirmation
  */
-async function checkSecurityConfirmation(operation: string): Promise<boolean> {
+export async function checkSecurityConfirmation(operation: string): Promise<boolean> {
     if (DANGEROUS_OPERATIONS.includes(operation)) {
         return await promptSecurityCode(operation);
     }
@@ -146,7 +153,7 @@ program
 /**
  * Get all database directories from src/app/db
  */
-function getDatabaseDirs(): string[] {
+export function getDatabaseDirs(): string[] {
     const dbPath = path.join(process.cwd(), 'src', 'app', 'db');
 
     if (!fs.existsSync(dbPath)) {
@@ -162,14 +169,14 @@ function getDatabaseDirs(): string[] {
 /**
  * Get schema path for a database
  */
-function getSchemaPath(dbName: string): string {
+export function getSchemaPath(dbName: string): string {
     return path.join(process.cwd(), 'src', 'app', 'db', dbName, 'schema.prisma');
 }
 
 /**
  * Clean up generated schema.prisma files from client directories
  */
-function cleanupClientSchemaFiles(dbName: string): void {
+export function cleanupClientSchemaFiles(dbName: string): void {
     const clientSchemaPath = path.join(process.cwd(), 'src', 'app', 'db', dbName, 'client', 'schema.prisma');
     if (fs.existsSync(clientSchemaPath)) {
         fs.unlinkSync(clientSchemaPath);
@@ -180,14 +187,14 @@ function cleanupClientSchemaFiles(dbName: string): void {
 /**
  * Get migrations directory path for a database
  */
-function getMigrationsPath(dbName: string): string {
+export function getMigrationsPath(dbName: string): string {
     return path.join(process.cwd(), 'src', 'app', 'db', dbName, 'migrations');
 }
 
 /**
  * Get all migration directories for a database
  */
-function getMigrationDirectories(dbName: string): string[] {
+export function getMigrationDirectories(dbName: string): string[] {
     const migrationsPath = getMigrationsPath(dbName);
     
     if (!fs.existsSync(migrationsPath)) {
@@ -203,7 +210,7 @@ function getMigrationDirectories(dbName: string): string[] {
 /**
  * Get migration info from directory name
  */
-function parseMigrationName(migrationDir: string): { timestamp: string, name: string } {
+export function parseMigrationName(migrationDir: string): { timestamp: string, name: string } {
     const parts = migrationDir.split('_');
     const timestamp = parts[0];
     const name = parts.slice(1).join('_');
@@ -213,7 +220,7 @@ function parseMigrationName(migrationDir: string): { timestamp: string, name: st
 /**
  * Display available migrations for rollback
  */
-function displayMigrations(dbName: string): void {
+export function displayMigrations(dbName: string): void {
     const migrations = getMigrationDirectories(dbName);
     
     if (migrations.length === 0) {
@@ -251,7 +258,7 @@ function displayMigrations(dbName: string): void {
 /**
  * Validate migration target for rollback
  */
-function validateMigrationTarget(dbName: string, target: string): string | null {
+export function validateMigrationTarget(dbName: string, target: string): string | null {
     const migrations = getMigrationDirectories(dbName);
     
     if (migrations.length === 0) {
@@ -326,7 +333,7 @@ async function createRollbackMigration(dbName: string, targetMigration: string, 
  * Generate rollback SQL from forward migration SQL
  * This is a basic implementation - manual review is recommended
  */
-function generateRollbackSQL(forwardSQL: string): string {
+export function generateRollbackSQL(forwardSQL: string): string {
     const lines = forwardSQL.split('\n');
     const rollbackLines: string[] = [];
     
@@ -374,7 +381,7 @@ function generateRollbackSQL(forwardSQL: string): string {
 /**
  * Extract table name from CREATE TABLE statement
  */
-function extractTableName(createTableSQL: string): string | null {
+export function extractTableName(createTableSQL: string): string | null {
     const match = createTableSQL.match(/CREATE TABLE\s+(?:IF NOT EXISTS\s+)?["`]?(\w+)["`]?/i);
     return match ? match[1] : null;
 }
@@ -382,7 +389,7 @@ function extractTableName(createTableSQL: string): string | null {
 /**
  * Extract table and column name from ALTER TABLE ADD COLUMN statement
  */
-function extractAlterAddColumn(alterSQL: string): { tableName: string | null, columnName: string | null } {
+export function extractAlterAddColumn(alterSQL: string): { tableName: string | null, columnName: string | null } {
     const match = alterSQL.match(/ALTER TABLE\s+["`]?(\w+)["`]?\s+ADD\s+(?:COLUMN\s+)?["`]?(\w+)["`]?/i);
     return {
         tableName: match ? match[1] : null,
@@ -393,7 +400,7 @@ function extractAlterAddColumn(alterSQL: string): { tableName: string | null, co
 /**
  * Extract index name from CREATE INDEX statement
  */
-function extractIndexName(createIndexSQL: string): string | null {
+export function extractIndexName(createIndexSQL: string): string | null {
     const match = createIndexSQL.match(/CREATE\s+(?:UNIQUE\s+)?INDEX\s+(?:IF NOT EXISTS\s+)?["`]?(\w+)["`]?/i);
     return match ? match[1] : null;
 }
@@ -403,7 +410,7 @@ function extractIndexName(createIndexSQL: string): string | null {
  * Follows the same convention as PrismaManager.getDatabaseUrl()
  * Convention: folderName -> FOLDER_NAME__KUSTO_RDB_URL (e.g., default -> DEFAULT__KUSTO_RDB_URL, myDatabase -> MY_DATABASE__KUSTO_RDB_URL)
  */
-function getDatabaseEnvVarName(dbName: string): string {
+export function getDatabaseEnvVarName(dbName: string): string {
     // Convert folder name to env variable: default -> DEFAULT__KUSTO_RDB_URL, myDatabase -> MY_DATABASE__KUSTO_RDB_URL
     return dbName.replace(/([a-z])([A-Z])/g, '$1_$2').toUpperCase() + '__KUSTO_RDB_URL';
 }
@@ -411,7 +418,7 @@ function getDatabaseEnvVarName(dbName: string): string {
 /**
  * Get database URL from environment variable
  */
-function getDatabaseUrl(dbName: string): string | undefined {
+export function getDatabaseUrl(dbName: string): string | undefined {
     const envVarName = getDatabaseEnvVarName(dbName);
     return process.env[envVarName];
 }
@@ -420,7 +427,7 @@ function getDatabaseUrl(dbName: string): string | undefined {
  * Create a temporary prisma.config.ts for a specific database
  * Prisma 7 requires prisma.config.ts for CLI commands
  */
-function createTempPrismaConfig(dbName: string, databaseUrl: string): string {
+export function createTempPrismaConfig(dbName: string, databaseUrl: string): string {
     const schemaPath = getSchemaPath(dbName).replace(/\\/g, '/');
     const migrationsPath = getMigrationsPath(dbName).replace(/\\/g, '/');
     
@@ -446,7 +453,7 @@ export default defineConfig({
 /**
  * Remove temporary prisma config file
  */
-function removeTempPrismaConfig(configPath: string): void {
+export function removeTempPrismaConfig(configPath: string): void {
     try {
         if (fs.existsSync(configPath)) {
             fs.unlinkSync(configPath);

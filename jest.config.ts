@@ -27,7 +27,8 @@ const config: Config = {
     '/src/app/',
     '/updater/',
     '/tests/_setup/',
-    '/tests/_fixtures/'
+    '/tests/_fixtures/',
+    '/node_modules/.prisma/'
   ],
   coverageThreshold: {
     global: { statements: 50, branches: 40, functions: 50, lines: 50 },

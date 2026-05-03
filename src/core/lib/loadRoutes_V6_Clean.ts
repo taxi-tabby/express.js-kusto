@@ -305,17 +305,31 @@ function convertToVirtualPath(filePath: string): string {
 }
 
 /**
+ * 폴더명 segment 를 Express URL segment 로 변환.
+ * `..[^name]` → `:name*` (wildcard)
+ * `[^name]` → `:name([^/]+)` (regex 제약)
+ * `[name]` → `:name` (named param)
+ * 그 외는 그대로 반환.
+ *
+ * 매칭 우선순위는 buildRoutePath 의 기존 inline 분기 순서 (regex → dynamic → namedParam) 를
+ * 그대로 유지한다. ROUTE_PATTERNS 의 정규식 정의를 사용.
+ */
+export function convertFolderToUrlSegment(folder: string): string {
+    const regexMatch = folder.match(ROUTE_PATTERNS.regex);
+    const dynamicMatch = folder.match(ROUTE_PATTERNS.dynamic);
+    const namedMatch = folder.match(ROUTE_PATTERNS.namedParam);
+
+    if (regexMatch) return `:${regexMatch[1]}([^/]+)`;
+    if (dynamicMatch) return `:${dynamicMatch[1]}*`;
+    if (namedMatch) return `:${namedMatch[1]}`;
+    return folder;
+}
+
+/**
  * 라우트 경로 생성
  */
 function buildRoutePath(parentRoute: string, dirName: string): string {
-    const regexMatch = dirName.match(ROUTE_PATTERNS.regex);
-    const dynamicMatch = dirName.match(ROUTE_PATTERNS.dynamic);
-    const namedMatch = dirName.match(ROUTE_PATTERNS.namedParam);
-
-    if (regexMatch) return `${parentRoute}/:${regexMatch[1]}([^/]+)`;
-    if (dynamicMatch) return `${parentRoute}/:${dynamicMatch[1]}*`;
-    if (namedMatch) return `${parentRoute}/:${namedMatch[1]}`;
-    return `${parentRoute}/${dirName}`;
+    return `${parentRoute}/${convertFolderToUrlSegment(dirName)}`;
 }
 
 /**

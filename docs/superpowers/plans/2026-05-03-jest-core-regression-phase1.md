@@ -175,10 +175,12 @@ PoC 결과를 다음 task 의 commit message 에서 참조하기 위해 메모.
 - [ ] **Step 1: 의존성 설치**
 
 ```bash
-npm install --save-dev jest@^29 ts-jest@^29 @types/jest@^29 jest-mock-extended@^4 execa@^9 @electric-sql/pglite @electric-sql/pglite-socket
+npm install --save-dev jest@^29 ts-jest@^29 @types/jest@^29 jest-mock-extended@^4 execa@^9 @electric-sql/pglite @electric-sql/pglite-socket @prisma/adapter-better-sqlite3 better-sqlite3
 ```
 
 Expected: `package.json` 의 `devDependencies` 에 위 패키지들 추가, `node_modules/` 에 설치, exit 0.
+
+> **PoC 발견**: Prisma 7 은 SQLite 도 driver adapter 가 필수다. `@prisma/adapter-better-sqlite3` + `better-sqlite3` 가 db-fixture 에서 `new PrismaClient({ adapter })` 형태로 주입된다.
 
 - [ ] **Step 2: 설치 확인**
 
@@ -186,18 +188,23 @@ Expected: `package.json` 의 `devDependencies` 에 위 패키지들 추가, `nod
 node -e "console.log(require('jest/package.json').version)"
 node -e "console.log(require('ts-jest/package.json').version)"
 node -e "console.log(require('execa/package.json').version)"
+node -e "console.log(require('@prisma/adapter-better-sqlite3/package.json').version)"
+node -e "console.log(require('better-sqlite3/package.json').version)"
 ```
 
-Expected: 각 명령이 버전 문자열 출력 (`29.x.x`, `29.x.x`, `9.x.x`).
+Expected: 각 명령이 버전 문자열 출력. better-sqlite3 는 native binding 컴파일이 필요할 수 있음 (npm install 단계에서 자동 처리).
 
 - [ ] **Step 3: Commit**
 
 ```bash
 git add package.json package-lock.json
-git commit -m "test: jest 와 관련 devDependencies 추가
+git commit -m "test: jest + Prisma 7 SQLite adapter devDependencies 추가
 
-jest 29, ts-jest 29, jest-mock-extended 4, execa 9, pglite/pglite-socket
-설치. PoC 1 (Prisma 7 + SQLite :memory:) 통과 확인 후 진행.
+jest 29, ts-jest 29, jest-mock-extended 4, execa 9, pglite/pglite-socket,
+@prisma/adapter-better-sqlite3, better-sqlite3 설치.
+
+PoC 1 결과: Prisma 7 은 SQLite 도 adapter 필수. PrismaClient 는
+{ adapter } 주입 필요.
 
 Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
 ```
@@ -389,6 +396,8 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
 
 `tests/_fixtures/test-schema.sqlite.prisma`:
 
+> **PoC 발견**: Prisma 7 은 schema 의 `datasource.url = env(...)` 를 거부 (P1012). connection 은 runtime adapter 와 `prisma db push` 의 `--url` 인자로 주입한다.
+
 ```prisma
 generator client {
   provider = "prisma-client-js"
@@ -397,7 +406,8 @@ generator client {
 
 datasource db {
   provider = "sqlite"
-  url      = env("KUSTO_TEST_SQLITE_URL")
+  // url 은 schema 에 두지 않음 — Prisma 7 거부.
+  // db push 시 --url 인자, runtime 시 PrismaClient adapter 로 주입.
 }
 
 model User {
@@ -457,7 +467,8 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("KUSTO_TEST_POSTGRES_URL")
+  // url 은 schema 에 두지 않음 — Prisma 7 거부.
+  // db push 시 --url 인자, runtime 시 PrismaClient adapter 로 주입.
 }
 
 model User {
@@ -508,11 +519,11 @@ model Comment {
 - [ ] **Step 3: 두 schema 가 prisma validate 통과하는지**
 
 ```bash
-KUSTO_TEST_SQLITE_URL='file::memory:?cache=shared' npx prisma validate --schema tests/_fixtures/test-schema.sqlite.prisma
-KUSTO_TEST_POSTGRES_URL='postgres://x:y@localhost:5432/z' npx prisma validate --schema tests/_fixtures/test-schema.postgres.prisma
+npx prisma validate --schema tests/_fixtures/test-schema.sqlite.prisma
+npx prisma validate --schema tests/_fixtures/test-schema.postgres.prisma
 ```
 
-Expected: 두 명령 모두 `The schema at ... is valid` 출력 + exit 0.
+Expected: 두 명령 모두 `The schema at ... is valid` 출력 + exit 0. (`url` 이 schema 에 없으므로 환경변수 없이도 validate 통과.)
 
 - [ ] **Step 4: Commit**
 
@@ -630,8 +641,11 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
 
 - [ ] **Step 1: 파일 작성**
 
+> **PoC 발견 적용**: Prisma 7 어댑터 패턴 사용. `--skip-generate` 옵션 제거. 절대 경로 강제. PrismaClient 생성 시 `{ adapter }` 주입. SQLite 어댑터 클래스명은 `PrismaBetterSqlite3` (소문자 sqlite3).
+
 ```ts
 import { spawnSync } from 'child_process';
+import * as fs from 'fs';
 import * as path from 'path';
 
 export type TestDbProvider = 'sqlite' | 'postgres';
@@ -653,7 +667,7 @@ export function selectProvider(): TestDbProvider {
 }
 
 /**
- * 통합 테스트 백엔드 부팅.
+ * 통합 테스트 백엔드 부팅. Prisma 7 의 driver adapter 패턴을 사용한다.
  *
  * 사용 예:
  * ```
@@ -673,37 +687,45 @@ export async function bootDbFixture(): Promise<DbFixture> {
 }
 
 async function bootSqlite(): Promise<DbFixture> {
-    // 워커별 임시 DB 파일 (in-memory 는 Prisma 와 worker 격리에서 충돌 가능)
+    // 워커별 임시 DB 파일 — :memory: 는 db push 가 별도 프로세스라 schema 적용 안 됨.
+    // Path 해상도 차이 (db push vs runtime adapter) 회피를 위해 절대 경로 강제.
     const workerId = process.env.JEST_WORKER_ID ?? '0';
-    const dbFile = path.resolve(`node_modules/.prisma/test-sqlite-${workerId}.db`);
+    const dbDir = path.resolve('node_modules/.prisma');
+    fs.mkdirSync(dbDir, { recursive: true });
+    const dbFile = path.join(dbDir, `test-sqlite-${workerId}.db`);
+    // 깨끗한 시작 보장
+    try { fs.unlinkSync(dbFile); } catch { /* 없으면 무시 */ }
     const url = `file:${dbFile}`;
-    process.env.KUSTO_TEST_SQLITE_URL = url;
 
-    // schema 적용
-    const schemaPath = 'tests/_fixtures/test-schema.sqlite.prisma';
+    const schemaPath = path.resolve('tests/_fixtures/test-schema.sqlite.prisma');
 
-    // generate (한 번만)
-    spawnSync('npx', ['prisma', 'generate', '--schema', schemaPath], {
+    // 1) generate (한 번만 — 결과는 node_modules/.prisma/test-sqlite-client 에 캐시됨)
+    const gen = spawnSync('npx', ['prisma', 'generate', '--schema', schemaPath], {
         stdio: 'pipe',
-        env: { ...process.env, KUSTO_TEST_SQLITE_URL: url }
+        shell: true
     });
-
-    // db push
-    const push = spawnSync('npx', [
-        'prisma', 'db', 'push',
-        '--skip-generate',
-        '--accept-data-loss',
-        '--schema', schemaPath
-    ], { stdio: 'pipe', env: { ...process.env, KUSTO_TEST_SQLITE_URL: url } });
-
-    if (push.status !== 0) {
-        throw new Error(`prisma db push failed: ${push.stderr.toString()}`);
+    if (gen.status !== 0) {
+        throw new Error(`prisma generate failed: ${gen.stderr?.toString() ?? ''}`);
     }
 
-    // Prisma client 임포트 (generate output 위치)
+    // 2) db push — Prisma 7 에서는 --skip-generate 가 제거됨. --url 로 connection 주입.
+    const push = spawnSync('npx', [
+        'prisma', 'db', 'push',
+        '--accept-data-loss',
+        '--schema', schemaPath,
+        '--url', url
+    ], { stdio: 'pipe', shell: true });
+
+    if (push.status !== 0) {
+        throw new Error(`prisma db push failed: ${push.stderr?.toString() ?? ''}`);
+    }
+
+    // 3) PrismaClient + better-sqlite3 어댑터로 클라이언트 생성
     const clientModule = require(path.resolve('node_modules/.prisma/test-sqlite-client'));
     const PrismaClient = clientModule.PrismaClient;
-    const prisma = new PrismaClient({ datasourceUrl: url });
+    const { PrismaBetterSqlite3 } = require('@prisma/adapter-better-sqlite3');
+    const adapter = new PrismaBetterSqlite3({ url });
+    const prisma = new PrismaClient({ adapter });
 
     return {
         provider: 'sqlite',
@@ -711,8 +733,6 @@ async function bootSqlite(): Promise<DbFixture> {
         prisma,
         teardown: async () => {
             await prisma.$disconnect();
-            // db 파일 삭제 (다음 worker 재사용 시 깨끗한 시작)
-            const fs = await import('fs');
             try { fs.unlinkSync(dbFile); } catch { /* 이미 없을 수 있음 */ }
         }
     };
@@ -721,35 +741,38 @@ async function bootSqlite(): Promise<DbFixture> {
 async function bootPostgres(): Promise<DbFixture> {
     const { PGlite } = await import('@electric-sql/pglite');
     const { PGLiteSocketServer } = await import('@electric-sql/pglite-socket');
+    const { PrismaPg } = await import('@prisma/adapter-pg');
 
     const pglite = new (PGlite as any)();
     const server = new (PGLiteSocketServer as any)({ db: pglite, port: 0 });
     await server.start();
     const port = (server as any).port;
     const url = `postgres://test:test@localhost:${port}/postgres`;
-    process.env.KUSTO_TEST_POSTGRES_URL = url;
 
-    const schemaPath = 'tests/_fixtures/test-schema.postgres.prisma';
+    const schemaPath = path.resolve('tests/_fixtures/test-schema.postgres.prisma');
 
-    spawnSync('npx', ['prisma', 'generate', '--schema', schemaPath], {
+    const gen = spawnSync('npx', ['prisma', 'generate', '--schema', schemaPath], {
         stdio: 'pipe',
-        env: { ...process.env, KUSTO_TEST_POSTGRES_URL: url }
+        shell: true
     });
+    if (gen.status !== 0) {
+        throw new Error(`prisma generate failed: ${gen.stderr?.toString() ?? ''}`);
+    }
 
     const push = spawnSync('npx', [
         'prisma', 'db', 'push',
-        '--skip-generate',
         '--accept-data-loss',
-        '--schema', schemaPath
-    ], { stdio: 'pipe', env: { ...process.env, KUSTO_TEST_POSTGRES_URL: url } });
-
+        '--schema', schemaPath,
+        '--url', url
+    ], { stdio: 'pipe', shell: true });
     if (push.status !== 0) {
-        throw new Error(`prisma db push failed: ${push.stderr.toString()}`);
+        throw new Error(`prisma db push failed: ${push.stderr?.toString() ?? ''}`);
     }
 
     const clientModule = require(path.resolve('node_modules/.prisma/test-postgres-client'));
     const PrismaClient = clientModule.PrismaClient;
-    const prisma = new PrismaClient({ datasourceUrl: url });
+    const adapter = new (PrismaPg as any)({ connectionString: url });
+    const prisma = new PrismaClient({ adapter });
 
     return {
         provider: 'postgres',

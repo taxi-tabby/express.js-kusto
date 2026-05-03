@@ -15,6 +15,24 @@ import {
 } from './types/generated-db-types';
 
 /**
+ * 폴더명을 환경변수명으로 변환.
+ *
+ * 변환 규칙:
+ *   - camelCase 경계(소문자→대문자) 사이에 `_` 삽입 후 전체 대문자화
+ *   - 끝에 `__KUSTO_RDB_URL` 접미사 부여
+ *
+ * 예:
+ *   - `'default'` → `'DEFAULT__KUSTO_RDB_URL'`
+ *   - `'myDatabase'` → `'MY_DATABASE__KUSTO_RDB_URL'`
+ *   - `'user_account'` → `'USER_ACCOUNT__KUSTO_RDB_URL'`
+ *
+ * `getDatabaseUrl` 의 inline 로직과 동일하다 (Prisma 7 fallback 경로).
+ */
+export function folderNameToEnvVarName(folderName: string): string {
+	return folderName.replace(/([a-z])([A-Z])/g, '$1_$2').toUpperCase() + '__KUSTO_RDB_URL';
+}
+
+/**
  * Database connection configuration interface
  */
 export interface DatabaseConfig {
@@ -528,7 +546,7 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 				// Prisma 7 format: url is provided via CLI --url option
 				// Use folder name convention to determine env variable
 				// Convert folder name to env variable: default -> DEFAULT__KUSTO_RDB_URL, myDatabase -> MY_DATABASE__KUSTO_RDB_URL
-				envVarName = folderName.replace(/([a-z])([A-Z])/g, '$1_$2').toUpperCase() + '__KUSTO_RDB_URL';
+				envVarName = folderNameToEnvVarName(folderName);
 			}
 
 			let url = process.env[envVarName];

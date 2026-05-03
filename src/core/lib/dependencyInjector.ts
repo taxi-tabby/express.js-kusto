@@ -1,6 +1,31 @@
 ﻿import { log } from '@ext/winston';
 import { Injectable, Middleware, MODULE_REGISTRY, MIDDLEWARE_REGISTRY, ModuleName, MiddlewareName } from './types/generated-injectable-types';
 
+/**
+ * 파일 경로를 injected/middleware 식별자(camelCase) 로 변환.
+ *
+ * 변환 규칙:
+ *   - `.module.ts`, `.middleware.ts`, `.middleware.interface.ts` 확장자 제거
+ *   - `/` 로 세그먼트 분리
+ *   - 첫 세그먼트는 그대로(=lowercase 시작 가정), 이후 세그먼트는 첫 글자만 UpperCase 로 변환 후 결합
+ *
+ * 예:
+ *   - `'logger.module.ts'` → `'logger'`
+ *   - `'auth/jwt.module.ts'` → `'authJwt'`
+ *   - `'auth/jwt/export.module.ts'` → `'authJwtExport'`
+ *   - `'auth/rateLimiter/default.middleware.ts'` → `'authRateLimiterDefault'`
+ *
+ * 본 함수는 `src/core/scripts/generate-injectable-types.js` 가 만들어내는
+ * camelCase 식별자 컨벤션을 런타임에서도 활용할 수 있도록 export 한다.
+ */
+export function pathToCamelCaseIdentifier(filePath: string): string {
+    const withoutExt = filePath.replace(/\.module\.ts$|\.middleware\.ts$|\.middleware\.interface\.ts$/, '');
+    const parts = withoutExt.split('/').filter(Boolean);
+    return parts
+        .map((p, i) => i === 0 ? p : p.charAt(0).toUpperCase() + p.slice(1))
+        .join('');
+}
+
 export class DependencyInjector {
     private static instance: DependencyInjector;
     private modules: any = {};

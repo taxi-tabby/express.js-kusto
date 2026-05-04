@@ -3088,19 +3088,13 @@ export class ExpressRouter {
         }
         
         const responses: any = {
-            200: {
-                data: { type: 'object', required: true, description: `${modelName} object` }
-            },
-            404: {
-                error: { type: 'object', required: true, description: 'Not found error' }
-            }
+            200: jsonApiResponse(modelName, 200),
+            404: jsonApiErrorResponse(404),
         };
-        
+
         // Soft delete가 설정된 경우 410 Gone 응답 추가
         if (isSoftDelete) {
-            responses[410] = {
-                error: { type: 'object', required: true, description: 'Resource has been soft deleted' }
-            };
+            responses[410] = jsonApiErrorResponse(410);
         }
         
         this.registerDocumentation('GET', routePath, {

@@ -1,0 +1,111 @@
+import { PrismaModelInfo } from '@lib/crudSchemaTypes';
+import { OpenApiSchema, OpenApiObjectSchema, OpenApiSchemaOrRef } from './openApiTypes';
+import { fieldToSchema } from './dmmfToOpenApi';
+
+/**
+ * JSON:API attributes schema — id 와 관계 필드를 제외한 모든 필드.
+ */
+export function jsonApiAttributes(model: PrismaModelInfo, enumValuesByName: Map<string, string[]>): OpenApiObjectSchema {
+    const properties: Record<string, OpenApiSchemaOrRef> = {};
+    const required: string[] = [];
+
+    for (const field of model.fields) {
+        if (field.isId) continue;
+        if (field.relationName) continue;
+        properties[field.name] = fieldToSchema(field, enumValuesByName);
+        if (!field.isOptional && !field.isGenerated) required.push(field.name);
+    }
+
+    const result: OpenApiObjectSchema = { type: 'object', properties };
+    if (required.length > 0) result.required = required;
+    return result;
+}
+
+/**
+ * JSON:API relationships schema — 관계 필드만, 각 관계는 resource identifier 형식.
+ * { data: { type: 'TargetModel', id: string } } (single)
+ * 또는 { data: [{ type, id }, ...] } (list).
+ */
+export function jsonApiRelationships(model: PrismaModelInfo): OpenApiObjectSchema {
+    const properties: Record<string, OpenApiSchemaOrRef> = {};
+
+    for (const rel of model.relations) {
+        const isList = rel.type === 'one-to-many' || rel.type === 'many-to-many';
+        const identifier: OpenApiSchema = {
+            type: 'object',
+            required: ['type', 'id'],
+            properties: {
+                type: { type: 'string' },
+                id: { type: 'string' },
+            },
+        };
+        const dataSchema: OpenApiSchema = isList
+            ? { type: 'array', items: identifier }
+            : identifier;
+        properties[rel.name] = {
+            type: 'object',
+            properties: { data: dataSchema },
+        };
+    }
+
+    return { type: 'object', properties };
+}
+
+/**
+ * JSON:API resource object schema — id/type/attributes/relationships 4 키.
+ * type 은 const = 모델명 으로 고정 (3.1 / JSON Schema 2020-12).
+ */
+export function jsonApiResource(model: PrismaModelInfo, enumValuesByName: Map<string, string[]>): OpenApiObjectSchema {
+    const attributes = jsonApiAttributes(model, enumValuesByName);
+    const relationships = jsonApiRelationships(model);
+
+    const properties: Record<string, OpenApiSchemaOrRef> = {
+        id: { type: 'string' },
+        type: { type: 'string', const: model.name } as OpenApiSchema & { const?: string },
+        attributes,
+    };
+    if (Object.keys(relationships.properties).length > 0) {
+        properties.relationships = relationships;
+    }
+
+    return {
+        type: 'object',
+        required: ['type', 'attributes'],
+        properties,
+    };
+}
+
+/**
+ * JSON:API errors[] 응답 본문 schema — 모든 4xx/5xx 응답에 공통 사용.
+ */
+export function jsonApiErrorObject(): OpenApiObjectSchema {
+    return {
+        type: 'object',
+        required: ['errors'],
+        properties: {
+            errors: {
+                type: 'array',
+                items: {
+                    type: 'object',
+                    required: ['status', 'code', 'title'],
+                    properties: {
+                        id: { type: 'string' },
+                        status: { type: 'string' },
+                        code: { type: 'string' },
+                        title: { type: 'string' },
+                        detail: { type: 'string' },
+                        source: {
+                            type: 'object',
+                            properties: {
+                                pointer: { type: 'string' },
+                                parameter: { type: 'string' },
+                                header: { type: 'string' },
+                            },
+                        },
+                        meta: { type: 'object' },
+                    },
+                } as OpenApiSchema,
+            },
+        },
+    };
+}

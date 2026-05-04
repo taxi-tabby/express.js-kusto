@@ -15,7 +15,14 @@ import { serializeBigInt, serialize } from './serializer';
 import { ERROR_CODES, getHttpStatusForErrorCode } from './errorCodes';
 import { CrudSchemaRegistry } from './crudSchemaRegistry';
 import { PrismaSchemaAnalyzer } from './prismaSchemaAnalyzer';
-import { syncSchemasFromAnalyzer, registerJsonApiErrorSchema } from './documentation';
+import {
+    syncSchemasFromAnalyzer,
+    registerJsonApiErrorSchema,
+    jsonApiCollectionResponse,
+    jsonApiResponse,
+    jsonApiBody,
+    jsonApiErrorResponse,
+} from './documentation';
 import { log } from '@ext/winston';
 import './types/express-extensions';
 
@@ -2869,13 +2876,8 @@ export class ExpressRouter {
                 query: queryParams
             },
             responses: {
-                200: {
-                    data: { type: 'array', required: true, description: `Array of ${modelName} items` },
-                    meta: { type: 'object', required: true, description: 'Pagination metadata' }
-                },
-                400: {
-                    error: { type: 'object', required: true, description: 'Bad request - pagination parameters are required' }
-                }
+                200: jsonApiCollectionResponse(modelName),
+                400: jsonApiErrorResponse(400),
             }
         });
     }

@@ -4384,20 +4384,21 @@ export class ExpressRouter {
             `Soft delete ${modelName} by ${primaryKey} (JSON:API)` : 
             `Delete ${modelName} by ${primaryKey} (JSON:API)`;
             
-        const deleteResponses = isSoftDelete ? {
+        const deleteResponses: any = isSoftDelete ? {
             200: {
-                meta: { type: 'object', required: true, description: 'Soft delete metadata with timestamp' }
+                type: 'object',
+                required: ['meta'],
+                properties: {
+                    meta: { type: 'object' },
+                },
             },
-            404: {
-                errors: { type: 'array', required: true, description: 'JSON:API error objects' }
-            }
+            404: jsonApiErrorResponse(404),
         } : {
             204: {
-                description: 'Successfully deleted (no content)'
+                type: 'object',
+                description: 'Successfully deleted (no content)',
             },
-            404: {
-                errors: { type: 'array', required: true, description: 'JSON:API error objects' }
-            }
+            404: jsonApiErrorResponse(404),
         };
         
         this.registerDocumentation('DELETE', routePath, {

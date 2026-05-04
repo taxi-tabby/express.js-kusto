@@ -26,9 +26,9 @@ export interface RouteDocumentationLike {
     parameters?: {
         query?: Schema;
         params?: Schema;
-        body?: Schema;
+        body?: Schema | OpenApiSchemaOrRef;
     };
-    responses?: Record<string | number, Schema>;
+    responses?: Record<string | number, Schema | OpenApiSchemaOrRef>;
     tags?: string[];
     contentType?: ContentTypeMode;
 }
@@ -38,6 +38,28 @@ export interface BuildOpenApiInput {
     schemas: Record<string, OpenApiSchemaOrRef>;
     env: NodeJS.ProcessEnv;
     packageJson: { name?: string; version?: string; description?: string };
+}
+
+/**
+ * 입력이 이미 OpenAPI schema 형태인지 감지.
+ * - $ref 가 있으면 ref 객체.
+ * - 또는 type 이 OpenAPI primitive 문자열이면 schema.
+ * - 또는 oneOf/allOf/anyOf 배열이 있으면 schema.
+ * 반대로 validator Schema 는 top-level 키가 필드명이고 type 키 자체가 보통 없거나 객체.
+ */
+function isOpenApiSchemaShape(value: unknown): boolean {
+    if (typeof value !== 'object' || value === null) return false;
+    const v = value as Record<string, unknown>;
+    if (typeof v.$ref === 'string') return true;
+    if (typeof v.type === 'string') {
+        const t = v.type;
+        if (t === 'object' || t === 'array' || t === 'string' || t === 'number' ||
+            t === 'integer' || t === 'boolean' || t === 'null') {
+            return true;
+        }
+    }
+    if (Array.isArray(v.oneOf) || Array.isArray(v.allOf) || Array.isArray(v.anyOf)) return true;
+    return false;
 }
 
 function buildParameters(route: RouteDocumentationLike): OpenApiParameter[] {
@@ -68,12 +90,14 @@ function buildParameters(route: RouteDocumentationLike): OpenApiParameter[] {
 
 function buildRequestBody(route: RouteDocumentationLike, mediaType: string): OpenApiRequestBody | undefined {
     if (!route.parameters?.body) return undefined;
+    const body = route.parameters.body;
+    const schema: OpenApiSchemaOrRef = isOpenApiSchemaShape(body)
+        ? (body as OpenApiSchemaOrRef)
+        : schemaToOpenApi(body as Schema);
     return {
         required: true,
         content: {
-            [mediaType]: {
-                schema: schemaToOpenApi(route.parameters.body),
-            },
+            [mediaType]: { schema },
         },
     };
 }
@@ -82,12 +106,13 @@ function buildResponses(route: RouteDocumentationLike, mediaType: string): Recor
     const out: Record<string, OpenApiResponse> = {};
     if (route.responses) {
         for (const [code, schema] of Object.entries(route.responses)) {
+            const resolved: OpenApiSchemaOrRef = isOpenApiSchemaShape(schema)
+                ? (schema as OpenApiSchemaOrRef)
+                : schemaToOpenApi(schema as Schema);
             out[code] = {
                 description: `Response ${code}`,
                 content: {
-                    [mediaType]: {
-                        schema: schemaToOpenApi(schema),
-                    },
+                    [mediaType]: { schema: resolved },
                 },
             };
         }

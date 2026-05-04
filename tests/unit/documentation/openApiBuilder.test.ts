@@ -171,5 +171,69 @@ describe('openApiBuilder', () => {
             expect(doc.info.title).toBe('Custom');
             expect(doc.servers?.[0].url).toBe('https://prod.example.com');
         });
+
+        it('parameters.body 가 이미 OpenAPI 객체 schema 일 때 그대로 사용된다 ($ref 보존)', () => {
+            const body = {
+                type: 'object',
+                required: ['data'],
+                properties: {
+                    data: { $ref: '#/components/schemas/UserAttributes' },
+                },
+            };
+            const doc = buildOpenApiDocument({
+                routes: [{
+                    method: 'POST',
+                    path: '/x',
+                    contentType: 'jsonapi',
+                    parameters: { body: body as any },
+                }],
+                schemas: {},
+                env: process.env,
+                packageJson: { name: 'a', version: '1' },
+            });
+            const reqSchema = doc.paths['/x']?.post?.requestBody?.content?.['application/vnd.api+json']?.schema as any;
+            expect(reqSchema.required).toEqual(['data']);
+            expect(reqSchema.properties.data).toEqual({ $ref: '#/components/schemas/UserAttributes' });
+        });
+
+        it('responses[code] 가 이미 OpenAPI 객체 schema 일 때 그대로 사용된다 ($ref 보존)', () => {
+            const responseSchema = {
+                type: 'object',
+                required: ['data'],
+                properties: {
+                    data: { $ref: '#/components/schemas/User' },
+                },
+            };
+            const doc = buildOpenApiDocument({
+                routes: [{
+                    method: 'GET',
+                    path: '/x',
+                    contentType: 'jsonapi',
+                    responses: { 200: responseSchema as any },
+                }],
+                schemas: {},
+                env: process.env,
+                packageJson: { name: 'a', version: '1' },
+            });
+            const resSchema = doc.paths['/x']?.get?.responses['200']?.content?.['application/vnd.api+json']?.schema as any;
+            expect(resSchema.required).toEqual(['data']);
+            expect(resSchema.properties.data).toEqual({ $ref: '#/components/schemas/User' });
+        });
+
+        it('직접 $ref 만 있는 schema 도 그대로 통과한다', () => {
+            const doc = buildOpenApiDocument({
+                routes: [{
+                    method: 'GET',
+                    path: '/x',
+                    contentType: 'jsonapi',
+                    responses: { 200: { $ref: '#/components/schemas/User' } as any },
+                }],
+                schemas: {},
+                env: process.env,
+                packageJson: { name: 'a', version: '1' },
+            });
+            const resSchema = doc.paths['/x']?.get?.responses['200']?.content?.['application/vnd.api+json']?.schema;
+            expect(resSchema).toEqual({ $ref: '#/components/schemas/User' });
+        });
     });
 });

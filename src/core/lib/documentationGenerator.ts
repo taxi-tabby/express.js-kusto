@@ -16,9 +16,9 @@ export interface RouteDocumentation {
     parameters?: {
         query?: Schema;
         params?: Schema;
-        body?: Schema;
+        body?: Schema | OpenApiSchemaOrRef;
     };
-    responses?: ResponseConfig;
+    responses?: ResponseConfig | Record<string | number, OpenApiSchemaOrRef>;
     tags?: string[];
     contentType?: ContentTypeMode;
 }

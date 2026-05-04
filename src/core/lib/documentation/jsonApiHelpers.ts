@@ -52,3 +52,23 @@ export function jsonApiErrorResponse(_statusCode: number): OpenApiObjectSchema {
         },
     };
 }
+
+/**
+ * JSON:API 컬렉션 응답: data 가 {Model} 의 배열, meta 옵셔널.
+ * GET / (index) 라우트가 사용.
+ */
+export function jsonApiCollectionResponse(modelName: string): OpenApiObjectSchema {
+    return {
+        type: 'object',
+        required: ['data'],
+        properties: {
+            data: {
+                type: 'array',
+                items: { $ref: `#/components/schemas/${modelName}` },
+            } as any,
+            meta: {
+                type: 'object',
+            } as any,
+        },
+    };
+}

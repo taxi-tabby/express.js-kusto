@@ -8,3 +8,4 @@ export * from './dmmfToOpenApi';
 export * from './jsonApiSchemas';
 export * from './openApiBuilder';
 export * from './syncSchemas';
+export * from './jsonApiHelpers';

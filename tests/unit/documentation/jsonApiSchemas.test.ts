@@ -30,6 +30,50 @@ describe('jsonApiSchemas', () => {
             expect((schema as any).properties).not.toHaveProperty('id');
             expect((schema as any).properties).not.toHaveProperty('author');
         });
+
+        it('isId 가 false 라도 primaryKey.fields 에 포함된 필드는 제외된다 (Prisma 7 호환)', () => {
+            const noIsIdModel: PrismaModelInfo = {
+                ...sampleModel,
+                fields: [
+                    { name: 'id', type: 'String', jsType: 'string', isOptional: false, isList: false, isId: false, isUnique: true, isReadOnly: false, isGenerated: true, isUpdatedAt: false },
+                    { name: 'title', type: 'String', jsType: 'string', isOptional: false, isList: false, isId: false, isUnique: false, isReadOnly: false, isGenerated: false, isUpdatedAt: false },
+                ],
+                primaryKey: { fields: ['id'] },
+            };
+            const schema = jsonApiAttributes(noIsIdModel, new Map());
+            expect((schema as any).properties).not.toHaveProperty('id');
+            expect((schema as any).properties).toHaveProperty('title');
+        });
+
+        it('primaryKey.fields 가 복합키일 때 모든 PK 필드가 제외된다', () => {
+            const composite: PrismaModelInfo = {
+                ...sampleModel,
+                fields: [
+                    { name: 'tenantId', type: 'String', jsType: 'string', isOptional: false, isList: false, isId: false, isUnique: false, isReadOnly: false, isGenerated: false, isUpdatedAt: false },
+                    { name: 'userId', type: 'String', jsType: 'string', isOptional: false, isList: false, isId: false, isUnique: false, isReadOnly: false, isGenerated: false, isUpdatedAt: false },
+                    { name: 'role', type: 'String', jsType: 'string', isOptional: false, isList: false, isId: false, isUnique: false, isReadOnly: false, isGenerated: false, isUpdatedAt: false },
+                ],
+                primaryKey: { fields: ['tenantId', 'userId'] },
+            };
+            const schema = jsonApiAttributes(composite, new Map());
+            expect((schema as any).properties).not.toHaveProperty('tenantId');
+            expect((schema as any).properties).not.toHaveProperty('userId');
+            expect((schema as any).properties).toHaveProperty('role');
+        });
+
+        it('primaryKey 자체가 없을 때 isId 가 true 인 필드만 제외된다', () => {
+            const onlyIsId: PrismaModelInfo = {
+                ...sampleModel,
+                fields: [
+                    { name: 'id', type: 'String', jsType: 'string', isOptional: false, isList: false, isId: true, isUnique: true, isReadOnly: false, isGenerated: true, isUpdatedAt: false },
+                    { name: 'name', type: 'String', jsType: 'string', isOptional: false, isList: false, isId: false, isUnique: false, isReadOnly: false, isGenerated: false, isUpdatedAt: false },
+                ],
+                primaryKey: undefined,
+            };
+            const schema = jsonApiAttributes(onlyIsId, new Map());
+            expect((schema as any).properties).not.toHaveProperty('id');
+            expect((schema as any).properties).toHaveProperty('name');
+        });
     });
 
     describe('jsonApiRelationships', () => {

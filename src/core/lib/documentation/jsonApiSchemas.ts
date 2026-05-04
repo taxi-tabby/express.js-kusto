@@ -4,13 +4,18 @@ import { fieldToSchema } from './dmmfToOpenApi';
 
 /**
  * JSON:API attributes schema — id 와 관계 필드를 제외한 모든 필드.
+ * Prisma 7 의 _runtimeDataModel 은 isId 메타데이터를 일관되게 노출하지 않을 수 있어
+ * model.primaryKey.fields 도 함께 제외 기준으로 사용한다.
  */
 export function jsonApiAttributes(model: PrismaModelInfo, enumValuesByName: Map<string, string[]>): OpenApiObjectSchema {
     const properties: Record<string, OpenApiSchemaOrRef> = {};
     const required: string[] = [];
 
+    const pkFields = new Set(model.primaryKey?.fields ?? []);
+
     for (const field of model.fields) {
         if (field.isId) continue;
+        if (pkFields.has(field.name)) continue;
         if (field.relationName) continue;
         properties[field.name] = fieldToSchema(field, enumValuesByName);
         if (!field.isOptional && !field.isGenerated) required.push(field.name);

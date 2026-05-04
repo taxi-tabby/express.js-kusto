@@ -15,6 +15,7 @@ import { serializeBigInt, serialize } from './serializer';
 import { ERROR_CODES, getHttpStatusForErrorCode } from './errorCodes';
 import { CrudSchemaRegistry } from './crudSchemaRegistry';
 import { PrismaSchemaAnalyzer } from './prismaSchemaAnalyzer';
+import { syncSchemasFromAnalyzer, registerJsonApiErrorSchema } from './documentation';
 import { log } from '@ext/winston';
 import './types/express-extensions';
 
@@ -165,12 +166,18 @@ export class ExpressRouter {
                     
                     // 모든 모델을 자동으로 등록
                     this.schemaRegistry.autoRegisterAllModels(analyzer, databaseName);
-                    
+
+                    // Documentation 시스템에도 sync (NEW)
+                    syncSchemasFromAnalyzer(analyzer, databaseName);
+
                     // 초기화 완료 표시
                     ExpressRouter.initializedDatabases.add(databaseName);
                     // log.Info(`🔍 Prisma 스키마 분석기가 초기화되었습니다. (데이터베이스: ${databaseName})`);
                 }
             }
+
+            // JsonApiError 는 DB 와 무관 — 루프 밖에서 한 번 (NEW)
+            registerJsonApiErrorSchema();
 
             // 첫 번째 사용 가능한 데이터베이스를 기본 분석기로 설정
             const firstDatabase = availableDatabases[0];

@@ -7,6 +7,7 @@ import {
     OpenApiResponse,
     OpenApiSchema,
     OpenApiSchemaOrRef,
+    ContentTypeMode,
 } from './openApiTypes';
 import { schemaToOpenApi, fieldToOpenApi } from './schemaConverter';
 import { buildInfo } from './infoSource';
@@ -31,6 +32,7 @@ export interface RouteDocumentationLike {
     };
     responses?: Record<string | number, Schema>;
     tags?: string[];
+    contentType?: ContentTypeMode;
 }
 
 export interface BuildOpenApiInput {

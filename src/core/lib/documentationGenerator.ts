@@ -5,6 +5,7 @@ import {
     buildOpenApiDocument,
     OpenApiSchemaOrRef,
     OpenApiDocument,
+    ContentTypeMode,
 } from './documentation';
 
 export interface RouteDocumentation {
@@ -19,6 +20,7 @@ export interface RouteDocumentation {
     };
     responses?: ResponseConfig;
     tags?: string[];
+    contentType?: ContentTypeMode;
 }
 
 /** 기존 ApiDocumentation 호환 alias */

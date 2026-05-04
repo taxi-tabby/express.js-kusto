@@ -3308,43 +3308,16 @@ export class ExpressRouter {
             }
         }
 
-        // 문서화 등록
+        // 문서화 등록 (JSON:API ref 사용)
         this.registerDocumentation('POST', '/', {
             summary: `Create new ${modelName} (JSON:API)`,
             parameters: {
-                body: {
-                    type: 'object',
-                    required: true,
-                    description: 'JSON:API resource object with optional relationships',
-                    properties: {
-                        data: {
-                            type: 'object',
-                            required: true,
-                            properties: {
-                                type: { type: 'string', required: true, description: 'Resource type' },
-                                id: { type: 'string', required: false, description: 'Client-generated ID (optional)' },
-                                attributes: options?.validation?.create?.body || 
-                                          { type: 'object', required: true, description: `${modelName} attributes` },
-                                relationships: { 
-                                    type: 'object', 
-                                    required: false, 
-                                    description: 'JSON:API relationships object with data containing resource identifiers' 
-                                }
-                            }
-                        }
-                    }
-                }
+                body: jsonApiBody(modelName, 'create'),
             },
             responses: {
-                201: {
-                    data: { type: 'object', required: true, description: `Created ${modelName} resource` }
-                },
-                400: {
-                    errors: { type: 'array', required: true, description: 'JSON:API error objects' }
-                },
-                422: {
-                    errors: { type: 'array', required: true, description: 'JSON:API validation errors including relationship errors' }
-                }
+                201: jsonApiResponse(modelName, 201),
+                400: jsonApiErrorResponse(400),
+                422: jsonApiErrorResponse(422),
             }
         });
     }

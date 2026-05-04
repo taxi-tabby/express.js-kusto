@@ -4230,7 +4230,7 @@ export class ExpressRouter {
         registerMethod('put');
         registerMethod('patch');
 
-        // 문서화 등록 (PUT/PATCH 동일) - JSON:API 형식
+        // 문서화 등록 (PUT/PATCH 동일) - JSON:API ref
         ['PUT', 'PATCH'].forEach(method => {
             this.registerDocumentation(method, routePath, {
                 summary: `Update ${modelName} by ${primaryKey} (JSON:API)`,
@@ -4238,42 +4238,13 @@ export class ExpressRouter {
                     params: {
                         [primaryKey]: { type: 'string', required: true, description: `${modelName} ${primaryKey}` }
                     },
-                    body: {
-                        type: 'object',
-                        required: true,
-                        description: 'JSON:API resource object with optional relationships',
-                        properties: {
-                            data: {
-                                type: 'object',
-                                required: true,
-                                properties: {
-                                    type: { type: 'string', required: true, description: 'Resource type' },
-                                    id: { type: 'string', required: false, description: 'Resource ID (must match URL parameter)' },
-                                    attributes: options?.validation?.update?.body || 
-                                              { type: 'object', required: true, description: `${modelName} attributes to update` },
-                                    relationships: { 
-                                        type: 'object', 
-                                        required: false, 
-                                        description: 'JSON:API relationships object for updating related resources (set/connect/disconnect)' 
-                                    }
-                                }
-                            }
-                        }
-                    }
+                    body: jsonApiBody(modelName, 'update'),
                 },
                 responses: {
-                    200: {
-                        data: { type: 'object', required: true, description: `Updated ${modelName} resource` }
-                    },
-                    404: {
-                        errors: { type: 'array', required: true, description: 'JSON:API error objects' }
-                    },
-                    400: {
-                        errors: { type: 'array', required: true, description: 'JSON:API error objects' }
-                    },
-                    422: {
-                        errors: { type: 'array', required: true, description: 'JSON:API validation errors including relationship errors' }
-                    }
+                    200: jsonApiResponse(modelName, 200),
+                    400: jsonApiErrorResponse(400),
+                    404: jsonApiErrorResponse(404),
+                    422: jsonApiErrorResponse(422),
                 }
             });
         });

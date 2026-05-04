@@ -4548,7 +4548,7 @@ export class ExpressRouter {
             }
         }
 
-        // 문서화 등록 - JSON:API 형식
+        // 문서화 등록 - JSON:API ref
         this.registerDocumentation('POST', routePath, {
             summary: `Recover soft-deleted ${modelName} by ${primaryKey} (JSON:API)`,
             parameters: {
@@ -4558,20 +4558,9 @@ export class ExpressRouter {
                 body: options?.validation?.recover?.body || undefined
             },
             responses: {
-                200: {
-                    data: { type: 'object', required: true, description: `Recovered ${modelName} resource` },
-                    meta: { 
-                        type: 'object', 
-                        required: true, 
-                        description: 'Recovery operation metadata' 
-                    }
-                },
-                404: {
-                    errors: { type: 'array', required: true, description: 'JSON:API error objects' }
-                },
-                409: {
-                    errors: { type: 'array', required: true, description: 'JSON:API error objects' }
-                }
+                200: jsonApiResponse(modelName, 200),
+                404: jsonApiErrorResponse(404),
+                409: jsonApiErrorResponse(409),
             }
         });
     }

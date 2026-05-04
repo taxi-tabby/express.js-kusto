@@ -106,4 +106,88 @@ describe('CRUD 가 등록한 OpenAPI spec 의 표준 준수', () => {
         const spec = DocumentationGenerator.generateOpenAPISpec();
         expect(spec.openapi).toBe('3.1.0');
     });
+
+    it('CRUD setup 메서드의 등록 후 spec 의 paths 에 $ref 가 등장한다', async () => {
+        // Sync 가 component schemas 를 채움 시뮬레이션
+        DocumentationGenerator.registerSchema('User', {
+            type: 'object',
+            properties: {
+                id: { type: 'string' },
+                type: { type: 'string' },
+                attributes: { type: 'object' },
+            },
+        });
+        DocumentationGenerator.registerSchema('UserAttributes', {
+            type: 'object',
+            properties: {
+                name: { type: 'string' },
+            },
+        });
+        DocumentationGenerator.registerSchema('UserRelationships', {
+            type: 'object',
+            properties: {},
+        });
+        DocumentationGenerator.registerSchema('JsonApiError', {
+            type: 'object',
+            required: ['errors'],
+            properties: { errors: { type: 'array' } },
+        });
+
+        // CRUD setup 메서드의 결과를 직접 시뮬레이션 (jsonApiBody/Response/ErrorResponse 사용)
+        DocumentationGenerator.registerRoute({
+            method: 'POST',
+            path: '/users',
+            contentType: 'jsonapi',
+            parameters: {
+                body: {
+                    type: 'object',
+                    required: ['data'],
+                    properties: {
+                        data: {
+                            type: 'object',
+                            required: ['type', 'attributes'],
+                            properties: {
+                                type: { type: 'string' },
+                                id: { type: 'string' },
+                                attributes: { $ref: '#/components/schemas/UserAttributes' },
+                                relationships: { $ref: '#/components/schemas/UserRelationships' },
+                            },
+                        },
+                    },
+                } as any,
+            },
+            responses: {
+                201: {
+                    type: 'object',
+                    required: ['data'],
+                    properties: { data: { $ref: '#/components/schemas/User' } },
+                } as any,
+                422: {
+                    type: 'object',
+                    required: ['errors'],
+                    properties: { errors: { $ref: '#/components/schemas/JsonApiError' } },
+                } as any,
+            },
+        });
+
+        const spec = DocumentationGenerator.generateOpenAPISpec();
+        const op = spec.paths['/users']?.post;
+
+        // body 의 attributes 가 $ref 보존
+        const reqSchema = op?.requestBody?.content?.['application/vnd.api+json']?.schema as any;
+        expect(reqSchema.properties.data.properties.attributes).toEqual({
+            $ref: '#/components/schemas/UserAttributes',
+        });
+
+        // 201 응답의 data 가 $ref 보존
+        const resSchema = op?.responses?.['201']?.content?.['application/vnd.api+json']?.schema as any;
+        expect(resSchema.properties.data).toEqual({ $ref: '#/components/schemas/User' });
+
+        // 422 응답의 errors 가 JsonApiError 로 $ref 보존
+        const errSchema = op?.responses?.['422']?.content?.['application/vnd.api+json']?.schema as any;
+        expect(errSchema.properties.errors).toEqual({ $ref: '#/components/schemas/JsonApiError' });
+
+        // swagger-parser validate 가 components.schemas 가 등록된 상태에서도 통과
+        await expect(SwaggerParser.validate(spec as any)).resolves.toBeDefined();
+    });
 });

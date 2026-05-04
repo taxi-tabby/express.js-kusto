@@ -1,24 +1,5 @@
 import { FieldSchema, Schema, ValidatorType } from '@lib/validator';
-
-export interface OpenApiSchema {
-    type?: 'string' | 'number' | 'boolean' | 'array' | 'object';
-    format?: string;
-    pattern?: string;
-    enum?: any[];
-    minLength?: number;
-    maxLength?: number;
-    minimum?: number;
-    maximum?: number;
-    minItems?: number;
-    maxItems?: number;
-    example?: any;
-}
-
-export interface OpenApiObjectSchema extends OpenApiSchema {
-    type: 'object';
-    properties: Record<string, OpenApiSchema>;
-    required?: string[];
-}
+import { OpenApiSchema, OpenApiObjectSchema } from './openApiTypes';
 
 const KNOWN_TYPES: ReadonlySet<ValidatorType> = new Set([
     'string', 'number', 'boolean', 'array', 'object',

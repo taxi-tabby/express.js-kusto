@@ -28,6 +28,7 @@ export interface FieldSchema {
     mediaType?: string;           // MIME type specification
     properties?: { [key: string]: FieldSchema }; // Nested properties for object types
     example?: any;                // Example value for documentation and validation
+    description?: string;         // Human-readable description for documentation
     // Security and sensitivity markers
     sensitive?: boolean;          // Marks field as containing sensitive data
     confidential?: boolean;       // Marks field as confidential

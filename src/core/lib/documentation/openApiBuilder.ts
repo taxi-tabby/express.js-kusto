@@ -1,4 +1,4 @@
-import { Schema, FieldSchema } from '@lib/validator';
+import { Schema } from '@lib/validator';
 import {
     OpenApiDocument,
     OpenApiOperation,
@@ -12,13 +12,11 @@ import {
 import { schemaToOpenApi, fieldToOpenApi } from './schemaConverter';
 import { buildInfo } from './infoSource';
 import { buildServers } from './serversSource';
+import { toOpenApiPath } from './pathConverter';
+import { mediaTypeFor } from './contentTypeRule';
 
-/**
- * 본 phase (M1) 에서는 path/content-type/openapi 버전 변경 없음 — 기존 동작 보존.
- * M2 에서 toOpenApiPath, mediaTypeFor, '3.1.0' 활성화.
- */
-const OPENAPI_VERSION = '3.0.0';
-const DEFAULT_CONTENT_TYPE = 'application/json';
+const OPENAPI_VERSION = '3.1.0';
+const DEFAULT_CONTENT_TYPE_MODE: ContentTypeMode = 'json';
 
 export interface RouteDocumentationLike {
     method: string;
@@ -68,26 +66,26 @@ function buildParameters(route: RouteDocumentationLike): OpenApiParameter[] {
     return out;
 }
 
-function buildRequestBody(route: RouteDocumentationLike): OpenApiRequestBody | undefined {
+function buildRequestBody(route: RouteDocumentationLike, mediaType: string): OpenApiRequestBody | undefined {
     if (!route.parameters?.body) return undefined;
     return {
         required: true,
         content: {
-            [DEFAULT_CONTENT_TYPE]: {
+            [mediaType]: {
                 schema: schemaToOpenApi(route.parameters.body),
             },
         },
     };
 }
 
-function buildResponses(route: RouteDocumentationLike): Record<string, OpenApiResponse> {
+function buildResponses(route: RouteDocumentationLike, mediaType: string): Record<string, OpenApiResponse> {
     const out: Record<string, OpenApiResponse> = {};
     if (route.responses) {
         for (const [code, schema] of Object.entries(route.responses)) {
             out[code] = {
                 description: `Response ${code}`,
                 content: {
-                    [DEFAULT_CONTENT_TYPE]: {
+                    [mediaType]: {
                         schema: schemaToOpenApi(schema),
                     },
                 },
@@ -95,11 +93,10 @@ function buildResponses(route: RouteDocumentationLike): Record<string, OpenApiRe
         }
     }
     if (Object.keys(out).length === 0) {
-        // 기존 generateOpenAPISpec 의 fallback 보존
         out['200'] = {
             description: 'Success',
             content: {
-                [DEFAULT_CONTENT_TYPE]: {
+                [mediaType]: {
                     schema: {
                         type: 'object',
                         properties: {
@@ -116,30 +113,28 @@ function buildResponses(route: RouteDocumentationLike): Record<string, OpenApiRe
 }
 
 function buildOperation(route: RouteDocumentationLike): OpenApiOperation {
+    const mediaType = mediaTypeFor(route.contentType ?? DEFAULT_CONTENT_TYPE_MODE);
     const op: OpenApiOperation = {
         summary: route.summary ?? `${route.method.toUpperCase()} ${route.path}`,
         tags: route.tags ?? ['API'],
-        responses: buildResponses(route),
+        responses: buildResponses(route, mediaType),
     };
     if (route.description !== undefined) op.description = route.description;
     const parameters = buildParameters(route);
     if (parameters.length > 0) op.parameters = parameters;
-    const requestBody = buildRequestBody(route);
+    const requestBody = buildRequestBody(route, mediaType);
     if (requestBody !== undefined) op.requestBody = requestBody;
     return op;
 }
 
-/**
- * routes/schemas/env/packageJson 을 입력받아 최종 OpenAPI document 빌드.
- * 본 phase 에서는 기존 generateOpenAPISpec 동작과 byte-for-byte 동등.
- */
 export function buildOpenApiDocument(input: BuildOpenApiInput): OpenApiDocument {
     const { routes, schemas, env, packageJson } = input;
 
     const paths: Record<string, Record<string, OpenApiOperation>> = {};
     for (const route of routes) {
-        if (!paths[route.path]) paths[route.path] = {};
-        paths[route.path][route.method.toLowerCase()] = buildOperation(route);
+        const { path: openApiPath } = toOpenApiPath(route.path);
+        if (!paths[openApiPath]) paths[openApiPath] = {};
+        paths[openApiPath][route.method.toLowerCase()] = buildOperation(route);
     }
 
     return {

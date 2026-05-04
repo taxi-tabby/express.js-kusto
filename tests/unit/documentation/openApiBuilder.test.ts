@@ -13,14 +13,14 @@ describe('openApiBuilder', () => {
     afterEach(() => restoreEnv());
 
     describe('buildOpenApiDocument', () => {
-        it('routes 가 비어 있을 때 paths 가 빈 객체인 OpenAPI document 를 반환한다', () => {
+        it('routes 가 비어 있을 때 openapi 3.1.0 의 빈 paths document 를 반환한다', () => {
             const doc = buildOpenApiDocument({
                 routes: [],
                 schemas: {},
                 env: process.env,
                 packageJson: { name: 'test-api', version: '1.0.0' },
             });
-            expect(doc.openapi).toBe('3.0.0');
+            expect(doc.openapi).toBe('3.1.0');
             expect(doc.info.title).toBe('test-api');
             expect(doc.paths).toEqual({});
             expect(doc.components?.schemas).toEqual({});
@@ -39,9 +39,7 @@ describe('openApiBuilder', () => {
                 packageJson: { name: 'test-api', version: '1.0.0' },
             });
             expect(doc.paths['/users']).toBeDefined();
-            expect(doc.paths['/users'].get).toBeDefined();
             expect(doc.paths['/users'].get?.summary).toBe('List users');
-            expect(doc.paths['/users'].get?.responses['200']).toBeDefined();
         });
 
         it('schemas 가 주어지면 components.schemas 로 그대로 옮겨진다', () => {
@@ -60,39 +58,98 @@ describe('openApiBuilder', () => {
                 routes: [{
                     method: 'GET',
                     path: '/users',
-                    parameters: {
-                        query: {
-                            page: { type: 'number', required: false },
-                        },
-                    },
+                    parameters: { query: { page: { type: 'number', required: false, description: 'Page' } } },
                 }],
                 schemas: {},
                 env: process.env,
                 packageJson: { name: 'test-api', version: '1.0.0' },
             });
             const op = doc.paths['/users'].get!;
-            expect(op.parameters).toBeDefined();
-            expect(op.parameters!.find((p: any) => p.name === 'page' && p.in === 'query')).toBeDefined();
+            expect(op.parameters!.find(p => p.name === 'page' && p.in === 'query')).toBeDefined();
         });
 
-        it('routes 의 path 파라미터가 OpenAPI parameters in=path 로 변환된다', () => {
+        it(':id 형식의 path 가 OpenAPI 표준 {id} 로 변환된다', () => {
             const doc = buildOpenApiDocument({
                 routes: [{
                     method: 'GET',
                     path: '/users/:id',
-                    parameters: {
-                        params: { id: { type: 'string', required: true } },
-                    },
+                    parameters: { params: { id: { type: 'string', required: true } } },
                 }],
                 schemas: {},
                 env: process.env,
-                packageJson: { name: 'test-api', version: '1.0.0' },
+                packageJson: { name: 'a', version: '1' },
             });
-            const op = doc.paths['/users/:id']?.get;
-            expect(op?.parameters?.find((p: any) => p.name === 'id' && p.in === 'path')).toBeDefined();
+            expect(doc.paths['/users/{id}']).toBeDefined();
+            expect(doc.paths['/users/:id']).toBeUndefined();
+            const op = doc.paths['/users/{id}'].get;
+            expect(op?.parameters?.find(p => p.name === 'id' && p.in === 'path')).toBeDefined();
         });
 
-        it('responses 가 없을 때 기본 200 응답이 채워진다 (기존 동작 보존)', () => {
+        it("contentType 'json' 일 때 응답 content key 가 application/json 이다", () => {
+            const doc = buildOpenApiDocument({
+                routes: [{
+                    method: 'GET',
+                    path: '/x',
+                    contentType: 'json',
+                    responses: { 200: { data: { type: 'object', required: true } } },
+                }],
+                schemas: {},
+                env: process.env,
+                packageJson: { name: 'a', version: '1' },
+            });
+            const content = doc.paths['/x'].get?.responses['200']?.content;
+            expect(content).toHaveProperty('application/json');
+            expect(content?.['application/vnd.api+json']).toBeUndefined();
+        });
+
+        it("contentType 'jsonapi' 일 때 응답 content key 가 application/vnd.api+json 이다", () => {
+            const doc = buildOpenApiDocument({
+                routes: [{
+                    method: 'GET',
+                    path: '/x',
+                    contentType: 'jsonapi',
+                    responses: { 200: { data: { type: 'object', required: true } } },
+                }],
+                schemas: {},
+                env: process.env,
+                packageJson: { name: 'a', version: '1' },
+            });
+            const content = doc.paths['/x'].get?.responses['200']?.content;
+            expect(content?.['application/vnd.api+json']).toBeDefined();
+            expect(content?.['application/json']).toBeUndefined();
+        });
+
+        it("contentType 'jsonapi' 일 때 requestBody content key 도 application/vnd.api+json 이다", () => {
+            const doc = buildOpenApiDocument({
+                routes: [{
+                    method: 'POST',
+                    path: '/x',
+                    contentType: 'jsonapi',
+                    parameters: { body: { name: { type: 'string', required: true } } },
+                }],
+                schemas: {},
+                env: process.env,
+                packageJson: { name: 'a', version: '1' },
+            });
+            const content = doc.paths['/x'].post?.requestBody?.content;
+            expect(content?.['application/vnd.api+json']).toBeDefined();
+        });
+
+        it('contentType 미지정일 때 application/json 이 기본값이다', () => {
+            const doc = buildOpenApiDocument({
+                routes: [{
+                    method: 'GET',
+                    path: '/y',
+                    responses: { 200: { ok: { type: 'boolean', required: true } } },
+                }],
+                schemas: {},
+                env: process.env,
+                packageJson: { name: 'a', version: '1' },
+            });
+            expect(doc.paths['/y'].get?.responses['200']?.content).toHaveProperty('application/json');
+        });
+
+        it('responses 가 없을 때 기본 200 응답이 채워진다', () => {
             const doc = buildOpenApiDocument({
                 routes: [{ method: 'POST', path: '/x' }],
                 schemas: {},

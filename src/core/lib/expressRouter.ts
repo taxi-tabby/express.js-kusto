@@ -115,6 +115,7 @@ export class ExpressRouter {
         path: string;
         requestConfig?: RequestConfig;
         responseConfig?: ResponseConfig;
+        contentType?: 'json' | 'jsonapi';
     }> = [];
     
     // 스키마 API 관련 인스턴스들 (개발 모드에서만 사용)
@@ -271,6 +272,7 @@ export class ExpressRouter {
             DocumentationGenerator.registerRoute({
                 method: doc.method,
                 path: fullPath,
+                contentType: doc.contentType,
                 parameters: {
                     query: doc.requestConfig?.query,
                     params: doc.requestConfig?.params,
@@ -4961,18 +4963,20 @@ export class ExpressRouter {
             DocumentationGenerator.registerRoute({
                 method,
                 path: this.getFullPath(path),
+                contentType: 'jsonapi',
                 ...config
             });
         } else {
             this.pendingDocumentation.push({
                 method,
                 path,
-                requestConfig: config.parameters ? { 
+                requestConfig: config.parameters ? {
                     query: config.parameters.query,
                     params: config.parameters.params,
-                    body: config.parameters.body 
+                    body: config.parameters.body
                 } : undefined,
-                responseConfig: config.responses
+                responseConfig: config.responses,
+                contentType: 'jsonapi',
             });
         }
     }

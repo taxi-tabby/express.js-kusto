@@ -7,3 +7,4 @@ export * from './schemaConverter';
 export * from './dmmfToOpenApi';
 export * from './jsonApiSchemas';
 export * from './openApiBuilder';
+export * from './syncSchemas';

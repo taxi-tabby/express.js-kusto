@@ -918,7 +918,12 @@ router
 - **`USE_HANDLER`** _(deprecated)_ — `HandlerFunction` 타입의 미들웨어를 등록한다. next 함수가 없어 다음으로 넘어가지 못하므로 일반적으로 사용하지 않는다. 대부분의 경우 `MIDDLEWARE` 또는 `USE` 를 사용한다.
 
 ### 프록시 및 정적 파일 메서드
-> http-proxy-middleware 라이브러리를 사용한 프록시 처리입니다.
+> Node `http`/`https` 기반 자체 구현 리버스 프록시입니다(외부 의존성 없음).
+> 지원 옵션(`ProxyOptions`): `target`(필수), `changeOrigin`, `pathRewrite`(객체/함수),
+> `headers`, `secure`(TLS 검증), `timeout`, 훅 `onProxyReq`/`onProxyRes`/`onError`.
+> 표준 `X-Forwarded-For/Proto/Host` 헤더를 자동 부가하며, 전역 body-parser 가 소비한
+> 본문(`req.body`)은 자동 재직렬화하여 전달합니다. 업스트림 실패 시 502/504(JSON:API)로 응답합니다.
+> (WebSocket 업그레이드 프록시는 미지원.)
 ```typescript
 import { ExpressRouter } from '@lib/expressRouter'
 const router = new ExpressRouter();

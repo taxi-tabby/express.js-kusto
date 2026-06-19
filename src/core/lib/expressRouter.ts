@@ -1,5 +1,5 @@
 ﻿import { Router, Request, Response, RequestHandler, NextFunction, static as static_ } from 'express';
-import { createProxyMiddleware, Options } from 'http-proxy-middleware';
+import { createProxyMiddleware, ProxyOptions } from './proxyMiddleware';
 import multer from 'multer';
 import { DocumentationGenerator } from './documentationGenerator';
 import { RequestHandler as CustomRequestHandler, RequestConfig, ResponseConfig, ValidatedRequest } from './requestHandler';
@@ -1305,11 +1305,11 @@ export class ExpressRouter {
 
     /**
      * # MIDDLE_PROXY_ROUTE
-     * @param options - http-proxy-middleware 옵션
+     * @param options - 자체 프록시 옵션(`ProxyOptions`: target, changeOrigin, pathRewrite, headers, secure, timeout, onProxyReq/onProxyRes/onError)
      * @description
      * - Express 라우터에 등록할 미들웨어를 추가합니다
      */
-    public MIDDLE_PROXY_ROUTE(options: Options) {
+    public MIDDLE_PROXY_ROUTE(options: ProxyOptions) {
         this.router.use("/", createProxyMiddleware(options));
     }
 
@@ -1318,11 +1318,11 @@ export class ExpressRouter {
     /**
      * # MIDDLE_PROXY_ROUTE_SLUG
      * @param slug - 슬러그 배열
-     * @param options - http-proxy-middleware 옵션
+     * @param options - 자체 프록시 옵션(`ProxyOptions`: target, changeOrigin, pathRewrite, headers, secure, timeout, onProxyReq/onProxyRes/onError)
      * @description
      * - Express 라우터에 등록할 미들웨어를 추가합니다
      */
-    public MIDDLE_PROXY_ROUTE_SLUG(slug: string[], options: Options) {
+    public MIDDLE_PROXY_ROUTE_SLUG(slug: string[], options: ProxyOptions) {
         this.router.use(this.convertSlugsToPath(slug), createProxyMiddleware(options));
     }
 

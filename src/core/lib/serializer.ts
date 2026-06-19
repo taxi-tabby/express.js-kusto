@@ -184,3 +184,62 @@ export function jsonReplacer(key: string, value: any): any {
 export function safeJsonResponse(data: any): string {
     return JSON.stringify(data, jsonReplacer);
 }
+
+import type { Request } from 'express';
+
+/** 배열이면 원소 타입, 아니면 그대로 (pick/omit 키를 원소 키로 좁히기 위함) */
+type ArrEl<T> = T extends readonly (infer E)[] ? E : T;
+
+/**
+ * 라우터 응답 serializer 형태. 함수(임의 재구성/리네임) 또는 선언형 pick/omit.
+ * pick/omit 키는 (배열이면) 원소 타입의 키로 제한된다.
+ */
+export type ResponseSerializer<T> =
+    | ((data: T, req: Request) => unknown | Promise<unknown>)
+    | { pick: readonly (keyof ArrEl<T>)[] }
+    | { omit: readonly (keyof ArrEl<T>)[] };
+
+/** 정제 후 응답 본문(data) 타입 계산 — IDE 추론/문서용 */
+export type SerializedResult<T, Sz> =
+    Sz extends (d: T, req: Request) => infer R ? Awaited<R> :
+    Sz extends { pick: readonly (infer K extends keyof ArrEl<T>)[] }
+        ? (T extends readonly any[] ? Pick<ArrEl<T>, K>[] : Pick<ArrEl<T>, K>) :
+    Sz extends { omit: readonly (infer K extends keyof ArrEl<T>)[] }
+        ? (T extends readonly any[] ? Omit<ArrEl<T>, K>[] : Omit<ArrEl<T>, K>) :
+    never;
+
+function pickKeys<T extends object, K extends keyof T>(obj: T, keys: readonly K[]): Pick<T, K> {
+    const out = {} as Pick<T, K>;
+    for (const k of keys) if (k in obj) out[k] = obj[k];
+    return out;
+}
+
+function omitKeys<T extends object, K extends keyof T>(obj: T, keys: readonly K[]): Omit<T, K> {
+    const drop = new Set<PropertyKey>(keys as readonly PropertyKey[]);
+    const out: any = {};
+    for (const k of Object.keys(obj)) if (!drop.has(k)) out[k] = (obj as any)[k];
+    return out as Omit<T, K>;
+}
+
+/**
+ * 응답 데이터에 serializer 를 적용한다.
+ * - 함수형: 값 전체를 받아 그대로 변형(배열 매핑은 사용자 책임). async 허용.
+ * - pick/omit: 배열이면 원소별, 단일 객체면 그대로 적용. null/undefined/원시값은 통과.
+ */
+export async function applyResponseSerializer(
+    data: unknown,
+    sz: ResponseSerializer<any>,
+    req: Request
+): Promise<unknown> {
+    if (typeof sz === 'function') {
+        return await sz(data as any, req);
+    }
+    if (data === null || data === undefined || typeof data !== 'object') {
+        return data;
+    }
+    const apply = (item: any) =>
+        item && typeof item === 'object'
+            ? ('pick' in sz ? pickKeys(item, sz.pick as any) : omitKeys(item, sz.omit as any))
+            : item;
+    return Array.isArray(data) ? data.map(apply) : apply(data);
+}

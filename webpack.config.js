@@ -27,18 +27,20 @@ function loadEnvironmentVariables() {
     }
 }
 
-// // 빌드 시 환경 변수 자동 생성 함수
+// 빌드 시 번들에 정적으로 주입할 환경 변수 allowlist.
+// 주의: 시크릿(DB URL, API 키 등)은 절대 여기에 추가하지 말 것 —
+// 런타임에 EnvironmentLoader(dotenv)가 .env 에서 읽으므로 번들에 박을 필요가 없다.
+// process.env 전체를 DefinePlugin 에 넣으면 빌드 셸의 모든 시크릿이
+// dist/server.js 에 평문으로 박히는 유출 사고가 발생한다.
+const BUILD_TIME_ENV_ALLOWLIST = [];
+
 function getEnvironmentVariables() {
     const envVars = {};
-
-    // process.env의 모든 환경 변수를 webpack DefinePlugin 형태로 변환
-    // NODE_ENV는 제외 (webpack에서 명시적으로 설정)
-    Object.keys(process.env).forEach(key => {
-        if (key !== 'NODE_ENV') {
+    BUILD_TIME_ENV_ALLOWLIST.forEach(key => {
+        if (process.env[key] !== undefined) {
             envVars[`process.env.${key}`] = JSON.stringify(process.env[key]);
         }
     });
-
     return envVars;
 }
 

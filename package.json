@@ -8,8 +8,9 @@
     "dev": "npm run generate && nodemon",
     "dev:serve": "nodemon --config nodemon.serve.json",
     "serve": "node dist/server.js",
-    "build": "npm run db -- generate --all && npm run generate -- --build && webpack --mode production && npm run clean",
+    "build": "npm run db -- generate --all && npm run generate -- --build && npm run typecheck && webpack --mode production && npm run clean",
     "build:dev": "npm run generate -- --build && webpack --mode development && npm run clean",
+    "typecheck": "tsc -p tsconfig.webpack.json --noEmit",
     "clean": "node src/core/scripts/clean-tmp.js",
     "generate": "node src/core/scripts/generate.js",
     "db": "ts-node ./src/core/scripts/kusto-db-cli.ts",
@@ -26,6 +27,9 @@
   },
   "author": "rkdmf0000@gmail.com",
   "license": "ISC",
+  "engines": {
+    "node": ">=18"
+  },
   "dependencies": {
     "@types/archiver": "^7.0.0",
     "@types/yauzl": "^2.10.3",
@@ -40,7 +44,7 @@
     "helmet": "^8.0.0",
     "http-proxy-middleware": "^2.0.6",
     "module-alias": "^2.2.3",
-    "multer": "^1.4.5-lts.1",
+    "multer": "^2.0.1",
     "winston": "^3.12.0",
     "winston-daily-rotate-file": "^5.0.0",
     "yauzl": "^3.2.1"
@@ -57,7 +61,7 @@
     "@types/ejs": "^3.1.5",
     "@types/express": "^4.17.21",
     "@types/jest": "^29.5.14",
-    "@types/multer": "^1.4.12",
+    "@types/multer": "^2.0.0",
     "@types/node": "^20.11.28",
     "@types/supertest": "^7.2.0",
     "better-sqlite3": "^12.9.0",

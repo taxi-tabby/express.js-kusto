@@ -345,7 +345,7 @@ export class ExpressRouter {
         handler: (req: Request, res: Response, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => R,
         options: { serialize: Sz }
     ): ExpressRouter;
-    public GET(handler: HandlerFunction, options?: object): ExpressRouter;
+    public GET(handler: HandlerFunction, options?: { serialize?: never; [key: string]: unknown }): ExpressRouter;
     public GET(handler: any, options?: any): ExpressRouter {
         const serialize = (options as { serialize?: ResponseSerializer<any> } | undefined)?.serialize;
         this.router.get('/', this.wrapHandler(handler, serialize));
@@ -391,7 +391,7 @@ export class ExpressRouter {
         handler: (req: Request, res: Response, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => R,
         options: { serialize: Sz }
     ): ExpressRouter;
-    public GET_SLUG(slug: string[], handler: HandlerFunction, options?: object): ExpressRouter;
+    public GET_SLUG(slug: string[], handler: HandlerFunction, options?: { serialize?: never; [key: string]: unknown }): ExpressRouter;
     public GET_SLUG(slug: string[], handler: any, options?: any): ExpressRouter {
         const serialize = (options as { serialize?: ResponseSerializer<any> } | undefined)?.serialize;
         const slugPath = this.convertSlugsToPath(slug);
@@ -429,7 +429,7 @@ export class ExpressRouter {
         handler: (req: Request, res: Response, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => R,
         options: { serialize: Sz }
     ): ExpressRouter;
-    public POST(handler: HandlerFunction, options?: object): ExpressRouter;
+    public POST(handler: HandlerFunction, options?: { serialize?: never; [key: string]: unknown }): ExpressRouter;
     public POST(handler: any, options?: any): ExpressRouter {
         const serialize = (options as { serialize?: ResponseSerializer<any> } | undefined)?.serialize;
         this.router.post('/', this.wrapHandler(handler, serialize));
@@ -470,7 +470,7 @@ export class ExpressRouter {
         handler: (req: Request, res: Response, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => R,
         options: { serialize: Sz }
     ): ExpressRouter;
-    public POST_SLUG(slug: string[], handler: HandlerFunction, options?: object): ExpressRouter;
+    public POST_SLUG(slug: string[], handler: HandlerFunction, options?: { serialize?: never; [key: string]: unknown }): ExpressRouter;
     public POST_SLUG(slug: string[], handler: any, options?: any): ExpressRouter {
         const serialize = (options as { serialize?: ResponseSerializer<any> } | undefined)?.serialize;
         const slugPath = this.convertSlugsToPath(slug);
@@ -677,7 +677,7 @@ export class ExpressRouter {
         handler: (req: Request, res: Response, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => R,
         options: { serialize: Sz }
     ): ExpressRouter;
-    public PUT(handler: HandlerFunction, options?: object): ExpressRouter;
+    public PUT(handler: HandlerFunction, options?: { serialize?: never; [key: string]: unknown }): ExpressRouter;
     public PUT(handler: any, options?: any): ExpressRouter {
         const serialize = (options as { serialize?: ResponseSerializer<any> } | undefined)?.serialize;
         this.router.put('/', this.wrapHandler(handler, serialize));
@@ -893,7 +893,7 @@ export class ExpressRouter {
         handler: (req: Request, res: Response, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => R,
         options: { serialize: Sz }
     ): ExpressRouter;
-    public PUT_SLUG(slug: string[], handler: HandlerFunction, options?: object): ExpressRouter;
+    public PUT_SLUG(slug: string[], handler: HandlerFunction, options?: { serialize?: never; [key: string]: unknown }): ExpressRouter;
     public PUT_SLUG(slug: string[], handler: any, options?: any): ExpressRouter {
         const serialize = (options as { serialize?: ResponseSerializer<any> } | undefined)?.serialize;
         const slugPath = this.convertSlugsToPath(slug);
@@ -934,7 +934,7 @@ export class ExpressRouter {
         handler: (req: Request, res: Response, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => R,
         options: { serialize: Sz }
     ): ExpressRouter;
-    public DELETE(handler: HandlerFunction, options?: object): ExpressRouter;
+    public DELETE(handler: HandlerFunction, options?: { serialize?: never; [key: string]: unknown }): ExpressRouter;
     public DELETE(handler: any, options?: any): ExpressRouter {
         const serialize = (options as { serialize?: ResponseSerializer<any> } | undefined)?.serialize;
         this.router.delete('/', this.wrapHandler(handler, serialize));
@@ -977,7 +977,7 @@ export class ExpressRouter {
         handler: (req: Request, res: Response, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => R,
         options: { serialize: Sz }
     ): ExpressRouter;
-    public DELETE_SLUG(slug: string[], handler: HandlerFunction, options?: object): ExpressRouter;
+    public DELETE_SLUG(slug: string[], handler: HandlerFunction, options?: { serialize?: never; [key: string]: unknown }): ExpressRouter;
     public DELETE_SLUG(slug: string[], handler: any, options?: any): ExpressRouter {
         const serialize = (options as { serialize?: ResponseSerializer<any> } | undefined)?.serialize;
         const slugPath = this.convertSlugsToPath(slug);
@@ -1018,7 +1018,7 @@ export class ExpressRouter {
         handler: (req: Request, res: Response, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => R,
         options: { serialize: Sz }
     ): ExpressRouter;
-    public PATCH(handler: HandlerFunction, options?: object): ExpressRouter;
+    public PATCH(handler: HandlerFunction, options?: { serialize?: never; [key: string]: unknown }): ExpressRouter;
     public PATCH(handler: any, options?: any): ExpressRouter {
         const serialize = (options as { serialize?: ResponseSerializer<any> } | undefined)?.serialize;
         this.router.patch('/', this.wrapHandler(handler, serialize));
@@ -1062,7 +1062,7 @@ export class ExpressRouter {
         handler: (req: Request, res: Response, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => R,
         options: { serialize: Sz }
     ): ExpressRouter;
-    public PATCH_SLUG(slug: string[], handler: HandlerFunction, options?: object): ExpressRouter;
+    public PATCH_SLUG(slug: string[], handler: HandlerFunction, options?: { serialize?: never; [key: string]: unknown }): ExpressRouter;
     public PATCH_SLUG(slug: string[], handler: any, options?: any): ExpressRouter {
         const serialize = (options as { serialize?: ResponseSerializer<any> } | undefined)?.serialize;
         const slugPath = this.convertSlugsToPath(slug);

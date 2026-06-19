@@ -73,7 +73,12 @@ export class Core {
         // Merge custom config with defaults
         if (customConfig) {
             this._config = { ...this._config, ...customConfig };
-        }              // Initialize PrismaManager before setting up routes
+        }
+
+        // 재초기화 시 이전 degraded 사유가 남지 않도록 초기화
+        this._degraded = {};
+
+        // Initialize PrismaManager before setting up routes
         await this.initializePrismaManager();
         
         // Initialize Repository Manager
@@ -209,21 +214,22 @@ export class Core {
     /**
      * Start the server
      */
-    public start(port?: number, host?: string): Promise<Server> {
-        return new Promise((resolve, reject) => {
-            if (this._server) {
-                log.Warn('Server is already running');
-                resolve(this._server);
-                return;
-            }
+    public async start(port?: number, host?: string): Promise<Server> {
+        if (this._server) {
+            log.Warn('Server is already running');
+            return this._server;
+        }
 
-            if (!this._isInitialized) {
-                this.initialize();
-            }
+        // 초기화 없이 직접 start 가 호출되면, listen 전에 반드시 초기화를 끝낸다.
+        // (await 없이 진행하면 라우트/healthz 등록 전에 서버가 listen 하는 race 가 생긴다.)
+        if (!this._isInitialized) {
+            await this.initialize();
+        }
 
-            const serverPort = port || this._config.port;
-            const serverHost = host || this._config.host;
+        const serverPort = port || this._config.port;
+        const serverHost = host || this._config.host;
 
+        return new Promise<Server>((resolve, reject) => {
             this._server = this._app.listen(serverPort, serverHost, () => {
                 log.Info(`🚀 Server started successfully`, {
                     port: serverPort,
@@ -385,21 +391,37 @@ export class Core {
      *
      * Repo/DI 초기화 실패는 부팅을 중단시키므로, 서버가 listen 중이라면 그 둘은 정상이다.
      * 따라서 degraded 여부는 DB 연결 상태(서버리스에서 의도적으로 tolerate 됨)에 달려 있다.
+     *
+     * 주의:
+     * - 미생성(isGenerated=false) DB 폴더는 readiness 대상에서 제외한다 — 그렇지 않으면
+     *   client 를 아직 generate 하지 않은 폴더 때문에 /healthz 가 영구 degraded 가 된다.
+     * - 설정된 생성 DB 가 0개면(total=0) healthy 로 본다(DB 를 쓰지 않는 앱).
+     * - prismaManager 는 개별 DB 연결 실패를 내부에서 흡수하므로, degraded 사유는
+     *   주로 getStatus().databases 의 미연결 목록에서 도출한다(_degraded.prisma 는
+     *   prismaManager.initialize() 전체가 throw 한 드문 경우에만 채워진다).
      */
     public getReadiness(): {
         ready: boolean;
         status: 'healthy' | 'degraded';
-        prisma: { connected: number; total: number; error?: string };
+        prisma: { connected: number; total: number; unconnected: string[]; error?: string };
     } {
-        const prismaStatus = prismaManager.getStatus() as any;
-        const total = prismaStatus?.totalDatabases ?? 0;
-        const connected = prismaStatus?.connectedDatabases ?? 0;
-        const dbDegraded = !!this._degraded.prisma || (total > 0 && connected < total);
+        const prismaStatus = prismaManager.getStatus();
+        const generated = (prismaStatus.databases ?? []).filter(d => d.generated);
+        const total = generated.length;
+        const connected = generated.filter(d => d.connected).length;
+        const unconnected = generated.filter(d => !d.connected).map(d => d.name);
+        const dbDegraded = !!this._degraded.prisma || unconnected.length > 0;
 
         return {
             ready: !dbDegraded,
             status: dbDegraded ? 'degraded' : 'healthy',
-            prisma: { connected, total, error: this._degraded.prisma },
+            prisma: {
+                connected,
+                total,
+                unconnected,
+                error: this._degraded.prisma
+                    ?? (unconnected.length ? `unconnected databases: ${unconnected.join(', ')}` : undefined),
+            },
         };
     }
 

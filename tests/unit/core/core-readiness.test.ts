@@ -20,8 +20,9 @@ describe('Core readiness / fail-fast boot (P0-1)', () => {
         repoThrows?: boolean;
         diThrows?: boolean;
         prismaThrows?: boolean;
-        prismaStatus?: { connectedDatabases: number; totalDatabases: number };
+        databases?: { name: string; connected: boolean; generated: boolean }[];
     }) {
+        const databases = opts.databases ?? [{ name: 'default', connected: true, generated: true }];
         jest.doMock('@lib/loadRoutes_V6_Clean', () => ({ __esModule: true, default: jest.fn() }));
         jest.doMock('@lib/prismaManager', () => ({
             __esModule: true,
@@ -29,9 +30,9 @@ describe('Core readiness / fail-fast boot (P0-1)', () => {
                 initialize: jest.fn(async () => { if (opts.prismaThrows) throw new Error('db down'); }),
                 getStatus: jest.fn(() => ({
                     initialized: true,
-                    connectedDatabases: opts.prismaStatus?.connectedDatabases ?? 1,
-                    totalDatabases: opts.prismaStatus?.totalDatabases ?? 1,
-                    databases: [],
+                    connectedDatabases: databases.filter(d => d.connected).length,
+                    totalDatabases: databases.length,
+                    databases,
                 })),
                 isConnected: jest.fn(() => true),
             },
@@ -82,14 +83,36 @@ describe('Core readiness / fail-fast boot (P0-1)', () => {
         expect(res.body.status).toBe('degraded');
     });
 
-    it('일부 DB 만 연결돼도 degraded (connected < total)', async () => {
-        const core = mockManagersAndGetCore({ prismaStatus: { connectedDatabases: 1, totalDatabases: 2 } });
+    it('생성된 DB 중 일부가 미연결이면 degraded + unconnected 목록 노출', async () => {
+        const core = mockManagersAndGetCore({
+            databases: [
+                { name: 'default', connected: true, generated: true },
+                { name: 'analytics', connected: false, generated: true },
+            ],
+        });
         await core.initialize({ routesPath: './src/app/routes' });
-        expect(core.getReadiness().ready).toBe(false);
+        const readiness = core.getReadiness();
+        expect(readiness.ready).toBe(false);
+        expect(readiness.prisma.unconnected).toContain('analytics');
+    });
+
+    it('미생성(generated=false) DB 폴더는 readiness 를 degraded 로 만들지 않는다', async () => {
+        const core = mockManagersAndGetCore({
+            databases: [
+                { name: 'default', connected: true, generated: true },
+                { name: 'wip', connected: false, generated: false }, // 아직 generate 안 한 폴더
+            ],
+        });
+        await core.initialize({ routesPath: './src/app/routes' });
+        const readiness = core.getReadiness();
+        expect(readiness.ready).toBe(true);
+        expect(readiness.prisma.total).toBe(1); // generated 만 분모에 포함
     });
 
     it('정상 부팅 시 /healthz 200 (ok)', async () => {
-        const core = mockManagersAndGetCore({ prismaStatus: { connectedDatabases: 1, totalDatabases: 1 } });
+        const core = mockManagersAndGetCore({
+            databases: [{ name: 'default', connected: true, generated: true }],
+        });
         await core.initialize({ routesPath: './src/app/routes' });
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires

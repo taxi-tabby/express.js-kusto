@@ -641,12 +641,24 @@ async function loadRoutes(app: Express, dir?: string): Promise<void> {
         }
 
         // 1.5. 전역 미들웨어 먼저 등록 (최상위 middleware.ts)
+        // P1-7: Express 는 arity 4(err,req,res,next) 함수만 에러 핸들러로 취급한다.
+        //       에러 핸들러가 라우트보다 먼저 mount 되면 라우트에서 던진 에러를 못 잡으므로,
+        //       pre-미들웨어와 에러 핸들러를 분리하여 에러 핸들러는 라우트 등록 이후 맨 뒤에 mount 한다.
+        let globalErrorMiddlewares: any[] = [];
         const rootDirectory = directories.find(d => d.parentRoute === '' || d.parentRoute === '/');
         if (rootDirectory && rootDirectory.hasMiddleware) {
             const globalMiddlewares = loadMiddleware(rootDirectory.path);
             if (globalMiddlewares && globalMiddlewares.length > 0) {
-                app.use(...globalMiddlewares);
-                log.Route(`🌍 Global middlewares registered: ${globalMiddlewares.length} middlewares from ${rootDirectory.path}`);
+                const preMiddlewares = globalMiddlewares.filter(
+                    (m: any) => typeof m !== 'function' || m.length !== 4
+                );
+                globalErrorMiddlewares = globalMiddlewares.filter(
+                    (m: any) => typeof m === 'function' && m.length === 4
+                );
+                if (preMiddlewares.length > 0) {
+                    app.use(...preMiddlewares);
+                }
+                log.Route(`🌍 Global middlewares registered: ${preMiddlewares.length} pre + ${globalErrorMiddlewares.length} error handler(s) from ${rootDirectory.path}`);
             }
         }
 
@@ -715,6 +727,13 @@ async function loadRoutes(app: Express, dir?: string): Promise<void> {
                 log.Route(`🔗 ${routePath} (${middlewares.length} middlewares)`);
             }
         }
+
+        // 3.5. 전역 에러 핸들러(4-arg)를 라우트 등록 이후 맨 뒤에 mount (P1-7)
+        if (globalErrorMiddlewares.length > 0) {
+            app.use(...globalErrorMiddlewares);
+            log.Route(`🧯 Global error handler(s) registered after routes: ${globalErrorMiddlewares.length}`);
+        }
+
         // 4. 완료 통계
         const endTime = process.hrtime(startTime);
         const stats = getCacheStats();

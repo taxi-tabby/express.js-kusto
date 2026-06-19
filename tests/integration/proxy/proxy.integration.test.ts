@@ -2,6 +2,7 @@ import http from 'http';
 import type { AddressInfo } from 'net';
 import express from 'express';
 import request from 'supertest';
+import qs from 'qs';
 import { createProxyMiddleware } from '@lib/proxyMiddleware';
 
 interface Upstream { server: http.Server; url: string; }
@@ -245,5 +246,146 @@ describe('createProxyMiddleware — 에러/훅', () => {
     await request(app).get('/');
     expect(reqCalled).toBe(true);
     expect(resCalled).toBe(true);
+  });
+});
+
+describe('createProxyMiddleware — 하드닝(리뷰 반영)', () => {
+  let upstream: Upstream | undefined;
+  afterEach(async () => { if (upstream) await closeUpstream(upstream); upstream = undefined; });
+
+  function echoBodyUpstream(): Promise<Upstream> {
+    return startUpstream((req, res) => {
+      const chunks: Buffer[] = [];
+      req.on('data', (c) => chunks.push(c as Buffer));
+      req.on('end', () => {
+        res.setHeader('content-type', 'application/json');
+        res.end(JSON.stringify({ received: Buffer.concat(chunks).toString('utf-8'), method: req.method }));
+      });
+    });
+  }
+
+  it('빈 객체 {} JSON 본문도 hang 없이 정확히 전달된다(Content-Length 일치)', async () => {
+    upstream = await echoBodyUpstream();
+    const app = express();
+    app.use(express.json());
+    app.use('/', createProxyMiddleware({ target: upstream.url }));
+
+    const resp = await request(app).post('/x').set('content-type', 'application/json').send('{}');
+    expect(resp.status).toBe(200);
+    expect(resp.body.received).toBe('{}');
+  });
+
+  it('빈 배열 [] JSON 본문도 hang 없이 정확히 전달된다', async () => {
+    upstream = await echoBodyUpstream();
+    const app = express();
+    app.use(express.json());
+    app.use('/', createProxyMiddleware({ target: upstream.url }));
+
+    const resp = await request(app).post('/x').set('content-type', 'application/json').send('[]');
+    expect(resp.status).toBe(200);
+    expect(resp.body.received).toBe('[]');
+  });
+
+  it('중첩 urlencoded(extended) 본문이 손실 없이 전달된다', async () => {
+    upstream = await echoBodyUpstream();
+    const app = express();
+    app.use(express.urlencoded({ extended: true }));
+    app.use('/', createProxyMiddleware({ target: upstream.url }));
+
+    const resp = await request(app).post('/x')
+      .set('content-type', 'application/x-www-form-urlencoded')
+      .send('user[name]=kim&user[age]=20&tags[0]=x&tags[1]=y');
+    expect(qs.parse(resp.body.received)).toEqual({ user: { name: 'kim', age: '20' }, tags: ['x', 'y'] });
+  });
+
+  it.each(['put', 'patch'] as const)('%s JSON 본문을 업스트림에 전달한다', async (method) => {
+    upstream = await echoBodyUpstream();
+    const app = express();
+    app.use(express.json());
+    app.use('/', createProxyMiddleware({ target: upstream.url }));
+
+    const resp = await (request(app) as any)[method]('/x').send({ a: 1 });
+    expect(JSON.parse(resp.body.received)).toEqual({ a: 1 });
+    expect(resp.body.method).toBe(method.toUpperCase());
+  });
+
+  it('DELETE를 본문 없이 메서드 보존하여 전달한다', async () => {
+    upstream = await echoBodyUpstream();
+    const app = express();
+    app.use(express.json());
+    app.use('/', createProxyMiddleware({ target: upstream.url }));
+
+    const resp = await request(app).delete('/x');
+    expect(resp.body.method).toBe('DELETE');
+    expect(resp.body.received).toBe('');
+  });
+
+  it('HEAD 요청은 본문 없이 상태/헤더만 전달한다', async () => {
+    upstream = await startUpstream((_req, res) => { res.setHeader('x-up', '1'); res.statusCode = 204; res.end(); });
+    const app = express();
+    app.use('/', createProxyMiddleware({ target: upstream.url }));
+
+    const resp = await request(app).head('/x');
+    expect(resp.status).toBe(204);
+    expect(resp.headers['x-up']).toBe('1');
+  });
+
+  it('다중 set-cookie 응답 헤더를 모두 보존한다', async () => {
+    upstream = await startUpstream((_req, res) => {
+      res.setHeader('set-cookie', ['a=1; Path=/', 'b=2; Path=/']);
+      res.end('ok');
+    });
+    const app = express();
+    app.use('/', createProxyMiddleware({ target: upstream.url }));
+
+    const resp = await request(app).get('/');
+    expect(resp.headers['set-cookie']).toEqual(['a=1; Path=/', 'b=2; Path=/']);
+  });
+
+  it('잘못된 target URL 은 생성 시점에 명확한 메시지로 throw 한다', () => {
+    expect(() => createProxyMiddleware({ target: 'not a url' })).toThrow(/Invalid target URL/);
+  });
+
+  it('셋업 단계 동기 throw(잘못된 경로)는 onError 로 위임된다(500 누수 없음)', async () => {
+    upstream = await startUpstream((_req, res) => res.end('ok'));
+    let onErrorCalled = false;
+    const app = express();
+    app.use('/', createProxyMiddleware({
+      target: upstream.url,
+      pathRewrite: () => '/bad\npath', // http.request 가 동기 throw
+      onError: (_e, _req, res) => { onErrorCalled = true; res.status(502).json({ setupError: true }); },
+    }));
+
+    const resp = await request(app).get('/');
+    expect(onErrorCalled).toBe(true);
+    expect(resp.status).toBe(502);
+    expect(resp.body).toEqual({ setupError: true });
+  });
+
+  it('응답 스트리밍 중 클라이언트가 끊으면 업스트림 요청을 정리한다', async () => {
+    let upstreamReqClosed = false;
+    upstream = await startUpstream((req, res) => {
+      res.setHeader('content-type', 'text/plain');
+      res.write('first-chunk-');           // 헤더 + 첫 청크만 보내고 응답을 유지
+      req.on('close', () => { upstreamReqClosed = true; });
+    });
+    const app = express();
+    app.use('/', createProxyMiddleware({ target: upstream.url }));
+
+    const server = await new Promise<http.Server>((resolve) => {
+      const s = app.listen(0, '127.0.0.1', () => resolve(s));
+    });
+    const port = (server.address() as AddressInfo).port;
+
+    await new Promise<void>((resolve) => {
+      const clientReq = http.get({ host: '127.0.0.1', port, path: '/' }, (clientRes) => {
+        clientRes.once('data', () => { clientReq.destroy(); }); // 첫 청크 받자마자 클라이언트 중단
+      });
+      clientReq.on('error', () => { /* abort 로 인한 에러 무시 */ });
+      setTimeout(resolve, 400); // 정리 전파 대기
+    });
+
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    expect(upstreamReqClosed).toBe(true);
   });
 });

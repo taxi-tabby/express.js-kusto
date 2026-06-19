@@ -4,6 +4,7 @@
  */
 
 import { log } from '@ext/winston';
+import type { Request } from 'express';
 
 /**
  * BigInt를 문자열로 변환하는 직렬화 함수
@@ -184,8 +185,6 @@ export function jsonReplacer(key: string, value: any): any {
 export function safeJsonResponse(data: any): string {
     return JSON.stringify(data, jsonReplacer);
 }
-
-import type { Request } from 'express';
 
 /** 배열이면 원소 타입, 아니면 그대로 (pick/omit 키를 원소 키로 좁히기 위함) */
 type ArrEl<T> = T extends readonly (infer E)[] ? E : T;

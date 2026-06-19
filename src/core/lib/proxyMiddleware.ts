@@ -3,6 +3,8 @@ import * as http from 'http';
 import * as https from 'https';
 import { URL } from 'url';
 import * as querystring from 'querystring';
+import { log } from '@ext/winston';
+import { ERROR_CODES, getHttpStatusForErrorCode } from './errorCodes';
 
 export interface ProxyOptions {
   /** 업스트림 베이스 URL. 필수. 예: 'http://localhost:3001', 'https://api.example.com' */
@@ -88,6 +90,35 @@ function copyResponseHeaders(proxyRes: http.IncomingMessage, res: Response): voi
   }
 }
 
+/**
+ * 업스트림 실패를 프레임워크 컨벤션(winston 로깅 + JSON:API 502/504)으로 응답한다.
+ * 응답이 이미 시작된(headersSent) 경우엔 본문을 더 쓸 수 없으므로 소켓을 끊는다.
+ */
+function sendProxyError(err: NodeJS.ErrnoException, req: Request, res: Response): void {
+  const isTimeout = (err as { __timeout?: boolean }).__timeout === true || err.code === 'ETIMEDOUT';
+  const code = isTimeout ? ERROR_CODES.GATEWAY_TIMEOUT : ERROR_CODES.BAD_GATEWAY;
+  const status = getHttpStatusForErrorCode(code);
+
+  log.Error(`Proxy upstream failure: ${err.code || err.message}`, {
+    code, status, path: req.originalUrl, error: err.message,
+  });
+
+  if (res.headersSent) {
+    res.destroy();
+    return;
+  }
+
+  const isDev = process.env.NODE_ENV !== 'production';
+  res.status(status).json({
+    errors: [{
+      status: String(status),
+      code,
+      title: isTimeout ? 'Gateway Timeout' : 'Bad Gateway',
+      detail: isDev ? `Upstream request failed: ${err.code || err.message}` : 'Upstream request failed',
+    }],
+  });
+}
+
 export function createProxyMiddleware(options: ProxyOptions): RequestHandler {
   const target = new URL(options.target);
   const isHttps = target.protocol === 'https:';
@@ -113,12 +144,36 @@ export function createProxyMiddleware(options: ProxyOptions): RequestHandler {
       if (options.onProxyRes) options.onProxyRes(proxyRes, req, res);
       res.statusCode = proxyRes.statusCode || 502;
       copyResponseHeaders(proxyRes, res);
+      // 스트리밍 중 업스트림 응답이 끊기면 클라이언트 소켓도 정리(언핸들드 에러 방지)
+      proxyRes.on('error', () => { res.destroy(); });
       proxyRes.pipe(res);
     };
 
     const proxyReq = isHttps
       ? https.request(requestOptions, onResponse)
       : http.request(requestOptions, onResponse);
+
+    // 업스트림 요청 실패/타임아웃 처리 (한 번만 settle)
+    let settled = false;
+    const handleError = (err: NodeJS.ErrnoException): void => {
+      if (settled) return;
+      settled = true;
+      proxyReq.destroy();
+      if (options.onError) { options.onError(err, req, res); return; }
+      sendProxyError(err, req, res);
+    };
+
+    proxyReq.on('error', handleError);
+    proxyReq.on('timeout', () => {
+      const err: NodeJS.ErrnoException = new Error('Proxy request timed out');
+      err.code = 'ETIMEDOUT';
+      (err as { __timeout?: boolean }).__timeout = true;
+      handleError(err);
+    });
+    req.on('aborted', () => proxyReq.destroy());
+
+    // onProxyReq 는 본문 전송 이전에 호출해야 헤더 변경이 반영된다
+    if (options.onProxyReq) options.onProxyReq(proxyReq, req, res);
 
     // body-parser(전역 미들웨어)가 이미 본문 스트림을 소비했으면 req.body 를 재직렬화해
     // 전달한다(fixRequestBody). 파싱되지 않은 raw 요청은 스트림을 그대로 파이프한다.

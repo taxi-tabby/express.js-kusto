@@ -187,3 +187,63 @@ describe('createProxyMiddleware — 요청 본문 (body-parser 이후)', () => {
     expect(resp.body.received).toBe('raw-payload');
   });
 });
+
+describe('createProxyMiddleware — 에러/훅', () => {
+  let upstream: Upstream | undefined;
+  afterEach(async () => { if (upstream) await closeUpstream(upstream); upstream = undefined; });
+
+  it('업스트림 다운(닫힌 포트) → 502 BAD_GATEWAY JSON', async () => {
+    const tmp = await startUpstream((_req, res) => res.end());
+    const deadUrl = tmp.url;
+    await closeUpstream(tmp); // 포트 해제 → 연결거부
+
+    const app = express();
+    app.use('/', createProxyMiddleware({ target: deadUrl }));
+
+    const resp = await request(app).get('/');
+    expect(resp.status).toBe(502);
+    expect(resp.body.errors[0].code).toBe('BAD_GATEWAY');
+  });
+
+  it('업스트림 무응답 + timeout → 504 GATEWAY_TIMEOUT JSON', async () => {
+    upstream = await startUpstream((_req, _res) => { /* 응답하지 않음 */ });
+    const app = express();
+    app.use('/', createProxyMiddleware({ target: upstream.url, timeout: 80 }));
+
+    const resp = await request(app).get('/');
+    expect(resp.status).toBe(504);
+    expect(resp.body.errors[0].code).toBe('GATEWAY_TIMEOUT');
+  });
+
+  it('onError 가 있으면 위임한다', async () => {
+    const tmp = await startUpstream((_req, res) => res.end());
+    const deadUrl = tmp.url;
+    await closeUpstream(tmp);
+
+    const app = express();
+    app.use('/', createProxyMiddleware({
+      target: deadUrl,
+      onError: (_err, _req, res) => { res.status(599).json({ custom: true }); },
+    }));
+
+    const resp = await request(app).get('/');
+    expect(resp.status).toBe(599);
+    expect(resp.body).toEqual({ custom: true });
+  });
+
+  it('onProxyReq / onProxyRes 훅이 호출된다', async () => {
+    upstream = await startUpstream((_req, res) => res.end('ok'));
+    let reqCalled = false;
+    let resCalled = false;
+    const app = express();
+    app.use('/', createProxyMiddleware({
+      target: upstream.url,
+      onProxyReq: () => { reqCalled = true; },
+      onProxyRes: () => { resCalled = true; },
+    }));
+
+    await request(app).get('/');
+    expect(reqCalled).toBe(true);
+    expect(resCalled).toBe(true);
+  });
+});

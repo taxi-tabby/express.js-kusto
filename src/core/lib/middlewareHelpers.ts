@@ -25,6 +25,20 @@ export type ValidatedMiddlewareHandlerFunction = (
 ) => Promise<any> | any;
 
 /**
+ * next 를 최대 한 번만 호출하도록 보장하는 가드.
+ * async 래퍼에서 핸들러가 next() 를 호출한 뒤(또는 응답을 보낸 뒤) throw 하면
+ * catch 의 next(error) 와 합쳐져 double-next 가 되는데, 이를 방지한다.
+ */
+function onceNext(next: NextFunction): NextFunction {
+    let called = false;
+    return ((err?: any) => {
+        if (called) return;
+        called = true;
+        next(err);
+    }) as NextFunction;
+}
+
+/**
  * MiddlewareHandlerFunction을 Express 호환 미들웨어로 래핑하는 헬퍼 함수
  *
  * 비동기 핸들러의 거부(rejection)도 next(error)로 전달하도록 async + await 로 래핑한다.
@@ -32,15 +46,16 @@ export type ValidatedMiddlewareHandlerFunction = (
  */
 export function wrapMiddleware(handler: MiddlewareHandlerFunction): RequestHandler {
     return async (req: Request, res: Response, next: NextFunction) => {
+        const safeNext = onceNext(next);
         try {
             // Kusto 매니저를 Request 객체에 설정
             req.kusto = kustoManager;
 
             // Dependency injector에서 모든 injectable 모듈 가져오기
             const injected = DependencyInjector.getInstance().getInjectedModules();
-            await handler(req, res, next, injected, repositoryManager, prismaManager);
+            await handler(req, res, safeNext, injected, repositoryManager, prismaManager);
         } catch (error) {
-            next(error);
+            safeNext(error);
         }
     };
 }
@@ -50,16 +65,17 @@ export function wrapMiddleware(handler: MiddlewareHandlerFunction): RequestHandl
  */
 export function wrapValidatedMiddleware(handler: ValidatedMiddlewareHandlerFunction): RequestHandler {
     return async (req: Request, res: Response, next: NextFunction) => {
+        const safeNext = onceNext(next);
         try {
             // Kusto 매니저를 Request 객체에 설정
             req.kusto = kustoManager;
-            
+
             // Dependency injector에서 모든 injectable 모듈 가져오기
             const injected = DependencyInjector.getInstance().getInjectedModules();
-            const result = await handler(req as ValidatedRequest, res, next, injected, repositoryManager, prismaManager);
+            const result = await handler(req as ValidatedRequest, res, safeNext, injected, repositoryManager, prismaManager);
             return result;
         } catch (error) {
-            next(error);
+            safeNext(error);
         }
     };
 }

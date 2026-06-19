@@ -83,11 +83,13 @@ export default [
      */
     (err: Error, req: Request, res: Response, next: NextFunction) => {
         if (res.headersSent) return next(err);
+        // 에러가 명시한 HTTP 상태를 존중하고, 없으면 500 으로 폴백
+        const status = (err as any)?.statusCode ?? (err as any)?.status ?? 500;
         const body = ErrorHandler.handleError(err, {
             format: ErrorResponseFormat.JSON_API,
-            context: { path: req.originalUrl, method: req.method, status: 500 },
+            context: { path: req.originalUrl, method: req.method, status },
             // security 생략 → applySecurity 가 NODE_ENV 기준으로 stack/connection-string 등 redaction
         });
-        res.status(500).json(body);
+        res.status(status).json(body);
     }
 ];

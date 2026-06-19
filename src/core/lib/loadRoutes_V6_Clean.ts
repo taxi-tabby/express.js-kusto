@@ -636,8 +636,9 @@ async function loadRoutes(app: Express, dir?: string): Promise<void> {
         log.Route(`📊 Found ${directories.length} directories, ${routeDirectories.length} routes in ${routesDir}`);
 
         if (routeDirectories.length === 0) {
-            log.Route(`⚠️ No routes found in ${routesDir}`);
-            return;
+            // early-return 하지 않는다: 라우트가 없어도 전역 미들웨어/에러 핸들러는 등록되어야 한다.
+            // (아래 라우트 preload/등록 루프는 빈 배열이라 자연히 no-op 이 된다.)
+            log.Route(`⚠️ No routes found in ${routesDir} — registering global middleware only`);
         }
 
         // 1.5. 전역 미들웨어 먼저 등록 (최상위 middleware.ts)

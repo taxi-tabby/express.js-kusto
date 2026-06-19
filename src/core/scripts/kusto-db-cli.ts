@@ -1186,9 +1186,21 @@ program
             return;
         }
 
+        // 방어: --db 는 폴더명(식별자)이어야 한다. 경로/스키마/임시설정 경로에 삽입되고
+        // win32 에서는 shell:true 로 실행되므로, 셸 메타문자/경로 탈출을 정규식으로 차단한다.
+        if (!/^[A-Za-z0-9_-]+$/.test(options.db)) {
+            console.error(`Invalid database name: "${options.db}" (allowed: letters, digits, _ and -)`);
+            return;
+        }
+
         console.log(`🗃️  Executing SQL against database: ${options.db}`);
 
         try {
+            const schemaPath = getSchemaPath(options.db);
+            if (!fs.existsSync(schemaPath)) {
+                throw new Error(`Schema file not found: ${schemaPath}`);
+            }
+
             // Prisma 7: Create temp config for database connection
             const databaseUrl = getDatabaseUrl(options.db);
             if (!databaseUrl) {
@@ -1197,17 +1209,21 @@ program
             }
             const tempConfigPath = createTempPrismaConfig(options.db, databaseUrl);
             try {
-                const { args, stdin } = buildExecuteArgs(options, getSchemaPath(options.db), tempConfigPath);
-                console.log(`Executing: npx prisma db execute ${options.command ? '--stdin' : `--file ${options.file}`} --schema ... --config <temp>`);
+                const { args, stdin } = buildExecuteArgs(options, schemaPath, tempConfigPath);
+                console.log(`Executing: npx ${args.join(' ').replace(tempConfigPath, '<temp>')}`);
 
                 await new Promise<void>((resolve, reject) => {
-                    // shell:false + 개별 argv + SQL은 stdin → 셸 메타문자 주입 차단 (P1-8)
-                    const child = spawn(NPX_BIN, args, { shell: false });
+                    // 보안(P1-8): 사용자 SQL 은 args 가 아니라 stdin 으로 전달되므로 주입 불가.
+                    // win32 에서는 .cmd 를 shell:false 로 spawn 하면 EINVAL 이므로 shell:true 가 필수다
+                    // (Node 24+ / CVE-2024-27980). argv 의 경로는 모두 프레임워크 파생 + --db 정규식 검증됨.
+                    const child = spawn(NPX_BIN, args, { shell: process.platform === 'win32' });
                     let stdout = '';
                     let stderr = '';
                     child.stdout?.on('data', (d) => { stdout += d.toString(); });
                     child.stderr?.on('data', (d) => { stderr += d.toString(); });
                     child.on('error', reject);
+                    // stdin 의 EPIPE 등 스트림 에러가 unhandled 로 프로세스를 죽이지 않도록 처리
+                    child.stdin?.on('error', reject);
                     child.on('close', (code) => {
                         if (stdout) console.log(`[${options.db}] ${stdout}`);
                         if (stderr) console.error(`[${options.db}] Error: ${stderr}`);

@@ -1,4 +1,4 @@
-import { spawnSync } from 'child_process';
+import { spawn, spawnSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
@@ -172,10 +172,18 @@ async function bootPostgres(): Promise<DbFixture> {
     const { PrismaPg } = await import('@prisma/adapter-pg');
 
     const pglite = new (PGlite as any)();
-    const server = new (PGLiteSocketServer as any)({ db: pglite, port: 0 });
+    // maxConnections 기본값은 1 인데, PrismaPg(node-postgres) 는 풀로 여러 연결을 열어
+    // 초과 연결이 거부·종료되면서 "Server has closed the connection" 이 발생한다.
+    // pglite 는 queryQueue 로 쿼리를 직렬화하므로 다중 연결을 허용해도 안전하다.
+    const server = new (PGLiteSocketServer as any)({ db: pglite, port: 0, maxConnections: 100 });
     await server.start();
     const port = (server as any).port;
-    const url = `postgres://test:test@localhost:${port}/postgres`;
+    // host 는 127.0.0.1 로 고정(PGLiteSocketServer 는 기본 127.0.0.1/IPv4 바인딩 —
+    // `localhost` 는 일부 OS 에서 ::1 로 해석되어 닿지 못할 수 있다).
+    // sslmode=disable 필수: PGLiteSocketServer 는 StartupMessage 만 파싱하고 SSLRequest
+    // 는 처리하지 못한다. prisma schema engine(db push)은 기본 sslmode=prefer 로 먼저
+    // SSLRequest 를 보내므로, 비활성화하지 않으면 핸드셰이크가 멈춰 P1001 로 실패한다.
+    const url = `postgres://test:test@127.0.0.1:${port}/postgres?sslmode=disable`;
 
     const schemaPath = path.resolve('tests/_fixtures/test-schema.postgres.prisma');
     const clientDir = path.resolve('node_modules/.prisma/test-postgres-client');
@@ -183,15 +191,25 @@ async function bootPostgres(): Promise<DbFixture> {
     // client 생성은 워커 경쟁 없이 1회만 (공유 디렉터리 race 방지)
     ensurePrismaClientGenerated(schemaPath, clientDir);
 
-    const push = spawnSync('npx', [
-        'prisma', 'db', 'push',
-        '--accept-data-loss',
-        '--schema', schemaPath,
-        '--url', url
-    ], { stdio: 'pipe', shell: true });
-    if (push.status !== 0) {
-        throw new Error(`prisma db push failed: ${push.stderr?.toString() ?? ''}`);
-    }
+    // 중요: postgres 백엔드는 PGLiteSocketServer 가 "이 프로세스 안"에서 돌며 이벤트 루프로
+    // 연결을 수락한다. 따라서 db push 를 동기 spawnSync 로 돌리면 이벤트 루프가 막혀
+    // 서버가 push 연결을 수락하지 못하고 P1001(Can't reach database server)로 실패한다.
+    // (sqlite 는 파일 접속이라 spawnSync 로도 무관.) 비동기 spawn 으로 루프를 살려둔다.
+    await new Promise<void>((resolve, reject) => {
+        const child = spawn('npx', [
+            'prisma', 'db', 'push',
+            '--accept-data-loss',
+            '--schema', schemaPath,
+            '--url', url
+        ], { stdio: 'pipe', shell: true });
+        let stderr = '';
+        child.stderr?.on('data', (d) => { stderr += d.toString(); });
+        child.on('error', reject);
+        child.on('close', (code) => {
+            if (code === 0) resolve();
+            else reject(new Error(`prisma db push failed: ${stderr}`));
+        });
+    });
 
     const clientModule = require(clientDir);
     const PrismaClient = clientModule.PrismaClient;

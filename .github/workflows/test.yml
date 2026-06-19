@@ -68,3 +68,5 @@ jobs:
         run: npm run test:ci
         env:
           KUSTO_TEST_DB: postgres
+          # PGlite 는 wasm 을 동적 import 하므로 jest vm 에서 ESM 동적 import 활성화 필요.
+          NODE_OPTIONS: --experimental-vm-modules

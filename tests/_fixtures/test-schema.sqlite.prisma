@@ -14,6 +14,7 @@ model User {
   email     String    @unique
   name      String
   deletedAt DateTime?
+  removedAt DateTime? // P0-3: 커스텀 soft-delete 필드 테스트용 (non-default)
   posts     Post[]
   comments  Comment[]
 }

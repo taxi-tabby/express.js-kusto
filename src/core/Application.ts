@@ -105,10 +105,24 @@ export class Application {
 
     /**
      * Get application health status
+     *
+     * P0-1: 단순히 서버 listen 여부만 보지 않고, Core 의 readiness(DB 연결 상태)를
+     * 반영하여 degraded 를 정직하게 노출한다.
      */
     public getHealthStatus() {
+        let status: 'healthy' | 'degraded' | 'stopped';
+        let readiness: ReturnType<Core['getReadiness']> | undefined;
+
+        if (!this.isRunning) {
+            status = 'stopped';
+        } else {
+            readiness = this.core.getReadiness();
+            status = readiness.ready ? 'healthy' : 'degraded';
+        }
+
         return {
-            status: this.isRunning ? 'healthy' : 'stopped',
+            status,
+            readiness,
             uptime: process.uptime(),
             memory: process.memoryUsage(),
             version: process.version,

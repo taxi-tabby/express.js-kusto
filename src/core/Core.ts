@@ -29,6 +29,9 @@ export class Core {
     private _server?: Server;
     private _config: Required<CoreConfig>;
     private _isInitialized = false;
+    // P0-1: DB 연결 실패는 서버리스 lazy-reconnect 를 위해 부팅을 막지 않되(non-fatal),
+    // degraded 상태로 기록하여 /healthz 와 health status 가 정직하게 노출하도록 한다.
+    private _degraded: { prisma?: string } = {};
 
     private constructor() {
         this._app = expressApp.getApp();
@@ -82,6 +85,7 @@ export class Core {
 
         
         this.setupExpress();
+        this.setupHealthCheck(); // /healthz readiness (글로벌 라우트보다 먼저)
         this.setupDocumentationRoutes(); // 문서화 라우트를 먼저 등록
         this.loadRoutes();
         this.setupViews();
@@ -323,9 +327,12 @@ export class Core {
             });
 
         } catch (error) {
+            // P0-1: DB 연결 실패는 의도적으로 non-fatal 이다 (서버리스 lazy-reconnect 전제).
+            // 단, 부팅을 green 으로 위장하지 않도록 degraded 상태로 기록한다 → /healthz 503.
+            const message = error instanceof Error ? error.message : String(error);
+            this._degraded.prisma = message;
             log.Error('Failed to initialize Prisma Manager', { error });
-            // Don't throw error here to allow application to continue without database
-            log.Warn('Application will continue without database connections');
+            log.Warn('Application will continue in DEGRADED mode (no database connections)');
         }
     }
 
@@ -349,9 +356,11 @@ export class Core {
                 log.Info(`✅ Repository '${repoName}' loaded successfully`);
             });
         } catch (error) {
-            log.Error('Failed to initialize Repository Manager', { error });
-            // Don't throw error here to allow application to continue without repositories
-            log.Warn('Application will continue without repository management');
+            // P0-1: Repository 매니저는 개별 repo 로드 실패를 내부 루프에서 이미 흡수한다.
+            // 여기까지 올라온 top-level throw 는 레지스트리/코드 구조 결함이므로,
+            // 부팅을 green 으로 위장하지 말고 fail-fast 한다 (요청 시점 500 대신 명확한 부팅 실패).
+            log.Error('Failed to initialize Repository Manager — aborting startup', { error });
+            throw error;
         }
     }
 
@@ -364,10 +373,51 @@ export class Core {
             await DependencyInjector.getInstance().initialize();
             log.Info('Dependency Injector initialization complete');
         } catch (error) {
-            log.Error('Failed to initialize Dependency Injector', { error });
-            // Don't throw error here to allow application to continue without DI
-            log.Warn('Application will continue without dependency injection');
+            // P0-1: DI 컨테이너도 개별 모듈 로드 실패를 내부 루프에서 흡수한다.
+            // top-level throw 는 구조 결함이므로 fail-fast 한다.
+            log.Error('Failed to initialize Dependency Injector — aborting startup', { error });
+            throw error;
         }
+    }
+
+    /**
+     * 애플리케이션 readiness 상태를 계산한다 (P0-1).
+     *
+     * Repo/DI 초기화 실패는 부팅을 중단시키므로, 서버가 listen 중이라면 그 둘은 정상이다.
+     * 따라서 degraded 여부는 DB 연결 상태(서버리스에서 의도적으로 tolerate 됨)에 달려 있다.
+     */
+    public getReadiness(): {
+        ready: boolean;
+        status: 'healthy' | 'degraded';
+        prisma: { connected: number; total: number; error?: string };
+    } {
+        const prismaStatus = prismaManager.getStatus() as any;
+        const total = prismaStatus?.totalDatabases ?? 0;
+        const connected = prismaStatus?.connectedDatabases ?? 0;
+        const dbDegraded = !!this._degraded.prisma || (total > 0 && connected < total);
+
+        return {
+            ready: !dbDegraded,
+            status: dbDegraded ? 'degraded' : 'healthy',
+            prisma: { connected, total, error: this._degraded.prisma },
+        };
+    }
+
+    /**
+     * /healthz readiness 엔드포인트 등록 (P0-1).
+     * 완전 정상일 때만 200, degraded 면 503 을 반환하여
+     * 오케스트레이터(k8s/LB/서버리스 워머)가 트래픽을 게이팅할 수 있게 한다.
+     * 글로벌 라우트 미들웨어(DB 의존)보다 먼저, 직접 app 에 등록한다.
+     */
+    private setupHealthCheck(): void {
+        this._app.get('/healthz', (_req, res) => {
+            const readiness = this.getReadiness();
+            res.status(readiness.ready ? 200 : 503).json({
+                status: readiness.ready ? 'ok' : 'degraded',
+                ready: readiness.ready,
+                prisma: readiness.prisma,
+            });
+        });
     }
 }
 

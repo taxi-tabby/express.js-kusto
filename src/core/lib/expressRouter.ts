@@ -11,7 +11,7 @@ import { repositoryManager } from '@lib/repositoryManager'
 import { kustoManager } from '@lib/kustoManager'
 import { CrudQueryParser, PrismaQueryBuilder, CrudResponseFormatter, JsonApiTransformer, JsonApiResponse, JsonApiResource, JsonApiRelationship, JsonApiErrorResponse } from './crudHelpers';
 import { ErrorFormatter } from './errorFormatter';
-import { serializeBigInt, serialize } from './serializer';
+import { serializeBigInt, serialize, ResponseSerializer, applyResponseSerializer } from './serializer';
 import { ERROR_CODES, getHttpStatusForErrorCode } from './errorCodes';
 import { CrudSchemaRegistry } from './crudSchemaRegistry';
 import { PrismaSchemaAnalyzer } from './prismaSchemaAnalyzer';
@@ -219,12 +219,19 @@ export class ExpressRouter {
     /**
      * HandlerFunction을 Express 호환 핸들러로 래핑하는 헬퍼 메서드
      */    
-    private wrapHandler(handler: HandlerFunction): RequestHandler {
+    private wrapHandler(
+        handler: (req: Request, res: Response, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => any,
+        serialize?: ResponseSerializer<any>
+    ): RequestHandler {
         return async (req: Request, res: Response, next: NextFunction) => {
             try {
                 // Dependency injector에서 모든 injectable 모듈 가져오기
                 const injected = DependencyInjector.getInstance().getInjectedModules();
-                await handler(req, res, injected, repositoryManager, prismaManager);
+                const result = await handler(req, res, injected, repositoryManager, prismaManager);
+                // serialize 지정 시에만 반환값을 정제해 전송(미지정 시 기존 동작 유지).
+                if (serialize && !res.headersSent && result !== undefined) {
+                    res.json(await applyResponseSerializer(result, serialize, req));
+                }
             } catch (error) {
                 next(error);
             }
@@ -334,8 +341,14 @@ export class ExpressRouter {
    * @param options 
    * @returns 
    */
-    public GET(handler: HandlerFunction, options?: object): ExpressRouter {
-        this.router.get('/', this.wrapHandler(handler));
+    public GET<R, const Sz extends ResponseSerializer<Awaited<R>>>(
+        handler: (req: Request, res: Response, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => R,
+        options: { serialize: Sz }
+    ): ExpressRouter;
+    public GET(handler: HandlerFunction, options?: object): ExpressRouter;
+    public GET(handler: any, options?: any): ExpressRouter {
+        const serialize = (options as { serialize?: ResponseSerializer<any> } | undefined)?.serialize;
+        this.router.get('/', this.wrapHandler(handler, serialize));
 
         // 문서화 등록 지연시: setBasePath 호출 후 올바른 경로로 등록하도록 함
         if (this.basePath) {
@@ -373,9 +386,16 @@ export class ExpressRouter {
      * });
      * ```
      */
-    public GET_SLUG(slug: string[], handler: HandlerFunction, options?: object): ExpressRouter {
+    public GET_SLUG<R, const Sz extends ResponseSerializer<Awaited<R>>>(
+        slug: string[],
+        handler: (req: Request, res: Response, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => R,
+        options: { serialize: Sz }
+    ): ExpressRouter;
+    public GET_SLUG(slug: string[], handler: HandlerFunction, options?: object): ExpressRouter;
+    public GET_SLUG(slug: string[], handler: any, options?: any): ExpressRouter {
+        const serialize = (options as { serialize?: ResponseSerializer<any> } | undefined)?.serialize;
         const slugPath = this.convertSlugsToPath(slug);
-        this.router.get(slugPath, this.wrapHandler(handler));
+        this.router.get(slugPath, this.wrapHandler(handler, serialize));
 
         // 문서화 등록 지연시: setBasePath 호출 후 올바른 경로로 등록하도록 함
         if (this.basePath) {

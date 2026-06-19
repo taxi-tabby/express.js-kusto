@@ -64,8 +64,11 @@ jobs:
         run: npm run db -- generate -a
       - name: Verify Prisma client generated
         run: test -f src/app/db/default/client/index.d.ts || { echo "::error::Prisma client(default) was not generated"; exit 1; }
+      # --forceExit: PGlite(wasm) + in-process 소켓 서버는 테스트 통과 후에도 libuv/wasm
+      # 핸들을 남길 수 있어, 없으면 jest 가 프로세스를 못 빠져나가 러너가 job 을 finalize
+      # 하지 못하고 매달린다(간헐적). 테스트·커버리지 완료 후 강제 종료해 결정적으로 끝낸다.
       - name: Run tests with PostgreSQL backend
-        run: npm run test:ci
+        run: npm run test:ci -- --forceExit
         env:
           KUSTO_TEST_DB: postgres
           # PGlite 는 wasm 을 동적 import 하므로 jest vm 에서 ESM 동적 import 활성화 필요.

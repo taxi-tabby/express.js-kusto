@@ -1525,10 +1525,22 @@ export class ExpressRouter {
      * # POST_VALIDATED
      * 검증된 POST 요청 처리
      */
+    public POST_VALIDATED<TConfig extends RequestConfig, R, const Sz extends ResponseSerializer<Awaited<R>>>(
+        requestConfig: TConfig,
+        responseConfig: ResponseConfig,
+        handler: (req: ValidatedRequest<TConfig>, res: Response, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => R | Promise<R>,
+        options: { serialize: Sz }
+    ): ExpressRouter;
     public POST_VALIDATED<TConfig extends RequestConfig>(
         requestConfig: TConfig,
         responseConfig: ResponseConfig,
         handler: ValidatedHandlerFunction<TConfig>
+    ): ExpressRouter;
+    public POST_VALIDATED<TConfig extends RequestConfig>(
+        requestConfig: TConfig,
+        responseConfig: ResponseConfig,
+        handler: ValidatedHandlerFunction<TConfig>,
+        options?: { serialize?: ResponseSerializer<any> }
     ): ExpressRouter {
         // 헬퍼 메서드를 통해 호출자 위치 정보 획득
         const { filePath, lineNumber } = this.getCallerSourceInfo();
@@ -1537,6 +1549,7 @@ export class ExpressRouter {
             {
                 request: requestConfig,
                 response: responseConfig,
+                serialize: options?.serialize,
                 sourceInfo: { filePath, lineNumber }
             },
             handler
@@ -1578,12 +1591,26 @@ export class ExpressRouter {
      * 검증된 POST 슬러그 요청 처리
      * @param exact true이면 하위 경로 매칭 방지 (기본값 false)
      */    
+    public POST_SLUG_VALIDATED<TConfig extends RequestConfig, R, const Sz extends ResponseSerializer<Awaited<R>>>(
+        slug: string[],
+        requestConfig: TConfig,
+        responseConfig: ResponseConfig,
+        handler: (req: ValidatedRequest<TConfig>, res: Response, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => R | Promise<R>,
+        options: { exact?: boolean; serialize: Sz }
+    ): ExpressRouter;
     public POST_SLUG_VALIDATED<TConfig extends RequestConfig>(
         slug: string[],
         requestConfig: TConfig,
         responseConfig: ResponseConfig,
         handler: ValidatedHandlerFunction<TConfig>,
         options?: { exact?: boolean }
+    ): ExpressRouter;
+    public POST_SLUG_VALIDATED<TConfig extends RequestConfig>(
+        slug: string[],
+        requestConfig: TConfig,
+        responseConfig: ResponseConfig,
+        handler: ValidatedHandlerFunction<TConfig>,
+        options?: { exact?: boolean; serialize?: ResponseSerializer<any> }
     ): ExpressRouter {
         // 헬퍼 메서드를 통해 호출자 위치 정보 획득
         const { filePath, lineNumber } = this.getCallerSourceInfo();
@@ -1592,6 +1619,7 @@ export class ExpressRouter {
             {
                 request: requestConfig,
                 response: responseConfig,
+                serialize: options?.serialize,
                 sourceInfo: { filePath, lineNumber }
             },
             handler
@@ -1651,10 +1679,22 @@ export class ExpressRouter {
      * # PUT_VALIDATED
      * 검증된 PUT 요청 처리
      */    
+    public PUT_VALIDATED<TConfig extends RequestConfig, R, const Sz extends ResponseSerializer<Awaited<R>>>(
+        requestConfig: TConfig,
+        responseConfig: ResponseConfig,
+        handler: (req: ValidatedRequest<TConfig>, res: Response, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => R | Promise<R>,
+        options: { serialize: Sz }
+    ): ExpressRouter;
     public PUT_VALIDATED<TConfig extends RequestConfig>(
         requestConfig: TConfig,
         responseConfig: ResponseConfig,
         handler: ValidatedHandlerFunction<TConfig>
+    ): ExpressRouter;
+    public PUT_VALIDATED<TConfig extends RequestConfig>(
+        requestConfig: TConfig,
+        responseConfig: ResponseConfig,
+        handler: ValidatedHandlerFunction<TConfig>,
+        options?: { serialize?: ResponseSerializer<any> }
     ): ExpressRouter {
         // 헬퍼 메서드를 통해 호출자 위치 정보 획득
         const { filePath, lineNumber } = this.getCallerSourceInfo();
@@ -1663,6 +1703,7 @@ export class ExpressRouter {
             {
                 request: requestConfig,
                 response: responseConfig,
+                serialize: options?.serialize,
                 sourceInfo: { filePath, lineNumber }
             },
             handler
@@ -1705,10 +1746,22 @@ export class ExpressRouter {
      * # DELETE_VALIDATED
      * 검증된 DELETE 요청 처리
      */    
+    public DELETE_VALIDATED<TConfig extends RequestConfig, R, const Sz extends ResponseSerializer<Awaited<R>>>(
+        requestConfig: TConfig,
+        responseConfig: ResponseConfig,
+        handler: (req: ValidatedRequest<TConfig>, res: Response, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => R | Promise<R>,
+        options: { serialize: Sz }
+    ): ExpressRouter;
     public DELETE_VALIDATED<TConfig extends RequestConfig>(
         requestConfig: TConfig,
         responseConfig: ResponseConfig,
         handler: ValidatedHandlerFunction<TConfig>
+    ): ExpressRouter;
+    public DELETE_VALIDATED<TConfig extends RequestConfig>(
+        requestConfig: TConfig,
+        responseConfig: ResponseConfig,
+        handler: ValidatedHandlerFunction<TConfig>,
+        options?: { serialize?: ResponseSerializer<any> }
     ): ExpressRouter {
         // 헬퍼 메서드를 통해 호출자 위치 정보 획득
         const { filePath, lineNumber } = this.getCallerSourceInfo();
@@ -1717,6 +1770,7 @@ export class ExpressRouter {
             {
                 request: requestConfig,
                 response: responseConfig,
+                serialize: options?.serialize,
                 sourceInfo: { filePath, lineNumber }
             },
             handler
@@ -1757,10 +1811,22 @@ export class ExpressRouter {
      * # PATCH_VALIDATED
      * 검증된 PATCH 요청 처리
      */    
+    public PATCH_VALIDATED<TConfig extends RequestConfig, R, const Sz extends ResponseSerializer<Awaited<R>>>(
+        requestConfig: TConfig,
+        responseConfig: ResponseConfig,
+        handler: (req: ValidatedRequest<TConfig>, res: Response, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => R | Promise<R>,
+        options: { serialize: Sz }
+    ): ExpressRouter;
     public PATCH_VALIDATED<TConfig extends RequestConfig>(
         requestConfig: TConfig,
         responseConfig: ResponseConfig,
         handler: ValidatedHandlerFunction<TConfig>
+    ): ExpressRouter;
+    public PATCH_VALIDATED<TConfig extends RequestConfig>(
+        requestConfig: TConfig,
+        responseConfig: ResponseConfig,
+        handler: ValidatedHandlerFunction<TConfig>,
+        options?: { serialize?: ResponseSerializer<any> }
     ): ExpressRouter {
         // 헬퍼 메서드를 통해 호출자 위치 정보 획득
         const { filePath, lineNumber } = this.getCallerSourceInfo();
@@ -1769,6 +1835,7 @@ export class ExpressRouter {
             {
                 request: requestConfig,
                 response: responseConfig,
+                serialize: options?.serialize,
                 sourceInfo: { filePath, lineNumber }
             },
             handler
@@ -1808,12 +1875,26 @@ export class ExpressRouter {
      * 검증된 PATCH 슬러그 요청 처리
      * @param exact true이면 하위 경로 매칭 방지 (기본값 false)
      */
+    public PATCH_SLUG_VALIDATED<TConfig extends RequestConfig, R, const Sz extends ResponseSerializer<Awaited<R>>>(
+        slug: string[],
+        requestConfig: TConfig,
+        responseConfig: ResponseConfig,
+        handler: (req: ValidatedRequest<TConfig>, res: Response, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => R | Promise<R>,
+        options: { exact?: boolean; serialize: Sz }
+    ): ExpressRouter;
     public PATCH_SLUG_VALIDATED<TConfig extends RequestConfig>(
         slug: string[],
         requestConfig: TConfig,
         responseConfig: ResponseConfig,
         handler: ValidatedHandlerFunction<TConfig>,
         options?: { exact?: boolean }
+    ): ExpressRouter;
+    public PATCH_SLUG_VALIDATED<TConfig extends RequestConfig>(
+        slug: string[],
+        requestConfig: TConfig,
+        responseConfig: ResponseConfig,
+        handler: ValidatedHandlerFunction<TConfig>,
+        options?: { exact?: boolean; serialize?: ResponseSerializer<any> }
     ): ExpressRouter {
         // 헬퍼 메서드를 통해 호출자 위치 정보 획득
         const { filePath, lineNumber } = this.getCallerSourceInfo();
@@ -1822,6 +1903,7 @@ export class ExpressRouter {
             {
                 request: requestConfig,
                 response: responseConfig,
+                serialize: options?.serialize,
                 sourceInfo: { filePath, lineNumber }
             },
             handler
@@ -2107,12 +2189,26 @@ export class ExpressRouter {
      * 검증된 PUT 슬러그 요청 처리
      * @param exact true이면 하위 경로 매칭 방지 (기본값 false)
      */
+    public PUT_SLUG_VALIDATED<TConfig extends RequestConfig, R, const Sz extends ResponseSerializer<Awaited<R>>>(
+        slug: string[],
+        requestConfig: TConfig,
+        responseConfig: ResponseConfig,
+        handler: (req: ValidatedRequest<TConfig>, res: Response, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => R | Promise<R>,
+        options: { exact?: boolean; serialize: Sz }
+    ): ExpressRouter;
     public PUT_SLUG_VALIDATED<TConfig extends RequestConfig>(
         slug: string[],
         requestConfig: TConfig,
         responseConfig: ResponseConfig,
         handler: ValidatedHandlerFunction<TConfig>,
         options?: { exact?: boolean }
+    ): ExpressRouter;
+    public PUT_SLUG_VALIDATED<TConfig extends RequestConfig>(
+        slug: string[],
+        requestConfig: TConfig,
+        responseConfig: ResponseConfig,
+        handler: ValidatedHandlerFunction<TConfig>,
+        options?: { exact?: boolean; serialize?: ResponseSerializer<any> }
     ): ExpressRouter {
         // 헬퍼 메서드를 통해 호출자 위치 정보 획득
         const { filePath, lineNumber } = this.getCallerSourceInfo();
@@ -2121,6 +2217,7 @@ export class ExpressRouter {
             {
                 request: requestConfig,
                 response: responseConfig,
+                serialize: options?.serialize,
                 sourceInfo: { filePath, lineNumber }
             },
             handler
@@ -2223,12 +2320,26 @@ export class ExpressRouter {
      * 검증된 DELETE 슬러그 요청 처리
      * @param exact true이면 하위 경로 매칭 방지 (기본값 false)
      */
+    public DELETE_SLUG_VALIDATED<TConfig extends RequestConfig, R, const Sz extends ResponseSerializer<Awaited<R>>>(
+        slug: string[],
+        requestConfig: TConfig,
+        responseConfig: ResponseConfig,
+        handler: (req: ValidatedRequest<TConfig>, res: Response, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => R | Promise<R>,
+        options: { exact?: boolean; serialize: Sz }
+    ): ExpressRouter;
     public DELETE_SLUG_VALIDATED<TConfig extends RequestConfig>(
         slug: string[],
         requestConfig: TConfig,
         responseConfig: ResponseConfig,
         handler: ValidatedHandlerFunction<TConfig>,
         options?: { exact?: boolean }
+    ): ExpressRouter;
+    public DELETE_SLUG_VALIDATED<TConfig extends RequestConfig>(
+        slug: string[],
+        requestConfig: TConfig,
+        responseConfig: ResponseConfig,
+        handler: ValidatedHandlerFunction<TConfig>,
+        options?: { exact?: boolean; serialize?: ResponseSerializer<any> }
     ): ExpressRouter {
         // 헬퍼 메서드를 통해 호출자 위치 정보 획득
         const { filePath, lineNumber } = this.getCallerSourceInfo();
@@ -2237,6 +2348,7 @@ export class ExpressRouter {
             {
                 request: requestConfig,
                 response: responseConfig,
+                serialize: options?.serialize,
                 sourceInfo: { filePath, lineNumber }
             },
             handler

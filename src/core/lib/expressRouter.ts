@@ -425,8 +425,14 @@ export class ExpressRouter {
      * @param options 
      * @returns 
      */
-    public POST(handler: HandlerFunction, options?: object): ExpressRouter {
-        this.router.post('/', this.wrapHandler(handler));
+    public POST<R, const Sz extends ResponseSerializer<Awaited<R>>>(
+        handler: (req: Request, res: Response, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => R,
+        options: { serialize: Sz }
+    ): ExpressRouter;
+    public POST(handler: HandlerFunction, options?: object): ExpressRouter;
+    public POST(handler: any, options?: any): ExpressRouter {
+        const serialize = (options as { serialize?: ResponseSerializer<any> } | undefined)?.serialize;
+        this.router.post('/', this.wrapHandler(handler, serialize));
 
         // 문서화 등록을 지연시키거나 setBasePath 호출 후 올바른 경로로 등록하도록 함
         if (this.basePath) {
@@ -459,9 +465,16 @@ export class ExpressRouter {
      * @description
      * - 라우터로 선언된 slug 직접 주워 받아야 합니다 
      */
-    public POST_SLUG(slug: string[], handler: HandlerFunction, options?: object): ExpressRouter {
+    public POST_SLUG<R, const Sz extends ResponseSerializer<Awaited<R>>>(
+        slug: string[],
+        handler: (req: Request, res: Response, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => R,
+        options: { serialize: Sz }
+    ): ExpressRouter;
+    public POST_SLUG(slug: string[], handler: HandlerFunction, options?: object): ExpressRouter;
+    public POST_SLUG(slug: string[], handler: any, options?: any): ExpressRouter {
+        const serialize = (options as { serialize?: ResponseSerializer<any> } | undefined)?.serialize;
         const slugPath = this.convertSlugsToPath(slug);
-        this.router.post(slugPath, this.wrapHandler(handler));
+        this.router.post(slugPath, this.wrapHandler(handler, serialize));
 
         // 문서화 등록을 지연시키거나 setBasePath 호출 후 올바른 경로로 등록하도록 함
         if (this.basePath) {
@@ -660,8 +673,14 @@ export class ExpressRouter {
      * @param options 
      * @returns 
      */
-    public PUT(handler: HandlerFunction, options?: object): ExpressRouter {
-        this.router.put('/', this.wrapHandler(handler));
+    public PUT<R, const Sz extends ResponseSerializer<Awaited<R>>>(
+        handler: (req: Request, res: Response, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => R,
+        options: { serialize: Sz }
+    ): ExpressRouter;
+    public PUT(handler: HandlerFunction, options?: object): ExpressRouter;
+    public PUT(handler: any, options?: any): ExpressRouter {
+        const serialize = (options as { serialize?: ResponseSerializer<any> } | undefined)?.serialize;
+        this.router.put('/', this.wrapHandler(handler, serialize));
 
         // 문서화 등록을 지연시키거나 setBasePath 호출 후 올바른 경로로 등록하도록 함
         if (this.basePath) {
@@ -869,9 +888,16 @@ export class ExpressRouter {
      * @description
      * - 라우터로 선언된 slug 직접 주워 받아야 합니다 
      */
-    public PUT_SLUG(slug: string[], handler: HandlerFunction, options?: object): ExpressRouter {
+    public PUT_SLUG<R, const Sz extends ResponseSerializer<Awaited<R>>>(
+        slug: string[],
+        handler: (req: Request, res: Response, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => R,
+        options: { serialize: Sz }
+    ): ExpressRouter;
+    public PUT_SLUG(slug: string[], handler: HandlerFunction, options?: object): ExpressRouter;
+    public PUT_SLUG(slug: string[], handler: any, options?: any): ExpressRouter {
+        const serialize = (options as { serialize?: ResponseSerializer<any> } | undefined)?.serialize;
         const slugPath = this.convertSlugsToPath(slug);
-        this.router.put(slugPath, this.wrapHandler(handler));
+        this.router.put(slugPath, this.wrapHandler(handler, serialize));
 
         // 문서화 등록을 지연시키거나 setBasePath 호출 후 올바른 경로로 등록하도록 함
         if (this.basePath) {
@@ -904,8 +930,14 @@ export class ExpressRouter {
      * @returns
      * - http delete 요청을 처리하는 메서드입니다. 
      */
-    public DELETE(handler: HandlerFunction, options?: object): ExpressRouter {
-        this.router.delete('/', this.wrapHandler(handler));
+    public DELETE<R, const Sz extends ResponseSerializer<Awaited<R>>>(
+        handler: (req: Request, res: Response, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => R,
+        options: { serialize: Sz }
+    ): ExpressRouter;
+    public DELETE(handler: HandlerFunction, options?: object): ExpressRouter;
+    public DELETE(handler: any, options?: any): ExpressRouter {
+        const serialize = (options as { serialize?: ResponseSerializer<any> } | undefined)?.serialize;
+        this.router.delete('/', this.wrapHandler(handler, serialize));
 
         // 문서화 등록을 지연시키거나 setBasePath 호출 후 올바른 경로로 등록하도록 함
         if (this.basePath) {
@@ -940,9 +972,16 @@ export class ExpressRouter {
      * @description
      * - 라우터로 선언된 slug 직접 주워 받아야 합니다 
      */
-    public DELETE_SLUG(slug: string[], handler: HandlerFunction, options?: object): ExpressRouter {
+    public DELETE_SLUG<R, const Sz extends ResponseSerializer<Awaited<R>>>(
+        slug: string[],
+        handler: (req: Request, res: Response, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => R,
+        options: { serialize: Sz }
+    ): ExpressRouter;
+    public DELETE_SLUG(slug: string[], handler: HandlerFunction, options?: object): ExpressRouter;
+    public DELETE_SLUG(slug: string[], handler: any, options?: any): ExpressRouter {
+        const serialize = (options as { serialize?: ResponseSerializer<any> } | undefined)?.serialize;
         const slugPath = this.convertSlugsToPath(slug);
-        this.router.delete(slugPath, this.wrapHandler(handler));
+        this.router.delete(slugPath, this.wrapHandler(handler, serialize));
 
         // 문서화 등록을 지연시키거나 setBasePath 호출 후 올바른 경로로 등록하도록 함
         if (this.basePath) {
@@ -975,8 +1014,14 @@ export class ExpressRouter {
      * @param options 
      * @returns 
      */
-    public PATCH(handler: HandlerFunction, options?: object): ExpressRouter {
-        this.router.patch('/', this.wrapHandler(handler));
+    public PATCH<R, const Sz extends ResponseSerializer<Awaited<R>>>(
+        handler: (req: Request, res: Response, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => R,
+        options: { serialize: Sz }
+    ): ExpressRouter;
+    public PATCH(handler: HandlerFunction, options?: object): ExpressRouter;
+    public PATCH(handler: any, options?: any): ExpressRouter {
+        const serialize = (options as { serialize?: ResponseSerializer<any> } | undefined)?.serialize;
+        this.router.patch('/', this.wrapHandler(handler, serialize));
 
         // 문서화 등록을 지연시키거나 setBasePath 호출 후 올바른 경로로 등록하도록 함
         if (this.basePath) {
@@ -1012,9 +1057,16 @@ export class ExpressRouter {
      * @description
      * - 라우터로 선언된 slug 직접 주워 받아야 합니다 
      */
-    public PATCH_SLUG(slug: string[], handler: HandlerFunction, options?: object): ExpressRouter {
+    public PATCH_SLUG<R, const Sz extends ResponseSerializer<Awaited<R>>>(
+        slug: string[],
+        handler: (req: Request, res: Response, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => R,
+        options: { serialize: Sz }
+    ): ExpressRouter;
+    public PATCH_SLUG(slug: string[], handler: HandlerFunction, options?: object): ExpressRouter;
+    public PATCH_SLUG(slug: string[], handler: any, options?: any): ExpressRouter {
+        const serialize = (options as { serialize?: ResponseSerializer<any> } | undefined)?.serialize;
         const slugPath = this.convertSlugsToPath(slug);
-        this.router.patch(slugPath, this.wrapHandler(handler));
+        this.router.patch(slugPath, this.wrapHandler(handler, serialize));
 
         // 문서화 등록을 지연시키거나 setBasePath 호출 후 올바른 경로로 등록하도록 함
         if (this.basePath) {

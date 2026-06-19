@@ -113,6 +113,7 @@ export default router.build();
 
 Key method categories:
 - HTTP verbs: `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `NOTFOUND`
+- Response serializer (optional): pass `{ serialize }` as the last options arg to verb/`*_VALIDATED`/`*_SLUG` methods to refine the response. `serialize` is a function `(data, req) => shaped` or a declarative `{ pick: [...] }` / `{ omit: [...] }` (typed via `Pick`/`Omit`, arrays applied per-element). When omitted, behavior is unchanged. For `*_VALIDATED`, serialize runs before `responseConfig` validation.
 - Validated variants: `GET_VALIDATED`, `POST_VALIDATED`, etc. — require all defined status codes to be handled
 - File uploads: `POST_SINGLE_FILE`, `POST_ARRAY_FILE`, `POST_FIELD_FILE`
 - Middleware: `WITH(name, params?)`, `MIDDLEWARE(fn)`, `USE(fn)`

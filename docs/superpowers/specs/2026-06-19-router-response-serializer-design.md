@@ -183,8 +183,8 @@ sendSuccess(res, out, statusCode, responseSchema, config.response);
 
 ## 9. 검증 항목 (구현 중 확인)
 
-- [ ] R1: `R`+`const Sz` 동시 추론 정상 동작(타입 단언 통과).
-- [ ] pick/omit 키가 `keyof ArrEl<R>`로 제한되어 오타가 컴파일 에러가 되는지.
-- [ ] 배열 응답에서 pick/omit 원소별 적용 + 결과 타입 `...[]`.
-- [ ] VALIDATED: serialize 후 responseConfig 검증이 정제된 형태에 적용되는지.
-- [ ] 기존(미지정) 라우트의 타입·런타임 동작 불변(회귀 없음).
+- [x] R1: `R`+`const Sz` 동시 추론 정상 동작(타입 단언 통과).
+- [x] pick/omit 키가 `keyof ArrEl<R>`로 제한되어 오타가 컴파일 에러가 되는지.
+- [x] 배열 응답에서 pick/omit 원소별 적용 + 결과 타입 `...[]`.
+- [x] VALIDATED: serialize 후 responseConfig 검증이 정제된 형태에 적용되는지.
+- [x] 기존(미지정) 라우트의 타입·런타임 동작 불변(회귀 없음).

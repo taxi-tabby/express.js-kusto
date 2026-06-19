@@ -539,9 +539,27 @@ export class CrudQueryParser {
   }
 
   /**
+   * 필터 값 검증 실패 시 던지는 구조화된 400 에러를 생성한다.
+   *
+   * NOTE(P0-2): 과거에는 검증 실패(잘못된 UUID / 빈 in 목록 / between 값 개수 오류)를
+   * null 로 반환하여 해당 필터를 "조용히 무시" 했고, 그 결과 잘못된 필터 요청이
+   * 200 + (필터가 빠진) 더 넓은 데이터로 응답되어 authz 인접 필터에서 데이터가
+   * 노출될 수 있었다. 이제는 400 으로 명확히 거부한다.
+   * (index 핸들러의 parseQuery try/catch 가 statusCode 를 그대로 사용한다.)
+   */
+  private static invalidFilterError(field: string, operator: string): Error {
+    const error: any = new Error(
+      `Invalid filter value for field "${field}" (operator "${operator}"): value failed validation`
+    );
+    error.code = ERROR_CODES.INVALID_FILTER;
+    error.statusCode = 400;
+    return error;
+  }
+
+  /**
    * 필터 표현식 파싱 (field_operator 형태)
    * 관계 필터링도 지원: author.name_like, tags.name_in 등
-   * UUID 검증 실패 시 null 반환하여 필터 무시
+   * 값 검증 실패 시 400 에러를 던진다 (P0-2 — 조용한 드롭 금지).
    */
   private static parseFilterExpression(expression: string, value: any, modelName?: string, schemaAnalyzer?: any) {
     const operators = [
@@ -554,13 +572,12 @@ export class CrudQueryParser {
       if (expression.endsWith('_' + op)) {
         const field = expression.slice(0, -(op.length + 1));
         const parsedValue = this.parseFilterValue(op as FilterOperator, value, field, modelName, schemaAnalyzer);
-        
-        // 값이 null이면 필터 무시 (빈 배열 또는 UUID 검증 실패)
+
+        // 값 검증 실패(빈 배열 / 잘못된 UUID / between 개수 오류)는 400 으로 거부
         if (parsedValue === null) {
-          // log.Warn(`Filter ignored for field "${field}" with operator "${op}": value validation failed`);
-          return null;
+          throw this.invalidFilterError(field, op);
         }
-        
+
         return {
           field,
           operator: op as FilterOperator,
@@ -572,13 +589,12 @@ export class CrudQueryParser {
     // 연산자가 명시되지 않은 경우 값의 패턴을 보고 자동 감지
     const autoDetectedOperator = this.autoDetectOperator(value);
     const parsedValue = this.parseFilterValue(autoDetectedOperator, value, expression, modelName, schemaAnalyzer);
-    
-    // 값이 null이면 필터 무시 (빈 배열 또는 UUID 검증 실패)
+
+    // 값 검증 실패는 400 으로 거부
     if (parsedValue === null) {
-      // log.Warn(`Filter ignored for field "${expression}": value validation failed`);
-      return null;
+      throw this.invalidFilterError(expression, autoDetectedOperator);
     }
-    
+
     return {
       field: expression,
       operator: autoDetectedOperator,

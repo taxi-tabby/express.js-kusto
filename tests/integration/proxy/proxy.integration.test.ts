@@ -136,3 +136,54 @@ describe('createProxyMiddleware — pathRewrite', () => {
     expect(resp.body.url).toBe('/prefixed/thing');
   });
 });
+
+describe('createProxyMiddleware — 요청 본문 (body-parser 이후)', () => {
+  let upstream: Upstream;
+  afterEach(async () => { if (upstream) await closeUpstream(upstream); });
+
+  function echoBodyUpstream(): Promise<Upstream> {
+    return startUpstream((req, res) => {
+      const chunks: Buffer[] = [];
+      req.on('data', (c) => chunks.push(c as Buffer));
+      req.on('end', () => {
+        res.setHeader('content-type', 'application/json');
+        res.end(JSON.stringify({
+          received: Buffer.concat(chunks).toString('utf-8'),
+          contentLength: req.headers['content-length'],
+        }));
+      });
+    });
+  }
+
+  it('JSON 본문이 body-parser 소비 후에도 업스트림에 그대로 도달한다', async () => {
+    upstream = await echoBodyUpstream();
+    const app = express();
+    app.use(express.json());
+    app.use('/', createProxyMiddleware({ target: upstream.url }));
+
+    const payload = { name: 'kusto', n: 42 };
+    const resp = await request(app).post('/x').send(payload);
+    expect(JSON.parse(resp.body.received)).toEqual(payload);
+  });
+
+  it('urlencoded 본문도 그대로 도달한다', async () => {
+    upstream = await echoBodyUpstream();
+    const app = express();
+    app.use(express.urlencoded({ extended: true }));
+    app.use('/', createProxyMiddleware({ target: upstream.url }));
+
+    const resp = await request(app).post('/x')
+      .type('form').send({ a: '1', b: 'two' });
+    expect(resp.body.received).toBe('a=1&b=two');
+  });
+
+  it('파싱되지 않은 raw 본문은 스트림으로 전달한다', async () => {
+    upstream = await echoBodyUpstream();
+    const app = express(); // body-parser 없음
+    app.use('/', createProxyMiddleware({ target: upstream.url }));
+
+    const resp = await request(app).post('/x')
+      .set('content-type', 'text/plain').send('raw-payload');
+    expect(resp.body.received).toBe('raw-payload');
+  });
+});

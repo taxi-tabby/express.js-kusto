@@ -2,6 +2,7 @@ import type { Request, Response, RequestHandler, NextFunction } from 'express';
 import * as http from 'http';
 import * as https from 'https';
 import { URL } from 'url';
+import * as querystring from 'querystring';
 
 export interface ProxyOptions {
   /** 업스트림 베이스 URL. 필수. 예: 'http://localhost:3001', 'https://api.example.com' */
@@ -119,6 +120,26 @@ export function createProxyMiddleware(options: ProxyOptions): RequestHandler {
       ? https.request(requestOptions, onResponse)
       : http.request(requestOptions, onResponse);
 
-    req.pipe(proxyReq);
+    // body-parser(전역 미들웨어)가 이미 본문 스트림을 소비했으면 req.body 를 재직렬화해
+    // 전달한다(fixRequestBody). 파싱되지 않은 raw 요청은 스트림을 그대로 파이프한다.
+    const parsedBody = req.body;
+    const hasParsedBody =
+      parsedBody !== undefined &&
+      parsedBody !== null &&
+      typeof parsedBody === 'object' &&
+      Object.keys(parsedBody).length > 0;
+
+    if (hasParsedBody) {
+      const contentType = String(req.headers['content-type'] || '');
+      const bodyData = contentType.includes('application/x-www-form-urlencoded')
+        ? querystring.stringify(parsedBody as Record<string, any>)
+        : JSON.stringify(parsedBody);
+      const buffer = Buffer.from(bodyData, 'utf-8');
+      proxyReq.setHeader('content-length', Buffer.byteLength(buffer));
+      proxyReq.write(buffer);
+      proxyReq.end();
+    } else {
+      req.pipe(proxyReq);
+    }
   };
 }

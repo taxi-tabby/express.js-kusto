@@ -220,7 +220,9 @@ Use `errorFormatter.ts` for consistent error responses. Environment-aware: detai
 
 ## Logging
 
-Winston with custom levels: error, warn, info, debug, silly, route, sql, footwalk, auth, email. Daily rotating file logs in `logs/`. Console output with colors in development, JSON structured logs in production.
+Winston (`@ext/winston`) with custom level methods (PascalCase): `Error`, `Warn`, `Info`, `Debug`, `Silly`, `SQL`, `Route`, `SessionDeclaration`, `Footwalk`, `Email`, `Auth` (plus a lowercase `error` alias used by winston's exception handling). Daily rotating file logs in `logs/`. Dev: human-readable colored line (color only on a TTY — respects `NO_COLOR`/`FORCE_COLOR`); prod: one-line structured JSON. Meta is serialized via a safe serializer that never throws (handles circular refs, `BigInt`, `Error`, `Buffer`, `Map`/`Set`, throwing getters) and **redacts** sensitive keys (`password`/`token`/`authorization`/`apikey`/`cookie`/… and `*_token`/`x-api-key` shapes) to `[REDACTED]`.
+
+**Console level is env-aware** (`LOG_LEVEL` always overrides): `production`→`Info`, `test`→`Error`, otherwise→`Debug`. Because dev defaults to `Debug`, **`Silly` is hidden by default** — run with `LOG_LEVEL=Silly` to see per-item traces. Tunable env vars: `LOG_LEVEL` (or `silent`/`off`), `LOG_DIR`, `LOG_MAX_SIZE`, `LOG_MAX_FILES`, `LOG_FILE_LEVEL`, `LOG_REDACT=false` (disable redaction), `LOG_REDACT_KEYS=a,b` (extra keys). If the log directory can't be created, file logging degrades to console-only instead of crashing.
 
 ### Log message conventions (runtime code)
 

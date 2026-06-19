@@ -5,9 +5,16 @@ import * as crypto from 'crypto';
 
 export type TestDbProvider = 'sqlite' | 'postgres';
 
+// 락/대기 상수. jest testTimeout(30s) 보다 작게 잡아 contended 시에도 명확히 실패한다.
+const GEN_MAX_WAIT_MS = 25000;   // 다른 워커의 생성 완료를 기다리는 최대 시간
+const GEN_STALE_LOCK_MS = 60000; // 락 디렉터리가 이보다 오래되면 크래시로 간주하고 회수
+
+// SharedArrayBuffer 는 한 번만 할당하여 재사용(매 호출 할당 방지)
+const SLEEP_SAB = new Int32Array(new SharedArrayBuffer(4));
+
 /** 동기 sleep (busy-CPU 없이 대기) */
 function sleepSync(ms: number): void {
-    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+    Atomics.wait(SLEEP_SAB, 0, 0, ms);
 }
 
 /** 스키마 파일 내용의 지문 (변경 감지용) */
@@ -15,12 +22,26 @@ function schemaFingerprint(schemaPath: string): string {
     return crypto.createHash('sha1').update(fs.readFileSync(schemaPath, 'utf8')).digest('hex');
 }
 
+/** 현재 스키마 지문으로 생성된 client 가 require 가능한 상태로 완성됐는지 */
+function isClientReady(clientDir: string, markerFile: string, fingerprint: string): boolean {
+    try {
+        return fs.readFileSync(markerFile, 'utf8') === fingerprint
+            && fs.existsSync(path.join(clientDir, 'index.js'));
+    } catch {
+        return false;
+    }
+}
+
 /**
  * Prisma client 를 워커 경쟁 없이 한 번만 생성한다.
  *
  * 여러 jest 워커가 공유 출력 디렉터리에 동시에 `prisma generate` 하면 client 가
  * 반쯤 쓰인 상태로 require 되어 깨질 수 있다(잠재 race). 원자적 디렉터리 락으로
- * 직렬화하고, 스키마 지문 마커가 일치하면 재생성을 생략한다(동일 스키마는 1회만).
+ * 직렬화하고, 스키마 지문 마커 + index.js 존재로 완성 여부를 판정한다(동일 스키마는 1회만).
+ *
+ * 대기 워커는 "락"이 아니라 "완성된 client(아티팩트)"를 폴링하므로:
+ *  - 첫 워커가 생성을 끝내는 즉시 반환(빠른 happy path)
+ *  - 활성 락을 실수로 회수해 race 를 재유발하지 않음(회수는 락 자체의 나이로만 판단)
  */
 function ensurePrismaClientGenerated(schemaPath: string, clientDir: string): void {
     const prismaRoot = path.resolve('node_modules/.prisma');
@@ -30,27 +51,37 @@ function ensurePrismaClientGenerated(schemaPath: string, clientDir: string): voi
     const markerFile = path.join(clientDir, '.kusto-gen-marker');
     const fingerprint = schemaFingerprint(schemaPath);
 
+    if (isClientReady(clientDir, markerFile, fingerprint)) return; // 이미 완성됨
+
     const start = Date.now();
-    // mkdir 은 원자적 → 락 획득. 이미 있으면 다른 워커가 생성 중이므로 대기.
     while (true) {
         try {
-            fs.mkdirSync(lockDir);
+            fs.mkdirSync(lockDir); // 원자적 락 획득
             break;
         } catch (e: any) {
             if (e.code !== 'EEXIST') throw e;
-            if (Date.now() - start > 120000) {
-                // stale lock 방지: 2분 초과 시 강제 회수 후 재시도
+            // 락을 못 잡음 — 다른 워커가 생성 중. 완성된 아티팩트가 보이면 락 없이 반환.
+            if (isClientReady(clientDir, markerFile, fingerprint)) return;
+            // 회수는 "대기 시간"이 아니라 "락 디렉터리의 나이"로만 판단(활성 락 보호).
+            let lockAge = Infinity;
+            try { lockAge = Date.now() - fs.statSync(lockDir).mtimeMs; } catch { /* 막 사라짐 */ }
+            if (lockAge > GEN_STALE_LOCK_MS) {
                 try { fs.rmdirSync(lockDir); } catch { /* 무시 */ }
-                continue;
+                continue; // 회수 후 재시도
+            }
+            if (Date.now() - start > GEN_MAX_WAIT_MS) {
+                throw new Error(`Timed out waiting for prisma client generation: ${clientDir}`);
             }
             sleepSync(100);
         }
     }
 
     try {
-        let current: string | null = null;
-        try { current = fs.readFileSync(markerFile, 'utf8'); } catch { /* 마커 없음 */ }
-        if (current === fingerprint) return; // 동일 스키마로 이미 생성됨
+        // 락을 잡는 사이 다른 워커가 끝냈을 수 있다
+        if (isClientReady(clientDir, markerFile, fingerprint)) return;
+
+        // 부분 생성 마커가 남지 않도록, 생성 전에 기존 마커를 제거한다(생성 성공 후에만 재기록)
+        try { fs.rmSync(markerFile, { force: true }); } catch { /* 무시 */ }
 
         const gen = spawnSync('npx', ['prisma', 'generate', '--schema', schemaPath], {
             stdio: 'pipe',

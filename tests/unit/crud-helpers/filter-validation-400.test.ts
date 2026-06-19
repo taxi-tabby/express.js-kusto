@@ -26,16 +26,28 @@ describe('CrudQueryParser — 필터 검증 실패는 400 throw (P0-2)', () => {
         expect(thrown.statusCode).toBe(400);
     });
 
-    it('모든 값이 무효한 in 필터(빈 결과)는 throw', () => {
-        expect(() =>
-            CrudQueryParser.parseQuery(makeReq({ 'filter[id_in]': 'bad1,bad2' }), 'Thing', uuidAnalyzer)
-        ).toThrow();
+    function expect400(query: Record<string, any>, model?: string, analyzer?: any) {
+        let thrown: any;
+        try {
+            CrudQueryParser.parseQuery(makeReq(query), model as any, analyzer);
+        } catch (e) {
+            thrown = e;
+        }
+        expect(thrown).toBeDefined();
+        expect(thrown.statusCode).toBe(400);
+        return thrown;
+    }
+
+    it('모든 값이 무효한 in 필터(빈 결과)는 statusCode 400 으로 throw', () => {
+        expect400({ 'filter[id_in]': 'bad1,bad2' }, 'Thing', uuidAnalyzer);
     });
 
-    it('between 에 값이 2개가 아니면 throw', () => {
-        expect(() =>
-            CrudQueryParser.parseQuery(makeReq({ 'filter[score_between]': '1' }))
-        ).toThrow();
+    it('between 에 값이 2개가 아니면 statusCode 400 으로 throw (스키마 유무 무관)', () => {
+        // 스키마 없이도(fallback 경로) 400 이어야 한다
+        expect400({ 'filter[score_between]': '1' });
+        // 스키마 정보가 있는 경우에도 동일
+        const intAnalyzer = { getModel: () => ({ fields: [{ name: 'score', type: 'Int' }] }) };
+        expect400({ 'filter[score_between]': '1' }, 'Thing', intAnalyzer);
     });
 
     it('유효한 UUID eq 필터는 정상 통과한다 (false positive 없음)', () => {

@@ -177,10 +177,15 @@ app/repos/
 3. **리포지터리 로드**: `app/repos/` 폴더의 리포지터리 자동 등록
 4. **의존성 주입**: `app/injectable/` 폴더의 모듈/미들웨어 로드
 5. **Express 설정**: 미들웨어 체인 구성
-6. **라우트 탐색 및 등록**: `app/routes/` 폴더 구조에 따라 URL 경로 자동 생성
-7. **서버 실행**: 지정된 포트에서 HTTP 서버 시작
+6. **Health check 등록**: `/healthz` readiness 엔드포인트를 글로벌 라우트보다 먼저 등록
+7. **라우트 탐색 및 등록**: `app/routes/` 폴더 구조에 따라 URL 경로 자동 생성
+8. **서버 실행**: 지정된 포트에서 HTTP 서버 시작
 
 
+
+> **부팅 정책(P0-1)**: DB(Prisma) 연결 실패는 **non-fatal** 입니다. 서버리스 lazy-reconnect 전제로 서버는 *degraded* 상태로 부팅을 계속합니다. 반면 **RepositoryManager / DependencyInjector 초기화의 top-level 실패는 fail-fast** 로 처리되어 부팅이 중단되고 서버가 listen 하지 않습니다.
+>
+> **`GET /healthz`**: readiness 엔드포인트. 정상이면 `200 { status: "ok", ready: true }`, DB 미연결 등으로 degraded 면 `503 { status: "degraded", ready: false }` 를 반환합니다. readiness 는 **생성된(generated) DB** 만 집계하며(미생성 폴더는 제외), 설정된 생성 DB 가 0개면 healthy 로 간주합니다. (`Core.setupHealthCheck`/`getReadiness`, `Application.getHealthStatus`)
 
 ## 핵심 특징
 

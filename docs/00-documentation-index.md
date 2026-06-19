@@ -43,6 +43,7 @@
 - **개발 대시보드**: http://localhost:3000/docs/dev
 - **OpenAPI 스펙**: http://localhost:3000/docs/openapi.json
 - **CRUD 스키마 API** (개발 모드 전용): http://localhost:3000/api/schema
+- **헬스 체크 (readiness)**: http://localhost:3000/healthz — 정상 200 `{status:"ok"}`, degraded 503 `{status:"degraded"}`
 
 ## 📞 도움이 필요하다면
 

@@ -217,7 +217,9 @@ router
         message: "너무 많은 요청입니다."
     })
     .WITH('authJwtNoLoginOnly')             // JWT 인증 (로그인 안된 사용자만)
-    .WITH('csrfProtection')                 // CSRF 보호
+    // 참고: 프레임워크 기본 제공 CSRF 미들웨어는 제거되었습니다.
+    // 쿠키 기반 인증(credentials)을 사용한다면 앱에서 직접 csrf 라이브러리를
+    // (예: csrf-csrf double-submit 토큰) middleware.ts 에 등록하세요.
     .POST_VALIDATED(requestConfig, responseConfig, handler)
     .GET_VALIDATED(getRequestConfig, getResponseConfig, getHandler);
 ```

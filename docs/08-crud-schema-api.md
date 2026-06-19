@@ -211,7 +211,7 @@ if (registry.isSchemaApiEnabled()) {
 import { PrismaSchemaAnalyzer } from '@core/lib/prismaSchemaAnalyzer';
 import { prismaManager } from '@lib/prismaManager';
 
-const client = prismaManager.getClient('default');
+const client = prismaManager.getClientSync('default'); // getClient() 는 async(Promise 반환)이므로 동기 사용 시 getClientSync()
 const analyzer = PrismaSchemaAnalyzer.getInstance(client);
 
 // 모든 모델 정보 조회

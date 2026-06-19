@@ -100,3 +100,39 @@ describe('createProxyMiddleware — 아웃바운드 헤더', () => {
     expect(resp.body.headers['x-hop-token']).toBeUndefined();
   });
 });
+
+describe('createProxyMiddleware — pathRewrite', () => {
+  let upstream: Upstream;
+  afterEach(async () => { if (upstream) await closeUpstream(upstream); });
+
+  function echoUrlUpstream(): Promise<Upstream> {
+    return startUpstream((req, res) => {
+      res.setHeader('content-type', 'application/json');
+      res.end(JSON.stringify({ url: req.url }));
+    });
+  }
+
+  it('객체형: { "^/api": "" } 로 접두사를 제거한다', async () => {
+    upstream = await echoUrlUpstream();
+    const app = express();
+    app.use('/', createProxyMiddleware({
+      target: upstream.url,
+      pathRewrite: { '^/api': '' },
+    }));
+
+    const resp = await request(app).get('/api/users?x=1');
+    expect(resp.body.url).toBe('/users?x=1');
+  });
+
+  it('함수형: (path) => path 변환을 적용한다', async () => {
+    upstream = await echoUrlUpstream();
+    const app = express();
+    app.use('/', createProxyMiddleware({
+      target: upstream.url,
+      pathRewrite: (path) => '/prefixed' + path,
+    }));
+
+    const resp = await request(app).get('/thing');
+    expect(resp.body.url).toBe('/prefixed/thing');
+  });
+});

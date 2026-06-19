@@ -27,6 +27,20 @@ const HOP_BY_HOP = new Set([
   'te', 'trailer', 'transfer-encoding', 'upgrade',
 ]);
 
+function applyPathRewrite(
+  path: string,
+  rewrite: ProxyOptions['pathRewrite'],
+  req: Request,
+): string {
+  if (!rewrite) return path;
+  if (typeof rewrite === 'function') return rewrite(path, req);
+  let result = path;
+  for (const [pattern, replacement] of Object.entries(rewrite)) {
+    result = result.replace(new RegExp(pattern), replacement);
+  }
+  return result;
+}
+
 function buildOutboundHeaders(
   req: Request,
   target: URL,
@@ -79,12 +93,14 @@ export function createProxyMiddleware(options: ProxyOptions): RequestHandler {
   const defaultPort = isHttps ? 443 : 80;
 
   return function proxyMiddleware(req: Request, res: Response, _next: NextFunction): void {
+    const outboundPath = applyPathRewrite(req.url, options.pathRewrite, req);
+
     const requestOptions: https.RequestOptions = {
       protocol: target.protocol,
       hostname: target.hostname,
       port: target.port || defaultPort,
       method: req.method,
-      path: req.url,
+      path: outboundPath,
       headers: buildOutboundHeaders(req, target, options),
       timeout: options.timeout,
     };

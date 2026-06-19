@@ -131,7 +131,7 @@ export class TransactionCommitManager {
             ...p,
             state: TransactionState.INITIAL
         })); if (config.enableLogging) {
-            log.Info(`Starting Saga transaction ${globalTransactionId}`, {
+            log.Debug(`Starting Saga transaction ${globalTransactionId}`, {
                 participantCount: transactionParticipants.length,
                 databases: transactionParticipants.map(p => p.database),
                 pattern: 'Saga + Compensating Transactions'
@@ -195,7 +195,7 @@ export class TransactionCommitManager {
             }
 
             if (config.enableLogging) {
-                log.Info(`Saga transaction ${globalTransactionId} completed successfully`, {
+                log.Debug(`Saga transaction ${globalTransactionId} completed successfully`, {
                     success: commitResult.success,
                     phase1Duration: `${phase1Duration}ms`,
                     phase2Duration: `${phase2Duration}ms`,
@@ -275,7 +275,7 @@ export class TransactionCommitManager {
 
                 return { success: false, error };
             } if (config.enableLogging) {
-                log.Info(`Saga ${globalTxId} validation phase completed successfully`, {
+                log.Debug(`Saga ${globalTxId} validation phase completed successfully`, {
                     participantStates: participants.map(p => ({ database: p.database, state: p.state })),
                     pattern: 'Validation Phase'
                 });
@@ -334,7 +334,7 @@ export class TransactionCommitManager {
             participant.preparedAt = new Date();
 
             if (config.enableLogging) {
-                log.Debug(`Saga ${globalTxId} participant ${participant.database} validation completed with simulation ${transactionId}`);
+                log.Silly(`Saga ${globalTxId} participant ${participant.database} validation completed with simulation ${transactionId}`);
             }
 
         } catch (error) {
@@ -392,7 +392,7 @@ export class TransactionCommitManager {
             }
 
             if (config.enableLogging) {
-                log.Debug(`Saga prepare (validation) completed for ${participant.database} with transaction ${transactionId}`);
+                log.Silly(`Saga prepare (validation) completed for ${participant.database} with transaction ${transactionId}`);
             }
 
         } catch (error) {
@@ -454,7 +454,7 @@ export class TransactionCommitManager {
                 try {
                     provider = this.prismaManager.getProviderForDatabase(dbName);
                 } catch (error) {
-                    log.Warn(`Could not get provider for ${dbName}, using default PostgreSQL`);
+                    log.Debug(`Could not get provider for ${dbName}, using default PostgreSQL`);
                 }
             }
             
@@ -501,7 +501,7 @@ export class TransactionCommitManager {
             
             return null;
         } catch (error) {
-            log.Warn('Could not determine database name from client:', error);
+            log.Debug('Could not determine database name from client:', error);
             return null;
         }
     }
@@ -766,7 +766,7 @@ export class TransactionCommitManager {
             }
 
             if (config.enableLogging) {
-                log.Info(`Saga ${globalTxId} sequential commit phase completed successfully`, {
+                log.Debug(`Saga ${globalTxId} sequential commit phase completed successfully`, {
                     totalCommits: results.length,
                     pattern: 'Sequential Commit'
                 });
@@ -822,7 +822,7 @@ export class TransactionCommitManager {
 
             participant.state = TransactionState.COMMITTED;
             participant.committedAt = new Date(); if (config.enableLogging) {
-                log.Debug(`Saga ${globalTxId} participant ${participant.database} commit completed for transaction ${participant.transactionId}`);
+                log.Silly(`Saga ${globalTxId} participant ${participant.database} commit completed for transaction ${participant.transactionId}`);
             }
 
             return finalResult;
@@ -860,7 +860,7 @@ export class TransactionCommitManager {
             if (participant.state === TransactionState.PREPARED || participant.state === TransactionState.PREPARING) {
                 participant.state = TransactionState.ABORTED;
                 if (config.enableLogging) {
-                    log.Debug(`Saga ${globalTxId} participant ${participant.database} validation aborted`);
+                    log.Silly(`Saga ${globalTxId} participant ${participant.database} validation aborted`);
                 }
             }
         }
@@ -945,7 +945,7 @@ export class TransactionCommitManager {
                     });
 
                     if (config.enableLogging) {
-                        log.Debug(`Compensating transaction executed successfully for ${participant.database}`);
+                        log.Silly(`Compensating transaction executed successfully for ${participant.database}`);
                     }
 
                 } catch (compensationError) {

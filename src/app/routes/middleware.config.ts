@@ -8,6 +8,7 @@
 import helmet from 'helmet';
 import cors from 'cors';
 import { JSON_API_CONTENT_TYPE } from '@lib/jsonApiConstants';
+import { log } from '@ext/winston';
 
 // ─────────────────────────────────────────────────────────────
 // CORS 설정
@@ -27,7 +28,7 @@ export const getWhitelist = (): string[] => {
             ? JSON.parse(env) 
             : env.split(',').map(s => s.trim()).filter(Boolean);
     } catch {
-        console.warn('CORS_WHITELIST 파싱 실패');
+        log.Warn('Failed to parse CORS_WHITELIST');
         return [];
     }
 };
@@ -41,7 +42,7 @@ export const corsOptions: cors.CorsOptions = {
         if (!origin || whitelist.includes(origin)) {
             callback(null, true);
         } else {
-            console.warn(`CORS 차단: ${origin}`);
+            log.Warn(`CORS blocked: ${origin}`);
             callback(null, false);
         }
     },

@@ -165,7 +165,7 @@ export abstract class BaseRepository<T extends DatabaseNamesUnion> {
         const startTime = process.hrtime.bigint();
 
         if (config.enableLogging) {
-            log.Debug(`Transaction ${txId} started`, { database: this.repositoryDatabaseName });
+            log.Silly(`Transaction ${txId} started`, { database: this.repositoryDatabaseName });
         }
 
         for (let attempt = 1; attempt <= config.retryAttempts; attempt++) {
@@ -182,7 +182,7 @@ export abstract class BaseRepository<T extends DatabaseNamesUnion> {
 
                 if (config.enableLogging) {
                     const duration = Number(process.hrtime.bigint() - startTime) / 1_000_000;
-                    log.Info(`Transaction ${txId} completed`, {
+                    log.Debug(`Transaction ${txId} completed`, {
                         duration: `${duration.toFixed(2)}ms`,
                         attempts: attempt
                     });
@@ -553,7 +553,7 @@ export abstract class BaseRepository<T extends DatabaseNamesUnion> {
 
             // 4. 성공 시 결과 반환
             if (options.enableLogging !== false) {
-                log.Info('Distributed transaction completed successfully', {
+                log.Debug('Distributed transaction completed successfully', {
                     globalTransactionId: result.globalTransactionId,
                     participantCount: result.participants.length,
                     totalDuration: `${result.totalDuration}ms`

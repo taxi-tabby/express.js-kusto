@@ -1,5 +1,6 @@
 import { config } from 'dotenv';
 import path from 'path';
+import { log } from '@ext/winston';
 
 /**
  * 환경변수 로더 유틸리티
@@ -21,7 +22,7 @@ export class EnvironmentLoader {
     const result = config({ path: envPath });
 
     if (result.error) {
-      console.warn('Warning: .env file not found or could not be loaded:', result.error.message);
+      log.Warn('.env file not found or could not be loaded:', result.error.message);
     }
 
     this.isLoaded = true;

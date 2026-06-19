@@ -222,6 +222,16 @@ Use `errorFormatter.ts` for consistent error responses. Environment-aware: detai
 
 Winston with custom levels: error, warn, info, debug, silly, route, sql, footwalk, auth, email. Daily rotating file logs in `logs/`. Console output with colors in development, JSON structured logs in production.
 
+### Log message conventions (runtime code)
+
+Applies to all `log.*` calls under `src/core/` and `src/app/`:
+
+- **English only.** Write log message strings in English. Keep `${...}` interpolations and the structured-meta object (2nd arg) intact.
+- **No emoji in messages.** The logger (`@ext/winston`) auto-prepends a per-level emoji in dev (Error→❌, Warn→⚠️, Info→💡, …); a second emoji inside the message just duplicates it (and leaks into prod JSON). Don't restate the level in text either (no leading `Warning:`/`Error:`).
+- **No `console.*` in runtime code.** Use `log.*` (`import { log } from '@ext/winston'`). Map: `console.log/info`→`log.Info`, `warn`→`log.Warn`, `error`→`log.Error`, `debug`→`log.Debug`.
+- **Right level / right volume.** Reserve `Info` for concise lifecycle summaries; per-item loop traces and routine intermediate steps belong at `Debug`/`Silly`. Avoid duplicate logs for one event.
+- **Exempt:** standalone CLI/build tooling (`src/core/scripts/*`, `updater/*`) may keep `console.*`, emoji, and Korean — it is operator-facing terminal output, not application logging. Do not normalize it. The `LOG_SETTINGS` emoji/color map in `src/core/external/winston.ts` is logger config, not a message — leave it.
+
 ## Build & Deployment
 
 Webpack bundles to `dist/server.js`. CopyWebpackPlugin copies `src/app/views/`, `public/`, Prisma clients and schemas to dist. Run with `npm run serve` after build.

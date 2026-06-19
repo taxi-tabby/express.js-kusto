@@ -93,7 +93,7 @@ export function serialize(obj: any): any {
                 }
             } catch (e: any) {
                 // valueOf() 실패 시 원본 반환. 빈 객체가 응답에 포함될 수 있으니 디버그용 흔적은 남긴다.
-                log.Debug('serialize: Date 후보 객체의 valueOf() 실패, 원본 반환', { message: e?.message });
+                log.Debug('serialize: valueOf() failed on Date-candidate object, returning original', { message: e?.message });
             }
         }
     }
@@ -145,7 +145,7 @@ export function serializePrismaDate(obj: any): any {
             }
         } catch (e: any) {
             // 변환 실패 시 원본 반환. 빈 객체가 응답에 포함될 수 있으니 디버그용 흔적은 남긴다.
-            log.Debug('serializePrismaDate: Prisma Date 후보 객체 변환 실패, 원본 반환', { message: e?.message });
+            log.Debug('serializePrismaDate: failed to convert Prisma Date-candidate object, returning original', { message: e?.message });
         }
     }
     

@@ -62,7 +62,7 @@ export class StaticFileMiddleware {
             
             // Check if file exists
             if (!fs.existsSync(filePath)) {
-                log.Debug(`Static file not found: ${filePath}`);
+                log.Silly(`Static file not found: ${filePath}`);
                 return next();
             }
             
@@ -75,7 +75,7 @@ export class StaticFileMiddleware {
                 res.setHeader('Cache-Control', 'no-cache'); // Disable caching for development
                 res.send(fileContent);
                 
-                log.Debug(`Served static file: ${fileName}`, { path: req.path, size: fileContent.length });
+                log.Silly(`Served static file: ${fileName}`, { path: req.path, size: fileContent.length });
             } catch (error) {
                 log.Error(`Failed to serve static file: ${fileName}`, { error, path: req.path });
                 next();

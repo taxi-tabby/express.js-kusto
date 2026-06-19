@@ -65,7 +65,7 @@ export class Core {
     public async initialize(customConfig?: Partial<CoreConfig>): Promise<Core> {
         if (this._isInitialized) {
             if (process.env.NODE_ENV === 'development') {
-                log.Warn('Core is already initialized');
+                log.Debug('Core is already initialized');
             }
             return this;
         }
@@ -100,7 +100,7 @@ export class Core {
             SchemaApiSetup.registerSchemaApi(this._app, '/api/schema');
         } catch (error) {
             if (process.env.NODE_ENV === 'development') {
-                log.Warn('스키마 API 등록 중 오류 발생:', error);
+                log.Warn('Error while registering Schema API:', error);
             }
         }
 
@@ -208,7 +208,7 @@ export class Core {
         });        
 
 
-        log.Info('📚 Documentation routes enabled at /docs');
+        log.Debug('Documentation routes enabled at /docs');
     }
 
     /**
@@ -216,7 +216,7 @@ export class Core {
      */
     public async start(port?: number, host?: string): Promise<Server> {
         if (this._server) {
-            log.Warn('Server is already running');
+            log.Debug('Server is already running');
             return this._server;
         }
 
@@ -231,7 +231,7 @@ export class Core {
 
         return new Promise<Server>((resolve, reject) => {
             this._server = this._app.listen(serverPort, serverHost, () => {
-                log.Info(`🚀 Server started successfully`, {
+                log.Info('Server started successfully', {
                     port: serverPort,
                     host: serverHost,
                     environment: process.env.NODE_ENV || 'development'
@@ -251,22 +251,22 @@ export class Core {
      */
     public async stop(): Promise<void> {
         if (!this._server) {
-            log.Info('Server is not running');
+            log.Debug('Server is not running');
             return;
         }
 
         // Disconnect all Prisma clients first
         try {
-            log.Info('🗄️ Disconnecting Prisma Manager...');
+            log.Debug('Disconnecting Prisma Manager...');
             await prismaManager.disconnectAll();
-            log.Info('Prisma Manager disconnected successfully');
+            log.Debug('Prisma Manager disconnected successfully');
         } catch (error) {
             log.Error('Error disconnecting Prisma Manager', { error });
         }
 
         return new Promise((resolve) => {
             this._server!.close(() => {
-                log.Info('🛑 Server stopped gracefully');
+                log.Info('Server stopped gracefully');
                 this._server = undefined;
                 resolve();
             });
@@ -321,7 +321,7 @@ export class Core {
      */
     private async initializePrismaManager(): Promise<void> {
         try {
-            log.Info('🗄️ Initializing Prisma Manager...');
+            log.Debug('Initializing Prisma Manager...');
             await prismaManager.initialize();
             
             const status = prismaManager.getStatus();
@@ -347,7 +347,7 @@ export class Core {
      */
     private async initializeRepositoryManager(): Promise<void> {
         try {
-            log.Info('📦 Initializing Repository Manager...');
+            log.Debug('Initializing Repository Manager...');
             await repositoryManager.initialize();
             
             const status = repositoryManager.getStatus();
@@ -355,11 +355,6 @@ export class Core {
                 initialized: status.initialized,
                 repositoryCount: status.repositoryCount,
                 repositories: status.repositories
-            });
-
-            // Log each repository loading status
-            status.repositories.forEach(repoName => {
-                log.Info(`✅ Repository '${repoName}' loaded successfully`);
             });
         } catch (error) {
             // P0-1: Repository 매니저는 개별 repo 로드 실패를 내부 루프에서 이미 흡수한다.
@@ -375,7 +370,7 @@ export class Core {
      */
     private async initializeDependencyInjector(): Promise<void> {
         try {
-            log.Info('💉 Initializing Dependency Injector...');
+            log.Debug('Initializing Dependency Injector...');
             await DependencyInjector.getInstance().initialize();
             log.Info('Dependency Injector initialization complete');
         } catch (error) {

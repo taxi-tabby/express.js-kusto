@@ -19,7 +19,7 @@ async function loadDynamicRouteMap(): Promise<void> {
     }
 
     try {
-        log.Debug(`🔄 Loading dynamic route map in webpack build...`);
+        log.Silly(`Loading dynamic route map in webpack build...`);
         // @ts-ignore - 런타임에 생성되는 파일이므로 TypeScript가 찾을 수 없음
         const routeMapModule = await import('../tmp/routes-map');
         routesMap = routeMapModule.routesMap;
@@ -31,11 +31,11 @@ async function loadDynamicRouteMap(): Promise<void> {
         virtualFS.middlewares = middlewaresMap;
         virtualFS.structure = directoryStructure;
 
-        log.Debug(`✅ Successfully loaded dynamic route map with ${Object.keys(routesMap).length} routes`);
+        log.Silly(`Successfully loaded dynamic route map with ${Object.keys(routesMap).length} routes`);
 
 
     } catch (error) {
-        log.Error(`❌ Error loading dynamic route map:`, error);
+        log.Error(`Error loading dynamic route map:`, error);
         // 빈 맵으로 초기화
         routesMap = {};
         middlewaresMap = {};
@@ -170,7 +170,7 @@ function fileExists(filePath: string): boolean {
     } catch (error: any) {
         // ENOENT 만 "없음" 으로 캐시. 권한 거부 등은 경고 로그를 남긴다.
         if (error?.code !== 'ENOENT') {
-            log.Warn(`fileExists 검사 중 비정상 fs 에러: ${filePath}`, { code: error?.code, message: error?.message });
+            log.Warn(`Abnormal fs error during fileExists check: ${filePath}`, { code: error?.code, message: error?.message });
         }
         fileExistsCache.set(filePath, false);
         return false;
@@ -185,9 +185,6 @@ function convertToVirtualPath(filePath: string): string {
         return filePath;
     }
 
-    // 디버깅을 위한 로그
-    log.Debug(`🔍 Converting path: ${filePath}`);
-
     // 경로 정규화: 백슬래시를 슬래시로 변환하고 연속 슬래시 제거
     let normalizedPath = filePath.replace(/\\/g, '/').replace(/\/+/g, '/');
 
@@ -195,27 +192,22 @@ function convertToVirtualPath(filePath: string): string {
     if (normalizedPath.endsWith('/route.ts') || normalizedPath.endsWith('/route.js')) {
         const pathWithoutFile = normalizedPath.replace(/\/route\.(ts|js)$/, '');
 
-        log.Debug(`🔍 Path without file: ${pathWithoutFile}`);
-
         // 절대 경로를 상대 경로로 변환
         if (pathWithoutFile.includes('/app/routes/')) {
             const relativePath = pathWithoutFile.split('/app/routes/')[1] || '';
             const result = relativePath ? `/${relativePath}` : '/';
-            log.Debug(`✅ Found /app/routes/ pattern, result: ${result}`);
             return result;
         }
 
         if (pathWithoutFile.includes('/src/app/routes/')) {
             const relativePath = pathWithoutFile.split('/src/app/routes/')[1] || '';
             const result = relativePath ? `/${relativePath}` : '/';
-            log.Debug(`✅ Found /src/app/routes/ pattern, result: ${result}`);
             return result;
         }
 
         if (pathWithoutFile.includes('/routes/')) {
             const relativePath = pathWithoutFile.split('/routes/')[1] || '';
             const result = relativePath ? `/${relativePath}` : '/';
-            log.Debug(`✅ Found /routes/ pattern, result: ${result}`);
             return result;
         }
 
@@ -225,7 +217,6 @@ function convertToVirtualPath(filePath: string): string {
         if (routesIndex !== -1 && routesIndex < parts.length - 1) {
             const relativePath = parts.slice(routesIndex + 1).join('/');
             const result = `/${relativePath}`;
-            log.Debug(`✅ Found routes index pattern, result: ${result}`);
             return result;
         }
 
@@ -249,7 +240,6 @@ function convertToVirtualPath(filePath: string): string {
 
         // 시작 슬래시 보장
         const result = cleanPath.startsWith('/') ? cleanPath : `/${cleanPath}`;
-        log.Debug(`✅ Fallback pattern, result: ${result}`);
         return result;
     }
 
@@ -351,7 +341,7 @@ function getDirectories(dir: string): string[] {
     } catch (error: any) {
         // ENOENT 는 "없음" 으로 처리. 권한 거부 등은 라우트 누락의 흔적이라 경고.
         if (error?.code !== 'ENOENT') {
-            log.Warn(`디렉토리 읽기 비정상 실패: ${dir}`, { code: error?.code, message: error?.message });
+            log.Warn(`Abnormal directory read failure: ${dir}`, { code: error?.code, message: error?.message });
         }
         return [];
     }
@@ -398,7 +388,7 @@ function loadMiddleware(dir: string): any[] {
         middlewareCache.set(dir, result);
         return result;
     } catch (error) {
-        log.Warn(`⚠️ Failed to load middleware: ${middlewarePath}`, error);
+        log.Warn(`Failed to load middleware: ${middlewarePath}`, error);
         middlewareCache.set(dir, []);
         return [];
     }
@@ -425,11 +415,8 @@ function loadRoute(filePath: string): Router {
         // 경로에서 연속된 슬래시 제거
         virtualPath = virtualPath.replace(/\/+/g, '/');
 
-        log.Debug(`📌 Looking for route in virtual FS: ${filePath.replace(/\\/g, '/')} => ${virtualPath}`);
-
         // 정확한 경로로 먼저 시도
         if (virtualFS.routes[virtualPath]) {
-            log.Debug(`✅ Found route in virtual FS: ${virtualPath}`);
             const route = virtualFS.routes[virtualPath];
             routeCache.set(filePath, route);
             return route;
@@ -445,11 +432,9 @@ function loadRoute(filePath: string): Router {
 
         // 라우트 맵에 등록된 모든 키를 체크하여 비슷한 경로가 있는지 확인
         const availableRoutes = Object.keys(virtualFS.routes);
-        log.Debug(`🔍 Available routes in virtual FS: ${availableRoutes.join(', ')}`);
 
         for (const altPath of alternativePaths) {
             if (virtualFS.routes[altPath]) {
-                log.Debug(`✅ Found route in virtual FS (alternative path): ${altPath}`);
                 const route = virtualFS.routes[altPath];
                 routeCache.set(filePath, route);
                 return route;
@@ -457,7 +442,6 @@ function loadRoute(filePath: string): Router {
         }
 
         // 확인용: 모든 디렉토리 구조 출력
-        log.Debug('📊 Virtual FS Directory Structure:', JSON.stringify(virtualFS.structure, null, 2));
 
         throw new Error(`Failed to load route from virtual FS: ${virtualPath}`);
     }
@@ -475,7 +459,7 @@ function loadRoute(filePath: string): Router {
         routeCache.set(filePath, route);
         return route;
     } catch (error) {
-        log.Error(`❌ Failed to load route: ${filePath}`, error);
+        log.Error(`Failed to load route: ${filePath}`, error);
         throw error;
     }
 }
@@ -623,9 +607,9 @@ async function loadRoutes(app: Express, dir?: string): Promise<void> {
     // 환경에 맞는 라우트 디렉토리 사용
     const routesDir = dir || getRoutesDirectory();
 
-    log.Route(`🚀 Starting Clean V6 route loader: ${routesDir}`);
-    log.Route(`📍 Environment: ${process.env.WEBPACK_BUILD === 'true' ? 'Build (Production)' : 'Development'}`);
-    log.Route(`📁 File extension: ${getFileExtension()}`);
+    log.Route(`Starting Clean V6 route loader: ${routesDir}`);
+    log.Route(`Environment: ${process.env.WEBPACK_BUILD === 'true' ? 'Build (Production)' : 'Development'}`);
+    log.Route(`File extension: ${getFileExtension()}`);
 
     try {
 
@@ -633,12 +617,12 @@ async function loadRoutes(app: Express, dir?: string): Promise<void> {
         const directories = scanDirectories(routesDir);
         const routeDirectories = directories.filter(d => d.hasRoute);
 
-        log.Route(`📊 Found ${directories.length} directories, ${routeDirectories.length} routes in ${routesDir}`);
+        log.Route(`Found ${directories.length} directories, ${routeDirectories.length} routes in ${routesDir}`);
 
         if (routeDirectories.length === 0) {
             // early-return 하지 않는다: 라우트가 없어도 전역 미들웨어/에러 핸들러는 등록되어야 한다.
             // (아래 라우트 preload/등록 루프는 빈 배열이라 자연히 no-op 이 된다.)
-            log.Route(`⚠️ No routes found in ${routesDir} — registering global middleware only`);
+            log.Warn(`No routes found in ${routesDir} — registering global middleware only`);
         }
 
         // 1.5. 전역 미들웨어 먼저 등록 (최상위 middleware.ts)
@@ -659,7 +643,7 @@ async function loadRoutes(app: Express, dir?: string): Promise<void> {
                 if (preMiddlewares.length > 0) {
                     app.use(...preMiddlewares);
                 }
-                log.Route(`🌍 Global middlewares registered: ${preMiddlewares.length} pre + ${globalErrorMiddlewares.length} error handler(s) from ${rootDirectory.path}`);
+                log.Route(`Global middlewares registered: ${preMiddlewares.length} pre + ${globalErrorMiddlewares.length} error handler(s) from ${rootDirectory.path}`);
             }
         }
 
@@ -681,10 +665,10 @@ async function loadRoutes(app: Express, dir?: string): Promise<void> {
                 middlewareCollections.set(dirInfo.path, middlewares);
 
                 if (process.env.NODE_ENV === 'development') {
-                    log.Route(`📦 Loaded: ${routeFilePath} (${middlewares.length} middlewares)`);
+                    log.Route(`Loaded: ${routeFilePath} (${middlewares.length} middlewares)`);
                 }
             } catch (error) {
-                log.Error(`❌ Failed to load route: ${routeFilePath}`, error);
+                log.Error(`Failed to load route: ${routeFilePath}`, error);
             }
         }
 
@@ -725,39 +709,25 @@ async function loadRoutes(app: Express, dir?: string): Promise<void> {
                     DocumentationGenerator.updateRoutePaths(routePath, newRouteIndices);
                 }
 
-                log.Route(`🔗 ${routePath} (${middlewares.length} middlewares)`);
+                log.Route(`${routePath} (${middlewares.length} middlewares)`);
             }
         }
 
         // 3.5. 전역 에러 핸들러(4-arg)를 라우트 등록 이후 맨 뒤에 mount (P1-7)
         if (globalErrorMiddlewares.length > 0) {
             app.use(...globalErrorMiddlewares);
-            log.Route(`🧯 Global error handler(s) registered after routes: ${globalErrorMiddlewares.length}`);
+            log.Route(`Global error handler(s) registered after routes: ${globalErrorMiddlewares.length}`);
         }
 
         // 4. 완료 통계
         const endTime = process.hrtime(startTime);
         const stats = getCacheStats();
 
-        // 빌드 환경에서 추가 디버깅 정보
-        if (process.env.WEBPACK_BUILD === 'true') {
-            const virtualMiddlewareKeys = Object.keys(virtualFS.middlewares);
-            const actualMiddlewareFiles = virtualMiddlewareKeys.filter(key => {
-                const middlewares = virtualFS.middlewares[key];
-                return Array.isArray(middlewares) && middlewares.length > 0;
-            });
-
-            log.Route(`🔍 Debug - VirtualFS middleware keys: ${virtualMiddlewareKeys.length}`);
-            log.Route(`🔍 Debug - Actual middleware files: ${actualMiddlewareFiles.length}`);
-            log.Route(`🔍 Debug - MiddlewareCache size: ${middlewareCache.size}`);
-            log.Route(`🔍 Debug - Middleware files with content: ${actualMiddlewareFiles.join(', ')}`);
-        }
-
-        log.Route(`✅ Clean V6 completed: ${getElapsedTimeInString(endTime)}`);
+        log.Route(`Clean V6 completed: ${getElapsedTimeInString(endTime)}`);
         log.Route(`   Routes: ${stats.routes}, Middlewares: ${stats.middlewares}`);
 
     } catch (error) {
-        log.Error(`❌ Route loading failed:`, error);
+        log.Error(`Route loading failed:`, error);
         throw error;
     }
 }
@@ -793,7 +763,7 @@ export function clearCache(): void {
     routeCache.clear();
     fileExistsCache.clear();
     moduleResolutionCache.clear();
-    log.Route(`🧹 Cache cleared`);
+    log.Route(`Cache cleared`);
 }
 
 export default loadRoutes;

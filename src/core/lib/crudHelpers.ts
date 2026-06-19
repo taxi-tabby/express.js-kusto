@@ -752,7 +752,6 @@ export class CrudQueryParser {
     if (nativeType === 'Uuid' || fieldType === 'Uuid') {
       // UUID가 아닌 값이 들어온 경우 null 반환 (호출부에서 400 으로 거부됨)
       if (!this.isValidUUID(value)) {
-        // log.Warn(`Invalid UUID format in filter: expected a valid UUID, but received "${value}". This filter is rejected with 400 (INVALID_FILTER).`);
         return null;
       }
       return value; // 유효한 UUID는 그대로 반환

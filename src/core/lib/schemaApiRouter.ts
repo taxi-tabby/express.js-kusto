@@ -15,7 +15,7 @@ export class SchemaApiRouter {
   constructor() {
     this.router = Router();
     this.registry = CrudSchemaRegistry.getInstance();
-    log.Debug('SchemaApiRouter initialized', { enabled: this.registry.isSchemaApiEnabled() });
+    log.Silly('SchemaApiRouter initialized', { enabled: this.registry.isSchemaApiEnabled() });
     this.setupRoutes();
   }
 
@@ -314,7 +314,7 @@ export class SchemaApiRouter {
         }
       };
 
-      log.Debug('Health check requested', healthData);
+      log.Silly('Health check requested', healthData);
 
       res.json({
         success: true,
@@ -481,7 +481,7 @@ export class SchemaApiRouter {
    * 에러 처리
    */
   private handleError(res: Response, error: any): void {
-    log.Error('Schema API Error', { error });
+    log.Error('Schema API error', { error });
 
     const statusCode = error.message?.includes('찾을 수 없습니다') ? 404 : 500;
 

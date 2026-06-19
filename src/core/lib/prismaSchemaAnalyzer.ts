@@ -155,8 +155,7 @@ export class PrismaSchemaAnalyzer {
           this.loadedEnums = enums;
           
           // 분석 완료 - 간단한 로그만 출력
-          // log.Info(`✅ Prisma 스키마 분석 완료 (${this.databaseName}): ${models.length}개 모델, ${Object.keys(enums).length}개 enum 로드됨`);
-          
+
           for (const model of models) {
             const modelInfo = this.parseModelFromDMMF(model);
             this.modelCache.set(model.name, modelInfo);
@@ -187,33 +186,32 @@ export class PrismaSchemaAnalyzer {
             dmmf = PrismaClass.dmmf;
           }
         } catch (e) {
-          log.Warn('정적 DMMF 접근 실패:', e);
+          log.Warn('Static DMMF access failed:', e);
         }
       }
       
       if (!dmmf) {
-        log.Warn('DMMF 정보를 찾을 수 없습니다. 가능한 DMMF 속성들을 확인합니다...');
-        log.Warn('클라이언트 속성:', Object.keys(this.prismaClient as any).filter(k => k.includes('dmmf') || k.includes('DMMF')));
-        
+        log.Warn('DMMF information not found. Checking possible DMMF properties...');
+        log.Debug('Client properties:', Object.keys(this.prismaClient as any).filter(k => k.includes('dmmf') || k.includes('DMMF')));
+
         // 모든 클라이언트 속성 확인
-        log.Warn('모든 클라이언트 속성:', Object.keys(this.prismaClient as any));
-        
+
         if ((this.prismaClient as any).Prisma) {
-          log.Warn('Prisma 네임스페이스 속성:', Object.keys((this.prismaClient as any).Prisma).filter(k => k.includes('dmmf') || k.includes('DMMF')));
+          log.Debug('Prisma namespace properties:', Object.keys((this.prismaClient as any).Prisma).filter(k => k.includes('dmmf') || k.includes('DMMF')));
         }
         
         // 생성자 속성 확인
         const constructor = this.prismaClient.constructor as any;
         if (constructor) {
-          log.Warn('생성자 속성:', Object.keys(constructor).filter(k => k.includes('dmmf') || k.includes('DMMF')));
-          log.Warn('생성자 정적 속성:', Object.getOwnPropertyNames(constructor).filter(k => k.includes('dmmf') || k.includes('DMMF')));
+          log.Debug('Constructor properties:', Object.keys(constructor).filter(k => k.includes('dmmf') || k.includes('DMMF')));
+          log.Debug('Constructor static properties:', Object.getOwnPropertyNames(constructor).filter(k => k.includes('dmmf') || k.includes('DMMF')));
         }
         
         return;
       }
 
       if (!dmmf.datamodel || !dmmf.datamodel.models) {
-        log.Warn('DMMF 구조가 예상과 다릅니다:', {
+        log.Warn('DMMF structure differs from expected:', {
           hasDmmf: !!dmmf,
           hasDatamodel: !!(dmmf && dmmf.datamodel),
           hasModels: !!(dmmf && dmmf.datamodel && dmmf.datamodel.models),
@@ -230,9 +228,8 @@ export class PrismaSchemaAnalyzer {
       }
 
       // 분석 완료 - 로그 제거
-      // log.Info(`✅ Prisma 스키마 분석 완료 (${this.databaseName}): ${this.modelCache.size}개 모델 로드됨`);
     } catch (error) {
-      log.Error('Prisma DMMF 로드 중 오류 발생:', error);
+      log.Error('Error while loading Prisma DMMF:', error);
     }
   }
 

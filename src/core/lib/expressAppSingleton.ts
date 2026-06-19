@@ -63,7 +63,7 @@ class AppSingleton {
             }
 
             this.server = this.app.listen(port, host, () => {
-                log.Info(`🚀 Server started on ${host}:${port}`, {
+                log.Info(`Server started on ${host}:${port}`, {
                     port,
                     host,
                     deprecated: true
@@ -85,13 +85,13 @@ class AppSingleton {
     public stop(): Promise<void> {
         return new Promise((resolve) => {
             if (!this.server) {
-                log.Info('Server is not running');
+                log.Debug('Server is not running');
                 resolve();
                 return;
             }
 
             this.server.close(() => {
-                log.Info('🛑 Server stopped gracefully');
+                log.Info('Server stopped gracefully');
                 this.server = undefined;
                 resolve();
             });

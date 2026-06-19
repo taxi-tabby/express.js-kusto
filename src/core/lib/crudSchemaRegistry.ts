@@ -73,23 +73,18 @@ export class CrudSchemaRegistry {
     }
 
     // 간단한 로그만 출력
-    // log.Info(`🔍 [${dbName}] 모든 모델 자동 등록 시작: ${allModels.length}개 모델 발견`);
-
     for (const model of allModels) {
       const modelName = model.name;
       const schemaKey = `${dbName}.${modelName}`;
 
       // 이미 등록된 모델은 건너뛰기
       if (this.schemas.has(schemaKey)) {
-        // log.Info(`⏭️  [${dbName}] 이미 등록된 모델 건너뛰기: ${modelName}`);
         continue;
       }
 
       // 모델을 기본 설정으로 자동 등록
       this.autoRegisterModel(dbName, modelName, analyzer);
     }
-
-    // log.Info(`✅ [${dbName}] 모든 모델 자동 등록 완료: ${this.schemas.size}개 스키마 등록됨`);
   }
 
   /**
@@ -147,8 +142,6 @@ export class CrudSchemaRegistry {
 
       const schemaKey = `${databaseName}.${modelName}`;
       this.schemas.set(schemaKey, schemaInfo);
-
-      // log.Info(`✅ [${databaseName}] 자동 등록 완료: ${modelName} -> ${basePath}`);
     } catch (error) {
       log.Error(`Auto-register failed: ${modelName}`, { databaseName, error });
     }
@@ -497,22 +490,14 @@ export class CrudSchemaRegistry {
     const model = schema.model;
 
     // 상세 로그 제거
-    // log.Info(`🏗️ [${model.name}] TypeORM 엔티티 변환 시작`);
-    // log.Info(`   - 필드 수: ${model.fields.length}`);
-    // log.Info(`   - 관계 수: ${model.relations.length}`);
-    // log.Info(`   - 관계 목록: ${model.relations.map(r => `${r.name}(${r.type}) -> ${r.model}`).join(', ')}`);
 
     // 컬럼 변환
     const columns = model.fields
       .filter(field => !field.relationName) // 관계 필드 제외
       .map(field => this.convertFieldToTypeOrmColumn(field, schema.databaseName));
 
-    // log.Info(`   - 변환된 컬럼 수: ${columns.length}`);
-
     // 관계 변환 - many-to-many 관계를 우선적으로 처리
     const relations = this.convertRelationsToTypeOrmFormat(model.relations, model.name);
-
-    // log.Info(`   - 변환된 관계 수: ${relations.length}`);
 
     // 인덱스 변환
     const indices = model.indexes.map(index => ({
@@ -560,7 +545,6 @@ export class CrudSchemaRegistry {
       crudInfo
     };
 
-    // log.Info(`✅ [${model.name}] TypeORM 엔티티 변환 완료: ${relations.length}개 관계 포함`);
     return result;
   }
 
@@ -746,23 +730,15 @@ export class CrudSchemaRegistry {
    * 관계들을 TypeORM 형식으로 변환하며, many-to-many 관계를 특별히 처리합니다
    */
   private convertRelationsToTypeOrmFormat(relations: any[], modelName: string): any[] {
-    // log.Info(`🔍 [${modelName}] 관계 변환 시작: ${relations.length}개 관계 발견`);
-    
     const convertedRelations: any[] = [];
 
     for (const relation of relations) {
-      // log.Info(`🔄 [${modelName}] 관계 처리 중: ${relation.name} -> ${relation.model} (타입: ${relation.type})`);
-      
       // 우선 모든 관계를 변환해보자 (CRUD 등록 여부와 상관없이)
       
       // many-to-many 관계인지 확인
       if (this.relationshipManager.isManyToManyRelation(relation, modelName)) {
-        // log.Info(`🎯 [${modelName}] Many-to-Many 관계 감지: ${relation.name} -> ${relation.model}`);
-        
         const manyToManyConfig = this.relationshipManager.getManyToManyConfig(relation, modelName);
         if (manyToManyConfig) {
-          // log.Info(`✅ [${modelName}] Many-to-Many 설정 적용: ${JSON.stringify(manyToManyConfig)}`);
-          
           convertedRelations.push({
             name: manyToManyConfig.relationName,
             type: 'many-to-many',
@@ -805,7 +781,6 @@ export class CrudSchemaRegistry {
       }
     }
 
-    // log.Info(`✅ [${modelName}] 관계 변환 완료: ${convertedRelations.length}개 관계 변환됨`);
     return convertedRelations;
   }
 
@@ -979,7 +954,7 @@ export class CrudSchemaRegistry {
    */
   public clearAllSchemas(): void {
     this.schemas.clear();
-    log.Info('All CRUD schemas cleared');
+    log.Debug('All CRUD schemas cleared');
   }
 
   /**
@@ -987,7 +962,7 @@ export class CrudSchemaRegistry {
    */
   public debugRegisteredSchemas(): void {
     if (!this.isEnabled) {
-      log.Warn('Schema API is disabled');
+      log.Debug('Schema API is disabled');
       return;
     }
 

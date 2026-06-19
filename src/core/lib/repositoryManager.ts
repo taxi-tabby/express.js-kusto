@@ -50,7 +50,7 @@ export class RepositoryManager {
                 
                 // Skip if repository loader is not found
                 if (!repositoryLoader) {
-                    log.Warn(`⚠️ Repository loader not found for: ${repositoryName}, skipping...`);
+                    log.Warn(`Repository loader not found for: ${repositoryName}, skipping`);
                     continue;
                 }
                 
@@ -60,7 +60,7 @@ export class RepositoryManager {
                     // Pass the PrismaManager instance to the repository constructor
                     const repositoryInstance = new RepositoryClass(this.prismaManager);
                     this.repositories[repositoryName] = repositoryInstance;
-                    log.Info(`Loaded repository: ${repositoryName}`);
+                    log.Debug(`Loaded repository: ${repositoryName}`);
                 } else {
                     log.Warn(`Repository ${repositoryName} is not a constructor function`);
                 }
@@ -156,7 +156,7 @@ export class RepositoryManager {
               if (typeof RepositoryClass === 'function') {
                 const repositoryInstance = new RepositoryClass(this.prismaManager);
                 this.repositories[name] = repositoryInstance;
-                log.Info(`Reloaded repository: ${name}`);
+                log.Debug(`Reloaded repository: ${name}`);
             }
         } catch (error) {
             log.Error(`Failed to reload repository ${name}:`, error);

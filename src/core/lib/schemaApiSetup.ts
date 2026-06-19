@@ -15,17 +15,15 @@ export class SchemaApiSetup {
    * @param basePath 스키마 API의 기본 경로 (기본값: '/api/schema')
    */
   public static registerSchemaApi(app: Application, basePath: string = '/api/schema'): void {
-    log.Debug('스키마 API 등록 시도 중...');
-
     if (this.isRegistered) {
-      log.Warn('스키마 API가 이미 등록되어 있습니다. 중복 등록을 방지합니다.');
+      log.Warn('Schema API is already registered. Preventing duplicate registration.');
       return;
     }
 
     const nodeEnv = process.env.NODE_ENV?.toLowerCase();
     const enableSchemaApi = process.env.ENABLE_SCHEMA_API?.toLowerCase();
 
-    log.Debug(`환경 변수 확인: NODE_ENV=${nodeEnv || 'undefined'}, ENABLE_SCHEMA_API=${enableSchemaApi || 'undefined'}`);
+    log.Silly(`Environment variable check: NODE_ENV=${nodeEnv || 'undefined'}, ENABLE_SCHEMA_API=${enableSchemaApi || 'undefined'}`);
 
     const isEnabled =
       nodeEnv === 'development' ||
@@ -34,7 +32,7 @@ export class SchemaApiSetup {
       enableSchemaApi === '1';
 
     if (!isEnabled) {
-      log.Info('스키마 API는 개발 모드에서만 활성화됩니다. NODE_ENV=development 또는 ENABLE_SCHEMA_API=true 설정 필요');
+      log.Debug('Schema API is enabled only in development mode. Set NODE_ENV=development or ENABLE_SCHEMA_API=true.');
       return;
     }
 
@@ -44,9 +42,9 @@ export class SchemaApiSetup {
 
       this.isRegistered = true;
 
-      log.Info(`CRUD 스키마 API 등록 완료: ${basePath}/ (목록), ${basePath}/database/:databaseName, ${basePath}/:databaseName/:modelName, ${basePath}/meta/stats, ${basePath}/meta/health`);
+      log.Info(`CRUD schema API registered: ${basePath}/ (list), ${basePath}/database/:databaseName, ${basePath}/:databaseName/:modelName, ${basePath}/meta/stats, ${basePath}/meta/health`);
     } catch (error) {
-      log.Error('스키마 API 등록 실패:', error);
+      log.Error('Failed to register schema API:', error);
     }
   }
 

@@ -32,7 +32,7 @@ export class Application {
      */
     public async start(): Promise<Server> {
         try {
-            log.Info('🚀 Starting application...');
+            log.Info('Starting application...');
             
             // Initialize core with configuration (now async)
             await this.core.initialize(this.config);
@@ -52,8 +52,8 @@ export class Application {
      */
     public async stop(): Promise<void> {
         const stack = new Error().stack;
-        log.Debug('🔍 stop() method called', { stack });
-        log.Info('🛑 Stopping application...');
+        log.Debug('stop() method called', { stack });
+        log.Info('Stopping application...');
         await this.core.stop();
         log.Info('Application stopped successfully');
     }
@@ -62,7 +62,7 @@ export class Application {
      * Restart the application
      */
     public async restart(): Promise<Server> {
-        log.Info('🔄 Restarting application...');
+        log.Info('Restarting application...');
         await this.stop();
         return this.start();
     }

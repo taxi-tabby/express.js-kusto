@@ -72,12 +72,12 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 	 * Load environment variables using the same logic as webpack config
 	 */
 	private loadEnvironmentVariables(): void {
-		log.Info('🔧 Loading environment variables...');
+		log.Debug('Loading environment variables...');
 		
 		// 기본 .env 파일 로드
 		const defaultEnvPath = path.resolve(process.cwd(), '.env');
 		if (fs.existsSync(defaultEnvPath)) {
-			log.Info(`📄 Loading default .env file: ${defaultEnvPath}`);
+			log.Debug(`Loading default .env file: ${defaultEnvPath}`);
 			config({ path: defaultEnvPath });
 		}
 
@@ -92,10 +92,10 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 		}
 		
 		if (envSpecificPath && fs.existsSync(envSpecificPath)) {
-			log.Info(`📄 Loading environment-specific file: ${envSpecificPath}`);
+			log.Debug(`Loading environment-specific file: ${envSpecificPath}`);
 			config({ path: envSpecificPath, override: true });
 		} else if (envSpecificPath) {
-			log.Info(`⚠️ Environment-specific file not found: ${envSpecificPath}`);
+			log.Warn(`Environment-specific file not found: ${envSpecificPath}`);
 		}
 		
 	}
@@ -116,7 +116,7 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 	 */
 	public async initialize(): Promise<void> {
 		if (this.initialized) {
-			log.Info('PrismaManager already initialized');
+			log.Debug('PrismaManager already initialized');
 			return;
 		}
 
@@ -136,7 +136,7 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 
 		// 개발 환경에서만 상세 로그 출력
 		if (process.env.NODE_ENV === 'development') {
-			log.Info(`Found ${folders.length} database folders:`, folders);
+			log.Debug(`Found ${folders.length} database folders:`, folders);
 		}
 
 		// Process each database folder with error handling
@@ -144,7 +144,7 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 			try {
 				await this.processDatabaseFolder(folderName, dbPath);
 			} catch (error) {
-				log.Error(`❌ Failed to process database folder '${folderName}':`, error);
+				log.Error(`Failed to process database folder '${folderName}':`, error);
 				// Continue with other databases instead of failing completely
 			}
 		}
@@ -156,9 +156,9 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 		const totalCount = folders.length;
 		
 		if (connectedCount === 0) {
-			log.Warn('⚠️ No databases connected');
+			log.Warn('No databases connected');
 		} else {
-			log.Info(`✅ PrismaManager: ${connectedCount}/${totalCount} databases ready`);
+			log.Info(`PrismaManager: ${connectedCount}/${totalCount} databases ready`);
 		}
 	}
 
@@ -231,17 +231,17 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 						throw new Error(`PrismaClient not found in module: ${clientIndexPath}`);
 					}
 					
-					log.Info(`✅ Successfully loaded Prisma client for ${folderName} from dist path`);
+					log.Debug(`Successfully loaded Prisma client for ${folderName} from dist path`);
 				} catch (requireError: any) {
-					log.Error(`❌ Failed to load Prisma client from dist for ${folderName}:`, requireError);
+					log.Error(`Failed to load Prisma client from dist for ${folderName}:`, requireError);
 					
 					// Fallback: Try to load from source (for development in production mode)
-					log.Info(`🔄 Attempting fallback to source client for ${folderName}...`);
+					log.Debug(`Attempting fallback to source client for ${folderName}...`);
 					const clientPath = path.join(folderPath, 'client');
 					if (fs.existsSync(path.join(clientPath, 'index.js'))) {
 						clientModule = await import(clientPath);
 						DatabasePrismaClient = clientModule.PrismaClient;
-						log.Info(`✅ Fallback successful for ${folderName}`);
+						log.Debug(`Fallback successful for ${folderName}`);
 					} else {
 						throw requireError;
 					}
@@ -249,7 +249,7 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 			} else {
 				// Development environment - enhanced client loading with cache clearing
 				const clientPath = path.join(folderPath, 'client');
-				log.Info(`🔧 Loading Prisma client for ${folderName} from development path: ${clientPath}`);
+				log.Debug(`Loading Prisma client for ${folderName} from development path: ${clientPath}`);
 				
 				try {
 					// 개발 모드에서 모듈 캐시 완전 클리어
@@ -262,7 +262,7 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 								normalizedKey.includes(`/db/${folderName}/client`) ||
 								normalizedKey.includes(`\\db\\${folderName}\\client`)) {
 								delete require.cache[key];
-								log.Info(`🗑️ Cleared cache for: ${key}`);
+								log.Silly(`Cleared cache for: ${key}`);
 							}
 						});
 					}
@@ -276,7 +276,7 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 					}
 					
 					if (!fs.existsSync(clientIndexTsPath)) {
-						log.Warn(`⚠️ Prisma client TypeScript definitions not found at: ${clientIndexTsPath}`);
+						log.Warn(`Prisma client TypeScript definitions not found at: ${clientIndexTsPath}`);
 					}
 					
 					// Dynamic import with timestamp to avoid ES module cache
@@ -290,7 +290,7 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 						clientModule = await import(importPath);
 					} catch (timestampError) {
 						// Fallback to normal import
-						log.Info(`🔄 Timestamp import failed, using normal import for ${folderName}`);
+						log.Debug(`Timestamp import failed, using normal import for ${folderName}`);
 						importPath = clientPath;
 						clientModule = await import(importPath);
 					}
@@ -306,17 +306,17 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 						throw new Error(`PrismaClient is not a constructor function. Type: ${typeof DatabasePrismaClient}`);
 					}
 					
-					log.Info(`✅ Successfully loaded Prisma client for ${folderName} from development path`);
+					log.Debug(`Successfully loaded Prisma client for ${folderName} from development path`);
 					
 				} catch (importError: any) {
-					log.Error(`❌ Failed to load Prisma client from development path for ${folderName}:`, importError);
+					log.Error(`Failed to load Prisma client from development path for ${folderName}:`, importError);
 					
 					// Try fallback to dist path if exists (development with build)
 					const distClientPath = path.join(process.cwd(), 'dist', 'src', 'app', 'db', folderName, 'client');
 					const distClientIndexPath = path.join(distClientPath, 'index.js');
 					
 					if (fs.existsSync(distClientIndexPath)) {
-						log.Info(`🔄 Attempting fallback to dist client for ${folderName}...`);
+						log.Debug(`Attempting fallback to dist client for ${folderName}...`);
 						try {
 							let nodeRequire: any;
 							try {
@@ -334,7 +334,7 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 								throw new Error(`PrismaClient not found in dist module: ${distClientIndexPath}`);
 							}
 							
-							log.Info(`✅ Fallback to dist client successful for ${folderName}`);
+							log.Debug(`Fallback to dist client successful for ${folderName}`);
 						} catch (distError) {
 							throw new Error(`Both development and dist client loading failed for ${folderName}. Development error: ${importError.message}, Dist error: ${distError}`);
 						}
@@ -352,7 +352,7 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 			try {
 				connectionUrl = this.getDatabaseUrl(folderName);
 			} catch (urlError) {
-				log.Error(`❌ Database URL not configured for ${folderName}:`, urlError);
+				log.Error(`Database URL not configured for ${folderName}:`, urlError);
 				throw urlError;
 			}
 
@@ -379,7 +379,7 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 					connectionAttempts++;
 					// 최종 실패 시에만 로그 출력 (성능 개선)
 					if (connectionAttempts >= maxAttempts) {
-						log.Error(`❌ Connection failed for ${folderName} after ${maxAttempts} attempts:`, connectError);
+						log.Error(`Connection failed for ${folderName} after ${maxAttempts} attempts:`, connectError);
 						throw connectError;
 					}
 					
@@ -408,10 +408,10 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 
 			// 개발 환경에서만 성공 로그 출력
 			if (process.env.NODE_ENV === 'development') {
-				log.Info(`✅ Connected to database: ${folderName}`);
+				log.Debug(`Connected to database: ${folderName}`);
 			}
 		} catch (error) {
-			log.Error(`❌ Failed to connect to database ${folderName}:`, error);
+			log.Error(`Failed to connect to database ${folderName}:`, error);
 			
 			// Store failed config for reference
 			this.configs.set(folderName, {
@@ -482,7 +482,7 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 			}
 		} catch (error: any) {
 			// schema.prisma 파싱 실패 시 잘못된 driver adapter 가 선택될 수 있음 — 가시화.
-			log.Warn(`schema.prisma provider 파싱 실패, 'postgresql' 로 폴백: ${folderName}`, { message: error?.message });
+			log.Warn(`Failed to parse schema.prisma provider, falling back to 'postgresql': ${folderName}`, { message: error?.message });
 		}
 		return 'postgresql';
 	}
@@ -523,7 +523,7 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 				// SQLite는 어댑터 없이 직접 연결
 				return null;
 			default:
-				log.Warn(`⚠️ Unknown provider '${provider}' for ${folderName}, attempting connection without adapter`);
+				log.Warn(`Unknown provider '${provider}' for ${folderName}, attempting connection without adapter`);
 				return null;
 		}
 	}
@@ -670,13 +670,13 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 		const cooldownUntil = this.reconnectionCooldowns.get(databaseName) || 0;
 		if (now < cooldownUntil) {
 			const remainingSec = Math.ceil((cooldownUntil - now) / 1000);
-			log.Warn(`⏳ Database '${databaseName}' reconnection in cooldown (${remainingSec}s remaining)`);
+			log.Warn(`Database '${databaseName}' reconnection in cooldown (${remainingSec}s remaining)`);
 			return false;
 		}
 
 		// 최대 시도 횟수에 도달하면 쿨다운 설정 후 실패
 		if (attempts >= this.MAX_RECONNECTION_ATTEMPTS) {
-			log.Error(`❌ Max reconnection attempts (${this.MAX_RECONNECTION_ATTEMPTS}) reached for database '${databaseName}', cooldown ${this.RECONNECTION_COOLDOWN_MS / 1000}s`);
+			log.Error(`Max reconnection attempts (${this.MAX_RECONNECTION_ATTEMPTS}) reached for database '${databaseName}', cooldown ${this.RECONNECTION_COOLDOWN_MS / 1000}s`);
 			this.reconnectionCooldowns.set(databaseName, now + this.RECONNECTION_COOLDOWN_MS);
 			this.reconnectionAttempts.set(databaseName, 0);
 			return false;
@@ -695,7 +695,7 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 					]);
 				} catch (disconnectError: any) {
 					// 재연결 직전이라 무시하고 계속 진행하되, 연결 누수 추적용으로 기록.
-					log.Debug(`재연결 전 기존 클라이언트 disconnect 실패: ${databaseName}`, { message: disconnectError?.message });
+					log.Debug(`Existing client disconnect failed before reconnect: ${databaseName}`, { message: disconnectError?.message });
 				}
 			}
 
@@ -706,11 +706,11 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 			this.reconnectionAttempts.set(databaseName, 0);
 			this.reconnectionCooldowns.delete(databaseName);
 
-			log.Info(`✅ Successfully reconnected to database '${databaseName}'`);
+			log.Info(`Successfully reconnected to database '${databaseName}'`);
 			return true;
 
 		} catch (error) {
-			log.Error(`❌ Failed to reconnect to database '${databaseName}' (attempt ${attempts + 1}/${this.MAX_RECONNECTION_ATTEMPTS}):`, error instanceof Error ? error.message : error);
+			log.Error(`Failed to reconnect to database '${databaseName}' (attempt ${attempts + 1}/${this.MAX_RECONNECTION_ATTEMPTS}):`, error instanceof Error ? error.message : error);
 			return false;
 		}
 	}
@@ -760,7 +760,7 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 					throw connectError;
 				}
 				const delay = 1000 * connectionAttempts; // 1초, 2초
-				log.Info(`⏳ DB 연결 대기 중 (${connectError.message?.substring(0, 40)}...), ${delay/1000}초 후 재시도... (${connectionAttempts}/${maxAttempts})`);
+				log.Debug(`Waiting for DB connection (${connectError.message?.substring(0, 40)}...), retrying in ${delay/1000}s... (${connectionAttempts}/${maxAttempts})`);
 				await new Promise(resolve => setTimeout(resolve, delay));
 			}
 		}
@@ -781,8 +781,8 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 			const callerInfo = this.getCallerSourceInfo();
 			
 			if (!this.initialized) {
-				log.Error('❌ PrismaManager not initialized. Call initialize() first.');
-				log.Error(`   Called from: ${callerInfo.filePath}${callerInfo.lineNumber ? `:${callerInfo.lineNumber}` : ''}`);
+				log.Error('PrismaManager not initialized. Call initialize() first.');
+				log.Error(`Called from: ${callerInfo.filePath}${callerInfo.lineNumber ? `:${callerInfo.lineNumber}` : ''}`);
 				throw new Error('데이터베이스 관리자가 초기화되지 않았습니다. 애플리케이션 시작 시 initialize()를 호출했는지 확인하세요.');
 			}
 
@@ -790,8 +790,8 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 			if (!this.configs.has(databaseName)) {
 				const availableDbs = Array.from(this.configs.keys());
 				const dbList = availableDbs.length > 0 ? availableDbs.join(', ') : '없음';
-				log.Error(`❌ Database '${databaseName}' not found. Available: ${dbList}`);
-				log.Error(`   Called from: ${callerInfo.filePath}${callerInfo.lineNumber ? `:${callerInfo.lineNumber}` : ''}`);
+				log.Error(`Database '${databaseName}' not found. Available: ${dbList}`);
+				log.Error(`Called from: ${callerInfo.filePath}${callerInfo.lineNumber ? `:${callerInfo.lineNumber}` : ''}`);
 				throw new Error(`데이터베이스 '${databaseName}'를 찾을 수 없습니다. 사용 가능한 데이터베이스: ${dbList}`);
 			}
 
@@ -799,14 +799,14 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 			if (process.env.NODE_ENV === 'development') {
 				const isClientHealthy = await this.verifyAndRefreshClientIfNeeded(databaseName);
 				if (!isClientHealthy) {
-					log.Warn(`⚠️ Client verification failed for ${databaseName}, but continuing...`);
+					log.Warn(`Client verification failed for ${databaseName}, but continuing...`);
 				}
 			}
 
 			const client = this.databases.get(databaseName);
 			if (!client) {
-				log.Error(`❌ Database client '${databaseName}' not found`);
-				log.Error(`   Called from: ${callerInfo.filePath}${callerInfo.lineNumber ? `:${callerInfo.lineNumber}` : ''}`);
+				log.Error(`Database client '${databaseName}' not found`);
+				log.Error(`Called from: ${callerInfo.filePath}${callerInfo.lineNumber ? `:${callerInfo.lineNumber}` : ''}`);
 				throw new Error(`데이터베이스 '${databaseName}' 클라이언트를 찾을 수 없습니다.`);
 			}
 
@@ -829,7 +829,7 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 	public getClientSync<T = any>(databaseName: string): T {
 		try {
 			if (!this.initialized) {
-				log.Error('❌ PrismaManager not initialized. Call initialize() first.');
+				log.Error('PrismaManager not initialized. Call initialize() first.');
 				throw new Error('데이터베이스 관리자가 초기화되지 않았습니다. 애플리케이션 시작 시 initialize()를 호출했는지 확인하세요.');
 			}
 
@@ -837,7 +837,7 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 			if (!client) {
 				const availableDbs = Array.from(this.databases.keys());
 				const dbList = availableDbs.length > 0 ? availableDbs.join(', ') : '없음';
-				log.Error(`❌ Database '${databaseName}' not found. Available: ${dbList}`);
+				log.Error(`Database '${databaseName}' not found. Available: ${dbList}`);
 				throw new Error(`데이터베이스 '${databaseName}'를 찾을 수 없습니다. 사용 가능한 데이터베이스: ${dbList}`);
 			}
 
@@ -1035,7 +1035,7 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 
 							if (manager.isConnectionError(error) && attempt < maxRetries) {
 								const delay = Math.min(baseDelay * Math.pow(1.5, attempt), 8000);
-								log.Info(`🔄 DB 연결 오류 감지 (${error.message?.substring(0, 50)}...), ${delay/1000}초 후 재시도... (${attempt + 1}/${maxRetries})`);
+								log.Debug(`DB connection error detected (${error.message?.substring(0, 50)}...), retrying in ${delay/1000}s... (${attempt + 1}/${maxRetries})`);
 
 								await new Promise(resolve => setTimeout(resolve, delay));
 
@@ -1043,7 +1043,7 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 									await manager.reconnectDatabase(databaseName);
 								} catch (reconnectError: any) {
 									// 재연결 실패해도 다음 시도에서 다시 시도하지만, 누적되면 root cause 추적이 어려우므로 기록.
-									log.Warn(`재연결 시도 실패 (다음 시도에서 재시도): ${databaseName}`, { attempt: attempt + 1, message: reconnectError?.message });
+									log.Warn(`Reconnection attempt failed (will retry on next attempt): ${databaseName}`, { attempt: attempt + 1, message: reconnectError?.message });
 								}
 								continue;
 							}
@@ -1352,7 +1352,7 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 	 * Useful when schema changes or client is out of sync
 	 */
 	public async forceRefreshClient(databaseName: string): Promise<void> {
-		log.Info(`🔄 Force refreshing client for database: ${databaseName}`);
+		log.Debug(`Force refreshing client for database: ${databaseName}`);
 		
 		// Disconnect existing client
 		const existingClient = this.databases.get(databaseName);
@@ -1360,7 +1360,7 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 			try {
 				await existingClient.$disconnect();
 			} catch (error) {
-				log.Warn(`⚠️ Error disconnecting existing client: ${error}`);
+				log.Warn(`Error disconnecting existing client: ${error}`);
 			}
 		}
 
@@ -1383,7 +1383,7 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 						normalizedKey.includes(`/db/${databaseName}/client`) ||
 						normalizedKey.includes(`\\db\\${databaseName}\\client`)) {
 						delete require.cache[key];
-						log.Info(`🗑️ Cleared cache for: ${key}`);
+						log.Silly(`Cleared cache for: ${key}`);
 					}
 				});
 				
@@ -1393,7 +1393,7 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 					if (normalizedKey.includes(`/db/${databaseName}/`) && 
 						(normalizedKey.includes('@prisma') || normalizedKey.includes('prisma'))) {
 						delete require.cache[key];
-						log.Info(`🗑️ Cleared Prisma cache for: ${key}`);
+						log.Silly(`Cleared Prisma cache for: ${key}`);
 					}
 				});
 			}
@@ -1403,9 +1403,9 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 		try {
 			const dbPath = path.join(process.cwd(), 'src', 'app', 'db');
 			await this.processDatabaseFolder(databaseName, dbPath);
-			log.Info(`✅ Client refreshed for database: ${databaseName}`);
+			log.Info(`Client refreshed for database: ${databaseName}`);
 		} catch (error) {
-			log.Error(`❌ Failed to refresh client for database: ${databaseName}`, error);
+			log.Error(`Failed to refresh client for database: ${databaseName}`, error);
 			throw error;
 		}
 	}
@@ -1414,14 +1414,14 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 	 * Force refresh all database clients
 	 */
 	public async forceRefreshAllClients(): Promise<void> {
-		log.Info('🔄 Force refreshing all database clients...');
+		log.Debug('Force refreshing all database clients...');
 		
 		const databases = Array.from(this.databases.keys());
 		for (const dbName of databases) {
 			await this.forceRefreshClient(dbName);
 		}
 		
-		log.Info('✅ All clients refreshed');
+		log.Info('All clients refreshed');
 	}
 
 	/**
@@ -1435,7 +1435,7 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 		try {
 			const config = this.configs.get(databaseName);
 			if (!config) {
-				log.Warn(`⚠️ Database config not found for: ${databaseName}`);
+				log.Warn(`Database config not found for: ${databaseName}`);
 				return false;
 			}
 
@@ -1444,7 +1444,7 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 			
 			// Check if schema file exists
 			if (!fs.existsSync(schemaPath)) {
-				log.Error(`❌ Schema file not found: ${schemaPath}`);
+				log.Error(`Schema file not found: ${schemaPath}`);
 				return false;
 			}
 
@@ -1453,7 +1453,7 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 			const clientIndexTsPath = path.join(clientPath, 'index.d.ts');
 			
 			if (!fs.existsSync(clientIndexPath) || !fs.existsSync(clientIndexTsPath)) {
-				log.Info(`🔧 Client files missing for ${databaseName}, regenerating...`);
+				log.Info(`Client files missing for ${databaseName}, regenerating...`);
 				
 				// Try to regenerate the client
 				const { spawn } = require('child_process');
@@ -1465,16 +1465,16 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 					
 					generateProcess.on('close', async (code: number | null) => {
 						if (code === 0) {
-							log.Info(`✅ Client regenerated for ${databaseName}`);
+							log.Debug(`Client regenerated for ${databaseName}`);
 							try {
 								await this.forceRefreshClient(databaseName);
 								resolve(true);
 							} catch (error) {
-								log.Error(`❌ Failed to refresh after regeneration: ${error}`);
+								log.Error(`Failed to refresh after regeneration: ${error}`);
 								resolve(false);
 							}
 						} else {
-							log.Error(`❌ Failed to regenerate client for ${databaseName}`);
+							log.Error(`Failed to regenerate client for ${databaseName}`);
 							resolve(false);
 						}
 					});
@@ -1484,14 +1484,14 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 			// Check if current client is working
 			const client = this.databases.get(databaseName);
 			if (!client) {
-				log.Info(`🔧 Client not loaded for ${databaseName}, refreshing...`);
+				log.Debug(`Client not loaded for ${databaseName}, refreshing...`);
 				await this.forceRefreshClient(databaseName);
 				return this.databases.has(databaseName);
 			}
 
 			return true;
 		} catch (error) {
-			log.Error(`❌ Client verification failed for ${databaseName}:`, error);
+			log.Error(`Client verification failed for ${databaseName}:`, error);
 			return false;
 		}
 	}

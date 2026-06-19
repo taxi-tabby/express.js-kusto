@@ -109,7 +109,7 @@ export class RequestHandler {
               // 검증 실패 시 에러 응답
             if (errors.length > 0) {
                 // 개발자를 위한 자세한 로깅
-                log.Debug(`Validation errors for ${req.method} ${req.originalUrl}`, { errors });
+                log.Silly(`Validation errors for ${req.method} ${req.originalUrl}`, { errors });
                 return this.sendError(res, 422, 'Validation failed', errors);
             }
 
@@ -183,7 +183,7 @@ export class RequestHandler {
             try {
                 filteredData = this.validateAndFilterResponse(data, responseSchema);
             } catch (error) {
-                log.Error('Response validation error:', { 
+                log.Error('Response validation error', {
                     error: error instanceof Error ? error.message : 'Unknown error',
                     stack: error instanceof Error ? error.stack : undefined
                 });
@@ -308,12 +308,6 @@ export class RequestHandler {
             try {
                 const handlerSource = handler.toString();
 
-                // 소스 정보 로깅
-                // log.Debug('Handler source info', {
-                //     sourceInfo: config.sourceInfo,
-                //     handlerStartsWith: handlerSource.substring(0, 100)
-                // });
-
                 const missingImplementations = this.validateHandlerImplementation(config.response, handlerSource, config.sourceInfo);
                 
                 // STRICT_STATUS_CODE_CHECK=true 환경변수가 설정되어 있으면 누락된 구현이 있을 경우 오류를 발생시킵니다.
@@ -359,7 +353,7 @@ export class RequestHandler {
                 }
 
             } catch (error) {
-                log.Error('Handler error:', { 
+                log.Error('Handler error', {
                     path: req.originalUrl, 
                     method: req.method,
                     error: error instanceof Error ? error.message : 'Unknown error',

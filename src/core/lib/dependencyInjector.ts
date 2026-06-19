@@ -72,7 +72,7 @@ export class DependencyInjector {
                 
                 // Skip if module loader is not found
                 if (!moduleLoader) {
-                    log.Warn(`⚠️ Module loader not found for: ${moduleName}, skipping...`);
+                    log.Warn(`Module loader not found for: ${moduleName}, skipping...`);
                     continue;
                 }
                 
@@ -91,7 +91,7 @@ export class DependencyInjector {
                     this.modules[moduleName] = ModuleClass;
                 }
 
-                log.Debug(`Loaded injectable module: ${moduleName}`);
+                log.Silly(`Loaded injectable module: ${moduleName}`);
             } catch (error) {
                 log.Error(`Failed to load injectable module ${moduleName}:`, error);
             }
@@ -105,46 +105,41 @@ export class DependencyInjector {
     private async loadMiddlewares(): Promise<void> {
         const middlewareNames = Object.keys(MIDDLEWARE_REGISTRY) as MiddlewareName[];
         
-        log.Info(`🔧 Loading ${middlewareNames.length} middlewares: ${middlewareNames.join(', ')}`);
+        log.Debug(`Loading ${middlewareNames.length} middlewares: ${middlewareNames.join(', ')}`);
 
         for (const middlewareName of middlewareNames) {
             try {
-                log.Debug(`Loading middleware: ${middlewareName}`);
+                log.Silly(`Loading middleware: ${middlewareName}`);
                 
                 // Dynamic import using the middleware registry
                 const middlewareLoader = MIDDLEWARE_REGISTRY[middlewareName];
                 
                 // Skip if middleware loader is not found
                 if (!middlewareLoader) {
-                    log.Warn(`⚠️ Middleware loader not found for: ${middlewareName}, skipping...`);
+                    log.Warn(`Middleware loader not found for: ${middlewareName}, skipping...`);
                     continue;
                 }
                 
                 const middlewareExports = await (middlewareLoader as () => Promise<any>)();
 
-                log.Debug(`Middleware exports for ${middlewareName}:`, Object.keys(middlewareExports));
-
                 // Handle different export patterns for middlewares (functions, not classes)
                 const MiddlewareFunction = this.resolveMiddlewareFunction(middlewareExports, middlewareName);
-                
-                log.Debug(`Resolved middleware function for ${middlewareName}:`, typeof MiddlewareFunction);
-                
+
                 if (typeof MiddlewareFunction === 'function') {
                     // Execute the middleware function to get the actual middleware object
                     this.middlewares[middlewareName] = MiddlewareFunction();
-                    log.Debug(`Executed middleware function for ${middlewareName}, result:`, typeof this.middlewares[middlewareName]);
                 } else {
                     log.Warn(`Middleware ${middlewareName} resolved to unexpected type: ${typeof MiddlewareFunction}`);
                     this.middlewares[middlewareName] = MiddlewareFunction;
                 }
 
-                log.Info(`✅ Loaded injectable middleware: ${middlewareName}`);
+                log.Silly(`Loaded injectable middleware: ${middlewareName}`);
             } catch (error) {
-                log.Error(`❌ Failed to load injectable middleware ${middlewareName}:`, error);
+                log.Error(`Failed to load injectable middleware ${middlewareName}:`, error);
             }
         }
         
-        log.Info(`🔧 Middleware loading complete. Loaded middlewares: ${Object.keys(this.middlewares).join(', ')}`);
+        log.Info(`Middleware loading complete. Loaded middlewares: ${Object.keys(this.middlewares).join(', ')}`);
     }
     
     
@@ -182,9 +177,7 @@ export class DependencyInjector {
      * Get a specific middleware by name
      */
     public getMiddleware<T extends MiddlewareName>(name: T): Middleware[T] | undefined {
-        log.Debug(`Getting middleware '${name}', available middlewares: [${Object.keys(this.middlewares).join(', ')}]`);
         const middleware = this.middlewares[name];
-        log.Debug(`Middleware '${name}' found: ${middleware !== undefined}, type: ${typeof middleware}`);
         return middleware;
     }
 
@@ -193,7 +186,7 @@ export class DependencyInjector {
      */
     public registerModule<T extends ModuleName>(name: T, module: Injectable[T]): void {
         this.modules[name] = module;
-        log.Debug(`Manually registered module: ${name}`);
+        log.Silly(`Manually registered module: ${name}`);
     }
 
     /**
@@ -201,7 +194,7 @@ export class DependencyInjector {
      */
     public registerMiddleware<T extends MiddlewareName>(name: T, middleware: Middleware[T]): void {
         this.middlewares[name] = middleware;
-        log.Debug(`Manually registered middleware: ${name}`);
+        log.Silly(`Manually registered middleware: ${name}`);
     }
 
     /**
@@ -276,7 +269,6 @@ export class DependencyInjector {
         }
         
         // 6. Fallback: return as-is
-        log.Debug(`No specific export pattern found for ${moduleName}, using moduleExports directly`);
         return moduleExports;
     }
 
@@ -316,7 +308,6 @@ export class DependencyInjector {
         }
         
         // 5. Fallback: return as-is
-        log.Debug(`No specific export pattern found for middleware ${middlewareName}, using middlewareExports directly`);
         return middlewareExports;
     }
 }

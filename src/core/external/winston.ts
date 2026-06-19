@@ -167,7 +167,7 @@ export const logger = {
 			end: () => {
 				const end = process.hrtime.bigint();
 				const duration = Number(end - start) / 1000000; // ms로 변환
-				log.Debug(`⏱️ ${label} completed in ${duration.toFixed(2)}ms`);
+				log.Debug(`${label} completed in ${duration.toFixed(2)}ms`);
 				return duration;
 			}
 		};

@@ -47,7 +47,7 @@ export class DocumentationGenerator {
     static registerRoute(route: RouteDocumentation): void {
         if (!this.isDocumentationEnabled()) return;
         this.routes.push(route);
-        log.Debug(`Documentation registered for ${route.method} ${route.path}`);
+        log.Silly(`Documentation registered for ${route.method} ${route.path}`);
     }
 
     /** 등록된 라우트의 경로를 업데이트 (마운트 시 사용) */
@@ -65,7 +65,7 @@ export class DocumentationGenerator {
                     const newPath = route.path === '/'
                         ? normalizedBasePath || '/'
                         : `${normalizedBasePath}${route.path}`;
-                    log.Debug(`Updating route path: ${route.path} -> ${newPath}`);
+                    log.Silly(`Updating route path: ${route.path} -> ${newPath}`);
                     route.path = newPath;
                 }
             }

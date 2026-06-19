@@ -142,7 +142,7 @@ export class ExpressRouter {
         this.schemaRegistry = CrudSchemaRegistry.getInstance();
         // 비동기 초기화는 별도로 처리
         this.initializeSchemaAnalyzer().catch(error => {
-            log.Error('스키마 분석기 초기화 실패:', error);
+            log.Error('Failed to initialize schema analyzer:', error);
         });
     }
 
@@ -160,7 +160,7 @@ export class ExpressRouter {
             const availableDatabases = prismaManager.getAvailableDatabases();
             
             if (availableDatabases.length === 0) {
-                log.Warn('사용 가능한 Prisma 클라이언트가 없습니다. 스키마 분석기를 초기화할 수 없습니다.');
+                log.Warn('No available Prisma clients. Cannot initialize schema analyzer.');
                 return;
             }
 
@@ -184,7 +184,6 @@ export class ExpressRouter {
 
                     // 초기화 완료 표시
                     ExpressRouter.initializedDatabases.add(databaseName);
-                    // log.Info(`🔍 Prisma 스키마 분석기가 초기화되었습니다. (데이터베이스: ${databaseName})`);
                 }
             }
 
@@ -197,13 +196,8 @@ export class ExpressRouter {
             if (firstClient && !this.schemaAnalyzer) {
                 this.schemaAnalyzer = PrismaSchemaAnalyzer.getInstance(firstClient, firstDatabase);
             }
-
-            // // 한 번만 출력
-            // if (ExpressRouter.initializedDatabases.size === availableDatabases.length) {
-            //     log.Info(`📊 사용 가능한 데이터베이스: ${availableDatabases.join(', ')}`);
-            // }
         } catch (error) {
-            log.Warn('스키마 분석기 초기화 실패:', error instanceof Error ? error.message : String(error));
+            log.Warn('Failed to initialize schema analyzer:', error instanceof Error ? error.message : String(error));
         }
     }
     
@@ -2625,7 +2619,7 @@ export class ExpressRouter {
         // 개발 모드에서 스키마 등록 (비동기로 백그라운드 실행)
         this.registerSchemaInDevelopment(databaseName, modelName as string, options)
             .catch(error => {
-                log.Error(`스키마 등록 실패 (${databaseName}.${modelName}):`, error.message);
+                log.Error(`Failed to register schema (${databaseName}.${modelName}):`, error.message);
             });
 
         const enabledActions = this.getEnabledActions(options);
@@ -2694,7 +2688,7 @@ export class ExpressRouter {
                 if (requestedClient) {
                     analyzer = PrismaSchemaAnalyzer.getInstance(requestedClient, databaseName);
                 } else {
-                    log.Warn(`요청된 데이터베이스 '${databaseName}'를 찾을 수 없습니다. 기본 분석기를 사용합니다.`);
+                    log.Warn(`Requested database '${databaseName}' not found. Using the default analyzer.`);
                 }
             }
 
@@ -2711,7 +2705,7 @@ export class ExpressRouter {
             );
         } catch (error) {
             log.Warn(
-                `스키마 등록 실패 (${databaseName}.${modelName}):`, 
+                `Failed to register schema (${databaseName}.${modelName}):`,
                 error instanceof Error ? error.message : String(error)
             );
         }
@@ -2941,8 +2935,6 @@ export class ExpressRouter {
                 delete totalCountOptions.skip;
                 delete totalCountOptions.take;
                 delete totalCountOptions.cursor;
-                 
-                // log.Info(modelName, Object.keys(client))
 
                 const [items, total] = await Promise.all([
                     client[modelName].findMany(findManyOptions),
@@ -4104,7 +4096,6 @@ export class ExpressRouter {
      */
     private hasAttributes(obj: any): obj is JsonApiResource {
         const result = obj && typeof obj === 'object' && 'attributes' in obj && obj.attributes != null;
-        // log.Info(`hasAttributes check for:`, JSON.stringify(obj, null, 2), `Result: ${result}`);
         return result;
     }
 

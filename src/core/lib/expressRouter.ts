@@ -107,8 +107,13 @@ export {
     wrapMiddleware,
     wrapValidatedMiddleware,
     wrapMiddlewares,
-    wrapValidatedMiddlewares
+    wrapValidatedMiddlewares,
+    injectedMiddleware
 } from './middlewareHelpers';
+
+// 내부 위임용 value import (P1-10b: private wrapMiddleware 가 단일 출처에 위임)
+import { wrapMiddleware } from './middlewareHelpers';
+import { JSON_API_CONTENT_TYPE, JSON_API_ATOMIC_CONTENT_TYPE } from './jsonApiConstants';
 
 
 
@@ -204,21 +209,11 @@ export class ExpressRouter {
     
 
     /**
-     * MiddlewareHandlerFunction을 Express 호환 미들웨어로 래핑하는 헬퍼 메서드
+     * MiddlewareHandlerFunction을 Express 호환 미들웨어로 래핑하는 헬퍼 메서드.
+     * P1-10b: 중복 제거 — 로직은 단일 출처(middlewareHelpers.wrapMiddleware)에 위임한다.
      */
     private wrapMiddleware(handler: MiddlewareHandlerFunction): RequestHandler {
-        return async (req: Request, res: Response, next: NextFunction) => {
-            try {
-                // Kusto 매니저를 Request 객체에 설정
-                req.kusto = kustoManager;
-
-                // Dependency injector에서 모든 injectable 모듈 가져오기
-                const injected = DependencyInjector.getInstance().getInjectedModules();
-                await handler(req, res, next, injected, repositoryManager, prismaManager);
-            } catch (error) {
-                next(error);
-            }
-        };
+        return wrapMiddleware(handler);
     }
 
     /**
@@ -1169,8 +1164,8 @@ export class ExpressRouter {
                     const method = (middlewareInstance as any)[methodName];
                     if (typeof method === 'function') {
                         // 각 메서드를 미들웨어로 래핑하여 라우터에 적용
-                        // 미들웨어 함수의 매개변수 개수로 판단 (req, res, next, injected, repo, db = 6개)
-                        if (method.length >= 6) {
+                        // 명시적 마커(injectedMiddleware)가 우선, 없으면 arity 휴리스틱 fallback (P2-13)
+                        if ((method as any).__kustoInjected === true || method.length >= 6) {
                             // MiddlewareHandlerFunction 타입으로 판단되면 wrapMiddleware 적용
                             this.router.use(this.wrapMiddleware(method));
                         } else {
@@ -1200,8 +1195,8 @@ export class ExpressRouter {
             } else if (typeof middlewareInstance === 'function') {
                
                 // 미들웨어가 직접 함수인 경우
-                // 매개변수 개수로 MiddlewareHandlerFunction인지 판단
-                if ((middlewareInstance as Function).length >= 6) {
+                // 명시적 마커(injectedMiddleware)가 우선, 없으면 arity 휴리스틱 fallback (P2-13)
+                if ((middlewareInstance as any).__kustoInjected === true || (middlewareInstance as Function).length >= 6) {
                     // MiddlewareHandlerFunction 타입으로 판단되면 wrapMiddleware 적용
                     this.router.use(this.wrapMiddleware(middlewareInstance as MiddlewareHandlerFunction));
                 } else {
@@ -2622,7 +2617,7 @@ export class ExpressRouter {
         const handler: HandlerFunction = async (req, res, injected, repo, db) => {
             try {
                 // JSON:API Content-Type 헤더 설정
-                res.setHeader('Content-Type', 'application/vnd.api+json');
+                res.setHeader('Content-Type', JSON_API_CONTENT_TYPE);
                 res.setHeader('Vary', 'Accept');
 
                 // 쿼리 파라미터 파싱 (UUID 검증 등의 에러 발생 가능)
@@ -2899,7 +2894,7 @@ export class ExpressRouter {
         const handler: HandlerFunction = async (req, res, injected, repo, db) => {
             try {
                 // JSON:API Content-Type 헤더 설정
-                res.setHeader('Content-Type', 'application/vnd.api+json');
+                res.setHeader('Content-Type', JSON_API_CONTENT_TYPE);
                 res.setHeader('Vary', 'Accept');
                 
                 // 파라미터 추출 및 파싱
@@ -3118,7 +3113,7 @@ export class ExpressRouter {
         const handler: HandlerFunction = async (req, res, injected, repo, db) => {
             try {
                 // JSON:API Content-Type 헤더 설정
-                res.setHeader('Content-Type', 'application/vnd.api+json');
+                res.setHeader('Content-Type', JSON_API_CONTENT_TYPE);
                 res.setHeader('Vary', 'Accept');
 
                 // 쿼리 파라미터 파싱 + include 정책 적용 (응답 included 지원)
@@ -3328,7 +3323,7 @@ export class ExpressRouter {
     private setupAtomicOperationsRoute(client: any, modelName: string, options?: any): void {
         const handler: HandlerFunction = async (req, res, injected, repo, db) => {
             try {
-                res.setHeader('Content-Type', 'application/vnd.api+json; ext="https://jsonapi.org/ext/atomic"');
+                res.setHeader('Content-Type', JSON_API_ATOMIC_CONTENT_TYPE);
                 
                 // Content-Type 검증 (atomic extension 필요)
                 // const contentType = req.get('Content-Type');
@@ -3557,43 +3552,6 @@ export class ExpressRouter {
 
         return true;
     }
-
-    /**
-     * Content Negotiation 헬퍼 - JSON:API 스펙 준수
-     */
-    // private validateJsonApiContentType(req: any, res: any): boolean {
-    //     const contentType = req.get('Content-Type');
-        
-    //     if (contentType && !contentType.includes('application/vnd.api+json')) {
-    //         const errorResponse = this.formatJsonApiError(
-    //             new Error('Content-Type must be application/vnd.api+json'),
-    //             'INVALID_CONTENT_TYPE',
-    //             415,
-    //             req.path
-    //         );
-    //         res.status(415).json(errorResponse);
-    //         return false;
-    //     }
-
-    //     // 지원하지 않는 미디어 타입 파라미터 검증
-    //     if (contentType) {
-    //         const mediaTypeParams = this.parseMediaTypeParameters(contentType);
-    //         for (const param of Object.keys(mediaTypeParams)) {
-    //             if (param !== 'ext' && param !== 'profile') {
-    //                 const errorResponse = this.formatJsonApiError(
-    //                     new Error(`Unsupported media type parameter: ${param}`),
-    //                     'UNSUPPORTED_MEDIA_TYPE_PARAMETER',
-    //                     415,
-    //                     req.path
-    //                 );
-    //                 res.status(415).json(errorResponse);
-    //                 return false;
-    //             }
-    //         }
-    //     }
-        
-    //     return true;
-    // }
 
     /**
      * 미디어 타입 파라미터 파싱
@@ -4023,7 +3981,7 @@ export class ExpressRouter {
 
             try {
                 // JSON:API Content-Type 헤더 설정
-                res.setHeader('Content-Type', 'application/vnd.api+json');
+                res.setHeader('Content-Type', JSON_API_CONTENT_TYPE);
 
                 // 쿼리 파라미터 파싱 + include 정책 적용 (응답 included 지원)
                 let queryParams;
@@ -4271,7 +4229,7 @@ export class ExpressRouter {
         const handler: HandlerFunction = async (req, res, injected, repo, db) => {
             try {
                 // JSON:API Content-Type 헤더 설정
-                res.setHeader('Content-Type', 'application/vnd.api+json');
+                res.setHeader('Content-Type', JSON_API_CONTENT_TYPE);
                 
                 // Content Negotiation 검증 (DELETE 요청에 본문이 있는 경우)
                 if (req.body && Object.keys(req.body).length > 0) {
@@ -4423,12 +4381,15 @@ export class ExpressRouter {
         primaryKeyParser: (value: string) => any = ExpressRouter.parseString
     ): void {
         const middlewares = options?.middleware?.recover || [];
-        
+        // P0-3: 형제 핸들러(index/destroy)와 동일하게 설정된 soft-delete 필드를 해석한다.
+        // (과거 'deletedAt' 을 하드코딩하여 커스텀 softDelete.field 설정 시 복구가 깨졌다.)
+        const softDeleteField = options?.softDelete?.field || 'deletedAt';
+
         const handler: HandlerFunction = async (req, res, injected, repo, db) => {
             try {
                 // JSON:API Content-Type 헤더 설정
-                res.setHeader('Content-Type', 'application/vnd.api+json');
-                
+                res.setHeader('Content-Type', JSON_API_CONTENT_TYPE);
+
                 // 파라미터 추출 및 파싱
                 const { success, parsedIdentifier } = this.extractAndParsePrimaryKey(
                     req, res, primaryKey, primaryKeyParser, modelName
@@ -4442,9 +4403,9 @@ export class ExpressRouter {
 
                 // 먼저 현재 상태 확인 (소프트 삭제된 상태인지 체크)
                 const existingItem = await client[modelName].findFirst({
-                    where: { 
+                    where: {
                         [primaryKey]: parsedIdentifier,
-                        deletedAt: { not: null } // 소프트 삭제된 항목만 조회
+                        [softDeleteField]: { not: null } // 소프트 삭제된 항목만 조회
                     }
                 });
 
@@ -4473,10 +4434,10 @@ export class ExpressRouter {
                     }
                 }
 
-                // 복구 실행 (deletedAt을 null로 설정)
+                // 복구 실행 (soft-delete 필드를 null로 설정)
                 const result = await client[modelName].update({
                     where: { [primaryKey]: parsedIdentifier },
-                    data: { deletedAt: null }
+                    data: { [softDeleteField]: null }
                 });
 
                 // After hook 실행
@@ -4935,7 +4896,7 @@ export class ExpressRouter {
         // GET /:identifier/:relationName - 관??리소??직접 조회
         this.router.get(`/:${primaryKey}/:relationName`, async (req, res) => {
             try {
-                res.setHeader('Content-Type', 'application/vnd.api+json');
+                res.setHeader('Content-Type', JSON_API_CONTENT_TYPE);
                 
                 const { success, parsedIdentifier } = this.extractAndParsePrimaryKey(
                     req, res, primaryKey, primaryKeyParser, modelName
@@ -5034,7 +4995,7 @@ export class ExpressRouter {
         // GET /:identifier/relationships/:relationName - 관계 자체 조회
         this.router.get(`/:${primaryKey}/relationships/:relationName`, async (req, res) => {
             try {
-                res.setHeader('Content-Type', 'application/vnd.api+json');
+                res.setHeader('Content-Type', JSON_API_CONTENT_TYPE);
                 
                 const { success, parsedIdentifier } = this.extractAndParsePrimaryKey(
                     req, res, primaryKey, primaryKeyParser, modelName
@@ -5102,7 +5063,7 @@ export class ExpressRouter {
         // POST /:identifier/relationships/:relationName - 관계 추가
         this.router.post(`/:${primaryKey}/relationships/:relationName`, async (req, res) => {
             try {
-                res.setHeader('Content-Type', 'application/vnd.api+json');
+                res.setHeader('Content-Type', JSON_API_CONTENT_TYPE);
                 
                 // Content-Type 검증
                 const contentType = req.get('Content-Type');
@@ -5160,7 +5121,7 @@ export class ExpressRouter {
         // PATCH /:identifier/relationships/:relationName - 관계 완전 교체
         this.router.patch(`/:${primaryKey}/relationships/:relationName`, async (req, res) => {
             try {
-                res.setHeader('Content-Type', 'application/vnd.api+json');
+                res.setHeader('Content-Type', JSON_API_CONTENT_TYPE);
                 
                 // Content-Type 검증
                 const contentType = req.get('Content-Type');
@@ -5227,7 +5188,7 @@ export class ExpressRouter {
         // DELETE /:identifier/relationships/:relationName - 관계 제거
         this.router.delete(`/:${primaryKey}/relationships/:relationName`, async (req, res) => {
             try {
-                res.setHeader('Content-Type', 'application/vnd.api+json');
+                res.setHeader('Content-Type', JSON_API_CONTENT_TYPE);
                 
                 // Content-Type 검증
                 const contentType = req.get('Content-Type');
@@ -5285,7 +5246,7 @@ export class ExpressRouter {
         // GET /:identifier/:relationName - 관??리소??조회
         this.router.get(`/:${primaryKey}/:relationName`, async (req, res) => {
             try {
-                res.setHeader('Content-Type', 'application/vnd.api+json');
+                res.setHeader('Content-Type', JSON_API_CONTENT_TYPE);
                 
                 const { success, parsedIdentifier } = this.extractAndParsePrimaryKey(
                     req, res, primaryKey, primaryKeyParser, modelName

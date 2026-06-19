@@ -116,6 +116,26 @@ describe('CRUD soft delete 흐름 (통합)', () => {
         expect(row.deletedAt).toBeNull();
     });
 
+    it('P0-3: 커스텀 soft-delete 필드(removedAt)로 recover 가 동작한다 (deletedAt 하드코딩 금지)', async () => {
+        const app = buildTestApp(
+            fixture,
+            { softDelete: { enabled: true, field: 'removedAt' } },
+            'User',
+            '/users'
+        );
+        await seedUser('u1');
+        // 커스텀 필드로 soft-delete 상태 만들기
+        await fixture.prisma.user.update({
+            where: { id: 'u1' },
+            data: { removedAt: new Date() }
+        });
+        const res = await request(app).post('/users/u1/recover');
+        // 수정 전: recover 가 deletedAt:{not:null} 로 조회 → 매칭 실패 → 409/404, removedAt 그대로
+        expect([200, 201]).toContain(res.status);
+        const row = await fixture.prisma.user.findUnique({ where: { id: 'u1' } });
+        expect(row.removedAt).toBeNull();
+    });
+
     it('soft delete 비활성 모델에서 DELETE 가 실제로 row 를 삭제한다', async () => {
         // softDelete 옵션 미지정 — 일반 DELETE 동작
         const app = buildTestApp(fixture, {}, 'User', '/users');

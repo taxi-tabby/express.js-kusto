@@ -240,6 +240,13 @@ export class RequestHandler {
         const nonDefaultStatusCodes = statusCodes.filter(code => code !== '200');
         const missingImplementations: string[] = [];
           for (const code of nonDefaultStatusCodes) {
+            // P2-13: 정규식 정적 분석은 휴리스틱이라 false positive 가 발생할 수 있다.
+            //        알려진 오탐은 해당 응답 설정에 `__skipImplementationCheck: true` 로
+            //        명시적으로 opt-out 하여, STRICT 모드 전체를 끄지 않고 개별 코드만 건너뛴다.
+            if ((responseConfig as any)?.[code]?.__skipImplementationCheck === true) {
+                continue;
+            }
+
             // 상태 코드 설정 코드가 핸들러에 있는지 확인
             
             // 주석 처리된 행 제거 (/* */, //, JSDoc 등 처리)

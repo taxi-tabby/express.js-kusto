@@ -1,4 +1,5 @@
 import { ContentTypeMode } from './openApiTypes';
+import { JSON_API_CONTENT_TYPE } from '../jsonApiConstants';
 
 /**
  * OpenAPI requestBody/response.content 의 media type 키를 결정한다.
@@ -6,5 +7,5 @@ import { ContentTypeMode } from './openApiTypes';
  * - 'jsonapi' → 'application/vnd.api+json' (CRUD 가 등록한 JSON:API 라우트)
  */
 export function mediaTypeFor(mode: ContentTypeMode): string {
-    return mode === 'jsonapi' ? 'application/vnd.api+json' : 'application/json';
+    return mode === 'jsonapi' ? JSON_API_CONTENT_TYPE : 'application/json';
 }

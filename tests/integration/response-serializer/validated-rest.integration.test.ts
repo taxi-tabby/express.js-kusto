@@ -54,4 +54,25 @@ describe('나머지 VALIDATED serialize', () => {
         const res = await request(app).post('/1');
         expect(res.body.data).toEqual({ id: 1 });
     });
+    it('PATCH_SLUG_VALIDATED {omit}', async () => {
+        const app = appWith(r => r.PATCH_SLUG_VALIDATED(
+            ['id'], {}, { 200: { id: { type: 'number' }, secret: { type: 'string' } } },
+            async () => ({ id: 1, secret: 'x' }), { serialize: { omit: ['secret'] } }));
+        const res = await request(app).patch('/1');
+        expect(res.body.data).toEqual({ id: 1 });
+    });
+    it('PUT_SLUG_VALIDATED {omit}', async () => {
+        const app = appWith(r => r.PUT_SLUG_VALIDATED(
+            ['id'], {}, { 200: { id: { type: 'number' }, secret: { type: 'string' } } },
+            async () => ({ id: 1, secret: 'x' }), { serialize: { omit: ['secret'] } }));
+        const res = await request(app).put('/1');
+        expect(res.body.data).toEqual({ id: 1 });
+    });
+    it('DELETE_SLUG_VALIDATED {omit}', async () => {
+        const app = appWith(r => r.DELETE_SLUG_VALIDATED(
+            ['id'], {}, { 200: { id: { type: 'number' }, secret: { type: 'string' } } },
+            async () => ({ id: 1, secret: 'x' }), { serialize: { omit: ['secret'] } }));
+        const res = await request(app).delete('/1');
+        expect(res.body.data).toEqual({ id: 1 });
+    });
 });

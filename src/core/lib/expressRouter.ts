@@ -28,7 +28,7 @@ import './types/express-extensions';
 
 
 export type HandlerFunction = (req: Request, res: Response, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => void;
-export type ValidatedHandlerFunction<TConfig extends RequestConfig = RequestConfig> = (req: ValidatedRequest<TConfig>, res: Response, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => Promise<any> | any;
+export type ValidatedHandlerFunction<TConfig extends RequestConfig = RequestConfig, R = any> = (req: ValidatedRequest<TConfig>, res: Response, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => Promise<R> | R;
 export type MiddlewareHandlerFunction = (req: Request, res: Response, next: NextFunction, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => void;
 export type ValidatedMiddlewareHandlerFunction<TConfig extends RequestConfig = RequestConfig> = (req: ValidatedRequest<TConfig>, res: Response, next: NextFunction, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => Promise<any> | any;
 
@@ -1366,10 +1366,22 @@ export class ExpressRouter {
      * # GET_VALIDATED
      * 검증된 GET 요청 처리
      */
+    public GET_VALIDATED<TConfig extends RequestConfig, R, const Sz extends ResponseSerializer<Awaited<R>>>(
+        requestConfig: TConfig,
+        responseConfig: ResponseConfig,
+        handler: (req: ValidatedRequest<TConfig>, res: Response, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => R | Promise<R>,
+        options: { serialize: Sz }
+    ): ExpressRouter;
     public GET_VALIDATED<TConfig extends RequestConfig>(
         requestConfig: TConfig,
         responseConfig: ResponseConfig,
         handler: ValidatedHandlerFunction<TConfig>
+    ): ExpressRouter;
+    public GET_VALIDATED<TConfig extends RequestConfig>(
+        requestConfig: TConfig,
+        responseConfig: ResponseConfig,
+        handler: ValidatedHandlerFunction<TConfig>,
+        options?: { serialize?: ResponseSerializer<any> }
     ): ExpressRouter {
         // 현재 위치 정보를 얻기 위해 Error 스택 추적
         const { filePath, lineNumber } = this.getCallerSourceInfo();
@@ -1378,6 +1390,7 @@ export class ExpressRouter {
             {
                 request: requestConfig,
                 response: responseConfig,
+                serialize: options?.serialize,
                 sourceInfo: { filePath, lineNumber }
             },
             handler
@@ -1422,12 +1435,26 @@ export class ExpressRouter {
      * 검증된 GET 슬러그 요청 처리
      * @param exact true이면 하위 경로 매칭 방지 (기본값 false)
      */
+    public GET_SLUG_VALIDATED<TConfig extends RequestConfig, R, const Sz extends ResponseSerializer<Awaited<R>>>(
+        slug: string[],
+        requestConfig: TConfig,
+        responseConfig: ResponseConfig,
+        handler: (req: ValidatedRequest<TConfig>, res: Response, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => R | Promise<R>,
+        options: { exact?: boolean; serialize: Sz }
+    ): ExpressRouter;
     public GET_SLUG_VALIDATED<TConfig extends RequestConfig>(
         slug: string[],
         requestConfig: TConfig,
         responseConfig: ResponseConfig,
         handler: ValidatedHandlerFunction<TConfig>,
         options?: { exact?: boolean }
+    ): ExpressRouter;
+    public GET_SLUG_VALIDATED<TConfig extends RequestConfig>(
+        slug: string[],
+        requestConfig: TConfig,
+        responseConfig: ResponseConfig,
+        handler: ValidatedHandlerFunction<TConfig>,
+        options?: { exact?: boolean; serialize?: ResponseSerializer<any> }
     ): ExpressRouter {
         // 헬퍼 메서드를 통해 호출자 위치 정보 획득
         const { filePath, lineNumber } = this.getCallerSourceInfo();
@@ -1436,6 +1463,7 @@ export class ExpressRouter {
             {
                 request: requestConfig,
                 response: responseConfig,
+                serialize: options?.serialize,
                 sourceInfo: { filePath, lineNumber }
             },
             handler

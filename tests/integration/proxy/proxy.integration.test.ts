@@ -41,3 +41,62 @@ describe('createProxyMiddleware — GET 패스스루', () => {
     expect(resp.body).toEqual({ ok: true, path: '/hello?q=1' });
   });
 });
+
+describe('createProxyMiddleware — 아웃바운드 헤더', () => {
+  let upstream: Upstream;
+  afterEach(async () => { if (upstream) await closeUpstream(upstream); });
+
+  function echoHeadersUpstream(): Promise<Upstream> {
+    return startUpstream((req, res) => {
+      res.setHeader('content-type', 'application/json');
+      res.end(JSON.stringify({ headers: req.headers }));
+    });
+  }
+
+  it('changeOrigin=true 이면 Host를 타깃 호스트로 교체한다', async () => {
+    upstream = await echoHeadersUpstream();
+    const targetHost = new URL(upstream.url).host; // 127.0.0.1:<port>
+    const app = express();
+    app.use('/', createProxyMiddleware({ target: upstream.url, changeOrigin: true }));
+
+    const resp = await request(app).get('/');
+    expect(resp.body.headers.host).toBe(targetHost);
+  });
+
+  it('X-Forwarded-Proto/Host/For 헤더를 추가한다', async () => {
+    upstream = await echoHeadersUpstream();
+    const app = express();
+    app.use('/', createProxyMiddleware({ target: upstream.url }));
+
+    const resp = await request(app).get('/');
+    expect(resp.body.headers['x-forwarded-proto']).toBe('http');
+    expect(resp.body.headers['x-forwarded-host']).toBeDefined();
+    expect(resp.body.headers['x-forwarded-for']).toBeDefined();
+  });
+
+  it('options.headers 로 헤더를 덮어쓴다', async () => {
+    upstream = await echoHeadersUpstream();
+    const app = express();
+    app.use('/', createProxyMiddleware({
+      target: upstream.url,
+      headers: { 'x-custom': 'injected' },
+    }));
+
+    const resp = await request(app).get('/');
+    expect(resp.body.headers['x-custom']).toBe('injected');
+  });
+
+  it('Connection 에 나열된 hop-by-hop 토큰 헤더를 업스트림으로 전달하지 않는다', async () => {
+    // 주의: `Connection` 헤더 자체는 Node http(s).request 가 에이전트 설정에 따라
+    // 항상 자체 부여하므로 제거 여부를 검증할 수 없다. 대신 Connection 에 나열된
+    // 토큰에 해당하는 헤더(여기선 x-hop-token)가 제거되는지로 hop-by-hop 처리를 검증한다.
+    upstream = await echoHeadersUpstream();
+    const app = express();
+    app.use('/', createProxyMiddleware({ target: upstream.url }));
+
+    const resp = await request(app).get('/')
+      .set('Connection', 'x-hop-token')
+      .set('X-Hop-Token', 'should-be-removed');
+    expect(resp.body.headers['x-hop-token']).toBeUndefined();
+  });
+});

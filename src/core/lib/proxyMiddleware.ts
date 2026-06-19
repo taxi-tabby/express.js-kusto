@@ -27,6 +27,44 @@ const HOP_BY_HOP = new Set([
   'te', 'trailer', 'transfer-encoding', 'upgrade',
 ]);
 
+function buildOutboundHeaders(
+  req: Request,
+  target: URL,
+  options: ProxyOptions,
+): http.OutgoingHttpHeaders {
+  const headers: http.OutgoingHttpHeaders = { ...req.headers };
+
+  // hop-by-hop 제거 (connection 헤더 값에 나열된 토큰도 함께 제거)
+  const connection = req.headers['connection'];
+  const extraHop = typeof connection === 'string'
+    ? connection.split(',').map((s) => s.trim().toLowerCase())
+    : [];
+  for (const name of Object.keys(headers)) {
+    const lower = name.toLowerCase();
+    if (HOP_BY_HOP.has(lower) || extraHop.includes(lower)) {
+      delete headers[name];
+    }
+  }
+
+  if (options.changeOrigin) {
+    headers['host'] = target.host;
+  }
+
+  const prevXff = req.headers['x-forwarded-for'];
+  const clientIp = req.ip || req.socket?.remoteAddress || '';
+  headers['x-forwarded-for'] = prevXff ? `${prevXff}, ${clientIp}` : clientIp;
+  headers['x-forwarded-proto'] = req.protocol;
+  if (req.headers['host']) headers['x-forwarded-host'] = req.headers['host'];
+
+  if (options.headers) {
+    for (const [k, v] of Object.entries(options.headers)) {
+      headers[k] = v;
+    }
+  }
+
+  return headers;
+}
+
 function copyResponseHeaders(proxyRes: http.IncomingMessage, res: Response): void {
   for (const [name, value] of Object.entries(proxyRes.headers)) {
     if (value === undefined) continue;
@@ -47,7 +85,7 @@ export function createProxyMiddleware(options: ProxyOptions): RequestHandler {
       port: target.port || defaultPort,
       method: req.method,
       path: req.url,
-      headers: { ...req.headers },
+      headers: buildOutboundHeaders(req, target, options),
       timeout: options.timeout,
     };
     if (isHttps) {

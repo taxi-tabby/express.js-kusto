@@ -9,7 +9,7 @@ export { EnvironmentLoader } from './lib/environmentLoader';
 export { ErrorFormatter } from './lib/errorFormatter';
 
 // Router and utilities
-export { ExpressRouter } from './lib/expressRouter';
+export { ExpressRouter, injectedMiddleware } from './lib/expressRouter';
 export { log, logger } from '@ext/winston';
 export * from '@ext/util';
 

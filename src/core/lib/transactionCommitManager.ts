@@ -29,11 +29,13 @@ export interface TransactionParticipant<T extends DatabaseNamesUnion = DatabaseN
     committedAt?: Date;
     error?: Error;
     timeout?: number; // 개별 타임아웃 설정 가능
-    result?: any; // Prepare 단계에서 실행된 결과
+    /** @deprecated P0-4 이후 미사용 — prepare 단계가 operation 을 실행하지 않으므로 채워지지 않는다. */
+    result?: any;
     requiredLocks?: string[]; // 특정 리소스에 대한 락 요구사항
     rollbackOperation?: (prisma: DatabaseClientMap[T]) => Promise<void>; // 보상 트랜잭션
     priority?: number; // 커밋 우선순위 (높을수록 먼저 커밋)
-    validatedResult?: any; // 검증된 결과 캐시
+    /** @deprecated P0-4 이후 미사용 — 검증 단계가 결과를 캐시하지 않는다(operation 은 commit 에서 1회 실행). */
+    validatedResult?: any;
 }
 
 /**
@@ -74,10 +76,10 @@ export interface TransactionCommitResult<T = any> {
  * - 완전한 원자성(Atomicity) 및 격리성(Isolation) 보장 불가
  * 
  * 현재 구현 패턴:
- * 1. Phase 1: 작업 검증 및 시뮬레이션 (Validation Phase)
- *    - 실제 2PC Prepare 대신 트랜잭션 시뮬레이션 후 롤백
+ * 1. Phase 1: 검증 (Validation Phase)
+ *    - 부수효과 없는 사전 검증(리소스 헬스 체크)만 수행. operation 은 실행하지 않는다.
  * 2. Phase 2: 순차적 커밋 실행 (Sequential Commit Phase)
- *    - 개별 트랜잭션으로 순차 커밋 (부분 실패 가능)
+ *    - 개별 트랜잭션으로 순차 커밋. operation 은 여기서 단 한 번만 실행된다(부분 실패 가능).
  * 3. Compensation Phase: 실패 시 보상 트랜잭션 실행
  *    - 이미 커밋된 데이터를 보상 로직으로 되돌림
  * 
@@ -371,9 +373,11 @@ export class TransactionCommitManager {
      * 4. 글로벌 코디네이터 지시 대기
      * 5. COMMIT 또는 ROLLBACK
      * 
-     * 현재 구현 (타협점):
-     * 1. 트랜잭션 시작 → 작업 수행 → 강제 롤백 (검증 목적)
-     * 2. 검증 성공 시 Phase 2에서 실제 커밋 수행
+     * 현재 구현(Saga):
+     *  - operation 은 실행하지 않는다. 부수효과 없는 사전 검증(리소스 헬스 체크)만 수행한다.
+     *  - 실제 operation 은 commit 단계(commitParticipant)에서 단 한 번만 실행된다.
+     *    (과거에는 여기서 operation 을 실행 후 롤백하는 "시뮬레이션"을 했으나, commit 이
+     *     operation 을 다시 실행하여 비멱등 작업이 두 번 실행되는 버그가 있었다 — P0-4)
      */private async startManagedTransaction(
         client: any,
         participant: TransactionParticipant,
@@ -381,28 +385,18 @@ export class TransactionCommitManager {
         transactionId: string
     ): Promise<void> {
         try {
-            // Phase 1: 작업 검증 및 준비 (부수효과 없는 사전 검증만 수행)
-
-            // 1. 데이터베이스 연결 및 리소스 확인
+            // 데이터베이스 연결 및 리소스 확인 (부수효과 없음)
             const healthCheck = await this.checkDatabaseResources(client, participant);
             if (!healthCheck.healthy) {
                 throw new Error(`Database resources not available: ${healthCheck.issue}`);
             }
 
-            // 2. 사전 검증 (부수효과 없음)
-            //    NOTE(P0-4): 과거에는 여기서 participant.operation 을 실제 실행 후 롤백하는
-            //    "시뮬레이션" 으로 검증했으나, commitParticipant 가 operation 을 한 번 더
-            //    실행하여 비멱등 작업(외부 HTTP/큐/이메일/시퀀스 등)이 두 번 실행되는 버그가 있었다.
-            //    Saga 패턴에서 operation 은 commit 단계에서 단 한 번만 실행한다.
-            //    Prepare 단계는 리소스 헬스 체크(위 checkDatabaseResources)까지만 수행한다.
-            participant.validatedResult = { validatedForCommit: true };
-
             if (config.enableLogging) {
-                log.Debug(`2PC Phase 1 (Prepare) completed for ${participant.database} with transaction ${transactionId}`);
+                log.Debug(`Saga prepare (validation) completed for ${participant.database} with transaction ${transactionId}`);
             }
 
         } catch (error) {
-            throw new Error(`2PC Prepare failed for ${participant.database}: ${error instanceof Error ? error.message : String(error)}`);
+            throw new Error(`Saga prepare failed for ${participant.database}: ${error instanceof Error ? error.message : String(error)}`);
         }
     }
 

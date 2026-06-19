@@ -3554,23 +3554,6 @@ export class ExpressRouter {
     }
 
     /**
-     * 미디어 타입 파라미터 파싱
-     */
-    private parseMediaTypeParameters(contentType: string): Record<string, string> {
-        const params: Record<string, string> = {};
-        const parts = contentType.split(';');
-        
-        for (let i = 1; i < parts.length; i++) {
-            const [key, value] = parts[i].split('=').map(s => s.trim());
-            if (key && value) {
-                params[key] = value.replace(/"/g, '');
-            }
-        }
-        
-        return params;
-    }
-
-    /**
      * PATCH 부분 업데이트 전략 처리
      */
     private async applyPatchStrategy(
@@ -5067,9 +5050,9 @@ export class ExpressRouter {
                 
                 // Content-Type 검증
                 const contentType = req.get('Content-Type');
-                if (contentType && !contentType.includes('application/vnd.api+json')) {
+                if (contentType && !contentType.includes(JSON_API_CONTENT_TYPE)) {
                     const errorResponse = this.formatJsonApiError(
-                        new Error('Content-Type must be application/vnd.api+json'),
+                        new Error(`Content-Type must be ${JSON_API_CONTENT_TYPE}`),
                         'INVALID_CONTENT_TYPE',
                         415,
                         req.path
@@ -5125,9 +5108,9 @@ export class ExpressRouter {
                 
                 // Content-Type 검증
                 const contentType = req.get('Content-Type');
-                if (contentType && !contentType.includes('application/vnd.api+json')) {
+                if (contentType && !contentType.includes(JSON_API_CONTENT_TYPE)) {
                     const errorResponse = this.formatJsonApiError(
-                        new Error('Content-Type must be application/vnd.api+json'),
+                        new Error(`Content-Type must be ${JSON_API_CONTENT_TYPE}`),
                         'INVALID_CONTENT_TYPE',
                         415,
                         req.path
@@ -5192,9 +5175,9 @@ export class ExpressRouter {
                 
                 // Content-Type 검증
                 const contentType = req.get('Content-Type');
-                if (contentType && !contentType.includes('application/vnd.api+json')) {
+                if (contentType && !contentType.includes(JSON_API_CONTENT_TYPE)) {
                     const errorResponse = this.formatJsonApiError(
-                        new Error('Content-Type must be application/vnd.api+json'),
+                        new Error(`Content-Type must be ${JSON_API_CONTENT_TYPE}`),
                         'INVALID_CONTENT_TYPE',
                         415,
                         req.path

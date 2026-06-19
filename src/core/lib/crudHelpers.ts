@@ -201,7 +201,7 @@ export class CrudQueryParser {
   
   /**
    * Express 요청 객체에서 CRUD 쿼리 파라미터를 파싱
-   * UUID 필드에 잘못된 값이 입력되면 해당 필터를 무시함
+   * UUID 필드에 잘못된 값이 입력되면 400(INVALID_FILTER)으로 거부함
    */
   static parseQuery(req: Request, modelName?: string, schemaAnalyzer?: any): CrudQueryParams {
     const query = req.query;
@@ -425,7 +425,7 @@ export class CrudQueryParser {
    * ?filter[name_eq]=John&filter[age_gt]=18
    * 또는 중첩 객체 형태: { filter: { name_eq: "John", age_gt: 18 } }
    * OR 조건 지원: ?filter[or][0][name_eq]=John&filter[or][0][age_gt]=18&filter[or][1][name_eq]=Jane
-   * UUID 검증 실패 시 해당 필터를 무시함
+   * UUID 검증 실패 시 호출부(parseFilterExpression)가 400 으로 거부함
    */
   private static parseFilter(query: any, modelName?: string, schemaAnalyzer?: any): Record<string, any> | undefined {
     const filters: Record<string, any> = {};
@@ -438,15 +438,12 @@ export class CrudQueryParser {
         if (filterExpression.toLowerCase() === 'or' && typeof value === 'object') {
           orConditions = this.parseOrConditions(value, modelName, schemaAnalyzer);
         } else {
-          // 일반 필터 조건 처리
+          // 일반 필터 조건 처리 (parseFilterExpression 은 유효 객체 반환 또는 throw — null 없음)
           const parsed = this.parseFilterExpression(filterExpression, value, modelName, schemaAnalyzer);
-          
-          if (parsed) {
-            filters[parsed.field] = {
-              ...filters[parsed.field],
-              [parsed.operator]: parsed.value
-            };
-          }
+          filters[parsed.field] = {
+            ...filters[parsed.field],
+            [parsed.operator]: parsed.value
+          };
         }
       });
     }
@@ -466,12 +463,10 @@ export class CrudQueryParser {
         }
         
         const parsed = this.parseFilterExpression(filterExpression, value, modelName, schemaAnalyzer);
-        if (parsed) {
-          orConditions[orIndex][parsed.field] = {
-            ...orConditions[orIndex][parsed.field],
-            [parsed.operator]: parsed.value
-          };
-        }
+        orConditions[orIndex][parsed.field] = {
+          ...orConditions[orIndex][parsed.field],
+          [parsed.operator]: parsed.value
+        };
         return;
       }
       
@@ -484,12 +479,10 @@ export class CrudQueryParser {
         // OR 조건이 아닌 경우에만 처리 (대소문자 구분 없음)
         if (filterExpression.toLowerCase() !== 'or') {
           const parsed = this.parseFilterExpression(filterExpression, value, modelName, schemaAnalyzer);
-          if (parsed) {
-            filters[parsed.field] = {
-              ...filters[parsed.field],
-              [parsed.operator]: parsed.value
-            };
-          }
+          filters[parsed.field] = {
+            ...filters[parsed.field],
+            [parsed.operator]: parsed.value
+          };
         }
       }
     });
@@ -524,12 +517,10 @@ export class CrudQueryParser {
           
           Object.entries(condition).forEach(([filterExpression, value]) => {
             const parsed = this.parseFilterExpression(filterExpression, value, modelName, schemaAnalyzer);
-            if (parsed) {
-              orConditions[orIndex][parsed.field] = {
-                ...orConditions[orIndex][parsed.field],
-                [parsed.operator]: parsed.value
-              };
-            }
+            orConditions[orIndex][parsed.field] = {
+              ...orConditions[orIndex][parsed.field],
+              [parsed.operator]: parsed.value
+            };
           });
         }
       }
@@ -631,7 +622,7 @@ export class CrudQueryParser {
 
   /**
    * 필터 값을 올바른 타입으로 변환
-   * null 반환 시 필터가 무시됨
+   * null 반환은 호출부에서 400(INVALID_FILTER) throw 로 변환됨
    */
   private static parseFilterValue(operator: FilterOperator, value: any, fieldName?: string, modelName?: string, schemaAnalyzer?: any): any {
     if (value === null || value === undefined) return value;
@@ -752,16 +743,16 @@ export class CrudQueryParser {
 
   /**
    * 필드 타입에 따른 값 변환
-   * @returns 변환된 값 또는 null (UUID 검증 실패 시 null 반환으로 필터 무시)
+   * @returns 변환된 값 또는 null (UUID 검증 실패 시 null → 호출부에서 400 으로 거부)
    */
   private static convertValueByType(value: string, fieldTypeInfo: { type: string; nativeType?: string }): any {
     const { type: fieldType, nativeType } = fieldTypeInfo;
 
     // UUID 타입인 경우 유효성 검증
     if (nativeType === 'Uuid' || fieldType === 'Uuid') {
-      // UUID가 아닌 값이 들어온 경우 null 반환 (필터 무시됨)
+      // UUID가 아닌 값이 들어온 경우 null 반환 (호출부에서 400 으로 거부됨)
       if (!this.isValidUUID(value)) {
-        // log.Warn(`Invalid UUID format in filter: expected a valid UUID, but received "${value}". This filter will be ignored.`);
+        // log.Warn(`Invalid UUID format in filter: expected a valid UUID, but received "${value}". This filter is rejected with 400 (INVALID_FILTER).`);
         return null;
       }
       return value; // 유효한 UUID는 그대로 반환

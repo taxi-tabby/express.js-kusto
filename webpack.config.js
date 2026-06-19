@@ -49,10 +49,13 @@ module.exports = (env, argv) => {
     const mode = argv.mode || 'production';
     const isProduction = mode === 'production';
 
-    // 환경 변수 로드
-    loadEnvironmentVariables();
+    // 빌드 타임에 번들로 주입할 allowlist 키가 있을 때만 .env 를 로드한다.
+    // (allowlist 가 비어 있으면 번들에 박을 env 가 없으므로 dotenv 로딩 자체가 불필요)
+    if (BUILD_TIME_ENV_ALLOWLIST.length) {
+        loadEnvironmentVariables();
+    }
 
-    // 동적으로 환경 변수 생성
+    // 동적으로 환경 변수 생성 (allowlist 비어 있으면 {})
     const envVariables = getEnvironmentVariables();
 
     return {
@@ -70,7 +73,10 @@ module.exports = (env, argv) => {
                     use: {
                         loader: "ts-loader",
                         options: {
-                            configFile: "tsconfig.webpack.json"
+                            configFile: "tsconfig.webpack.json",
+                            // 타입 검사는 build 스크립트의 `npm run typecheck`(tsc --noEmit)가 단독으로 수행.
+                            // 여기서는 transpile 만 하여 전체 프로젝트 이중 타입체크(빌드 2배 시간)를 피한다.
+                            transpileOnly: true
                         }
                     },
                     exclude: /node_modules/,

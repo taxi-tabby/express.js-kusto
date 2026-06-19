@@ -380,12 +380,8 @@ export class TransactionCommitManager {
         config: TransactionCommitOptions,
         transactionId: string
     ): Promise<void> {
-        const timeout = participant.timeout || config.prepareTimeout || 10000;
-
         try {
-            // Phase 1: 작업 검증 및 준비
-            // 실제로는 트랜잭션을 시작하고 검증만 하고 롤백해야 하지만,
-            // Prisma의 제약으로 인해 시뮬레이션 방식 사용
+            // Phase 1: 작업 검증 및 준비 (부수효과 없는 사전 검증만 수행)
 
             // 1. 데이터베이스 연결 및 리소스 확인
             const healthCheck = await this.checkDatabaseResources(client, participant);
@@ -393,12 +389,13 @@ export class TransactionCommitManager {
                 throw new Error(`Database resources not available: ${healthCheck.issue}`);
             }
 
-            // 2. 작업 시뮬레이션 (실제 데이터 변경 없이 검증)
-            const simulationResult = await this.simulateOperation(client, participant, config, timeout);
-
-            // 3. 결과 저장 (Prepare 단계 완료)
-            participant.result = simulationResult;
-            participant.validatedResult = simulationResult;
+            // 2. 사전 검증 (부수효과 없음)
+            //    NOTE(P0-4): 과거에는 여기서 participant.operation 을 실제 실행 후 롤백하는
+            //    "시뮬레이션" 으로 검증했으나, commitParticipant 가 operation 을 한 번 더
+            //    실행하여 비멱등 작업(외부 HTTP/큐/이메일/시퀀스 등)이 두 번 실행되는 버그가 있었다.
+            //    Saga 패턴에서 operation 은 commit 단계에서 단 한 번만 실행한다.
+            //    Prepare 단계는 리소스 헬스 체크(위 checkDatabaseResources)까지만 수행한다.
+            participant.validatedResult = { validatedForCommit: true };
 
             if (config.enableLogging) {
                 log.Debug(`2PC Phase 1 (Prepare) completed for ${participant.database} with transaction ${transactionId}`);
@@ -697,58 +694,6 @@ export class TransactionCommitManager {
 
 
     /**
-     * 작업 시뮬레이션 (실제 커밋 없이 검증)
-     */    
-    private async simulateOperation(
-        client: any,
-        participant: TransactionParticipant,
-        config: TransactionCommitOptions,
-        timeout: number
-    ): Promise<any> {
-        try {
-            // 트랜잭션 시뮬레이션: 실행 후 롤백
-            const result = await client.$transaction(
-                async (tx: any) => {
-                    // 실제 작업 수행
-                    const operationResult = await participant.operation(tx);
-
-                    // 결과 검증
-                    if (operationResult === null || operationResult === undefined) {
-                        throw new Error('Operation returned null/undefined result');
-                    }
-
-                    // 명시적으로 롤백을 위해 에러 발생
-                    // (시뮬레이션이므로 실제 데이터 변경을 원하지 않음)
-                    throw new Error('SIMULATION_ROLLBACK');
-                },
-                {
-                    maxWait: timeout,
-                    timeout: timeout,
-                    isolationLevel: config.isolationLevel as any
-                }
-            );
-
-            // 여기는 도달하지 않음 (위에서 롤백 에러 발생)
-            return result;
-
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
-
-            // 시뮬레이션 롤백은 정상 상황
-            if (errorMessage === 'SIMULATION_ROLLBACK') {
-                // 시뮬레이션 성공 - 실제 Phase 2에서 실행할 수 있음을 의미
-                return { simulationSuccess: true, validatedForCommit: true };
-            }
-
-            // 실제 에러인 경우
-            throw error;
-        }
-    }    
-    
-    
-    
-    
-    /**
      * Phase 2: Sequential Commit - 우선순위 순으로 순차적 커밋 수행
      * 실패 시 이미 커밋된 것들에 대해 보상 트랜잭션 필요
      */    
@@ -868,24 +813,18 @@ export class TransactionCommitManager {
 
             const client = this.prismaManager.getClientSync(participant.database);
 
-            // 검증된 결과가 있으면 재사용, 없으면 다시 실행
-            let finalResult;
-
-            if (participant.validatedResult !== undefined) {
-                // 이미 검증된 작업을 다시 실행 (최종 커밋)
-                finalResult = await client.$transaction(
-                    async (tx: any) => {
-                        return await participant.operation(tx);
-                    }, {
-                    isolationLevel: config.isolationLevel as any,
-                    maxWait: config.commitTimeout || 15000,
-                    timeout: config.commitTimeout || 15000
-                }
-                );
-            } else {
-                // Prepare 단계에서 저장된 결과 사용
-                finalResult = participant.result;
+            // NOTE(P0-4): operation 은 Saga commit 단계에서 단 한 번만 실행한다.
+            // (과거 prepare 단계의 simulateOperation 이 operation 을 미리 실행 후 롤백하여
+            //  비멱등 작업이 두 번 실행되던 버그를 제거했다.)
+            const finalResult = await client.$transaction(
+                async (tx: any) => {
+                    return await participant.operation(tx);
+                }, {
+                isolationLevel: config.isolationLevel as any,
+                maxWait: config.commitTimeout || 15000,
+                timeout: config.commitTimeout || 15000
             }
+            );
 
             participant.state = TransactionState.COMMITTED;
             participant.committedAt = new Date(); if (config.enableLogging) {

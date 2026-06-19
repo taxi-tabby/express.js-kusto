@@ -8,8 +8,37 @@ import { exec, spawn } from 'child_process';
 import * as util from 'util';
 import * as dotenv from 'dotenv';
 import * as readline from 'readline';
+import { folderNameToEnvVarName } from '../lib/dbNaming';
 
 const execPromise = util.promisify(exec);
+
+// 셸을 거치지 않고 npx 를 직접 실행하기 위한 플랫폼별 바이너리 이름.
+const NPX_BIN = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+
+/**
+ * `prisma db execute` 호출용 argv/stdin 구성 (셸 비경유 / no shell).
+ *
+ * 보안: 사용자 제공 SQL(--command)은 셸 문자열에 절대 넣지 않고 stdin 으로 전달한다.
+ * 파일/스키마/설정 경로는 모두 개별 argv 요소로 두어 메타문자 해석을 차단한다.
+ * (과거 `echo "${command}" | npx ...` 방식은 따옴표/`$()`/`;` 로 임의 OS 명령
+ *  주입이 가능했다 — P1-8.)
+ */
+export function buildExecuteArgs(
+    options: { command?: string; file?: string },
+    schemaPath: string,
+    configPath: string
+): { args: string[]; stdin?: string } {
+    const args = ['prisma', 'db', 'execute', '--schema', schemaPath, '--config', configPath];
+    if (options.command) {
+        args.push('--stdin');
+        return { args, stdin: options.command };
+    }
+    if (options.file) {
+        args.push('--file', options.file);
+        return { args };
+    }
+    throw new Error('Either --file or --command must be specified');
+}
 
 /**
  * Dangerous operations that require double confirmation
@@ -411,8 +440,8 @@ export function extractIndexName(createIndexSQL: string): string | null {
  * Convention: folderName -> FOLDER_NAME__KUSTO_RDB_URL (e.g., default -> DEFAULT__KUSTO_RDB_URL, myDatabase -> MY_DATABASE__KUSTO_RDB_URL)
  */
 export function getDatabaseEnvVarName(dbName: string): string {
-    // Convert folder name to env variable: default -> DEFAULT__KUSTO_RDB_URL, myDatabase -> MY_DATABASE__KUSTO_RDB_URL
-    return dbName.replace(/([a-z])([A-Z])/g, '$1_$2').toUpperCase() + '__KUSTO_RDB_URL';
+    // 단일 출처(@lib/dbNaming)에 위임 — 변환 규칙 중복 제거.
+    return folderNameToEnvVarName(dbName);
 }
 
 /**
@@ -1160,30 +1189,38 @@ program
         console.log(`🗃️  Executing SQL against database: ${options.db}`);
 
         try {
-            let executeCommand = 'db execute';
-            if (options.file) executeCommand += ` --file ${options.file}`;
-            if (options.command) executeCommand += ` --stdin`;
+            // Prisma 7: Create temp config for database connection
+            const databaseUrl = getDatabaseUrl(options.db);
+            if (!databaseUrl) {
+                const envVarName = getDatabaseEnvVarName(options.db);
+                throw new Error(`Database URL not found. Please set ${envVarName} environment variable.`);
+            }
+            const tempConfigPath = createTempPrismaConfig(options.db, databaseUrl);
+            try {
+                const { args, stdin } = buildExecuteArgs(options, getSchemaPath(options.db), tempConfigPath);
+                console.log(`Executing: npx prisma db execute ${options.command ? '--stdin' : `--file ${options.file}`} --schema ... --config <temp>`);
 
-            if (options.command) {
-                // For stdin commands, we need to pipe the command
-                // Prisma 7: Create temp config for database connection
-                const databaseUrl = getDatabaseUrl(options.db);
-                if (!databaseUrl) {
-                    const envVarName = getDatabaseEnvVarName(options.db);
-                    throw new Error(`Database URL not found. Please set ${envVarName} environment variable.`);
-                }
-                const tempConfigPath = createTempPrismaConfig(options.db, databaseUrl);
-                try {
-                    const fullCommand = `echo "${options.command}" | npx prisma ${executeCommand} --schema ${getSchemaPath(options.db)} --config "${tempConfigPath}"`;
-                    console.log(`Executing: echo "${options.command}" | npx prisma ${executeCommand} --schema ... --config <temp>`);
-                    const { stdout, stderr } = await execPromise(fullCommand);
-                    console.log(`[${options.db}] ${stdout}`);
-                    if (stderr) console.error(`[${options.db}] Error: ${stderr}`);
-                } finally {
-                    removeTempPrismaConfig(tempConfigPath);
-                }
-            } else {
-                await executePrismaCommand(options.db, executeCommand);
+                await new Promise<void>((resolve, reject) => {
+                    // shell:false + 개별 argv + SQL은 stdin → 셸 메타문자 주입 차단 (P1-8)
+                    const child = spawn(NPX_BIN, args, { shell: false });
+                    let stdout = '';
+                    let stderr = '';
+                    child.stdout?.on('data', (d) => { stdout += d.toString(); });
+                    child.stderr?.on('data', (d) => { stderr += d.toString(); });
+                    child.on('error', reject);
+                    child.on('close', (code) => {
+                        if (stdout) console.log(`[${options.db}] ${stdout}`);
+                        if (stderr) console.error(`[${options.db}] Error: ${stderr}`);
+                        if (code === 0) resolve();
+                        else reject(new Error(`db execute failed with exit code ${code}`));
+                    });
+                    if (stdin !== undefined) {
+                        child.stdin?.write(stdin);
+                        child.stdin?.end();
+                    }
+                });
+            } finally {
+                removeTempPrismaConfig(tempConfigPath);
             }
 
             console.log(`✅ SQL execution completed for ${options.db}`);

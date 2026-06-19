@@ -27,10 +27,12 @@ import {
  *   - `'user_account'` → `'USER_ACCOUNT__KUSTO_RDB_URL'`
  *
  * `getDatabaseUrl` 의 inline 로직과 동일하다 (Prisma 7 fallback 경로).
+ *
+ * 실제 구현은 의존성 없는 단일 출처 모듈 `./dbNaming` 에 있고 여기서 re-export 한다.
+ * (CLI 와의 중복 제거 — 기존 `@lib/prismaManager` import 호환을 위해 re-export 유지)
  */
-export function folderNameToEnvVarName(folderName: string): string {
-	return folderName.replace(/([a-z])([A-Z])/g, '$1_$2').toUpperCase() + '__KUSTO_RDB_URL';
-}
+export { folderNameToEnvVarName } from './dbNaming';
+import { folderNameToEnvVarName } from './dbNaming';
 
 /**
  * Database connection configuration interface

@@ -198,3 +198,7 @@ ca/*.pem
 
 # Prisma generated client directories
 src/app/db/*/client/
+
+# kusto-db-cli 가 생성하는 임시 per-DB prisma 설정 (평문 DB URL 포함 — 절대 커밋 금지)
+# 루트의 정식 prisma.config.ts 는 매칭되지 않는다.
+prisma.config.*.ts

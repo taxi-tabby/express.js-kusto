@@ -17,9 +17,19 @@ jobs:
           cache: 'npm'
       - name: Install dependencies
         run: npm ci
-      - name: Generate Prisma client (사용자 schema, tsc 사전 에러 회피)
+      # generate 는 사용자 스키마만 읽고 DB 에 연결하지 않는다. 다만 kusto-db CLI 는
+      # DEFAULT__KUSTO_RDB_URL 존재 검사를 먼저 수행하므로, CI 러너에서만 쓰는
+      # 더미 .env 를 임의로 지정해 그 검사를 통과시킨다(.env 는 gitignore, 실제 연결 없음).
+      - name: Prepare CI-only test env
+        run: |
+          echo "NODE_ENV=test" > .env
+          echo "DEFAULT__KUSTO_RDB_URL=postgresql://ci:ci@127.0.0.1:5432/ci_dummy" >> .env
+      - name: Generate Prisma client (사용자 schema)
         run: npm run db -- generate -a
-        continue-on-error: true
+      # generate 명령은 per-db 에러를 삼키고 exit 0 으로 끝날 수 있으므로(아티팩트 미생성),
+      # tsc 의 모호한 import 에러로 번지기 전에 client 산출물을 직접 검증해 명확히 실패시킨다.
+      - name: Verify Prisma client generated
+        run: test -f src/app/db/default/client/index.d.ts || { echo "::error::Prisma client(default) was not generated"; exit 1; }
       - name: TypeScript check
         run: npx tsc --noEmit -p tsconfig.test.json
       - name: Run tests
@@ -45,9 +55,15 @@ jobs:
           cache: 'npm'
       - name: Install dependencies
         run: npm ci
+      # sqlite job 과 동일: generate 의 CLI URL 검사 통과용 더미 env (실제 연결 없음).
+      - name: Prepare CI-only test env
+        run: |
+          echo "NODE_ENV=test" > .env
+          echo "DEFAULT__KUSTO_RDB_URL=postgresql://ci:ci@127.0.0.1:5432/ci_dummy" >> .env
       - name: Generate Prisma client
         run: npm run db -- generate -a
-        continue-on-error: true
+      - name: Verify Prisma client generated
+        run: test -f src/app/db/default/client/index.d.ts || { echo "::error::Prisma client(default) was not generated"; exit 1; }
       - name: Run tests with PostgreSQL backend
         run: npm run test:ci
         env:

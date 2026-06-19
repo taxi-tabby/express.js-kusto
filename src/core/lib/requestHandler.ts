@@ -5,6 +5,7 @@ import { DependencyInjector } from './dependencyInjector';
 import { Injectable } from './types/generated-injectable-types';
 import { prismaManager } from './prismaManager';
 import { repositoryManager } from './repositoryManager';
+import { ResponseSerializer, applyResponseSerializer } from './serializer';
 
 export interface RequestConfig {
     body?: Schema;
@@ -19,6 +20,7 @@ export interface ResponseConfig {
 export interface HandlerConfig {
     request?: RequestConfig;
     response?: ResponseConfig;
+    serialize?: ResponseSerializer<any>;
     sourceInfo?: {
         filePath: string;
         lineNumber?: number;
@@ -349,7 +351,11 @@ export class RequestHandler {
                 if (result !== undefined) {
                     const statusCode = res.statusCode || 200;
                     const responseSchema = config.response?.[statusCode];
-                    this.sendSuccess(res, result, statusCode, responseSchema, config.response);
+                    // serialize 는 responseConfig 검증/필터(sendSuccess)보다 먼저 변형한다.
+                    const out = config.serialize
+                        ? await applyResponseSerializer(result, config.serialize, req)
+                        : result;
+                    this.sendSuccess(res, out, statusCode, responseSchema, config.response);
                 }
 
             } catch (error) {

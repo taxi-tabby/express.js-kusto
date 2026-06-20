@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Express.js-Kusto is a TypeScript framework for building REST APIs using Convention over Configuration. It wraps Express.js with a fluent routing API, multi-database Prisma management, dependency injection, and JSON:API v1.1 compliant CRUD generation. (Current version: see `package.json`.)
 
-**Language**: Korean is used in commit messages and some documentation. Follow this convention.
+**Language**: Korean is used in commit messages and some documentation. Follow this convention. (Exception: every `AGENTS.md` is written in English — see the **AGENTS.md** rule under Architecture.)
 
 ## Commands
 
@@ -56,10 +56,11 @@ No test runner is configured in this project.
 
 ### AGENTS.md — mandatory to read AND to keep in sync
 
-**Every folder carries an `AGENTS.md`** that summarizes its files, exports, and dependency direction. Two rules, both non-negotiable:
+**Every folder carries an `AGENTS.md`** that summarizes its files, exports, and dependency direction. Three rules, all non-negotiable:
 
 - **Always reference it before any work.** Before reading or editing any file in a folder, you MUST first read that folder's `AGENTS.md` (and its parent-tier `AGENTS.md`). It is the single source of truth for what each file does and which way dependencies flow — do not start from the code alone.
 - **Always update it on any change.** When you add a feature, file, or export, or change behavior or dependency direction, you MUST update the affected folder's `AGENTS.md` in the same change. Code and its `AGENTS.md` must never drift; a stale `AGENTS.md` is a defect.
+- **Always write it in English.** Every `AGENTS.md` is authored in English — one unified language, chosen for reliable LLM comprehension — even though commit messages and other docs may be Korean. Do not mix languages within or across `AGENTS.md` files.
 
 ### Core Internal Structure (Tier Layout)
 

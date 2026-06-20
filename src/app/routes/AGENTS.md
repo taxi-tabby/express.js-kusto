@@ -1,24 +1,24 @@
 # routes/ - HTTP Routing & Global Middleware
 
-Express 라우트 정의와 글로벌 미들웨어를 관리하는 폴더.
+Folder that manages Express route definitions and global middleware.
 
 ## Structure
 
 ```
 routes/
-├── middleware.ts   # 글로벌 미들웨어 스택 (모든 요청에 적용)
-├── route.ts        # 루트 경로 (/) 핸들러
+├── middleware.ts   # Global middleware stack (applied to every request)
+├── route.ts        # Root path (/) handler
 └── api/
     └── v1/
         └── users/
-            └── route.ts  # /api/v1/users 핸들러
+            └── route.ts  # /api/v1/users handler
 ```
 
 ## File Convention
 
-- **`middleware.ts`**: 해당 폴더 경로에 적용되는 미들웨어 배열. 루트(`routes/middleware.ts`)는 글로벌 정책 스택이며, 기본은 `[...defaultGlobalMiddleware()]`(helmet/CORS/cookie/body/log). **얇고 선택적** — 없으면 Core 가 기본을 자동 적용한다. 필수 미들웨어(`req.kusto`/clientIp/전역 에러)는 Core 가 소유하므로 여기 두지 않는다.
-- **`route.ts`**: 해당 폴더 경로의 HTTP 엔드포인트 정의
-- 폴더 구조가 곧 URL 경로 (`routes/api/v1/users/route.ts` → `/api/v1/users`)
+- **`middleware.ts`**: Array of middleware applied to that folder's path. The root (`routes/middleware.ts`) is the global policy stack, and the default is `[...defaultGlobalMiddleware()]` (helmet/CORS/cookie/body/log). **Thin and optional** — when absent, Core applies the default automatically. The essential middleware (`req.kusto`/clientIp/global error) is owned by Core, so it is not placed here.
+- **`route.ts`**: HTTP endpoint definitions for that folder's path
+- The folder structure is the URL path (`routes/api/v1/users/route.ts` → `/api/v1/users`)
 
 ## ExpressRouter API
 
@@ -28,26 +28,26 @@ import { RequestHandler } from '@lib/http/validation/requestHandler';
 
 const router = new ExpressRouter();
 
-// Fluent API로 라우트 정의
+// Define routes with the fluent API
 router
     .GET(
         '/',
         ...RequestHandler.createHandler(
             { request: { query: schema }, response: { 200: responseSchema } },
             async (req, res, injected, repo, db) => {
-                // injected: DI 서비스, repo: 리포지터리 매니저, db: Prisma 매니저
+                // injected: DI services, repo: repository manager, db: Prisma manager
                 return { message: 'Hello' };
             }
         )
     )
     .POST('/', ...handler)
-    .WITH('authRateLimiterDefault', { maxRequests: 100 })  // 미들웨어 이름 + 옵션
+    .WITH('authRateLimiterDefault', { maxRequests: 100 })  // middleware name + options
     .CRUD('default', 'User', { softDelete: { enabled: true, field: 'deletedAt' } });
 
 export default router.build();
 ```
 
-`WITH` 의 첫 인자는 `injectable/` 에 등록된 미들웨어의 이름 문자열이며, 두 번째 인자는 해당 미들웨어가 받는 옵션이다. arrow function 을 직접 넘기는 형태는 지원하지 않는다.
+The first argument to `WITH` is the name string of a middleware registered under `injectable/`, and the second argument is the options that middleware accepts. Passing an arrow function directly is not supported.
 
 ## Handler Signature
 
@@ -55,28 +55,28 @@ export default router.build();
 async (req: ValidatedRequest, res: Response, injected: Injectable, repo: RepositoryManager, db: PrismaManager) => any
 ```
 
-5개 파라미터가 자동 주입되며, `req.validatedData`에 검증된 body/query/params가 담김.
+Five parameters are injected automatically, and `req.validatedData` holds the validated body/query/params.
 
-## CRUD include 정책
+## CRUD include policy
 
-`router.CRUD()` 는 클라이언트의 `?include=author,comments.author` 를 Prisma `include` 로 변환해 한 쿼리로 관계를 로드한다 (Prisma 자체가 lazy loading 을 지원하지 않으므로 N+1 위험은 구조적으로 없음). 다만 무제한 허용은 DoS / 정보 노출 위험이 있어 다음 4개 옵션을 통해 정책을 강제할 수 있다.
+`router.CRUD()` converts the client's `?include=author,comments.author` into a Prisma `include` and loads relations in a single query (since Prisma itself does not support lazy loading, there is no structural N+1 risk). However, allowing this without limit poses a DoS / information-exposure risk, so the policy can be enforced through the following 4 options.
 
 ```typescript
 router.CRUD('default', 'Post', {
-    maxIncludeCount: 5,                // ?include= 항목 개수 상한
-    maxIncludeDepth: 3,                // 점 경로 깊이 상한 (a.b.c → 3)
-    allowedIncludes: ['author', 'comments.author'],  // 화이트리스트
-    defaultIncludes: ['author'],       // 서버 강제 eager-load
+    maxIncludeCount: 5,                // upper limit on the number of ?include= items
+    maxIncludeDepth: 3,                // upper limit on dot-path depth (a.b.c → 3)
+    allowedIncludes: ['author', 'comments.author'],  // whitelist
+    defaultIncludes: ['author'],       // server-forced eager-load
 });
 ```
 
-| 옵션 | 동작 | 위반 시 |
+| Option | Behavior | On violation |
 |---|---|---|
-| `maxIncludeCount` | 클라이언트가 보낸 include 항목 수 검증 | 400 `INCLUDE_LIMIT_EXCEEDED` |
-| `maxIncludeDepth` | 각 항목의 점 깊이 검증 | 400 `INCLUDE_DEPTH_EXCEEDED` |
-| `allowedIncludes` | 화이트리스트 매칭 — 정확 일치 또는 허용 경로의 prefix 허용. 예: `['comments.author']` 이면 `comments` 도 허용, `comments.posts` 는 거부 | 400 `INCLUDE_NOT_ALLOWED` |
-| `defaultIncludes` | 클라이언트 요청과 병합되어 항상 로드. 정책 검증 우회 (서버 신뢰) | — |
+| `maxIncludeCount` | Validates the number of include items the client sent | 400 `INCLUDE_LIMIT_EXCEEDED` |
+| `maxIncludeDepth` | Validates each item's dot depth | 400 `INCLUDE_DEPTH_EXCEEDED` |
+| `allowedIncludes` | Whitelist matching — allows an exact match or a prefix of an allowed path. Example: with `['comments.author']`, `comments` is also allowed, while `comments.posts` is rejected | 400 `INCLUDE_NOT_ALLOWED` |
+| `defaultIncludes` | Merged with the client request and always loaded. Bypasses policy validation (server-trusted) | — |
 
-검증/병합은 `index`, `show`, `create`, `update` 4개 작업에 적용된다. **`create` / `update` 도 `?include=` 쿼리를 받아 응답의 `included` 배열을 채운다.**
+Validation/merging applies to the 4 operations `index`, `show`, `create`, and `update`. **`create` / `update` also accept the `?include=` query and populate the response's `included` array.**
 
-주의: 클라이언트가 `?select=` 를 동시에 보내면 Prisma 가 select 우선 정책을 사용하므로 `defaultIncludes` 의 eager-load 효과는 보장되지 않는다.
+Note: if the client sends `?select=` at the same time, Prisma uses a select-first policy, so the eager-load effect of `defaultIncludes` is not guaranteed.

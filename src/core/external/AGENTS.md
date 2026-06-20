@@ -1,43 +1,43 @@
-# external/ - 외부 라이브러리 래퍼 / 범용 헬퍼
+# external/ - third-party library wrappers / general-purpose helpers
 
-서드파티 라이브러리(winston)를 프레임워크 컨벤션에 맞게 래핑한 로깅 서브시스템과, 어떤 tier 에도 종속되지 않는 범용 유틸 함수를 제공하는 leaf tier. 코어 내부 어디로도 import 하지 않으며(intra-core 의존성 0), 다른 모든 tier 가 이쪽을 향해 import 한다(순수 바닥층).
+The leaf tier that provides the logging subsystem — a wrapper around a third-party library (winston) adapted to the framework's conventions — plus general-purpose utility functions that depend on no tier. It imports nothing anywhere inside core (zero intra-core dependencies); every other tier imports toward it (a pure bottom layer).
 
 ## Structure
 
 ```
 external/
-├── winston.ts   # 로깅 서브시스템: 커스텀 레벨/색상/이모지, env-aware 콘솔 레벨, 안전 직렬화+민감정보 마스킹, log 싱글톤
-└── util.ts      # 범용 헬퍼: 슬래시 정규화, 경과시간 포맷, 복수/단수화, 페이지네이션 커서
+├── winston.ts   # logging subsystem: custom levels/colors/emojis, env-aware console level, safe serialization + sensitive-data masking, log singleton
+└── util.ts      # general-purpose helpers: slash normalization, elapsed-time formatting, pluralize/singularize, pagination cursor
 ```
 
-## winston.ts — 로깅 서브시스템 (leaf, intra-core 의존성 0)
+## winston.ts — logging subsystem (leaf, zero intra-core dependencies)
 
-winston + winston-daily-rotate-file 위에 프로젝트 전용 로그 레벨/포맷/직렬화 정책을 입힌 싱글 모듈. 외부 의존성은 `winston`, `winston-daily-rotate-file`, `logform`, Node 내장 `path`/`fs` 뿐이며 코어 내부 모듈은 전혀 import 하지 않는다.
+A single module that layers project-specific log levels/format/serialization policy on top of winston + winston-daily-rotate-file. Its only external dependencies are `winston`, `winston-daily-rotate-file`, `logform`, and the Node built-ins `path`/`fs`; it imports no core-internal module whatsoever.
 
-주요 export:
-- `log` (default + named) — 커스텀 레벨 메서드를 갖춘 winston `Logger` 싱글톤. 레벨 메서드(PascalCase): `Error`, `Warn`, `Info`, `Debug`, `Silly`, `SQL`, `Route`, `SessionDeclaration`, `Footwalk`, `Email`, `Auth` (+ winston 예외처리용 소문자 `error` 별칭). 코어/앱 런타임 전역이 `import { log } from '@ext/winston'` 로 사용.
-- `logger` — 보조 유틸 객체: `startTimer(label)`(hrtime 기반 성능 타이머), `httpRequest(method,url,statusCode,duration)`, `dbQuery(query,duration?,params?)`.
-- `LogLevelName` — `LOG_SETTINGS` 키에서 파생된 레벨명 유니온 타입.
-- `normalizeLevel(raw)` — 임의 문자열/별칭/`silent`·`off`·`none` 을 정규 레벨명 또는 `'silent'`/`null` 로 해석(`LOG_LEVEL` 정규화용).
-- `resolveConsoleLevel(env?)` — 콘솔 transport 레벨 결정. 우선순위 `LOG_LEVEL` > 환경별 기본값(production=`Info`, test=`Error`, 그 외=`Debug`). dev 기본이 `Debug` 이므로 `Silly` 는 기본 숨김.
-- `isColorEnabled(env?, isTTY?)` — ANSI 색상 사용 여부. `NO_COLOR` 표준 존중, `FORCE_COLOR` 강제, 비-TTY 에서는 비활성.
-- `toSafeJson(value, opts?)` — `JSON.stringify` 가 throw 할 수 있는 모든 케이스(순환 참조, `BigInt`, 함수, 심볼, `Error`, `Buffer`, `Date`, `Map`/`Set`, throw 하는 getter, 깊이 초과)를 방어해 JSON 안전 구조로 변환.
-- `safeStringify(value, opts?)` — `toSafeJson` 으로 정리 후 직렬화. 어떤 입력에도 절대 throw 하지 않으며 민감키를 `[REDACTED]` 로 마스킹.
+Main exports:
+- `log` (default + named) — a winston `Logger` singleton with custom level methods. Level methods (PascalCase): `Error`, `Warn`, `Info`, `Debug`, `Silly`, `SQL`, `Route`, `SessionDeclaration`, `Footwalk`, `Email`, `Auth` (plus a lowercase `error` alias for winston's exception handling). Used globally across the core/app runtime via `import { log } from '@ext/winston'`.
+- `logger` — an auxiliary utility object: `startTimer(label)` (hrtime-based performance timer), `httpRequest(method,url,statusCode,duration)`, `dbQuery(query,duration?,params?)`.
+- `LogLevelName` — a level-name union type derived from the `LOG_SETTINGS` keys.
+- `normalizeLevel(raw)` — resolves an arbitrary string/alias/`silent`·`off`·`none` to a canonical level name or `'silent'`/`null` (for `LOG_LEVEL` normalization).
+- `resolveConsoleLevel(env?)` — determines the console transport level. Precedence: `LOG_LEVEL` > per-environment default (production=`Info`, test=`Error`, otherwise=`Debug`). Since the dev default is `Debug`, `Silly` is hidden by default.
+- `isColorEnabled(env?, isTTY?)` — whether ANSI color is used. Respects the `NO_COLOR` standard, honors `FORCE_COLOR` as a force, and is disabled on non-TTY.
+- `toSafeJson(value, opts?)` — converts to a JSON-safe structure, guarding against every case where `JSON.stringify` could throw (circular references, `BigInt`, functions, symbols, `Error`, `Buffer`, `Date`, `Map`/`Set`, throwing getters, depth overflow).
+- `safeStringify(value, opts?)` — cleans up via `toSafeJson`, then serializes. Never throws on any input and masks sensitive keys to `[REDACTED]`.
 
-내부 동작 요점: `LOG_SETTINGS` 가 레벨/색상/이모지의 단일 진실원천(`customLevels`/`customColors`/`customEmojis` 파생). dev 는 사람이 읽기 좋은 컬러 라인(TTY 한정), prod 는 한 줄 JSON. 민감키 매칭은 `SUBSTRING_TOKENS`(부분일치) + `WORD_TOKENS`(전체-단어, 예: `pwd`/`ssn`/`jwt`)로 구성되며 `LOG_REDACT=false` 로 비활성, `LOG_REDACT_KEYS=a,b` 로 추가 키 지정. 일자 회전 파일 로그는 `LOG_DIR`/`LOG_MAX_SIZE`/`LOG_MAX_FILES`/`LOG_FILE_LEVEL` 로 튜닝되며, 로그 디렉토리 생성 실패(`ensureLogDirectory`) 또는 transport 초기화 실패 시 throw 대신 콘솔 전용으로 graceful 강등. transport 쓰기 실패(`log.on('error')`)는 stderr 로 흘려 프로세스를 죽이지 않는다.
+Key internal behavior: `LOG_SETTINGS` is the single source of truth for levels/colors/emojis (`customLevels`/`customColors`/`customEmojis` are derived from it). Dev uses a human-readable colored line (TTY only); prod uses one-line JSON. Sensitive-key matching is composed of `SUBSTRING_TOKENS` (partial match) + `WORD_TOKENS` (whole-word, e.g. `pwd`/`ssn`/`jwt`); disable it with `LOG_REDACT=false`, add extra keys with `LOG_REDACT_KEYS=a,b`. Daily-rotating file logs are tuned via `LOG_DIR`/`LOG_MAX_SIZE`/`LOG_MAX_FILES`/`LOG_FILE_LEVEL`, and on log-directory creation failure (`ensureLogDirectory`) or transport initialization failure they degrade gracefully to console-only instead of throwing. Transport write failures (`log.on('error')`) are routed to stderr so they do not kill the process.
 
-## util.ts — 범용 헬퍼 (leaf, 의존성 0)
+## util.ts — general-purpose helpers (leaf, zero dependencies)
 
-외부/내부 import 이 전혀 없는 순수 함수 모음. 문자열 경로/페이지네이션/단어 변형에서 코어 전반이 공유한다.
+A collection of pure functions with no external or internal imports at all. Shared across the core for string paths/pagination/word transformations.
 
-주요 export:
-- `normalizeSlash(input)` — 연속 슬래시(`//+`)를 단일 `/` 로 축약(URL/경로 정규화).
-- `getElapsedTimeInString(endTime)` — `process.hrtime` 의 `[초, 나노초]` 튜플을 `"1.2s (1234ms)"` 형식 문자열로 포맷.
-- `pluralize(word)` — 간단한 영어 규칙 복수화(`s`/`x`/`ch`/`sh`→`+es`, `y`→`ies`, 그 외 `+s`).
-- `singularize(word)` — `pluralize` 의 역규칙 단수화(`ies`→`y`, `ses`/`xes`/`ches`/`shes`→`-es`, `ss` 제외 말미 `s` 제거).
-- `createPaginationCursor(total)` — TypeORM 호환 형식의 base64 페이지네이션 커서 생성.
+Main exports:
+- `normalizeSlash(input)` — collapses consecutive slashes (`//+`) into a single `/` (URL/path normalization).
+- `getElapsedTimeInString(endTime)` — formats a `process.hrtime` `[seconds, nanoseconds]` tuple into a string in the form `"1.2s (1234ms)"`.
+- `pluralize(word)` — simple English-rule pluralization (`s`/`x`/`ch`/`sh`→`+es`, `y`→`ies`, otherwise `+s`).
+- `singularize(word)` — singularization by the inverse of `pluralize`'s rules (`ies`→`y`, `ses`/`xes`/`ches`/`shes`→`-es`, strips a trailing `s` except for `ss`).
+- `createPaginationCursor(total)` — generates a base64 pagination cursor in a TypeORM-compatible format.
 
-## Import 규칙 / 레이어링
+## Import rules / layering
 
-- 정규 import 경로는 단일 `@lib` 루트가 아니라 별칭 `@ext` 를 통한다: `@ext/winston`, `@ext/util` (= `src/core/external/*`). `@ext` 는 `src/core/external` 를 가리키는 전용 별칭(`@lib` = `src/core/lib` 와 구분).
-- **레이어링 방향**: external 은 코어 최하층(leaf). 두 파일 모두 코어 내부를 import 하지 않으며(outbound 의존성 = winston 계열/Node 내장뿐), 상위 tier(lib·core 전반, app)가 단방향으로 이쪽을 import 한다. 순환 위험이 없는 안전한 바닥층이므로 어디서든 자유롭게 끌어다 쓸 수 있다.
+- The canonical import path is not the single `@lib` root but the alias `@ext`: `@ext/winston`, `@ext/util` (= `src/core/external/*`). `@ext` is a dedicated alias pointing at `src/core/external` (distinct from `@lib` = `src/core/lib`).
+- **Layering direction**: external is the lowest layer of core (leaf). Both files import nothing from inside core (outbound dependencies = winston-family/Node built-ins only), and higher tiers (lib and core in general, app) import toward it one-directionally. Because it is a safe bottom layer with no circular risk, it can be freely pulled in from anywhere.

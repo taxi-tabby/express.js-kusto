@@ -1,18 +1,18 @@
 # injectable/ - Dependency Injection (Services & Middleware)
 
-라우트 핸들러에 자동 주입되는 서비스 모듈과 미들웨어를 정의하는 폴더.
+Folder for defining service modules and middleware that are auto-injected into route handlers.
 
 ## File Types
 
-| 패턴 | 용도 |
+| Pattern | Purpose |
 |------|------|
-| `*.module.ts` | 비즈니스 로직 서비스 클래스 |
-| `*.middleware.ts` | Express 미들웨어 팩토리 함수 |
-| `*.middleware.interface.ts` | 미들웨어 파라미터 타입 정의 |
+| `*.module.ts` | Business logic service class |
+| `*.middleware.ts` | Express middleware factory function |
+| `*.middleware.interface.ts` | Middleware parameter type definition |
 
 ## Naming Convention
 
-파일 경로가 camelCase로 변환되어 핸들러의 `injected` 파라미터에 주입됨:
+The file path is converted to camelCase and injected into the handler's `injected` parameter:
 
 ```
 injectable/
@@ -20,8 +20,8 @@ injectable/
 │   ├── jwt/
 │   │   └── export.module.ts      → injected.authJwtExport
 │   └── rateLimiter/
-│       ├── default.middleware.ts  → injected.authRateLimiterDefault (미들웨어)
-│       └── option.middleware.interface.ts  (타입 정의만)
+│       ├── default.middleware.ts  → injected.authRateLimiterDefault (middleware)
+│       └── option.middleware.interface.ts  (type definition only)
 ```
 
 ## Usage in Routes
@@ -36,11 +36,11 @@ router.GET(
     )
 );
 
-// 미들웨어 적용
+// Applying middleware
 router.WITH(injected => injected.authRateLimiterDefault({ maxRequests: 100 }))
     .GET('/api', handler);
 ```
 
 ## Type Generation
 
-`npm run generate` 실행 시 `src/core/lib/types/generated-injectable-types.ts`에 모든 injectable 모듈의 타입이 자동 생성됨.
+Running `npm run generate` auto-generates the types of all injectable modules into `src/core/lib/types/generated-injectable-types.ts`.

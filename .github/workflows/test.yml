@@ -1,0 +1,121 @@
+name: tests
+on:
+  push:
+    branches: [main, 'ver/**']
+  pull_request:
+
+jobs:
+  test-sqlite:
+    name: tests (sqlite default)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      # generate 는 사용자 스키마만 읽고 DB 에 연결하지 않는다. 다만 kusto-db CLI 는
+      # DEFAULT__KUSTO_RDB_URL 존재 검사를 먼저 수행하므로, CI 러너에서만 쓰는
+      # 더미 .env 를 임의로 지정해 그 검사를 통과시킨다(.env 는 gitignore, 실제 연결 없음).
+      - name: Prepare CI-only test env
+        run: |
+          echo "NODE_ENV=test" > .env
+          echo "DEFAULT__KUSTO_RDB_URL=postgresql://ci:ci@127.0.0.1:5432/ci_dummy" >> .env
+      - name: Generate Prisma client (사용자 schema)
+        run: npm run db -- generate -a
+      # generate 명령은 per-db 에러를 삼키고 exit 0 으로 끝날 수 있으므로(아티팩트 미생성),
+      # tsc 의 모호한 import 에러로 번지기 전에 client 산출물을 직접 검증해 명확히 실패시킨다.
+      - name: Verify Prisma client generated
+        run: test -f src/app/db/default/client/index.d.ts || { echo "::error::Prisma client(default) was not generated"; exit 1; }
+      - name: TypeScript check
+        run: npx tsc --noEmit -p tsconfig.test.json
+      - name: Run tests
+        run: npm run test:ci
+      - name: Upload coverage artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-sqlite
+          path: coverage/
+          retention-days: 7
+
+  test-postgres:
+    name: tests (postgres via pglite-socket)
+    runs-on: ubuntu-latest
+    needs: test-sqlite
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      # sqlite job 과 동일: generate 의 CLI URL 검사 통과용 더미 env (실제 연결 없음).
+      - name: Prepare CI-only test env
+        run: |
+          echo "NODE_ENV=test" > .env
+          echo "DEFAULT__KUSTO_RDB_URL=postgresql://ci:ci@127.0.0.1:5432/ci_dummy" >> .env
+      - name: Generate Prisma client
+        run: npm run db -- generate -a
+      - name: Verify Prisma client generated
+        run: test -f src/app/db/default/client/index.d.ts || { echo "::error::Prisma client(default) was not generated"; exit 1; }
+      # --forceExit: PGlite(wasm) + in-process 소켓 서버는 테스트 통과 후에도 libuv/wasm
+      # 핸들을 남길 수 있어, 없으면 jest 가 프로세스를 못 빠져나가 러너가 job 을 finalize
+      # 하지 못하고 매달린다(간헐적). 테스트·커버리지 완료 후 강제 종료해 결정적으로 끝낸다.
+      - name: Run tests with PostgreSQL backend
+        run: npm run test:ci -- --forceExit
+        env:
+          KUSTO_TEST_DB: postgres
+          # PGlite 는 wasm 을 동적 import 하므로 jest vm 에서 ESM 동적 import 활성화 필요.
+          NODE_OPTIONS: --experimental-vm-modules
+
+  test-postgres-real:
+    name: tests (real postgres 16 service)
+    runs-on: ubuntu-latest
+    needs: test-sqlite
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: testdb
+        ports:
+          - 5432:5432
+        # 컨테이너가 연결을 받을 준비가 될 때까지 잡 시작을 지연한다.
+        options: >-
+          --health-cmd "pg_isready -U test -d testdb"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Prepare CI-only test env
+        run: |
+          echo "NODE_ENV=test" > .env
+          echo "DEFAULT__KUSTO_RDB_URL=postgresql://ci:ci@127.0.0.1:5432/ci_dummy" >> .env
+      - name: Generate Prisma client
+        run: npm run db -- generate -a
+      - name: Verify Prisma client generated
+        run: test -f src/app/db/default/client/index.d.ts || { echo "::error::Prisma client(default) was not generated"; exit 1; }
+      # 실제 Postgres 서비스 컨테이너에 KUSTO_TEST_PG_URL 로 접속한다(db-fixture 의 외부 경로).
+      # 모든 테스트 파일이 같은 DB 를 공유하므로, 같은 고정 ID(u1/p1 등)를 seed 하는 파일들이
+      # 병렬 실행되면 충돌한다. 반드시 단일 워커 직렬 실행이어야 한다 — test:ci 에 --maxWorkers=1
+      # 을 덧붙이면 --maxWorkers=2 와 중복되어 병렬로 떨어지므로, 단일 플래그 전용 스크립트를 쓴다.
+      - name: Run tests against real PostgreSQL (serial)
+        run: npm run test:ci:serial
+        env:
+          KUSTO_TEST_DB: postgres
+          KUSTO_TEST_PG_URL: postgresql://test:test@localhost:5432/testdb

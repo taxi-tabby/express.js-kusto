@@ -4,10 +4,12 @@ Express.js 기반 프로젝트에서 Prisma CRUD 메서드 사용 시 개발 모
 
 ## 특징
 
-- **개발 모드 전용**: `NODE_ENV=development` 또는 `ENABLE_SCHEMA_API=true`일 때만 활성화
+- **개발 모드 전용**: 다음 중 하나라도 만족하면 활성화 (`schemaApiSetup.ts`)
+  - `NODE_ENV=development` 또는 `NODE_ENV=dev`
+  - `ENABLE_SCHEMA_API=true` 또는 `ENABLE_SCHEMA_API=1`
 - **자동 스키마 등록**: `ExpressRouter.CRUD()` 메서드 호출 시 자동으로 스키마 정보 등록
 - **Prisma 기반**: Prisma DMMF(Data Model Meta Format)를 분석하여 정확한 스키마 정보 제공
-- **보안**: 로컬호스트에서만 접근 가능 (프로덕션 환경에서 추가 보안)
+- **보안**: 로컬호스트(127.0.0.1, ::1)에서만 접근 가능. `ENABLE_SCHEMA_API=true` 설정 시 외부 IP 도 허용
 
 ## 설정
 
@@ -25,7 +27,8 @@ ENABLE_SCHEMA_API=true
 
 ```typescript
 import express from 'express';
-import { SchemaApiSetup } from '@core/lib/schemaApiSetup';
+import { SchemaApiSetup } from '@lib/schemaApiSetup';
+import { log } from '@ext/winston';
 
 const app = express();
 
@@ -33,14 +36,16 @@ const app = express();
 SchemaApiSetup.registerSchemaApi(app, '/api/schema');
 
 app.listen(3000, () => {
-  console.log('서버가 시작되었습니다');
+  log.Info('서버가 시작되었습니다');
 });
 ```
+
+> 일반적으로 `Application.start()` / `Core.initialize()` 부팅 흐름에서 자동으로 등록되므로 직접 호출할 일은 드물다. 위 예시는 커스텀 부팅 시 참고용.
 
 ### 3. CRUD 라우터 사용
 
 ```typescript
-import { ExpressRouter } from '@core/lib/expressRouter';
+import { ExpressRouter } from '@lib/http/routing/expressRouter';
 
 const router = new ExpressRouter();
 
@@ -71,46 +76,31 @@ export default router.build();
 GET /api/schema/
 ```
 
-**응답 예시:**
+기본 응답은 TypeORM 호환 형식을 사용한다 (`schemaApiRouter.getAllSchemas` → `getTypeOrmCompatibleSchema`). `?format=raw` 를 붙이면 내부 표현으로 받을 수 있다. `basePath` 는 슬래시 없이 복수형 kebab-case (예: `User` → `users`).
+
+**응답 예시 (기본, TypeORM 호환):**
 ```json
 {
-  "success": true,
-  "data": {
-    "schemas": [
-      {
-        "databaseName": "default",
-        "modelName": "User",
-        "basePath": "/user",
-        "primaryKey": "id",
-        "primaryKeyType": "string",
-        "enabledActions": ["index", "show", "create", "update"],
-        "endpoints": [
-          {
-            "method": "GET",
-            "path": "/user",
-            "action": "index",
-            "description": "리스트 조회 (필터링, 정렬, 페이징 지원)"
-          }
-        ],
-        "model": {
-          "name": "User",
-          "fields": [
-            {
-              "name": "id",
-              "type": "String",
-              "jsType": "string",
-              "isId": true,
-              "isOptional": false
-            }
-          ]
-        },
-        "createdAt": "2025-08-03T10:30:00.000Z"
-      }
-    ],
-    "models": [...],
+  "data": [
+    {
+      "entityName": "User",
+      "tableName": "User",
+      "databaseName": "default",
+      "columns": [ /* TypeORM 컬럼 형식 */ ],
+      "indices": [],
+      "relations": [],
+      "endpoints": [
+        { "method": "GET", "path": "GET /users", "action": "index" },
+        { "method": "GET", "path": "GET /users/:id", "action": "show" }
+      ]
+    }
+  ],
+  "metadata": {
+    "timestamp": "2025-08-03T10:30:00.000Z",
+    "affectedCount": 1,
+    "totalDatabases": 1,
     "databases": ["default"],
-    "totalSchemas": 1,
-    "environment": "development"
+    "pagination": { "type": "offset", "total": 1 }
   }
 }
 ```
@@ -170,22 +160,39 @@ GET /api/schema/meta/health
 - `ENABLE_SCHEMA_API=true`로 설정하면 모든 IP에서 접근 가능 (주의 필요)
 
 ### 오류 응답 예시
+
+스키마 API 비활성 (development 모드 아님):
 ```json
 {
   "success": false,
   "error": {
-    "code": "SCHEMA_API_DISABLED",
+    "code": "FEATURE_DISABLED",
     "message": "스키마 API는 개발 환경에서만 사용할 수 있습니다.",
     "hint": "NODE_ENV=development로 설정하거나 ENABLE_SCHEMA_API=true 환경변수를 설정하세요."
   }
 }
 ```
 
+로컬호스트 외부 접근 거부 (`ENABLE_SCHEMA_API` 미설정):
+```json
+{
+  "success": false,
+  "error": {
+    "code": "FORBIDDEN",
+    "message": "스키마 API는 로컬호스트에서만 접근 가능합니다.",
+    "hint": "localhost에서 접근하거나 ENABLE_SCHEMA_API=true로 설정하세요.",
+    "clientIP": "..."
+  }
+}
+```
+
+`code` 값은 `errorCodes.ts` 의 `ERROR_CODES.FEATURE_DISABLED` / `ERROR_CODES.FORBIDDEN` 상수를 그대로 사용한다.
+
 ## 프로그래밍 방식 접근
 
 ### 스키마 레지스트리 직접 사용
 ```typescript
-import { CrudSchemaRegistry } from '@core/lib/crudSchemaRegistry';
+import { CrudSchemaRegistry } from '@lib/crudSchemaRegistry';
 
 const registry = CrudSchemaRegistry.getInstance();
 
@@ -201,10 +208,10 @@ if (registry.isSchemaApiEnabled()) {
 
 ### Prisma 스키마 분석기 사용
 ```typescript
-import { PrismaSchemaAnalyzer } from '@core/lib/prismaSchemaAnalyzer';
-import { prismaManager } from '@lib/prismaManager';
+import { PrismaSchemaAnalyzer } from '@lib/prismaSchemaAnalyzer';
+import { prismaManager } from '@lib/data/database/prismaManager';
 
-const client = prismaManager.getClient('default');
+const client = prismaManager.getClientSync('default'); // getClient() 는 async(Promise 반환)이므로 동기 사용 시 getClientSync()
 const analyzer = PrismaSchemaAnalyzer.getInstance(client);
 
 // 모든 모델 정보 조회

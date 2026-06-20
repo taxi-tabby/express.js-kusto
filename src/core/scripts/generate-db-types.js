@@ -51,7 +51,7 @@ function generateDatabaseTypes() {
 /**
  * Extend PrismaManager class with proper method overloads
  */
-declare module '../prismaManager' {
+declare module '../data/database/prismaManager' {
   interface PrismaManager {
 ${methodOverloads}
 ${getClientOverloads}

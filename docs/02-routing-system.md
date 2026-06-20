@@ -69,7 +69,7 @@ router.GET_SLUG(["userId", "postId"], async (req, res, injected, repo, db) => {
 라우트 파일은 **플루언트(Fluent) 개발론**을 기반으로 설계되어 메서드 체이닝을 통한 직관적이고 읽기 쉬운 코드 작성을 지원합니다:
 
 ```typescript
-import { ExpressRouter } from '@lib/expressRouter'
+import { ExpressRouter } from '@lib/http/routing/expressRouter'
 
 const router = new ExpressRouter();
 
@@ -217,7 +217,9 @@ router
         message: "너무 많은 요청입니다."
     })
     .WITH('authJwtNoLoginOnly')             // JWT 인증 (로그인 안된 사용자만)
-    .WITH('csrfProtection')                 // CSRF 보호
+    // 참고: 프레임워크 기본 제공 CSRF 미들웨어는 제거되었습니다.
+    // 쿠키 기반 인증(credentials)을 사용한다면 앱에서 직접 csrf 라이브러리를
+    // (예: csrf-csrf double-submit 토큰) middleware.ts 에 등록하세요.
     .POST_VALIDATED(requestConfig, responseConfig, handler)
     .GET_VALIDATED(getRequestConfig, getResponseConfig, getHandler);
 ```
@@ -359,17 +361,19 @@ router.POST_VALIDATED(
 
 ```typescript
 import { Request, Response, NextFunction } from "express";
+import { log } from "@ext/winston";
 
 export default [
     (req: Request, res: Response, next: NextFunction) => {
-        // 미들웨어 로직
-        console.log(`요청 경로: ${req.path}`);
+        // 미들웨어 로직 — winston 로거 사용 (프레임워크 컨벤션)
+        log.Info(`요청 경로: ${req.path}`);
         next();
     },
-    
+
     (req: Request, res: Response, next: NextFunction) => {
-        // 또 다른 미들웨어
-        req.customData = "some data";
+        // 다음 핸들러로 값을 넘기려면 declaration merging 으로 Request 를 확장하거나
+        // (권장) WITH 미들웨어 체인을 사용해 req.with.<name> 슬롯을 활용한다.
+        (req as any).customData = "some data";
         next();
     }
 ];
@@ -411,7 +415,7 @@ src/app/routes/
 ### 1. 루트 라우트 (src/app/routes/route.ts)
 
 ```typescript
-import { ExpressRouter } from '@lib/expressRouter'
+import { ExpressRouter } from '@lib/http/routing/expressRouter'
 
 const router = new ExpressRouter();
 
@@ -432,7 +436,7 @@ export default router.build();
 
 ```typescript
 // src/app/routes/users/[userId]/route.ts
-import { ExpressRouter } from '@lib/expressRouter';
+import { ExpressRouter } from '@lib/http/routing/expressRouter';
 
 const router = new ExpressRouter();
 
@@ -457,7 +461,7 @@ export default router.build();
 ### 3. 중첩 동적 라우트 (src/app/routes/users/[userId]/posts/[postId]/route.ts)
 
 ```typescript
-import { ExpressRouter } from '@lib/expressRouter';
+import { ExpressRouter } from '@lib/http/routing/expressRouter';
 
 const router = new ExpressRouter();
 
@@ -488,7 +492,7 @@ export default router.build();
 ### 4. 인증 라우트 (src/app/routes/authorities/signin/route.ts)
 
 ```typescript
-import { ExpressRouter } from '@lib/expressRouter';
+import { ExpressRouter } from '@lib/http/routing/expressRouter';
 
 const router = new ExpressRouter();
 
@@ -773,7 +777,7 @@ router
 ### 기본 메서드
 > 라우터를 적용하는 기능입니다.
 ```typescript
-import { ExpressRouter } from '@lib/expressRouter'
+import { ExpressRouter } from '@lib/http/routing/expressRouter'
 const router = new ExpressRouter();
 
 ...
@@ -791,7 +795,7 @@ export default router.build();
 
 ### HTTP 메서드 (기본)
 ```typescript
-import { ExpressRouter } from '@lib/expressRouter'
+import { ExpressRouter } from '@lib/http/routing/expressRouter'
 const router = new ExpressRouter();
 
 // Express.js를 사용하는 방법과 거의 동일합니다.
@@ -832,7 +836,7 @@ router
 > multer 라이브러리를 사용한 파일 업로드 대응 기능입니다.
 > https://github.com/expressjs/multer 를 참고하세요
 ```typescript
-import { ExpressRouter } from '@lib/expressRouter'
+import { ExpressRouter } from '@lib/http/routing/expressRouter'
 import { memoryStorage } from 'multer'
 const router = new ExpressRouter();
 
@@ -897,7 +901,7 @@ router.POST_FIELD_FILE(storage, [
 
 ### 미들웨어 메서드
 ```typescript
-import { ExpressRouter } from '@lib/expressRouter'
+import { ExpressRouter } from '@lib/http/routing/expressRouter'
 const router = new ExpressRouter();
 
 // 미들웨어 체이닝 예시
@@ -910,12 +914,18 @@ router
 
 - **`USE`** - Express 기본 미들웨어를 등록합니다.
 - **`MIDDLEWARE`** - 커스텀 미들웨어 함수를 등록합니다.
-- **`WITH`** - Injectable 미들웨어를 등록합니다 (의존성 주입 지원).
+- **`WITH`** - Injectable 미들웨어를 등록합니다 (의존성 주입 지원). 첫 인자는 `injectable/` 에 등록된 미들웨어의 이름 문자열, 두 번째 인자는 옵션. arrow function 직접 전달은 지원하지 않음.
+- **`USE_HANDLER`** _(deprecated)_ — `HandlerFunction` 타입의 미들웨어를 등록한다. next 함수가 없어 다음으로 넘어가지 못하므로 일반적으로 사용하지 않는다. 대부분의 경우 `MIDDLEWARE` 또는 `USE` 를 사용한다.
 
 ### 프록시 및 정적 파일 메서드
-> http-proxy-middleware 라이브러리를 사용한 프록시 처리입니다.
+> Node `http`/`https` 기반 자체 구현 리버스 프록시입니다(외부 의존성 없음).
+> 지원 옵션(`ProxyOptions`): `target`(필수), `changeOrigin`, `pathRewrite`(객체/함수),
+> `headers`, `secure`(TLS 검증), `timeout`, 훅 `onProxyReq`/`onProxyRes`/`onError`.
+> 표준 `X-Forwarded-For/Proto/Host` 헤더를 자동 부가하며, 전역 body-parser 가 소비한
+> 본문(`req.body`)은 자동 재직렬화하여 전달합니다. 업스트림 실패 시 502/504(JSON:API)로 응답합니다.
+> (WebSocket 업그레이드 프록시는 미지원.)
 ```typescript
-import { ExpressRouter } from '@lib/expressRouter'
+import { ExpressRouter } from '@lib/http/routing/expressRouter'
 const router = new ExpressRouter();
 
 // 프록시 설정 예시
@@ -930,7 +940,7 @@ router.MIDDLE_PROXY_ROUTE({
 
 ### 정적 HTTP 파일 제공 메서드
 ```typescript
-import { ExpressRouter } from '@lib/expressRouter'
+import { ExpressRouter } from '@lib/http/routing/expressRouter'
 const router = new ExpressRouter();
 
 // 정적 파일 서빙 예시
@@ -942,7 +952,7 @@ router.STATIC('./public');
 
 ### 검증된 요청 메서드
 ```typescript
-import { ExpressRouter } from '@lib/expressRouter'
+import { ExpressRouter } from '@lib/http/routing/expressRouter'
 const router = new ExpressRouter();
 
 // 검증된 요청 예시
@@ -963,7 +973,7 @@ router.POST_VALIDATED(
 
 ### CRUD 메서드
 ```typescript
-import { ExpressRouter } from '@lib/expressRouter'
+import { ExpressRouter } from '@lib/http/routing/expressRouter'
 const router = new ExpressRouter();
 
 // CRUD 자동 생성 예시

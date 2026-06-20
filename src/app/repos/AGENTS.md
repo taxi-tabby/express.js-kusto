@@ -10,7 +10,7 @@
 ## Required Structure
 
 ```typescript
-import { BaseRepository } from '@core/lib/baseRepository';
+import { BaseRepository } from '@lib/data/database/baseRepository';
 
 export default class UserRepository extends BaseRepository<'default'> {
     protected getDatabaseName(): 'default' {
@@ -27,11 +27,12 @@ export default class UserRepository extends BaseRepository<'default'> {
 
 | 기능 | 설명 |
 |------|------|
-| `this.client` | `getWrap()` 기반 Prisma 클라이언트 (서버리스 자동 재연결) |
-| `this.getAsyncClient()` | 비동기 버전 (동일한 재연결 로직) |
-| `this.$transaction()` | 자동 재시도, 성능 모니터링 포함 트랜잭션 |
+| `this.client` | `getWrap()` 기반 Prisma 클라이언트 (lazy 자동 재연결) |
+| `this.getAsyncClient()` | `client` 와 동일한 인스턴스를 Promise 로 래핑한 변형 (await 컨텍스트용) |
+| `this.$transaction()` | 트랜잭션 + 성능 모니터링. `retryAttempts >= 2` 옵션 지정 시 재시도 활성화 (기본 1회 — 재시도 없음) |
 | `this.$batchOperation()` | 대량 데이터 배치 처리 |
-| `this.$createDistributedOperation()` | 분산 트랜잭션 작업 생성 헬퍼 |
+
+> NOTE: `this.$createDistributedOperation()` / `this.$runDistributedTransaction()` 는 Prisma 커넥션 풀 한계로 신뢰성이 낮으므로 사용하지 않는다 (CLAUDE.md 참고).
 
 ## Usage in Routes
 

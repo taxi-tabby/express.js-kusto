@@ -57,7 +57,7 @@ export interface PrismaManagerClientOverloads {
 /**
  * Extend PrismaManager class with proper method overloads
  */
-declare module '../prismaManager' {
+declare module '../data/database/prismaManager' {
   interface PrismaManager {
   getWrap(databaseName: 'default'): DefaultInstance;
   getClient(databaseName: 'default'): Promise<DefaultInstance>;

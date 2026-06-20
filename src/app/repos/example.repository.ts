@@ -1,4 +1,4 @@
-import { BaseRepository } from '@lib/baseRepository';
+import { BaseRepository } from '@lib/data/database/baseRepository';
 
 
 export default class ExampleRepository extends BaseRepository<'default'> {

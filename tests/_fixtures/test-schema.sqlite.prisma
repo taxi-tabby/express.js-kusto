@@ -1,0 +1,55 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../../node_modules/.prisma/test-sqlite-client"
+}
+
+datasource db {
+  provider = "sqlite"
+  // url 은 schema 에 두지 않음 — Prisma 7 거부.
+  // db push 시 --url 인자, runtime 시 PrismaClient adapter 로 주입.
+}
+
+model User {
+  id        String    @id @default(uuid())
+  email     String    @unique
+  name      String
+  deletedAt DateTime?
+  removedAt DateTime? // P0-3: 커스텀 soft-delete 필드 테스트용 (non-default)
+  posts     Post[]
+  comments  Comment[]
+}
+
+model Post {
+  id        String    @id @default(uuid())
+  title     String
+  content   String?
+  authorId  String
+  author    User      @relation(fields: [authorId], references: [id])
+  comments  Comment[]
+  tags      PostTag[]
+  deletedAt DateTime?
+}
+
+model Tag {
+  id    String    @id @default(uuid())
+  name  String    @unique
+  posts PostTag[]
+}
+
+model PostTag {
+  postId String
+  tagId  String
+  post   Post   @relation(fields: [postId], references: [id])
+  tag    Tag    @relation(fields: [tagId], references: [id])
+
+  @@id([postId, tagId])
+}
+
+model Comment {
+  id       String @id @default(uuid())
+  body     String
+  postId   String
+  authorId String
+  post     Post   @relation(fields: [postId], references: [id])
+  author   User   @relation(fields: [authorId], references: [id])
+}

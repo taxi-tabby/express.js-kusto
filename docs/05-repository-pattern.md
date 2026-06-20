@@ -24,7 +24,7 @@ Repository 시스템은 다음과 같은 구조로 구성됩니다:
 모든 `*.repository.ts` 파일은 다음 구조를 반드시 지켜야 합니다:
 
 ```typescript
-import { BaseRepository } from '@lib/baseRepository';
+import { BaseRepository } from '@lib/data/database/baseRepository';
 
 export default class XXXRepository extends BaseRepository<'xxx'> {
     protected getDatabaseName(): 'xxx' {
@@ -81,7 +81,7 @@ export interface ItemUpdateData {
 
 ```typescript
 // repos/product/item.repository.ts
-import { BaseRepository } from '@lib/baseRepository';
+import { BaseRepository } from '@lib/data/database/baseRepository';
 import { ItemBase, ItemCreateData, ItemUpdateData } from './item.types';
 
 export default class ItemRepository extends BaseRepository<'product'> {

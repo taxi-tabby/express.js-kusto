@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 // filepath: r:\project\express.js-kusto\src\core\scripts\kusto-db-cli.ts
 
+// 경로 별칭(@lib 등)을 ts-node 런타임에서 해석할 수 있도록 등록. (앱 진입점 src/index.ts 와 동일)
+import 'module-alias/register';
 import { Command } from 'commander';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -8,8 +10,37 @@ import { exec, spawn } from 'child_process';
 import * as util from 'util';
 import * as dotenv from 'dotenv';
 import * as readline from 'readline';
+import { folderNameToEnvVarName } from '@lib/data/database/dbNaming';
 
 const execPromise = util.promisify(exec);
+
+// 셸을 거치지 않고 npx 를 직접 실행하기 위한 플랫폼별 바이너리 이름.
+const NPX_BIN = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+
+/**
+ * `prisma db execute` 호출용 argv/stdin 구성 (셸 비경유 / no shell).
+ *
+ * 보안: 사용자 제공 SQL(--command)은 셸 문자열에 절대 넣지 않고 stdin 으로 전달한다.
+ * 파일/스키마/설정 경로는 모두 개별 argv 요소로 두어 메타문자 해석을 차단한다.
+ * (과거 `echo "${command}" | npx ...` 방식은 따옴표/`$()`/`;` 로 임의 OS 명령
+ *  주입이 가능했다 — P1-8.)
+ */
+export function buildExecuteArgs(
+    options: { command?: string; file?: string },
+    schemaPath: string,
+    configPath: string
+): { args: string[]; stdin?: string } {
+    const args = ['prisma', 'db', 'execute', '--schema', schemaPath, '--config', configPath];
+    if (options.command) {
+        args.push('--stdin');
+        return { args, stdin: options.command };
+    }
+    if (options.file) {
+        args.push('--file', options.file);
+        return { args };
+    }
+    throw new Error('Either --file or --command must be specified');
+}
 
 /**
  * Dangerous operations that require double confirmation
@@ -23,7 +54,7 @@ const FORCE_WAIT_OPERATIONS = ['deploy'];
 /**
  * Generate a random 4-character alphanumeric code
  */
-function generateSecurityCode(): string {
+export function generateSecurityCode(): string {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     let result = '';
     for (let i = 0; i < 4; i++) {
@@ -35,17 +66,24 @@ function generateSecurityCode(): string {
 /**
  * Prompt user for security code confirmation
  */
-async function promptSecurityCode(operation: string): Promise<boolean> {
-    const rl = readline.createInterface({
-        input: process.stdin,
-        output: process.stdout
-    });
+export async function promptSecurityCode(
+    operation: string,
+    getInput?: (prompt: string) => Promise<string>
+): Promise<boolean> {
+    let rl: any = null;
+    let question: (prompt: string) => Promise<string>;
 
-    const question = (prompt: string): Promise<string> => {
-        return new Promise((resolve) => {
-            rl.question(prompt, resolve);
+    if (getInput) {
+        question = getInput;
+    } else {
+        rl = readline.createInterface({
+            input: process.stdin,
+            output: process.stdout
         });
-    };
+        question = (prompt: string) => new Promise((resolve) => {
+            rl!.question(prompt, resolve);
+        });
+    }
 
     try {
         console.log(`\n🚨 SECURITY WARNING: You are about to perform a DANGEROUS operation: "${operation}"`);
@@ -76,14 +114,14 @@ async function promptSecurityCode(operation: string): Promise<boolean> {
         console.log('✅ Both confirmations successful. Proceeding with operation...\n');
         return true;
     } finally {
-        rl.close();
+        if (rl) rl.close();
     }
 }
 
 /**
  * Check if operation requires security confirmation
  */
-async function checkSecurityConfirmation(operation: string): Promise<boolean> {
+export async function checkSecurityConfirmation(operation: string): Promise<boolean> {
     if (DANGEROUS_OPERATIONS.includes(operation)) {
         return await promptSecurityCode(operation);
     }
@@ -146,7 +184,7 @@ program
 /**
  * Get all database directories from src/app/db
  */
-function getDatabaseDirs(): string[] {
+export function getDatabaseDirs(): string[] {
     const dbPath = path.join(process.cwd(), 'src', 'app', 'db');
 
     if (!fs.existsSync(dbPath)) {
@@ -162,14 +200,14 @@ function getDatabaseDirs(): string[] {
 /**
  * Get schema path for a database
  */
-function getSchemaPath(dbName: string): string {
+export function getSchemaPath(dbName: string): string {
     return path.join(process.cwd(), 'src', 'app', 'db', dbName, 'schema.prisma');
 }
 
 /**
  * Clean up generated schema.prisma files from client directories
  */
-function cleanupClientSchemaFiles(dbName: string): void {
+export function cleanupClientSchemaFiles(dbName: string): void {
     const clientSchemaPath = path.join(process.cwd(), 'src', 'app', 'db', dbName, 'client', 'schema.prisma');
     if (fs.existsSync(clientSchemaPath)) {
         fs.unlinkSync(clientSchemaPath);
@@ -180,14 +218,14 @@ function cleanupClientSchemaFiles(dbName: string): void {
 /**
  * Get migrations directory path for a database
  */
-function getMigrationsPath(dbName: string): string {
+export function getMigrationsPath(dbName: string): string {
     return path.join(process.cwd(), 'src', 'app', 'db', dbName, 'migrations');
 }
 
 /**
  * Get all migration directories for a database
  */
-function getMigrationDirectories(dbName: string): string[] {
+export function getMigrationDirectories(dbName: string): string[] {
     const migrationsPath = getMigrationsPath(dbName);
     
     if (!fs.existsSync(migrationsPath)) {
@@ -203,7 +241,7 @@ function getMigrationDirectories(dbName: string): string[] {
 /**
  * Get migration info from directory name
  */
-function parseMigrationName(migrationDir: string): { timestamp: string, name: string } {
+export function parseMigrationName(migrationDir: string): { timestamp: string, name: string } {
     const parts = migrationDir.split('_');
     const timestamp = parts[0];
     const name = parts.slice(1).join('_');
@@ -213,7 +251,7 @@ function parseMigrationName(migrationDir: string): { timestamp: string, name: st
 /**
  * Display available migrations for rollback
  */
-function displayMigrations(dbName: string): void {
+export function displayMigrations(dbName: string): void {
     const migrations = getMigrationDirectories(dbName);
     
     if (migrations.length === 0) {
@@ -251,7 +289,7 @@ function displayMigrations(dbName: string): void {
 /**
  * Validate migration target for rollback
  */
-function validateMigrationTarget(dbName: string, target: string): string | null {
+export function validateMigrationTarget(dbName: string, target: string): string | null {
     const migrations = getMigrationDirectories(dbName);
     
     if (migrations.length === 0) {
@@ -326,7 +364,7 @@ async function createRollbackMigration(dbName: string, targetMigration: string, 
  * Generate rollback SQL from forward migration SQL
  * This is a basic implementation - manual review is recommended
  */
-function generateRollbackSQL(forwardSQL: string): string {
+export function generateRollbackSQL(forwardSQL: string): string {
     const lines = forwardSQL.split('\n');
     const rollbackLines: string[] = [];
     
@@ -374,7 +412,7 @@ function generateRollbackSQL(forwardSQL: string): string {
 /**
  * Extract table name from CREATE TABLE statement
  */
-function extractTableName(createTableSQL: string): string | null {
+export function extractTableName(createTableSQL: string): string | null {
     const match = createTableSQL.match(/CREATE TABLE\s+(?:IF NOT EXISTS\s+)?["`]?(\w+)["`]?/i);
     return match ? match[1] : null;
 }
@@ -382,7 +420,7 @@ function extractTableName(createTableSQL: string): string | null {
 /**
  * Extract table and column name from ALTER TABLE ADD COLUMN statement
  */
-function extractAlterAddColumn(alterSQL: string): { tableName: string | null, columnName: string | null } {
+export function extractAlterAddColumn(alterSQL: string): { tableName: string | null, columnName: string | null } {
     const match = alterSQL.match(/ALTER TABLE\s+["`]?(\w+)["`]?\s+ADD\s+(?:COLUMN\s+)?["`]?(\w+)["`]?/i);
     return {
         tableName: match ? match[1] : null,
@@ -393,7 +431,7 @@ function extractAlterAddColumn(alterSQL: string): { tableName: string | null, co
 /**
  * Extract index name from CREATE INDEX statement
  */
-function extractIndexName(createIndexSQL: string): string | null {
+export function extractIndexName(createIndexSQL: string): string | null {
     const match = createIndexSQL.match(/CREATE\s+(?:UNIQUE\s+)?INDEX\s+(?:IF NOT EXISTS\s+)?["`]?(\w+)["`]?/i);
     return match ? match[1] : null;
 }
@@ -403,15 +441,15 @@ function extractIndexName(createIndexSQL: string): string | null {
  * Follows the same convention as PrismaManager.getDatabaseUrl()
  * Convention: folderName -> FOLDER_NAME__KUSTO_RDB_URL (e.g., default -> DEFAULT__KUSTO_RDB_URL, myDatabase -> MY_DATABASE__KUSTO_RDB_URL)
  */
-function getDatabaseEnvVarName(dbName: string): string {
-    // Convert folder name to env variable: default -> DEFAULT__KUSTO_RDB_URL, myDatabase -> MY_DATABASE__KUSTO_RDB_URL
-    return dbName.replace(/([a-z])([A-Z])/g, '$1_$2').toUpperCase() + '__KUSTO_RDB_URL';
+export function getDatabaseEnvVarName(dbName: string): string {
+    // 단일 출처(@lib/dbNaming)에 위임 — 변환 규칙 중복 제거.
+    return folderNameToEnvVarName(dbName);
 }
 
 /**
  * Get database URL from environment variable
  */
-function getDatabaseUrl(dbName: string): string | undefined {
+export function getDatabaseUrl(dbName: string): string | undefined {
     const envVarName = getDatabaseEnvVarName(dbName);
     return process.env[envVarName];
 }
@@ -420,7 +458,7 @@ function getDatabaseUrl(dbName: string): string | undefined {
  * Create a temporary prisma.config.ts for a specific database
  * Prisma 7 requires prisma.config.ts for CLI commands
  */
-function createTempPrismaConfig(dbName: string, databaseUrl: string): string {
+export function createTempPrismaConfig(dbName: string, databaseUrl: string): string {
     const schemaPath = getSchemaPath(dbName).replace(/\\/g, '/');
     const migrationsPath = getMigrationsPath(dbName).replace(/\\/g, '/');
     
@@ -446,7 +484,7 @@ export default defineConfig({
 /**
  * Remove temporary prisma config file
  */
-function removeTempPrismaConfig(configPath: string): void {
+export function removeTempPrismaConfig(configPath: string): void {
     try {
         if (fs.existsSync(configPath)) {
             fs.unlinkSync(configPath);
@@ -1150,33 +1188,57 @@ program
             return;
         }
 
+        // 방어: --db 는 폴더명(식별자)이어야 한다. 경로/스키마/임시설정 경로에 삽입되고
+        // win32 에서는 shell:true 로 실행되므로, 셸 메타문자/경로 탈출을 정규식으로 차단한다.
+        if (!/^[A-Za-z0-9_-]+$/.test(options.db)) {
+            console.error(`Invalid database name: "${options.db}" (allowed: letters, digits, _ and -)`);
+            return;
+        }
+
         console.log(`🗃️  Executing SQL against database: ${options.db}`);
 
         try {
-            let executeCommand = 'db execute';
-            if (options.file) executeCommand += ` --file ${options.file}`;
-            if (options.command) executeCommand += ` --stdin`;
+            const schemaPath = getSchemaPath(options.db);
+            if (!fs.existsSync(schemaPath)) {
+                throw new Error(`Schema file not found: ${schemaPath}`);
+            }
 
-            if (options.command) {
-                // For stdin commands, we need to pipe the command
-                // Prisma 7: Create temp config for database connection
-                const databaseUrl = getDatabaseUrl(options.db);
-                if (!databaseUrl) {
-                    const envVarName = getDatabaseEnvVarName(options.db);
-                    throw new Error(`Database URL not found. Please set ${envVarName} environment variable.`);
-                }
-                const tempConfigPath = createTempPrismaConfig(options.db, databaseUrl);
-                try {
-                    const fullCommand = `echo "${options.command}" | npx prisma ${executeCommand} --schema ${getSchemaPath(options.db)} --config "${tempConfigPath}"`;
-                    console.log(`Executing: echo "${options.command}" | npx prisma ${executeCommand} --schema ... --config <temp>`);
-                    const { stdout, stderr } = await execPromise(fullCommand);
-                    console.log(`[${options.db}] ${stdout}`);
-                    if (stderr) console.error(`[${options.db}] Error: ${stderr}`);
-                } finally {
-                    removeTempPrismaConfig(tempConfigPath);
-                }
-            } else {
-                await executePrismaCommand(options.db, executeCommand);
+            // Prisma 7: Create temp config for database connection
+            const databaseUrl = getDatabaseUrl(options.db);
+            if (!databaseUrl) {
+                const envVarName = getDatabaseEnvVarName(options.db);
+                throw new Error(`Database URL not found. Please set ${envVarName} environment variable.`);
+            }
+            const tempConfigPath = createTempPrismaConfig(options.db, databaseUrl);
+            try {
+                const { args, stdin } = buildExecuteArgs(options, schemaPath, tempConfigPath);
+                console.log(`Executing: npx ${args.join(' ').replace(tempConfigPath, '<temp>')}`);
+
+                await new Promise<void>((resolve, reject) => {
+                    // 보안(P1-8): 사용자 SQL 은 args 가 아니라 stdin 으로 전달되므로 주입 불가.
+                    // win32 에서는 .cmd 를 shell:false 로 spawn 하면 EINVAL 이므로 shell:true 가 필수다
+                    // (Node 24+ / CVE-2024-27980). argv 의 경로는 모두 프레임워크 파생 + --db 정규식 검증됨.
+                    const child = spawn(NPX_BIN, args, { shell: process.platform === 'win32' });
+                    let stdout = '';
+                    let stderr = '';
+                    child.stdout?.on('data', (d) => { stdout += d.toString(); });
+                    child.stderr?.on('data', (d) => { stderr += d.toString(); });
+                    child.on('error', reject);
+                    // stdin 의 EPIPE 등 스트림 에러가 unhandled 로 프로세스를 죽이지 않도록 처리
+                    child.stdin?.on('error', reject);
+                    child.on('close', (code) => {
+                        if (stdout) console.log(`[${options.db}] ${stdout}`);
+                        if (stderr) console.error(`[${options.db}] Error: ${stderr}`);
+                        if (code === 0) resolve();
+                        else reject(new Error(`db execute failed with exit code ${code}`));
+                    });
+                    if (stdin !== undefined) {
+                        child.stdin?.write(stdin);
+                        child.stdin?.end();
+                    }
+                });
+            } finally {
+                removeTempPrismaConfig(tempConfigPath);
             }
 
             console.log(`✅ SQL execution completed for ${options.db}`);

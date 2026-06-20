@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Express.js-Kusto (v0.1.45) is a TypeScript framework for building REST APIs using Convention over Configuration. It wraps Express.js with a fluent routing API, multi-database Prisma management, dependency injection, and JSON:API v1.1 compliant CRUD generation.
+Express.js-Kusto is a TypeScript framework for building REST APIs using Convention over Configuration. It wraps Express.js with a fluent routing API, multi-database Prisma management, dependency injection, and JSON:API v1.1 compliant CRUD generation. (Current version: see `package.json`.)
 
 **Language**: Korean is used in commit messages and some documentation. Follow this convention.
 
@@ -45,6 +45,34 @@ No test runner is configured in this project.
 - **`src/core/`** — Framework internals. **Do not modify** unless updating the framework itself.
 - **`src/app/`** — Developer workspace where all application code lives.
 
+### Core Internal Structure (Tier Layout)
+
+`src/core` is organized into purpose- and layer-grouped tiers (SSOT methodology). The `@lib` alias root is unchanged (`@lib/*` → `src/core/lib/*`); paths are deepened by tier. **Every folder carries an `AGENTS.md`** describing its files, exports, and dependency direction — read it before working in that folder.
+
+```
+src/core/
+├── index.ts              # public API barrel (curated re-exports)
+├── bootstrap/            # lifecycle: Application, Core, expressAppSingleton(@deprecated)
+├── external/             # 3rd-party wrappers (leaf, zero intra-core imports): winston, util
+└── lib/
+    ├── http/             # request-handling tier
+    │   ├── routing/      # expressRouter, loadRoutes_V6_Clean, middlewareHelpers, proxyMiddleware
+    │   ├── validation/   # requestHandler (_VALIDATED engine), validator
+    │   ├── serialization/# serializer (BigInt/Date + response serializer), serializationMiddleware
+    │   └── errors/       # errorCodes (SSOT), errorFormatter, errorHandler
+    ├── data/             # persistence tier
+    │   ├── database/     # prismaManager, baseRepository, repositoryManager, transactionCommitManager, dbNaming
+    │   └── di/           # dependencyInjector, kustoManager (req.kusto facade)
+    ├── crud/             # JSON:API CRUD engine: crudRouteBuilder, crudHelpers, primaryKeyParsers, jsonApiConstants
+    ├── devtools/         # DEV-ONLY (AUTO_DOCS / ENABLE_SCHEMA_API)
+    │   ├── documentation/# OpenAPI 3.1 generation + Swagger UI + dev static assets
+    │   └── schema-api/   # /api/schema introspection: crudSchema*, relationshipConfig, prismaSchemaAnalyzer
+    ├── config/           # environmentLoader
+    └── types/            # express-extensions + generated-*.ts (do-not-edit codegen)
+```
+
+**Dependency direction (one-way):** `bootstrap` → tiers; within `lib`, higher tiers depend inward on lower ones; `external` and `config` are leaves. Do not introduce a back-edge (e.g. `data` importing `http`). `devtools` is dev-only and may depend on runtime tiers, never the reverse.
+
 ### Initialization Flow
 
 `src/index.ts` → `Application.start()` → `Core.initialize()` which sequentially loads:
@@ -80,12 +108,13 @@ Route files must `export default router.build()` using `ExpressRouter`.
 
 Exports an array of Express middleware applied to all routes, in order:
 1. KustoManager initialization (`req.kusto`)
-2. Helmet security headers
-3. CORS (dynamic whitelist from `CORS_WHITELIST` env)
-4. Cookie parser
-5. Body parser (JSON + URL-encoded, 50mb limit, supports `application/vnd.api+json`)
-6. Footwalk logging (IP detection + request logging)
-7. Error handler
+2. Client IP extraction (`clientIpMiddleware`) — populates `req.ip`/`req.ips` honoring proxy headers
+3. Helmet security headers
+4. CORS (dynamic whitelist from `CORS_WHITELIST` env)
+5. Cookie parser
+6. Body parser (JSON + URL-encoded, 50mb limit, supports `application/vnd.api+json`)
+7. Footwalk request logging (winston `Footwalk` level)
+8. Error handler (catches downstream errors, returns 500 JSON)
 
 ### Handler Signature
 
@@ -97,7 +126,7 @@ async (req, res, injected, repo, db) => { ... }
 - `req.validatedData` — Available only in `_VALIDATED` methods
 - `req.with` — Middleware-injected parameters
 
-### ExpressRouter Fluent API (`src/core/lib/expressRouter.ts`)
+### ExpressRouter Fluent API (`src/core/lib/http/routing/expressRouter.ts`)
 
 Method chaining pattern:
 ```typescript
@@ -112,6 +141,8 @@ export default router.build();
 
 Key method categories:
 - HTTP verbs: `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `NOTFOUND`
+- Response serializer (optional): pass `{ serialize }` as the last options arg to verb/`*_VALIDATED`/`*_SLUG` methods to refine the response. `serialize` is a function `(data, req) => shaped` or a declarative `{ pick: [...] }` / `{ omit: [...] }` (typed via `Pick`/`Omit`, arrays applied per-element). When omitted, behavior is unchanged. For `*_VALIDATED`, serialize runs before `responseConfig` validation.
+- OpenAPI/Swagger docs (optional): the `/docs` UI is auto-generated and **every route auto-registers and auto-groups** — the resource tag and `operationId` are derived from the path, `_VALIDATED` request/response schemas become parameters/requestBody/responses, and `*_FILE` get framework summaries. To enrich a route, pass doc fields in the same last options arg (alongside `serialize`): `{ summary?, description?, tags?, operationId?, deprecated? }` — e.g. `router.GET(handler, { summary: 'List users', tags: ['Users'] })`. A file-level default tag (and its Swagger group description) is set once via the constructor: `new ExpressRouter({ tag: 'Users', description: 'User management' })`. Precedence for the tag: per-route `tags` > constructor `tag` > path-derived. All fields are optional/back-compatible (docs only render in dev when `AUTO_DOCS=true`).
 - Validated variants: `GET_VALIDATED`, `POST_VALIDATED`, etc. — require all defined status codes to be handled
 - File uploads: `POST_SINGLE_FILE`, `POST_ARRAY_FILE`, `POST_FIELD_FILE`
 - Middleware: `WITH(name, params?)`, `MIDDLEWARE(fn)`, `USE(fn)`
@@ -139,7 +170,7 @@ datasource db {
 }
 ```
 
-PrismaManager handles serverless-optimized connections with auto-reconnection (detects Lambda/Vercel/GCP environments). Health check intervals: 15s for serverless, 60s for traditional.
+PrismaManager uses lazy auto-reconnection: connection errors during `getWrap()` calls trigger up to 3 reconnect attempts with a 30s cooldown per database. There is no periodic health-check polling — `healthCheck()` is an on-demand call. (See `prismaManager.ts` for `MAX_RECONNECTION_ATTEMPTS` / `RECONNECTION_COOLDOWN_MS`.)
 
 ### Dependency Injection (`src/app/injectable/`)
 
@@ -155,7 +186,7 @@ All files must use `export default`.
 ### Repository Pattern (`src/app/repos/`)
 
 ```typescript
-import { BaseRepository } from '@lib/baseRepository';
+import { BaseRepository } from '@lib/data/database/baseRepository';
 
 export default class FooRepository extends BaseRepository<'dbname'> {
     protected getDatabaseName(): 'dbname' { return 'dbname'; }
@@ -198,8 +229,25 @@ Related modules: `CrudSchemaRegistry`, `PrismaSchemaAnalyzer`, `SchemaApiRouter`
 | `@lib/*` | `src/core/lib` |
 | `@ext/*` | `src/core/external` |
 | `@db/*` | `src/app/db` |
+| `@tests/*` | `tests` |
 
-Defined in both `tsconfig.json` (for TS) and `package.json` `_moduleAliases` (for runtime via `module-alias`), and mirrored in `webpack.config.js`.
+**Single source of truth: `tsconfig.json` `compilerOptions.paths`.** Everything else derives from it so they can't drift:
+- **jest** (`jest.config.ts`): `moduleNameMapper` is generated via `pathsToModuleNameMapper(tsconfig.paths)`.
+- **webpack** (`webpack.config.js`): `resolve.alias` is built from tsconfig paths by `buildAliasesFromTsconfig()`.
+- **runtime** (`package.json` `_moduleAliases`, used by `module-alias`): the only hand-maintained copy — kept in lockstep by the guard test `tests/unit/config/alias-consistency.test.ts`. The entrypoints `src/index.ts`, `src/core/scripts/kusto-db-cli.ts`, and `updater/{generate,compare,update}.ts` register it via `import 'module-alias/register'`.
+
+**To add an alias:** add it to `tsconfig.json` paths **and** `package.json` `_moduleAliases` (jest/webpack pick it up automatically; the guard test enforces the pair). Use `@lib/...` (not `@core/lib/...`) — `@lib` is the canonical spelling for `src/core/lib`.
+
+**Import the tier path, not the old flat path.** After the tier reorg, core modules live under `@lib/<tier>/<file>` — e.g. `@lib/http/routing/expressRouter`, `@lib/http/validation/requestHandler`, `@lib/data/database/baseRepository`, `@lib/http/errors/errorCodes`. The `@lib` root is unchanged, so no alias config changed; only the path after `@lib/` deepened. Each tier folder's `AGENTS.md` lists the canonical import paths for its files.
+
+## SSOT (Single Source of Truth) Methodology
+
+Core is organized so that each piece of truth — a constant, a type, a mapping, a config/env decision, a rule — is **defined once and referenced everywhere else**. When adding or changing code:
+
+- **One home per truth.** Before hardcoding a literal (HTTP status, JSON:API version, default `id`/`deletedAt`/page-size, a Prisma-code → status mapping, an env-mode check), look for an existing constant/helper and reference it. Add the constant to the tier that owns the concept (error mappings → `@lib/http/errors/errorCodes`, JSON:API constants → `@lib/crud/jsonApiConstants`, env decisions → `@lib/config/environmentLoader`, DB-folder→env naming → `@lib/data/database/dbNaming`).
+- **No parallel definitions.** A type and its OpenAPI/doc schema, or a runtime list and its literal-union type, must derive from one declaration — don't maintain two copies that can drift.
+- **Folders mirror responsibility.** A file's tier is its single conceptual home; cross-tier reuse happens by importing the owner, never by copying. Respect the one-way dependency direction (see Tier Layout).
+- **Generated = derived truth.** `src/core/lib/types/generated-*.ts` derive from `src/app/{db,injectable,repos}` — never hand-edit; change the source and regenerate.
 
 ## Key Environment Variables
 
@@ -210,7 +258,7 @@ Configured via `.env` (see `.env.template`), with `.env.dev` / `.env.prod` overr
 - `AUTO_DOCS` — Enable auto documentation (dev only, serves at `/docs`)
 - `ENABLE_SCHEMA_API` — Enable `/api/schema` endpoint
 - `STRICT_STATUS_CODE_CHECK` — Validate response status codes
-- `RDS_{NAME}_URL` — Database connection strings per DB folder name
+- `{FOLDER}__KUSTO_RDB_URL` — Database connection string per `src/app/db/{folder}/`. Folder name is converted camelCase → UPPER_SNAKE_CASE (e.g. `myData` → `MY_DATA__KUSTO_RDB_URL`). Override by setting `url = env(...)` in the schema directly.
 
 ## Error Handling
 
@@ -218,7 +266,19 @@ Use `errorFormatter.ts` for consistent error responses. Environment-aware: detai
 
 ## Logging
 
-Winston with custom levels: error, warn, info, debug, silly, route, sql, footwalk, auth, email. Daily rotating file logs in `logs/`. Console output with colors in development, JSON structured logs in production.
+Winston (`@ext/winston`) with custom level methods (PascalCase): `Error`, `Warn`, `Info`, `Debug`, `Silly`, `SQL`, `Route`, `SessionDeclaration`, `Footwalk`, `Email`, `Auth` (plus a lowercase `error` alias used by winston's exception handling). Daily rotating file logs in `logs/`. Dev: human-readable colored line (color only on a TTY — respects `NO_COLOR`/`FORCE_COLOR`); prod: one-line structured JSON. Meta is serialized via a safe serializer that never throws (handles circular refs, `BigInt`, `Error`, `Buffer`, `Map`/`Set`, throwing getters) and **redacts** sensitive keys (`password`/`token`/`authorization`/`apikey`/`cookie`/… and `*_token`/`x-api-key` shapes) to `[REDACTED]`.
+
+**Console level is env-aware** (`LOG_LEVEL` always overrides): `production`→`Info`, `test`→`Error`, otherwise→`Debug`. Because dev defaults to `Debug`, **`Silly` is hidden by default** — run with `LOG_LEVEL=Silly` to see per-item traces. Tunable env vars: `LOG_LEVEL` (or `silent`/`off`), `LOG_DIR`, `LOG_MAX_SIZE`, `LOG_MAX_FILES`, `LOG_FILE_LEVEL`, `LOG_REDACT=false` (disable redaction), `LOG_REDACT_KEYS=a,b` (extra keys). If the log directory can't be created, file logging degrades to console-only instead of crashing.
+
+### Log message conventions (runtime code)
+
+Applies to all `log.*` calls under `src/core/` and `src/app/`:
+
+- **English only.** Write log message strings in English. Keep `${...}` interpolations and the structured-meta object (2nd arg) intact.
+- **No emoji in messages.** The logger (`@ext/winston`) auto-prepends a per-level emoji in dev (Error→❌, Warn→⚠️, Info→💡, …); a second emoji inside the message just duplicates it (and leaks into prod JSON). Don't restate the level in text either (no leading `Warning:`/`Error:`).
+- **No `console.*` in runtime code.** Use `log.*` (`import { log } from '@ext/winston'`). Map: `console.log/info`→`log.Info`, `warn`→`log.Warn`, `error`→`log.Error`, `debug`→`log.Debug`.
+- **Right level / right volume.** Reserve `Info` for concise lifecycle summaries; per-item loop traces and routine intermediate steps belong at `Debug`/`Silly`. Avoid duplicate logs for one event.
+- **Exempt:** standalone CLI/build tooling (`src/core/scripts/*`, `updater/*`) may keep `console.*`, emoji, and Korean — it is operator-facing terminal output, not application logging. Do not normalize it. The `LOG_SETTINGS` emoji/color map in `src/core/external/winston.ts` is logger config, not a message — leave it.
 
 ## Build & Deployment
 

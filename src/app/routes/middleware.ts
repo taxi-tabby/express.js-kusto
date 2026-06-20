@@ -1,7 +1,8 @@
-import '@lib/types/express-extensions';
-import { log } from '@/src/core/external/winston';
+﻿import '@lib/types/express-extensions';
+import { log } from '@ext/winston';
 import { Request, Response, NextFunction } from 'express';
-import { kustoManager } from '@lib/kustoManager';
+import { kustoManager } from '@lib/data/di/kustoManager';
+import { ErrorHandler, ErrorResponseFormat } from '@lib/http/errors/errorHandler';
 
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
@@ -13,7 +14,6 @@ import {
     corsOptions,
     helmetOptions,
     bodyParserOptions,
-    csrfOptions,
 } from './middleware.config';
 
 // 클라이언트 IP 미들웨어
@@ -74,12 +74,22 @@ export default [
 
     
     /**
-     * 에러 핸들링 미들웨어
+     * 전역 에러 핸들링 미들웨어 (4-arg).
+     *
+     * P1-7: 과거에는 `err.message` 를 모든 환경에서 그대로 노출하여(연결 문자열/스택 유출)
+     * ErrorHandler 의 redaction 파이프라인을 우회했다. 이제는 ErrorHandler 를 경유하여
+     * NODE_ENV 기준으로 민감 정보를 제거하고 JSON:API 형태로 응답한다.
+     * (라우트 로더가 이 4-arg 핸들러를 라우트 등록 이후 맨 뒤에 mount 한다.)
      */
     (err: Error, req: Request, res: Response, next: NextFunction) => {
-        res.status(500).json({
-            message: "서버 내부 오류입니다.",
-            error: err.message
+        if (res.headersSent) return next(err);
+        // 에러가 명시한 HTTP 상태를 존중하고, 없으면 500 으로 폴백
+        const status = (err as any)?.statusCode ?? (err as any)?.status ?? 500;
+        const body = ErrorHandler.handleError(err, {
+            format: ErrorResponseFormat.JSON_API,
+            context: { path: req.originalUrl, method: req.method, status },
+            // security 생략 → applySecurity 가 NODE_ENV 기준으로 stack/connection-string 등 redaction
         });
+        res.status(status).json(body);
     }
 ];

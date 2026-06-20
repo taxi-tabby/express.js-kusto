@@ -7,6 +7,8 @@
 
 import helmet from 'helmet';
 import cors from 'cors';
+import { JSON_API_CONTENT_TYPE } from '@lib/crud/jsonApiConstants';
+import { log } from '@ext/winston';
 
 // ─────────────────────────────────────────────────────────────
 // CORS 설정
@@ -26,7 +28,7 @@ export const getWhitelist = (): string[] => {
             ? JSON.parse(env) 
             : env.split(',').map(s => s.trim()).filter(Boolean);
     } catch {
-        console.warn('CORS_WHITELIST 파싱 실패');
+        log.Warn('Failed to parse CORS_WHITELIST');
         return [];
     }
 };
@@ -40,7 +42,7 @@ export const corsOptions: cors.CorsOptions = {
         if (!origin || whitelist.includes(origin)) {
             callback(null, true);
         } else {
-            console.warn(`CORS 차단: ${origin}`);
+            log.Warn(`CORS blocked: ${origin}`);
             callback(null, false);
         }
     },
@@ -71,7 +73,7 @@ export const helmetOptions: Parameters<typeof helmet>[0] = {
 
 export const bodyParserOptions = {
     json: {
-        type: ['application/json', 'application/vnd.api+json'] as string[],
+        type: ['application/json', JSON_API_CONTENT_TYPE] as string[],
         limit: '50mb',
     },
     urlencoded: {
@@ -81,10 +83,13 @@ export const bodyParserOptions = {
 };
 
 // ─────────────────────────────────────────────────────────────
-// CSRF 설정
+// CSRF
 // ─────────────────────────────────────────────────────────────
-
-export const csrfOptions = {
-    ttl: 30 * 60 * 1000, // 30분
-    trustedOrigins: whitelist,
-};
+//
+// P1-11: 과거 `csrfOptions` 가 정의만 되고 어디에도 적용되지 않아(dead config),
+// 마치 CSRF 보호가 있는 것처럼 오해를 줬다. 실제 CSRF 미들웨어가 없으므로 제거했다.
+//
+// ⚠️ 쿠키 기반 인증(credentials: true)을 사용한다면 CSRF 보호가 필요하다.
+//    그 경우 앱에서 csrf 라이브러리(예: csrf-csrf 의 double-submit 토큰)를 추가해
+//    middleware.ts 의 cookieParser/bodyParser 뒤, 라우트 핸들러 앞에 등록하라.
+//    Bearer 토큰(Authorization 헤더) 기반 인증만 쓴다면 CSRF 는 일반적으로 불필요하다.

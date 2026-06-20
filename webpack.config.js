@@ -5,6 +5,20 @@ const nodeExternals = require("webpack-node-externals");
 const { config } = require('dotenv');
 const fs = require('fs');
 
+// 단일 소스: tsconfig.json 의 compilerOptions.paths 에서 webpack resolve.alias 를 파생한다.
+// 별칭을 tsconfig 한 곳에서만 관리하므로 webpack 이 tsconfig 와 drift 할 수 없다.
+function buildAliasesFromTsconfig() {
+    const tsconfig = JSON.parse(fs.readFileSync(path.resolve(__dirname, 'tsconfig.json'), 'utf-8'));
+    const paths = (tsconfig.compilerOptions && tsconfig.compilerOptions.paths) || {};
+    const alias = {};
+    for (const [key, targets] of Object.entries(paths)) {
+        const aliasKey = key.replace(/\/\*$/, '');
+        const target = (targets[0] || '.').replace(/\/\*$/, '').replace(/^\.\//, '') || '.';
+        alias[aliasKey] = path.resolve(__dirname, target);
+    }
+    return alias;
+}
+
 // 환경 변수 로딩 함수
 function loadEnvironmentVariables() {
     // 기본 .env 파일 로드
@@ -27,18 +41,20 @@ function loadEnvironmentVariables() {
     }
 }
 
-// // 빌드 시 환경 변수 자동 생성 함수
+// 빌드 시 번들에 정적으로 주입할 환경 변수 allowlist.
+// 주의: 시크릿(DB URL, API 키 등)은 절대 여기에 추가하지 말 것 —
+// 런타임에 EnvironmentLoader(dotenv)가 .env 에서 읽으므로 번들에 박을 필요가 없다.
+// process.env 전체를 DefinePlugin 에 넣으면 빌드 셸의 모든 시크릿이
+// dist/server.js 에 평문으로 박히는 유출 사고가 발생한다.
+const BUILD_TIME_ENV_ALLOWLIST = [];
+
 function getEnvironmentVariables() {
     const envVars = {};
-
-    // process.env의 모든 환경 변수를 webpack DefinePlugin 형태로 변환
-    // NODE_ENV는 제외 (webpack에서 명시적으로 설정)
-    Object.keys(process.env).forEach(key => {
-        if (key !== 'NODE_ENV') {
+    BUILD_TIME_ENV_ALLOWLIST.forEach(key => {
+        if (process.env[key] !== undefined) {
             envVars[`process.env.${key}`] = JSON.stringify(process.env[key]);
         }
     });
-
     return envVars;
 }
 
@@ -47,10 +63,13 @@ module.exports = (env, argv) => {
     const mode = argv.mode || 'production';
     const isProduction = mode === 'production';
 
-    // 환경 변수 로드
-    loadEnvironmentVariables();
+    // 빌드 타임에 번들로 주입할 allowlist 키가 있을 때만 .env 를 로드한다.
+    // (allowlist 가 비어 있으면 번들에 박을 env 가 없으므로 dotenv 로딩 자체가 불필요)
+    if (BUILD_TIME_ENV_ALLOWLIST.length) {
+        loadEnvironmentVariables();
+    }
 
-    // 동적으로 환경 변수 생성
+    // 동적으로 환경 변수 생성 (allowlist 비어 있으면 {})
     const envVariables = getEnvironmentVariables();
 
     return {
@@ -68,7 +87,10 @@ module.exports = (env, argv) => {
                     use: {
                         loader: "ts-loader",
                         options: {
-                            configFile: "tsconfig.webpack.json"
+                            configFile: "tsconfig.webpack.json",
+                            // 타입 검사는 build 스크립트의 `npm run typecheck`(tsc --noEmit)가 단독으로 수행.
+                            // 여기서는 transpile 만 하여 전체 프로젝트 이중 타입체크(빌드 2배 시간)를 피한다.
+                            transpileOnly: true
                         }
                     },
                     exclude: /node_modules/,
@@ -80,14 +102,7 @@ module.exports = (env, argv) => {
             /require function is used in a way in which dependencies cannot be statically extracted/
         ], resolve: {
             extensions: [".ts", ".js"], // .ts 파일을 인식할 수 있도록 확장자 추가
-            alias: {
-                '@': path.resolve(__dirname, '.'),
-                '@app': path.resolve(__dirname, 'src/app'),
-                '@core': path.resolve(__dirname, 'src/core'),
-                '@lib': path.resolve(__dirname, 'src/core/lib'),
-                '@ext': path.resolve(__dirname, 'src/core/external'),
-                '@db': path.resolve(__dirname, 'src/app/db')
-            }
+            alias: buildAliasesFromTsconfig()
         }, plugins: [
             new webpack.DefinePlugin({
                 'process.env.NODE_ENV': JSON.stringify(mode),

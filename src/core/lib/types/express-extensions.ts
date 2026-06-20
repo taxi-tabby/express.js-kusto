@@ -1,6 +1,6 @@
 // Type extensions for Express Request object
-import { MiddlewareParamName, MiddlewareParams } from './generated-injectable-types';
-import type { KustoManager } from '../kustoManager';
+import { MiddlewareParamName, MiddlewareParams } from '@lib/types/generated-injectable-types';
+import type { KustoManager } from '@lib/data/di/kustoManager';
 
 declare global {
   namespace Express {

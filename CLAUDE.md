@@ -23,7 +23,14 @@ npm run build:dev        # Development webpack build
 # Type generation (auto-runs in dev mode via nodemon on file changes)
 npm run generate         # Generate types for injectable/repository/db
 
-# Database (kusto-db CLI, via ts-node)
+# Unified CLI (kusto) — single commander entry over db / update / generate
+#   src/core/cli/kusto.ts, also exposed as the `kusto` bin (npx kusto ...)
+npm run kusto -- db list                  # = npm run db -- list
+npm run kusto -- update check             # check for framework updates
+npm run kusto -- update apply --dry-run   # preview an update (no writes)
+npm run kusto -- generate                 # generate framework types
+
+# Database (kusto-db CLI, via ts-node) — also `kusto db <...>`
 npm run db -- generate --all              # Generate all Prisma clients
 npm run db -- migrate -t dev -n "name" -d dbname  # Run migration
 npm run db -- studio -d dbname            # Open Prisma Studio
@@ -31,9 +38,10 @@ npm run db -- seed -d dbname              # Seed data
 npm run db -- validate -d dbname          # Validate schema
 npm run db -- debug                       # System info
 
-# Framework self-update (updater/ folder, uses archiver/yauzl)
-npm run updater:check    # Check for new versions
-npm run updater:update   # Auto-update framework core
+# Framework self-update (src/core/updater/, uses archiver/yauzl) — also `kusto update <...>`
+npm run updater:check    # Check for new versions  (= kusto update check)
+npm run updater:update   # Apply update; supports -- --dry-run / --yes / --package <zip>
+npm run updater:generate # Build a release update package  (= kusto update build)
 ```
 
 No test runner is configured in this project.
@@ -54,6 +62,9 @@ src/core/
 ├── index.ts              # public API barrel (curated re-exports)
 ├── bootstrap/            # lifecycle: Application, Core, expressAppSingleton(@deprecated)
 ├── external/             # 3rd-party wrappers (leaf, zero intra-core imports): winston, util
+├── cli/                  # unified `kusto` CLI (commander) over db/update/generate
+├── scripts/              # standalone build/codegen CLI tooling (operator-facing)
+├── updater/              # framework self-update (excluded from its own deploy map)
 └── lib/
     ├── http/             # request-handling tier
     │   ├── routing/      # expressRouter, loadRoutes_V6_Clean, middlewareHelpers, proxyMiddleware
@@ -234,7 +245,7 @@ Related modules: `CrudSchemaRegistry`, `PrismaSchemaAnalyzer`, `SchemaApiRouter`
 **Single source of truth: `tsconfig.json` `compilerOptions.paths`.** Everything else derives from it so they can't drift:
 - **jest** (`jest.config.ts`): `moduleNameMapper` is generated via `pathsToModuleNameMapper(tsconfig.paths)`.
 - **webpack** (`webpack.config.js`): `resolve.alias` is built from tsconfig paths by `buildAliasesFromTsconfig()`.
-- **runtime** (`package.json` `_moduleAliases`, used by `module-alias`): the only hand-maintained copy — kept in lockstep by the guard test `tests/unit/config/alias-consistency.test.ts`. The entrypoints `src/index.ts`, `src/core/scripts/kusto-db-cli.ts`, and `updater/{generate,compare,update}.ts` register it via `import 'module-alias/register'`.
+- **runtime** (`package.json` `_moduleAliases`, used by `module-alias`): the only hand-maintained copy — kept in lockstep by the guard test `tests/unit/config/alias-consistency.test.ts`. The entrypoints `src/index.ts`, `src/core/scripts/kusto-db-cli.ts`, `src/core/cli/kusto.ts`, and `src/core/updater/{generate,compare,update}.ts` register it via `import 'module-alias/register'`.
 
 **To add an alias:** add it to `tsconfig.json` paths **and** `package.json` `_moduleAliases` (jest/webpack pick it up automatically; the guard test enforces the pair). Use `@lib/...` (not `@core/lib/...`) — `@lib` is the canonical spelling for `src/core/lib`.
 
@@ -278,10 +289,10 @@ Applies to all `log.*` calls under `src/core/` and `src/app/`:
 - **No emoji in messages.** The logger (`@ext/winston`) auto-prepends a per-level emoji in dev (Error→❌, Warn→⚠️, Info→💡, …); a second emoji inside the message just duplicates it (and leaks into prod JSON). Don't restate the level in text either (no leading `Warning:`/`Error:`).
 - **No `console.*` in runtime code.** Use `log.*` (`import { log } from '@ext/winston'`). Map: `console.log/info`→`log.Info`, `warn`→`log.Warn`, `error`→`log.Error`, `debug`→`log.Debug`.
 - **Right level / right volume.** Reserve `Info` for concise lifecycle summaries; per-item loop traces and routine intermediate steps belong at `Debug`/`Silly`. Avoid duplicate logs for one event.
-- **Exempt:** standalone CLI/build tooling (`src/core/scripts/*`, `updater/*`) may keep `console.*`, emoji, and Korean — it is operator-facing terminal output, not application logging. Do not normalize it. The `LOG_SETTINGS` emoji/color map in `src/core/external/winston.ts` is logger config, not a message — leave it.
+- **Exempt:** standalone CLI/build tooling (`src/core/scripts/*`, `src/core/cli/*`, `src/core/updater/*`) may keep `console.*`, emoji, and Korean — it is operator-facing terminal output, not application logging. Do not normalize it. The `LOG_SETTINGS` emoji/color map in `src/core/external/winston.ts` is logger config, not a message — leave it.
 
 ## Build & Deployment
 
 Webpack bundles to `dist/server.js`. CopyWebpackPlugin copies `src/app/views/`, `public/`, Prisma clients and schemas to dist. Run with `npm run serve` after build.
 
-`updater/` folder contains framework self-update tooling (generate release archives, compare versions, apply updates). Uses `archiver` and `yauzl` packages.
+`src/core/updater/` contains framework self-update tooling (build release archives, compare versions, apply updates with backup/rollback, SHA-256 file maps, zip-slip-safe extraction). Uses `archiver` and `yauzl`. It is excluded from its own deployment map (no self-overwrite) and is not bundled into `dist` (not reachable from the `src/index.ts` entry). The unified `kusto` CLI (`src/core/cli/kusto.ts`, exposed as the `kusto` bin) wraps it as `kusto update <...>`. See `docs/07-update-system.md` and `src/core/updater/AGENTS.md`.

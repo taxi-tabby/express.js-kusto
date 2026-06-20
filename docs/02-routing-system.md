@@ -69,7 +69,7 @@ router.GET_SLUG(["userId", "postId"], async (req, res, injected, repo, db) => {
 라우트 파일은 **플루언트(Fluent) 개발론**을 기반으로 설계되어 메서드 체이닝을 통한 직관적이고 읽기 쉬운 코드 작성을 지원합니다:
 
 ```typescript
-import { ExpressRouter } from '@lib/expressRouter'
+import { ExpressRouter } from '@lib/http/routing/expressRouter'
 
 const router = new ExpressRouter();
 
@@ -415,7 +415,7 @@ src/app/routes/
 ### 1. 루트 라우트 (src/app/routes/route.ts)
 
 ```typescript
-import { ExpressRouter } from '@lib/expressRouter'
+import { ExpressRouter } from '@lib/http/routing/expressRouter'
 
 const router = new ExpressRouter();
 
@@ -436,7 +436,7 @@ export default router.build();
 
 ```typescript
 // src/app/routes/users/[userId]/route.ts
-import { ExpressRouter } from '@lib/expressRouter';
+import { ExpressRouter } from '@lib/http/routing/expressRouter';
 
 const router = new ExpressRouter();
 
@@ -461,7 +461,7 @@ export default router.build();
 ### 3. 중첩 동적 라우트 (src/app/routes/users/[userId]/posts/[postId]/route.ts)
 
 ```typescript
-import { ExpressRouter } from '@lib/expressRouter';
+import { ExpressRouter } from '@lib/http/routing/expressRouter';
 
 const router = new ExpressRouter();
 
@@ -492,7 +492,7 @@ export default router.build();
 ### 4. 인증 라우트 (src/app/routes/authorities/signin/route.ts)
 
 ```typescript
-import { ExpressRouter } from '@lib/expressRouter';
+import { ExpressRouter } from '@lib/http/routing/expressRouter';
 
 const router = new ExpressRouter();
 
@@ -777,7 +777,7 @@ router
 ### 기본 메서드
 > 라우터를 적용하는 기능입니다.
 ```typescript
-import { ExpressRouter } from '@lib/expressRouter'
+import { ExpressRouter } from '@lib/http/routing/expressRouter'
 const router = new ExpressRouter();
 
 ...
@@ -795,7 +795,7 @@ export default router.build();
 
 ### HTTP 메서드 (기본)
 ```typescript
-import { ExpressRouter } from '@lib/expressRouter'
+import { ExpressRouter } from '@lib/http/routing/expressRouter'
 const router = new ExpressRouter();
 
 // Express.js를 사용하는 방법과 거의 동일합니다.
@@ -836,7 +836,7 @@ router
 > multer 라이브러리를 사용한 파일 업로드 대응 기능입니다.
 > https://github.com/expressjs/multer 를 참고하세요
 ```typescript
-import { ExpressRouter } from '@lib/expressRouter'
+import { ExpressRouter } from '@lib/http/routing/expressRouter'
 import { memoryStorage } from 'multer'
 const router = new ExpressRouter();
 
@@ -901,7 +901,7 @@ router.POST_FIELD_FILE(storage, [
 
 ### 미들웨어 메서드
 ```typescript
-import { ExpressRouter } from '@lib/expressRouter'
+import { ExpressRouter } from '@lib/http/routing/expressRouter'
 const router = new ExpressRouter();
 
 // 미들웨어 체이닝 예시
@@ -925,7 +925,7 @@ router
 > 본문(`req.body`)은 자동 재직렬화하여 전달합니다. 업스트림 실패 시 502/504(JSON:API)로 응답합니다.
 > (WebSocket 업그레이드 프록시는 미지원.)
 ```typescript
-import { ExpressRouter } from '@lib/expressRouter'
+import { ExpressRouter } from '@lib/http/routing/expressRouter'
 const router = new ExpressRouter();
 
 // 프록시 설정 예시
@@ -940,7 +940,7 @@ router.MIDDLE_PROXY_ROUTE({
 
 ### 정적 HTTP 파일 제공 메서드
 ```typescript
-import { ExpressRouter } from '@lib/expressRouter'
+import { ExpressRouter } from '@lib/http/routing/expressRouter'
 const router = new ExpressRouter();
 
 // 정적 파일 서빙 예시
@@ -952,7 +952,7 @@ router.STATIC('./public');
 
 ### 검증된 요청 메서드
 ```typescript
-import { ExpressRouter } from '@lib/expressRouter'
+import { ExpressRouter } from '@lib/http/routing/expressRouter'
 const router = new ExpressRouter();
 
 // 검증된 요청 예시
@@ -973,7 +973,7 @@ router.POST_VALIDATED(
 
 ### CRUD 메서드
 ```typescript
-import { ExpressRouter } from '@lib/expressRouter'
+import { ExpressRouter } from '@lib/http/routing/expressRouter'
 const router = new ExpressRouter();
 
 // CRUD 자동 생성 예시

@@ -45,6 +45,34 @@ No test runner is configured in this project.
 - **`src/core/`** — Framework internals. **Do not modify** unless updating the framework itself.
 - **`src/app/`** — Developer workspace where all application code lives.
 
+### Core Internal Structure (Tier Layout)
+
+`src/core` is organized into purpose- and layer-grouped tiers (SSOT methodology). The `@lib` alias root is unchanged (`@lib/*` → `src/core/lib/*`); paths are deepened by tier. **Every folder carries an `AGENTS.md`** describing its files, exports, and dependency direction — read it before working in that folder.
+
+```
+src/core/
+├── index.ts              # public API barrel (curated re-exports)
+├── bootstrap/            # lifecycle: Application, Core, expressAppSingleton(@deprecated)
+├── external/             # 3rd-party wrappers (leaf, zero intra-core imports): winston, util
+└── lib/
+    ├── http/             # request-handling tier
+    │   ├── routing/      # expressRouter, loadRoutes_V6_Clean, middlewareHelpers, proxyMiddleware
+    │   ├── validation/   # requestHandler (_VALIDATED engine), validator
+    │   ├── serialization/# serializer (BigInt/Date + response serializer), serializationMiddleware
+    │   └── errors/       # errorCodes (SSOT), errorFormatter, errorHandler
+    ├── data/             # persistence tier
+    │   ├── database/     # prismaManager, baseRepository, repositoryManager, transactionCommitManager, dbNaming
+    │   └── di/           # dependencyInjector, kustoManager (req.kusto facade)
+    ├── crud/             # JSON:API CRUD engine: crudRouteBuilder, crudHelpers, primaryKeyParsers, jsonApiConstants
+    ├── devtools/         # DEV-ONLY (AUTO_DOCS / ENABLE_SCHEMA_API)
+    │   ├── documentation/# OpenAPI 3.1 generation + Swagger UI + dev static assets
+    │   └── schema-api/   # /api/schema introspection: crudSchema*, relationshipConfig, prismaSchemaAnalyzer
+    ├── config/           # environmentLoader
+    └── types/            # express-extensions + generated-*.ts (do-not-edit codegen)
+```
+
+**Dependency direction (one-way):** `bootstrap` → tiers; within `lib`, higher tiers depend inward on lower ones; `external` and `config` are leaves. Do not introduce a back-edge (e.g. `data` importing `http`). `devtools` is dev-only and may depend on runtime tiers, never the reverse.
+
 ### Initialization Flow
 
 `src/index.ts` → `Application.start()` → `Core.initialize()` which sequentially loads:
@@ -98,7 +126,7 @@ async (req, res, injected, repo, db) => { ... }
 - `req.validatedData` — Available only in `_VALIDATED` methods
 - `req.with` — Middleware-injected parameters
 
-### ExpressRouter Fluent API (`src/core/lib/expressRouter.ts`)
+### ExpressRouter Fluent API (`src/core/lib/http/routing/expressRouter.ts`)
 
 Method chaining pattern:
 ```typescript
@@ -158,7 +186,7 @@ All files must use `export default`.
 ### Repository Pattern (`src/app/repos/`)
 
 ```typescript
-import { BaseRepository } from '@lib/baseRepository';
+import { BaseRepository } from '@lib/data/database/baseRepository';
 
 export default class FooRepository extends BaseRepository<'dbname'> {
     protected getDatabaseName(): 'dbname' { return 'dbname'; }
@@ -209,6 +237,17 @@ Related modules: `CrudSchemaRegistry`, `PrismaSchemaAnalyzer`, `SchemaApiRouter`
 - **runtime** (`package.json` `_moduleAliases`, used by `module-alias`): the only hand-maintained copy — kept in lockstep by the guard test `tests/unit/config/alias-consistency.test.ts`. The entrypoints `src/index.ts`, `src/core/scripts/kusto-db-cli.ts`, and `updater/{generate,compare,update}.ts` register it via `import 'module-alias/register'`.
 
 **To add an alias:** add it to `tsconfig.json` paths **and** `package.json` `_moduleAliases` (jest/webpack pick it up automatically; the guard test enforces the pair). Use `@lib/...` (not `@core/lib/...`) — `@lib` is the canonical spelling for `src/core/lib`.
+
+**Import the tier path, not the old flat path.** After the tier reorg, core modules live under `@lib/<tier>/<file>` — e.g. `@lib/http/routing/expressRouter`, `@lib/http/validation/requestHandler`, `@lib/data/database/baseRepository`, `@lib/http/errors/errorCodes`. The `@lib` root is unchanged, so no alias config changed; only the path after `@lib/` deepened. Each tier folder's `AGENTS.md` lists the canonical import paths for its files.
+
+## SSOT (Single Source of Truth) Methodology
+
+Core is organized so that each piece of truth — a constant, a type, a mapping, a config/env decision, a rule — is **defined once and referenced everywhere else**. When adding or changing code:
+
+- **One home per truth.** Before hardcoding a literal (HTTP status, JSON:API version, default `id`/`deletedAt`/page-size, a Prisma-code → status mapping, an env-mode check), look for an existing constant/helper and reference it. Add the constant to the tier that owns the concept (error mappings → `@lib/http/errors/errorCodes`, JSON:API constants → `@lib/crud/jsonApiConstants`, env decisions → `@lib/config/environmentLoader`, DB-folder→env naming → `@lib/data/database/dbNaming`).
+- **No parallel definitions.** A type and its OpenAPI/doc schema, or a runtime list and its literal-union type, must derive from one declaration — don't maintain two copies that can drift.
+- **Folders mirror responsibility.** A file's tier is its single conceptual home; cross-tier reuse happens by importing the owner, never by copying. Respect the one-way dependency direction (see Tier Layout).
+- **Generated = derived truth.** `src/core/lib/types/generated-*.ts` derive from `src/app/{db,injectable,repos}` — never hand-edit; change the source and regenerate.
 
 ## Key Environment Variables
 

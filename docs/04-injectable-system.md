@@ -151,7 +151,7 @@ export default class JWTService {
 
 ```typescript
 // app/routes/authorities/signin/route.ts
-import { ExpressRouter } from '@lib/expressRouter';
+import { ExpressRouter } from '@lib/http/routing/expressRouter';
 const router = new ExpressRouter();
 
 router

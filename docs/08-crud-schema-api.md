@@ -45,7 +45,7 @@ app.listen(3000, () => {
 ### 3. CRUD 라우터 사용
 
 ```typescript
-import { ExpressRouter } from '@lib/expressRouter';
+import { ExpressRouter } from '@lib/http/routing/expressRouter';
 
 const router = new ExpressRouter();
 
@@ -209,7 +209,7 @@ if (registry.isSchemaApiEnabled()) {
 ### Prisma 스키마 분석기 사용
 ```typescript
 import { PrismaSchemaAnalyzer } from '@lib/prismaSchemaAnalyzer';
-import { prismaManager } from '@lib/prismaManager';
+import { prismaManager } from '@lib/data/database/prismaManager';
 
 const client = prismaManager.getClientSync('default'); // getClient() 는 async(Promise 반환)이므로 동기 사용 시 getClientSync()
 const analyzer = PrismaSchemaAnalyzer.getInstance(client);

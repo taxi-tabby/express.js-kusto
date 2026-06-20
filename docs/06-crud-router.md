@@ -7,7 +7,7 @@ CRUD 자동 생성 시스템을 이용한 REST API 엔드포인트 구현 가이
 ### 기본 CRUD 생성
 ```typescript
 // routes/users/route.ts
-import { ExpressRouter } from '@lib/expressRouter';
+import { ExpressRouter } from '@lib/http/routing/expressRouter';
 
 const router = new ExpressRouter();
 
@@ -230,7 +230,7 @@ router.CRUD('user', 'user', {
 ### 블로그 포스트 라우터
 ```typescript
 // routes/posts/route.ts
-import { ExpressRouter } from '@lib/expressRouter';
+import { ExpressRouter } from '@lib/http/routing/expressRouter';
 
 const router = new ExpressRouter();
 
@@ -268,7 +268,7 @@ export default router.build();
 ### 사용자 관리 라우터
 ```typescript
 // routes/users/route.ts
-import { ExpressRouter } from '@lib/expressRouter';
+import { ExpressRouter } from '@lib/http/routing/expressRouter';
 
 const router = new ExpressRouter();
 
@@ -313,7 +313,7 @@ export default router.build();
 ### 읽기 전용 API
 ```typescript
 // routes/categories/route.ts
-import { ExpressRouter } from '@lib/expressRouter';
+import { ExpressRouter } from '@lib/http/routing/expressRouter';
 
 const router = new ExpressRouter();
 
@@ -330,7 +330,7 @@ export default router.build();
 ### 정수 ID 기반 CRUD
 ```typescript
 // routes/comments/route.ts
-import { ExpressRouter } from '@lib/expressRouter';
+import { ExpressRouter } from '@lib/http/routing/expressRouter';
 
 const router = new ExpressRouter();
 
@@ -551,7 +551,7 @@ GET /posts?filter[tags.name_in]=javascript,react&include=author,tags&page[number
 ### 블로그 시스템 라우터 구성
 ```typescript
 // routes/posts/route.ts
-import { ExpressRouter } from '@lib/expressRouter';
+import { ExpressRouter } from '@lib/http/routing/expressRouter';
 
 const router = new ExpressRouter();
 
@@ -588,7 +588,7 @@ export default router.build();
 ### 사용자 관리 라우터
 ```typescript
 // routes/users/route.ts
-import { ExpressRouter } from '@lib/expressRouter';
+import { ExpressRouter } from '@lib/http/routing/expressRouter';
 
 const router = new ExpressRouter();
 
@@ -620,7 +620,7 @@ export default router.build();
 ### 읽기 전용 API
 ```typescript
 // routes/categories/route.ts
-import { ExpressRouter } from '@lib/expressRouter';
+import { ExpressRouter } from '@lib/http/routing/expressRouter';
 
 const router = new ExpressRouter();
 

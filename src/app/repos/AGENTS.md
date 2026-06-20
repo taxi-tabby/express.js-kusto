@@ -10,7 +10,7 @@
 ## Required Structure
 
 ```typescript
-import { BaseRepository } from '@lib/baseRepository';
+import { BaseRepository } from '@lib/data/database/baseRepository';
 
 export default class UserRepository extends BaseRepository<'default'> {
     protected getDatabaseName(): 'default' {

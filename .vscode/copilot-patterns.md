@@ -3,7 +3,7 @@
 
 When creating or modifying route files:
 - Use ExpressRouter with fluent API and method chaining
-- Import: `import { ExpressRouter } from '@lib/expressRouter'`
+- Import: `import { ExpressRouter } from '@lib/http/routing/expressRouter'`
 - Always export with: `export default router.build()`
 - Use 5-parameter handler: `async (req, res, injected, repo, db) => {}`
 - For validation, use _VALIDATED methods with complete schema definitions
@@ -13,7 +13,7 @@ When creating or modifying route files:
 
 Example:
 ```typescript
-import { ExpressRouter } from '@lib/expressRouter';
+import { ExpressRouter } from '@lib/http/routing/expressRouter';
 
 const router = new ExpressRouter();
 
@@ -106,7 +106,7 @@ When creating repositories:
 
 Example:
 ```typescript
-import { BaseRepository } from '@lib/baseRepository';
+import { BaseRepository } from '@lib/data/database/baseRepository';
 
 export default class UserRepository extends BaseRepository<'default'> {
     protected getDatabaseName(): 'default' {

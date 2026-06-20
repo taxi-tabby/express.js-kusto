@@ -1139,6 +1139,11 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 		return this.databases.has(databaseName);
 	}
 
+	/** 해당 DB 의 현재 누적 재연결 시도 횟수(읽기 전용, 모니터링용). */
+	public getReconnectionAttempts(databaseName: string): number {
+		return this.reconnectionAttempts.get(databaseName) || 0;
+	}
+
 	/**
 	 * Disconnect all databases
 	 */

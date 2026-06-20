@@ -12,6 +12,7 @@ import { prismaManager } from '@lib/data/database/prismaManager';
 import { DependencyInjector } from '@lib/data/di/dependencyInjector';
 import { repositoryManager } from '@lib/data/database/repositoryManager';
 import { SchemaApiSetup } from '@lib/devtools/schema-api/schemaApiSetup';
+import { registerMonitor } from '@lib/devtools/monitor/monitorSetup';
 
 export interface CoreConfig {
     basePath?: string;
@@ -108,6 +109,7 @@ export class Core {
 
         
         this.setupExpress();
+        this.setupMonitor();     // dev 모니터(메트릭 미들웨어 + /__kusto/metrics) — 라우트보다 먼저
         this.setupHealthCheck(); // /healthz readiness (글로벌 라우트보다 먼저)
         this.setupDocumentationRoutes(); // 문서화 라우트를 먼저 등록
         this.loadRoutes();
@@ -453,6 +455,28 @@ export class Core {
                 prisma: readiness.prisma,
             });
         });
+    }
+
+    /** dev 모니터 등록(메트릭 수집 미들웨어 + /__kusto/metrics). dev·localhost 전용. */
+    private setupMonitor(): void {
+        registerMonitor(this._app, {
+            host: this._config.host || '0.0.0.0',
+            port: this._config.port || 3000,
+            getReadiness: () => {
+                const r = this.getReadiness();
+                const degraded = r.prisma.error
+                    || (r.prisma.unconnected.length ? `unconnected: ${r.prisma.unconnected.join(', ')}` : undefined);
+                return { ready: r.ready, degraded };
+            },
+            getRouteCount: () => this.countRoutes(),
+        });
+    }
+
+    /** Express 라우터 스택에서 등록된 라우트 수(best-effort). */
+    private countRoutes(): number {
+        const stack = (this._app as unknown as { _router?: { stack?: Array<{ route?: unknown }> } })._router?.stack;
+        if (!Array.isArray(stack)) return 0;
+        return stack.filter((l) => l.route).length;
     }
 }
 

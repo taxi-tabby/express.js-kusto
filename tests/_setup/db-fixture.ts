@@ -242,7 +242,7 @@ async function bootPostgres(): Promise<DbFixture> {
  * 서버는 우리가 소유하지 않으므로 teardown 은 client disconnect 만 수행한다.
  *
  * 주의(CI): 모든 jest 워커가 같은 DB 를 공유하므로, 외부 Postgres 잡은 워커 간 간섭을 막기
- * 위해 단일 워커(--runInBand)로 실행해야 한다. (db-fixture 자체는 워커 수에 무관하게 동작)
+ * 위해 단일 워커(--maxWorkers=1)로 실행해야 한다. (db-fixture 자체는 워커 수에 무관하게 동작)
  */
 async function bootPostgresExternal(externalUrl: string): Promise<DbFixture> {
     const { PrismaPg } = await import('@prisma/adapter-pg');

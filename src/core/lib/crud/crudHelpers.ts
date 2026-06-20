@@ -5,6 +5,7 @@ import { ErrorHandler, ErrorResponseFormat } from '@lib/http/errors/errorHandler
 import { ERROR_CODES, PRISMA_CANONICAL_ERROR_MAP } from '@lib/http/errors/errorCodes';
 import { JSON_API_VERSION } from '@lib/crud/jsonApiConstants';
 import { removeSensitiveInformation } from '@lib/http/errors/errorSanitizer';
+import { isUuid } from '@lib/crud/primaryKeyParsers';
 
 /**
  * CRUD 쿼리 파싱 및 필터링을 위한 헬퍼 유틸리티
@@ -757,8 +758,8 @@ export class CrudQueryParser {
    * UUID 유효성 검증
    */
   private static isValidUUID(value: string): boolean {
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    return uuidRegex.test(value);
+    // UUID_REGEX 단일 출처(@lib/crud/primaryKeyParsers)로 위임 (lenient 규칙 공유).
+    return isUuid(value);
   }
 
   /**

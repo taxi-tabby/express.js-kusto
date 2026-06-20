@@ -17,6 +17,7 @@ import {
     parseString as parseStringImpl,
     parseIdSmart as parseIdSmartImpl,
     getSmartPrimaryKeyParser as getSmartPrimaryKeyParserImpl,
+    UUID_REGEX,
 } from '@lib/crud/primaryKeyParsers';
 import { ERROR_CODES } from '@lib/http/errors/errorCodes';
 import { PrismaSchemaAnalyzer } from '@lib/devtools/schema-api/prismaSchemaAnalyzer';
@@ -1143,9 +1144,8 @@ export class CrudRouteBuilder {
      */
     private parseRelationshipId(id: any): any {
         if (typeof id === 'string') {
-            // UUID 형식인지 확인
-            const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-            if (uuidRegex.test(id)) {
+            // UUID 형식인지 확인 (UUID_REGEX 단일 출처)
+            if (UUID_REGEX.test(id)) {
                 return id; // UUID는 문자열 그대로
             }
             // 숫자 문자열인 경우

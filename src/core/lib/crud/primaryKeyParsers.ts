@@ -6,11 +6,20 @@
  */
 
 /**
+ * UUID 검증 정규식 (단일 출처 / SSOT).
+ * lenient 규칙: 8-4-4-4-12 hex (RFC 버전/variant 비강제). crudHelpers.isValidUUID 와
+ * crudRouteBuilder.parseRelationshipId 의 관계 ID 검증이 이 동일 규칙을 공유한다.
+ */
+export const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** 주어진 문자열이 UUID(lenient) 형식인지 검사 */
+export const isUuid = (value: string): boolean => UUID_REGEX.test(value);
+
+/**
  * UUID 전용 파서 (검증 포함)
  */
 export const parseUuid = (uuid: string): string => {
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-    if (!uuidRegex.test(uuid)) {
+    if (!UUID_REGEX.test(uuid)) {
         throw new Error(`Invalid UUID format: ${uuid}`);
     }
     return uuid;
@@ -44,9 +53,8 @@ export const parseIdSmart = (id: string): any => {
         throw new Error('Invalid ID format: ID must be a non-empty string');
     }
 
-    // UUID 패턴 체크 (엄격한 검증)
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-    if (uuidRegex.test(id)) {
+    // UUID 패턴 체크 (lenient, UUID_REGEX 단일 출처)
+    if (UUID_REGEX.test(id)) {
         return id; // 유효한 UUID 그대로 반환
     }
 

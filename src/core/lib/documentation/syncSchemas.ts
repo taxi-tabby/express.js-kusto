@@ -1,8 +1,8 @@
 import { PrismaSchemaAnalyzer } from '@lib/prismaSchemaAnalyzer';
 import { PrismaModelInfo } from '@lib/crudSchemaTypes';
 import { DocumentationGenerator, isDocumentationEnabled } from '@lib/documentationGenerator';
-import { jsonApiResource, jsonApiAttributes, jsonApiRelationships, jsonApiErrorObject } from './jsonApiSchemas';
-import { enumToOpenApi } from './dmmfToOpenApi';
+import { jsonApiResource, jsonApiAttributes, jsonApiRelationships, jsonApiErrorObject } from '@lib/documentation/jsonApiSchemas';
+import { enumToOpenApi } from '@lib/documentation/dmmfToOpenApi';
 import { log } from '@ext/winston';
 
 /**

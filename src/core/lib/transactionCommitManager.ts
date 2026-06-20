@@ -1,5 +1,5 @@
-﻿import { DatabaseClientMap, DatabaseNamesUnion } from './types/generated-db-types';
-import { PrismaManager } from './prismaManager';
+﻿import { DatabaseClientMap, DatabaseNamesUnion } from '@lib/types/generated-db-types';
+import { PrismaManager } from '@lib/prismaManager';
 import { log } from '@ext/winston';
 
 /**

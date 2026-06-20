@@ -1,9 +1,9 @@
-import { DependencyInjector } from './dependencyInjector';
-import { repositoryManager } from './repositoryManager';
-import { prismaManager } from './prismaManager';
-import { Injectable } from './types/generated-injectable-types';
-import { RepositoryTypeMap, RepositoryName } from './types/generated-repository-types';
-import { PrismaManagerClientOverloads, DatabaseNamesUnion, DatabaseClientType } from './types/generated-db-types';
+import { DependencyInjector } from '@lib/dependencyInjector';
+import { repositoryManager } from '@lib/repositoryManager';
+import { prismaManager } from '@lib/prismaManager';
+import { Injectable } from '@lib/types/generated-injectable-types';
+import { RepositoryTypeMap, RepositoryName } from '@lib/types/generated-repository-types';
+import { PrismaManagerClientOverloads, DatabaseNamesUnion, DatabaseClientType } from '@lib/types/generated-db-types';
 
 
 

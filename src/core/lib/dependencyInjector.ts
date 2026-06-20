@@ -1,5 +1,5 @@
 ﻿import { log } from '@ext/winston';
-import { Injectable, Middleware, MODULE_REGISTRY, MIDDLEWARE_REGISTRY, ModuleName, MiddlewareName } from './types/generated-injectable-types';
+import { Injectable, Middleware, MODULE_REGISTRY, MIDDLEWARE_REGISTRY, ModuleName, MiddlewareName } from '@lib/types/generated-injectable-types';
 
 /**
  * 파일 경로를 injected/middleware 식별자(camelCase) 로 변환.

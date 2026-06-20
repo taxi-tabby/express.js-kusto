@@ -1,5 +1,5 @@
 import { Router, RequestHandler } from 'express';
-import { RequestHandler as CustomRequestHandler } from './requestHandler';
+import { RequestHandler as CustomRequestHandler } from '@lib/requestHandler';
 import { prismaManager } from '@lib/prismaManager';
 import {
     CrudQueryParser,
@@ -10,27 +10,27 @@ import {
     JsonApiResource,
     JsonApiRelationship,
     JsonApiErrorResponse,
-} from './crudHelpers';
-import { ErrorFormatter } from './errorFormatter';
-import { serialize } from './serializer';
+} from '@lib/crudHelpers';
+import { ErrorFormatter } from '@lib/errorFormatter';
+import { serialize } from '@lib/serializer';
 import {
     parseString as parseStringImpl,
     parseIdSmart as parseIdSmartImpl,
     getSmartPrimaryKeyParser as getSmartPrimaryKeyParserImpl,
-} from './primaryKeyParsers';
-import { ERROR_CODES } from './errorCodes';
-import { PrismaSchemaAnalyzer } from './prismaSchemaAnalyzer';
-import { CrudSchemaRegistry } from './crudSchemaRegistry';
+} from '@lib/primaryKeyParsers';
+import { ERROR_CODES } from '@lib/errorCodes';
+import { PrismaSchemaAnalyzer } from '@lib/prismaSchemaAnalyzer';
+import { CrudSchemaRegistry } from '@lib/crudSchemaRegistry';
 import {
     jsonApiCollectionResponse,
     jsonApiResponse,
     jsonApiBody,
     jsonApiErrorResponse,
-} from './documentation';
-import { JSON_API_CONTENT_TYPE, JSON_API_ATOMIC_CONTENT_TYPE } from './jsonApiConstants';
-import { ErrorHandler, ErrorResponseFormat } from './errorHandler';
+} from '@lib/documentation';
+import { JSON_API_CONTENT_TYPE, JSON_API_ATOMIC_CONTENT_TYPE } from '@lib/jsonApiConstants';
+import { ErrorHandler, ErrorResponseFormat } from '@lib/errorHandler';
 import { log } from '@ext/winston';
-import type { HandlerFunction, MiddlewareHandlerFunction } from './expressRouter';
+import type { HandlerFunction, MiddlewareHandlerFunction } from '@lib/expressRouter';
 
 /**
  * CrudRouteBuilder 가 ExpressRouter 로부터 필요로 하는 공유 능력(capabilities) 집합.

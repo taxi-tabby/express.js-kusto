@@ -4,13 +4,13 @@ import { Server } from 'http';
 import * as path from 'path';
 import { log } from '@ext/winston';
 import { getElapsedTimeInString } from '@ext/util';
-import loadRoutes from './lib/loadRoutes_V6_Clean';
-import expressApp from './lib/expressAppSingleton';
-import { DocumentationGenerator } from './lib/documentationGenerator';
-import { StaticFileMiddleware } from './lib/staticFileMiddleware';
-import { prismaManager } from './lib/prismaManager';
-import { DependencyInjector } from './lib/dependencyInjector';
-import { repositoryManager } from './lib/repositoryManager';
+import loadRoutes from '@lib/loadRoutes_V6_Clean';
+import expressApp from '@lib/expressAppSingleton';
+import { DocumentationGenerator } from '@lib/documentationGenerator';
+import { StaticFileMiddleware } from '@lib/staticFileMiddleware';
+import { prismaManager } from '@lib/prismaManager';
+import { DependencyInjector } from '@lib/dependencyInjector';
+import { repositoryManager } from '@lib/repositoryManager';
 import { SchemaApiSetup } from '@lib/schemaApiSetup';
 
 export interface CoreConfig {

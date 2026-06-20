@@ -1,6 +1,6 @@
 import { PrismaModelInfo } from '@lib/crudSchemaTypes';
-import { OpenApiSchema, OpenApiObjectSchema, OpenApiSchemaOrRef } from './openApiTypes';
-import { fieldToSchema } from './dmmfToOpenApi';
+import { OpenApiSchema, OpenApiObjectSchema, OpenApiSchemaOrRef } from '@lib/documentation/openApiTypes';
+import { fieldToSchema } from '@lib/documentation/dmmfToOpenApi';
 
 /**
  * JSON:API attributes schema — id 와 관계 필드를 제외한 모든 필드.

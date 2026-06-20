@@ -8,13 +8,13 @@ import {
     OpenApiSchema,
     OpenApiSchemaOrRef,
     ContentTypeMode,
-} from './openApiTypes';
-import { OpenApiTag } from './openApiTypes';
-import { schemaToOpenApi, fieldToOpenApi } from './schemaConverter';
-import { buildInfo } from './infoSource';
-import { buildServers } from './serversSource';
-import { toOpenApiPath, deriveResourceTag, deriveOperationId } from './pathConverter';
-import { mediaTypeFor } from './contentTypeRule';
+} from '@lib/documentation/openApiTypes';
+import { OpenApiTag } from '@lib/documentation/openApiTypes';
+import { schemaToOpenApi, fieldToOpenApi } from '@lib/documentation/schemaConverter';
+import { buildInfo } from '@lib/documentation/infoSource';
+import { buildServers } from '@lib/documentation/serversSource';
+import { toOpenApiPath, deriveResourceTag, deriveOperationId } from '@lib/documentation/pathConverter';
+import { mediaTypeFor } from '@lib/documentation/contentTypeRule';
 
 const OPENAPI_VERSION = '3.1.0';
 const DEFAULT_CONTENT_TYPE_MODE: ContentTypeMode = 'json';

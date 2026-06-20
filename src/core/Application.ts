@@ -1,6 +1,6 @@
 ﻿import { Express } from 'express';
 import { Server } from 'http';
-import { Core, CoreConfig } from './Core';
+import { Core, CoreConfig } from '@core/Core';
 import { log } from '@ext/winston';
 
 /**
@@ -8,7 +8,7 @@ import { log } from '@ext/winston';
  * 
  * @example
  * ```typescript
- * import { Application } from './core';
+ * import { Application } from '@core/core';
  * 
  * const app = new Application({
  *   port: 3000,

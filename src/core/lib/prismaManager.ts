@@ -12,7 +12,7 @@ import {
 	DatabaseName,
 	PrismaManagerWrapOverloads,
 	PrismaManagerClientOverloads
-} from './types/generated-db-types';
+} from '@lib/types/generated-db-types';
 
 /**
  * 폴더명을 환경변수명으로 변환.
@@ -31,8 +31,8 @@ import {
  * 실제 구현은 의존성 없는 단일 출처 모듈 `./dbNaming` 에 있고 여기서 re-export 한다.
  * (CLI 와의 중복 제거 — 기존 `@lib/prismaManager` import 호환을 위해 re-export 유지)
  */
-export { folderNameToEnvVarName } from './dbNaming';
-import { folderNameToEnvVarName } from './dbNaming';
+export { folderNameToEnvVarName } from '@lib/dbNaming';
+import { folderNameToEnvVarName } from '@lib/dbNaming';
 
 /**
  * Database connection configuration interface

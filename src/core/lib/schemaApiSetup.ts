@@ -1,6 +1,6 @@
 ﻿import { Application } from 'express';
-import { SchemaApiRouter } from './schemaApiRouter';
-import { CrudSchemaRegistry } from './crudSchemaRegistry';
+import { SchemaApiRouter } from '@lib/schemaApiRouter';
+import { CrudSchemaRegistry } from '@lib/crudSchemaRegistry';
 import { log } from '@ext/winston';
 
 /**

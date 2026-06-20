@@ -7,7 +7,7 @@
  * CrudResponseFormatter 가 담당). 미사용 메서드는 제거되었다.
  */
 
-import { ERROR_CODES } from './errorCodes';
+import { ERROR_CODES } from '@lib/errorCodes';
 
 export class ErrorFormatter {
   /**

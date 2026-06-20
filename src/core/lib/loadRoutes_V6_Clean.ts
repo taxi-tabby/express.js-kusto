@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { log } from '@ext/winston';
 import { normalizeSlash, getElapsedTimeInString } from '@ext/util';
-import { DocumentationGenerator } from './documentationGenerator';
+import { DocumentationGenerator } from '@lib/documentationGenerator';
 
 // Webpack 빌드 환경에서 자동 생성된 라우트 맵 가져오기 (빌드 타임에 생성된 파일)
 let routesMap: Record<string, Router> = {};
@@ -21,7 +21,7 @@ async function loadDynamicRouteMap(): Promise<void> {
     try {
         log.Silly(`Loading dynamic route map in webpack build...`);
         // @ts-ignore - 런타임에 생성되는 파일이므로 TypeScript가 찾을 수 없음
-        const routeMapModule = await import('../tmp/routes-map');
+        const routeMapModule = await import('@core/tmp/routes-map');
         routesMap = routeMapModule.routesMap;
         middlewaresMap = routeMapModule.middlewaresMap;
         directoryStructure = routeMapModule.directoryStructure;

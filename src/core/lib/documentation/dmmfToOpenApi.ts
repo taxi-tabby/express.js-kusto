@@ -1,5 +1,5 @@
 import { PrismaFieldMetadata } from '@lib/crudSchemaTypes';
-import { OpenApiSchema, OpenApiSchemaOrRef } from './openApiTypes';
+import { OpenApiSchema, OpenApiSchemaOrRef } from '@lib/documentation/openApiTypes';
 import { log } from '@ext/winston';
 
 /**

@@ -1,6 +1,6 @@
 ﻿import { Request, Response, NextFunction } from 'express';
 import { log } from '@ext/winston';
-import { serialize } from './serializer';
+import { serialize } from '@lib/serializer';
 
 /**
  * BigInt 및 기타 직렬화 불가능한 타입을 자동으로 처리하는 미들웨어

@@ -5,7 +5,7 @@ import {
   PrismaRelationInfo,
   PrismaIndexInfo,
   PRISMA_TYPE_MAPPING
-} from './crudSchemaTypes';
+} from '@lib/crudSchemaTypes';
 
 // Prisma 7: PrismaClient는 생성된 클라이언트에서 가져오므로 any 타입 사용
 type PrismaClientAny = any;

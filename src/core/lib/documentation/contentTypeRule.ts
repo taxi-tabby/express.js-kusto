@@ -1,5 +1,5 @@
-import { ContentTypeMode } from './openApiTypes';
-import { JSON_API_CONTENT_TYPE } from '../jsonApiConstants';
+import { ContentTypeMode } from '@lib/documentation/openApiTypes';
+import { JSON_API_CONTENT_TYPE } from '@lib/jsonApiConstants';
 
 /**
  * OpenAPI requestBody/response.content 의 media type 키를 결정한다.

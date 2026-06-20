@@ -10,7 +10,7 @@ import { exec, spawn } from 'child_process';
 import * as util from 'util';
 import * as dotenv from 'dotenv';
 import * as readline from 'readline';
-import { folderNameToEnvVarName } from '../lib/dbNaming';
+import { folderNameToEnvVarName } from '@lib/dbNaming';
 
 const execPromise = util.promisify(exec);
 

@@ -1,4 +1,4 @@
-import { OpenApiInfo } from './openApiTypes';
+import { OpenApiInfo } from '@lib/documentation/openApiTypes';
 
 const FALLBACK_TITLE = 'kusto-api';
 const FALLBACK_VERSION = '0.0.0';

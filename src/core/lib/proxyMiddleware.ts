@@ -4,7 +4,7 @@ import * as https from 'https';
 import { URL } from 'url';
 import qs from 'qs';
 import { log } from '@ext/winston';
-import { ERROR_CODES, getHttpStatusForErrorCode } from './errorCodes';
+import { ERROR_CODES, getHttpStatusForErrorCode } from '@lib/errorCodes';
 
 export interface ProxyOptions {
   /** 업스트림 베이스 URL. 필수. 예: 'http://localhost:3001', 'https://api.example.com' */

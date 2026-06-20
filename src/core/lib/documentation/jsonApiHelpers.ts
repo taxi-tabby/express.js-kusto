@@ -1,4 +1,4 @@
-import { OpenApiObjectSchema } from './openApiTypes';
+import { OpenApiObjectSchema } from '@lib/documentation/openApiTypes';
 
 /**
  * CRUD 라우트가 등록할 JSON:API request body schema 를 생성.

@@ -10,11 +10,11 @@ import { log } from '@ext/winston';
  * @example
  * ```typescript
  * // Legacy usage (deprecated)
- * import expressApp from './expressAppSingleton';
+ * import expressApp from '@lib/expressAppSingleton';
  * const app = expressApp.getApp();
  * 
  * // New recommended usage
- * import { Core, Application } from '../Core';
+ * import { Core, Application } from '@core/Core';
  * const app = new Application();
  * ```
  */

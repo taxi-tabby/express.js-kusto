@@ -1,5 +1,5 @@
 import { FieldSchema, Schema, ValidatorType } from '@lib/validator';
-import { OpenApiSchema, OpenApiObjectSchema } from './openApiTypes';
+import { OpenApiSchema, OpenApiObjectSchema } from '@lib/documentation/openApiTypes';
 
 const KNOWN_TYPES: ReadonlySet<ValidatorType> = new Set([
     'string', 'number', 'boolean', 'array', 'object',

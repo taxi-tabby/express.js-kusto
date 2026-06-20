@@ -3,8 +3,8 @@
  * 모든 에러 관련 로직을 중앙화하여 일관성과 유지보수성을 확보
  */
 
-import { JsonApiError, JsonApiErrorResponse, ErrorSecurityOptions } from './crudHelpers';
-import { ERROR_CODES, PRISMA_ERROR_CODES, HTTP_ERROR_CODES, PRISMA_CANONICAL_ERROR_MAP } from './errorCodes';
+import { JsonApiError, JsonApiErrorResponse, ErrorSecurityOptions } from '@lib/crudHelpers';
+import { ERROR_CODES, PRISMA_ERROR_CODES, HTTP_ERROR_CODES, PRISMA_CANONICAL_ERROR_MAP } from '@lib/errorCodes';
 
 /**
  * JSON:API meta.implementation 문자열을 package.json 의 name/version 에서 파생한다.

@@ -1,10 +1,10 @@
 import { Request, Response, NextFunction, RequestHandler } from 'express';
-import { DependencyInjector } from './dependencyInjector';
-import { prismaManager } from './prismaManager';
-import { repositoryManager } from './repositoryManager';
-import { kustoManager } from './kustoManager';
-import { Injectable } from './types/generated-injectable-types';
-import { ValidatedRequest } from './requestHandler';
+import { DependencyInjector } from '@lib/dependencyInjector';
+import { prismaManager } from '@lib/prismaManager';
+import { repositoryManager } from '@lib/repositoryManager';
+import { kustoManager } from '@lib/kustoManager';
+import { Injectable } from '@lib/types/generated-injectable-types';
+import { ValidatedRequest } from '@lib/requestHandler';
 
 export type MiddlewareHandlerFunction = (
     req: Request, 

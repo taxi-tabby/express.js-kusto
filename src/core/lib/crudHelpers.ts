@@ -1,8 +1,8 @@
 ﻿import { Request } from 'express';
 
 import { log } from '@ext/winston';
-import { ErrorHandler, ErrorResponseFormat } from './errorHandler';
-import { ERROR_CODES, PRISMA_CANONICAL_ERROR_MAP } from './errorCodes';
+import { ErrorHandler, ErrorResponseFormat } from '@lib/errorHandler';
+import { ERROR_CODES, PRISMA_CANONICAL_ERROR_MAP } from '@lib/errorCodes';
 
 /**
  * CRUD 쿼리 파싱 및 필터링을 위한 헬퍼 유틸리티

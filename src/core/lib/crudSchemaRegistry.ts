@@ -3,9 +3,9 @@
   SchemaApiResponse,
   AllSchemasResponse,
   CRUD_ACTIONS
-} from './crudSchemaTypes';
-import { PrismaSchemaAnalyzer } from './prismaSchemaAnalyzer';
-import { RelationshipConfigManager } from './relationshipConfig';
+} from '@lib/crudSchemaTypes';
+import { PrismaSchemaAnalyzer } from '@lib/prismaSchemaAnalyzer';
+import { RelationshipConfigManager } from '@lib/relationshipConfig';
 import { pluralize, createPaginationCursor } from '@ext/util';
 import { log } from '@ext/winston';
 

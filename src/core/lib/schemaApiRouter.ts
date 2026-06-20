@@ -1,8 +1,8 @@
 ﻿import { Router, Request, Response, NextFunction } from 'express';
-import { CrudSchemaRegistry } from './crudSchemaRegistry';
+import { CrudSchemaRegistry } from '@lib/crudSchemaRegistry';
 import { createPaginationCursor } from '@ext/util';
 import { log } from '@ext/winston';
-import { ERROR_CODES } from './errorCodes';
+import { ERROR_CODES } from '@lib/errorCodes';
 
 /**
  * 개발 모드에서만 활성화되는 스키마 API 라우터

@@ -1,27 +1,27 @@
 ﻿import { Router, Request, Response, RequestHandler, NextFunction, static as static_ } from 'express';
-import { createProxyMiddleware, ProxyOptions } from './proxyMiddleware';
+import { createProxyMiddleware, ProxyOptions } from '@lib/proxyMiddleware';
 import multer from 'multer';
-import { DocumentationGenerator } from './documentationGenerator';
-import { RequestHandler as CustomRequestHandler, RequestConfig, ResponseConfig, ValidatedRequest } from './requestHandler';
-import { Injectable, MiddlewareName, MiddlewareParams, MIDDLEWARE_PARAM_MAPPING } from './types/generated-injectable-types';
-import { DatabaseNamesUnion, DatabaseClientMap } from './types/generated-db-types';
-import { DependencyInjector } from './dependencyInjector';
+import { DocumentationGenerator } from '@lib/documentationGenerator';
+import { RequestHandler as CustomRequestHandler, RequestConfig, ResponseConfig, ValidatedRequest } from '@lib/requestHandler';
+import { Injectable, MiddlewareName, MiddlewareParams, MIDDLEWARE_PARAM_MAPPING } from '@lib/types/generated-injectable-types';
+import { DatabaseNamesUnion, DatabaseClientMap } from '@lib/types/generated-db-types';
+import { DependencyInjector } from '@lib/dependencyInjector';
 import { prismaManager } from '@lib/prismaManager'
 import { repositoryManager } from '@lib/repositoryManager'
 import { kustoManager } from '@lib/kustoManager'
-import { CrudQueryParser, PrismaQueryBuilder, CrudResponseFormatter, JsonApiTransformer, JsonApiResponse, JsonApiResource, JsonApiRelationship, JsonApiErrorResponse } from './crudHelpers';
-import { ErrorFormatter } from './errorFormatter';
-import { serializeBigInt, serialize, ResponseSerializer, applyResponseSerializer } from './serializer';
+import { CrudQueryParser, PrismaQueryBuilder, CrudResponseFormatter, JsonApiTransformer, JsonApiResponse, JsonApiResource, JsonApiRelationship, JsonApiErrorResponse } from '@lib/crudHelpers';
+import { ErrorFormatter } from '@lib/errorFormatter';
+import { serializeBigInt, serialize, ResponseSerializer, applyResponseSerializer } from '@lib/serializer';
 import {
     parseUuid as parseUuidImpl,
     parseString as parseStringImpl,
     parseInt_ as parseIntImpl,
     parseIdSmart as parseIdSmartImpl,
     getSmartPrimaryKeyParser as getSmartPrimaryKeyParserImpl,
-} from './primaryKeyParsers';
-import { ERROR_CODES, getHttpStatusForErrorCode } from './errorCodes';
-import { CrudSchemaRegistry } from './crudSchemaRegistry';
-import { PrismaSchemaAnalyzer } from './prismaSchemaAnalyzer';
+} from '@lib/primaryKeyParsers';
+import { ERROR_CODES, getHttpStatusForErrorCode } from '@lib/errorCodes';
+import { CrudSchemaRegistry } from '@lib/crudSchemaRegistry';
+import { PrismaSchemaAnalyzer } from '@lib/prismaSchemaAnalyzer';
 import {
     syncSchemasFromAnalyzer,
     registerJsonApiErrorSchema,
@@ -29,9 +29,9 @@ import {
     jsonApiResponse,
     jsonApiBody,
     jsonApiErrorResponse,
-} from './documentation';
+} from '@lib/documentation';
 import { log } from '@ext/winston';
-import './types/express-extensions';
+import '@lib/types/express-extensions';
 
 
 export type HandlerFunction = (req: Request, res: Response, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => void;
@@ -116,17 +116,17 @@ export {
     wrapMiddlewares,
     wrapValidatedMiddlewares,
     injectedMiddleware
-} from './middlewareHelpers';
+} from '@lib/middlewareHelpers';
 
 // 내부 위임용 value import (P1-10b: private wrapMiddleware 가 단일 출처에 위임)
-import { wrapMiddleware } from './middlewareHelpers';
-import { JSON_API_CONTENT_TYPE, JSON_API_ATOMIC_CONTENT_TYPE } from './jsonApiConstants';
+import { wrapMiddleware } from '@lib/middlewareHelpers';
+import { JSON_API_CONTENT_TYPE, JSON_API_ATOMIC_CONTENT_TYPE } from '@lib/jsonApiConstants';
 
 
 
 
-import { ErrorHandler, ErrorResponseFormat } from './errorHandler';
-import { CrudRouteBuilder, CrudBuilderContext } from './crudRouteBuilder';
+import { ErrorHandler, ErrorResponseFormat } from '@lib/errorHandler';
+import { CrudRouteBuilder, CrudBuilderContext } from '@lib/crudRouteBuilder';
 
 /** 라우트에 선택적으로 붙이는 OpenAPI 문서 메타데이터(verb 옵션 인자로 전달). */
 export interface RouteDocOptions {

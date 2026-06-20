@@ -1,6 +1,6 @@
-﻿import { prismaManager, PrismaManager } from './prismaManager';
-import { DatabaseClientMap } from './types/generated-db-types'
-import type { DatabaseNamesUnion } from './types/generated-db-types';
+﻿import { prismaManager, PrismaManager } from '@lib/prismaManager';
+import { DatabaseClientMap } from '@lib/types/generated-db-types'
+import type { DatabaseNamesUnion } from '@lib/types/generated-db-types';
 import { log } from '@ext/winston';
 import {
     TransactionCommitManager,
@@ -8,7 +8,7 @@ import {
     TransactionCommitOptions,
     TransactionCommitResult,
     TransactionState
-} from './transactionCommitManager';
+} from '@lib/transactionCommitManager';
 
 
 /**

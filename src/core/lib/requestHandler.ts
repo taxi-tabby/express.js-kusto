@@ -1,11 +1,11 @@
 ﻿import { Request, Response, NextFunction, RequestHandler as ExpressRequestHandler } from 'express';
-import { Validator, Schema, ValidationResult, FieldSchema } from './validator';
+import { Validator, Schema, ValidationResult, FieldSchema } from '@lib/validator';
 import { log } from '@ext/winston';
-import { DependencyInjector } from './dependencyInjector';
-import { Injectable } from './types/generated-injectable-types';
-import { prismaManager } from './prismaManager';
-import { repositoryManager } from './repositoryManager';
-import { ResponseSerializer, applyResponseSerializer } from './serializer';
+import { DependencyInjector } from '@lib/dependencyInjector';
+import { Injectable } from '@lib/types/generated-injectable-types';
+import { prismaManager } from '@lib/prismaManager';
+import { repositoryManager } from '@lib/repositoryManager';
+import { ResponseSerializer, applyResponseSerializer } from '@lib/serializer';
 
 export interface RequestConfig {
     body?: Schema;

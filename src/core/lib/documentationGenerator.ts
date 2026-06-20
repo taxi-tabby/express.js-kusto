@@ -1,11 +1,11 @@
-import { ResponseConfig } from './requestHandler';
+import { ResponseConfig } from '@lib/requestHandler';
 import { log } from '@ext/winston';
 import {
     buildOpenApiDocument,
     OpenApiSchemaOrRef,
     OpenApiDocument,
     RouteDocumentationLike,
-} from './documentation';
+} from '@lib/documentation';
 
 /**
  * 라우트 문서 등록 타입.

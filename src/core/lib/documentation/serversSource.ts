@@ -1,4 +1,4 @@
-import { OpenApiServer } from './openApiTypes';
+import { OpenApiServer } from '@lib/documentation/openApiTypes';
 import { log } from '@ext/winston';
 
 function fallback(env: NodeJS.ProcessEnv): OpenApiServer[] {

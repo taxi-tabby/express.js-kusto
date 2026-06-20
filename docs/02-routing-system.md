@@ -381,22 +381,57 @@ export default [
 
 ### 최상위 미들웨어 (src/app/routes/middleware.ts)
 
-최상위 미들웨어는 모든 요청에 적용되며, 다음과 같은 기능을 제공합니다:
+전역 미들웨어는 **소유 주체**에 따라 두 계층으로 나뉩니다.
 
-- **Kusto Manager 초기화**: 모든 요청에 kusto 인스턴스 제공
-- **보안 헤더**: Helmet을 통한 보안 설정
-- **CORS 처리**: 동적 화이트리스트 관리
-- **요청 파싱**: JSON, URL-encoded 데이터 파싱 (`application/vnd.api+json` 지원)
-- **IP 추적**: 클라이언트 IP 식별 및 Footwalk 로깅
-- **에러 핸들링**: 전역 에러 처리
+#### 1. 프레임워크 필수 미들웨어 (Core 소유 · 항상 적용 · app 에 없음)
+
+프레임워크가 정상 동작하려면 반드시 필요한 미들웨어로, **Core 가 직접 등록**합니다. `src/app` 에 두지 않으므로 사용자가 실수로 지우거나 순서를 깨뜨릴 수 없고, 프레임워크 업데이트로 함께 갱신됩니다.
+
+- **`req.kusto` 주입**(`kustoInitMiddleware`): 모든 요청에 통합 리소스 접근 facade 제공 (라우트보다 먼저)
+- **클라이언트 IP 해석**(`clientIpMiddleware`): Express 의 `trust proxy` 설정과 무관하게 프록시 헤더(CF-Connecting-IP → True-Client-IP → X-Real-IP → X-Forwarded-For, 없으면 소켓)에서 실제 클라이언트 IP 를 추출해 `req.ip` 를 오버라이드
+- **전역 에러 핸들러**(`globalErrorMiddleware`, 4-arg): 모든 라우트/미들웨어 에러를 포착해 `NODE_ENV` 기준으로 민감정보를 redaction 한 JSON:API 응답으로 변환 (**라우트 뒤 맨 마지막**에 마운트)
+
+> 이 미들웨어들은 `@lib/http/routing/{frameworkMiddleware,clientIpMiddleware}.ts` 에 있으며 core 와 함께 배포·업데이트됩니다.
+
+#### 2. 정책 스택 (`defaultGlobalMiddleware()` · 교체 가능)
+
+보안/파싱/로깅 정책으로, 합리적 기본값을 제공하되 사용자가 조정·교체할 수 있습니다. `@core/index` 에서 `defaultGlobalMiddleware()` 로 가져옵니다(순서대로 적용).
+
+helmet(보안 헤더) → CORS(`CORS_WHITELIST` 화이트리스트) → cookie-parser → body-parser(JSON + URL-encoded, 50mb, `application/vnd.api+json`) → 요청 로깅(`Footwalk`)
+
+`src/app/routes/middleware.ts` 는 **얇고 선택적인** 사용자 파일입니다.
+
+```typescript
+import { defaultGlobalMiddleware } from '@core/index';
+
+export default [
+    ...defaultGlobalMiddleware(),
+    // ↓ 여기에 프로젝트 전역 미들웨어를 추가하세요.
+];
+```
+
+- **파일이 없거나 정책 미들웨어가 0개면** 로더가 `defaultGlobalMiddleware()` 기본을 자동 적용합니다(안전한 기본값).
+- 정책을 조정하려면 옵션을 넘깁니다: `defaultGlobalMiddleware({ corsWhitelist, bodyLimit, helmet, disableRequestLog })`.
+- 쿠키 기반 인증(credentials)을 사용한다면 CSRF 대응을 이곳에서 직접 추가하세요(프레임워크 기본 CSRF 미들웨어는 제공하지 않습니다).
+
+#### 실효 요청 순서
+
+```
+req.kusto → clientIp → helmet → CORS → cookie → body → 요청 로깅 → (폴더/WITH 미들웨어) → 라우트 → 전역 에러 핸들러
+```
+
+앞의 두 단계(`req.kusto`/clientIp)와 마지막 단계(전역 에러 핸들러)는 Core 소유, 가운데 정책 스택은 app 의 `middleware.ts`(또는 그 기본값)입니다.
 
 ### 계층적 미들웨어 적용
 
 미들웨어는 계층적으로 적용됩니다:
 
-1. **최상위 미들웨어** (`src/app/routes/middleware.ts`)
+0. **Core 필수 미들웨어** (`req.kusto` 주입 · clientIp) — Core 가 최우선 등록 (app 에 없음)
+1. **최상위 정책 미들웨어** (`src/app/routes/middleware.ts`, 없으면 `defaultGlobalMiddleware()` 기본)
 2. **폴더별 미들웨어** (해당 경로의 `middleware.ts`)
 3. **라우트 레벨 미들웨어** (WITH 메서드로 추가된 미들웨어)
+
+그리고 모든 라우트 등록 이후 **전역 에러 핸들러**가 맨 마지막에 적용됩니다.
 
 예시 구조:
 ```

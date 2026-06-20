@@ -27,5 +27,5 @@ di/
 정규 import 경로는 `@lib/data/di/<file>` 형태다 (단일 `@lib` 루트, 경로만 깊어짐).
 예: `@lib/data/di/dependencyInjector`, `@lib/data/di/kustoManager`.
 
-- 인바운드: `Core` 초기화가 `DependencyInjector.initialize()`를 호출하고, 글로벌 미들웨어가 `req.kusto = KustoManager.getInstance()`를 주입한다. 라우트 핸들러는 `req.kusto`로 모듈/리포지터리/DB에 접근한다.
+- 인바운드: `Core` 초기화가 `DependencyInjector.initialize()`를 호출하고, Core 소유 필수 미들웨어 `kustoInitMiddleware`(`@lib/http/routing/frameworkMiddleware`)가 모든 요청에 `req.kusto = kustoManager`(싱글톤)를 주입한다. 라우트 핸들러는 `req.kusto`로 모듈/리포지터리/DB에 접근한다.
 - 아웃바운드: 같은 data 티어의 `database/` 서브 티어(`prismaManager`/`repositoryManager`)와 생성 타입(`@lib/types/generated-*`), 로깅(`@ext/winston`)에 의존한다. 상위 라우팅/문서 티어를 역참조하지 않는다.

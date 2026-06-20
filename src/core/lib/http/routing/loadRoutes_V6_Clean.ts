@@ -636,23 +636,23 @@ async function loadRoutes(app: Express, dir?: string): Promise<void> {
             ? loadMiddleware(rootDirectory.path)
             : [];
 
-        if (rootMiddlewares && rootMiddlewares.length > 0) {
-            // app/routes/middleware.ts 가 정의한 글로벌 정책 스택을 사용한다.
-            const preMiddlewares = rootMiddlewares.filter(
-                (m: any) => typeof m !== 'function' || m.length !== 4
-            );
-            globalErrorMiddlewares = rootMiddlewares.filter(
-                (m: any) => typeof m === 'function' && m.length === 4
-            );
-            if (preMiddlewares.length > 0) {
-                app.use(...preMiddlewares);
-            }
-            log.Route(`Global middlewares registered: ${preMiddlewares.length} pre + ${globalErrorMiddlewares.length} error handler(s) from ${rootDirectory!.path}`);
+        // app/routes/middleware.ts 의 pre-미들웨어(정책)와 4-arg 에러 핸들러를 분리.
+        const preMiddlewares = (rootMiddlewares || []).filter(
+            (m: any) => typeof m !== 'function' || m.length !== 4
+        );
+        globalErrorMiddlewares = (rootMiddlewares || []).filter(
+            (m: any) => typeof m === 'function' && m.length === 4
+        );
+
+        if (preMiddlewares.length > 0) {
+            // 사용자가 정의한 글로벌 정책 스택 사용.
+            app.use(...preMiddlewares);
+            log.Route(`Global middlewares registered: ${preMiddlewares.length} pre + ${globalErrorMiddlewares.length} error handler(s)`);
         } else {
-            // app/routes/middleware.ts 가 없으면 프레임워크 기본 정책 스택을 적용한다(safe default).
-            // (필수 미들웨어 — req.kusto/clientIp/전역 에러 — 는 Core 가 별도로 소유한다.)
+            // 정책 미들웨어가 없으면(파일 없음·빈 배열·에러 핸들러만) 프레임워크 기본 정책 적용(safe default).
+            // helmet/CORS/body 누락으로 인한 footgun 방지. (필수 — req.kusto/clientIp/전역 에러 — 는 Core 소유.)
             app.use(...defaultGlobalMiddleware());
-            log.Route('No app/routes/middleware.ts — applied defaultGlobalMiddleware()');
+            log.Route(`Applied defaultGlobalMiddleware() (no app policy middleware) + ${globalErrorMiddlewares.length} error handler(s)`);
         }
 
         // 2. 모든 라우트 모듈 사전 로드

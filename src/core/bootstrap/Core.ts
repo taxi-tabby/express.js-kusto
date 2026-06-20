@@ -115,7 +115,7 @@ export class Core {
         this.setupMonitor();     // dev 모니터(메트릭 미들웨어 + /__kusto/metrics) — 라우트보다 먼저
         this.setupHealthCheck(); // /healthz readiness (글로벌 라우트보다 먼저)
         this.setupDocumentationRoutes(); // 문서화 라우트를 먼저 등록
-        this.loadRoutes();
+        await this.loadRoutes();          // await: 전역 에러 핸들러보다 라우트가 먼저 등록되도록 보장
         this.setupViews();
 
         // 스키마 API 등록 (개발 모드에서만)
@@ -162,18 +162,21 @@ export class Core {
         }
     }
 
-    private loadRoutes(): void {
+    private async loadRoutes(): Promise<void> {
         const startTime = process.hrtime();
-        
+
         try {
-            loadRoutes(this._app, this._config.routesPath);
+            // loadRoutes 는 async(동적 라우트맵 await) 다. await 하지 않으면 라우트/정책 미들웨어가
+            // 이후 microtask 에 등록되어, 동기 본문에서 마운트한 전역 에러 핸들러보다 *뒤*에 깔린다
+            // (에러 핸들러가 라우트 에러를 못 잡는 회귀). await 로 등록 순서를 보장한다.
+            await loadRoutes(this._app, this._config.routesPath);
             const elapsed = process.hrtime(startTime);
             log.Route(`Routes loaded successfully: ${getElapsedTimeInString(elapsed)}`);
         } catch (error) {
             log.Error('Failed to load routes', { error, routesPath: this._config.routesPath });
             throw error;
         }
-    }    
+    }
     
     private setupViews(): void {
         this._app.set('view engine', this._config.viewEngine);

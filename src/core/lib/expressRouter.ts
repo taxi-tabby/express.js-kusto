@@ -12,6 +12,13 @@ import { kustoManager } from '@lib/kustoManager'
 import { CrudQueryParser, PrismaQueryBuilder, CrudResponseFormatter, JsonApiTransformer, JsonApiResponse, JsonApiResource, JsonApiRelationship, JsonApiErrorResponse } from './crudHelpers';
 import { ErrorFormatter } from './errorFormatter';
 import { serializeBigInt, serialize, ResponseSerializer, applyResponseSerializer } from './serializer';
+import {
+    parseUuid as parseUuidImpl,
+    parseString as parseStringImpl,
+    parseInt_ as parseIntImpl,
+    parseIdSmart as parseIdSmartImpl,
+    getSmartPrimaryKeyParser as getSmartPrimaryKeyParserImpl,
+} from './primaryKeyParsers';
 import { ERROR_CODES, getHttpStatusForErrorCode } from './errorCodes';
 import { CrudSchemaRegistry } from './crudSchemaRegistry';
 import { PrismaSchemaAnalyzer } from './prismaSchemaAnalyzer';
@@ -2194,53 +2201,18 @@ export class ExpressRouter {
 
     /**
      * Primary key 타입을 자동으로 감지하고 적절한 파서를 반환하는 헬퍼 메서드
+     * (순수 로직은 ./primaryKeyParsers 로 추출됨)
      */
     private getSmartPrimaryKeyParser(databaseName: string, modelName: string, primaryKey: string): (value: string) => any {
-        // 간단한 타입 추론 로직
-        // 실제로는 Prisma 스키마나 메타데이터를 통해 판단할 수 있음
-        // 여기서는 일반적인 패턴을 기반으로 추론
-
-        // primaryKey 이름 기반 추론
-        if (primaryKey === 'uuid' || primaryKey.includes('uuid') || primaryKey.endsWith('_uuid')) {
-            return ExpressRouter.parseUuid;
-        }
-
-        // 기본적으로 스마트 파서 사용 (숫자인지 UUID인지 자동 판단)
-        return this.parseIdSmart;
+        return getSmartPrimaryKeyParserImpl(databaseName, modelName, primaryKey);
     }
 
     /**
      * 스마트 ID 파서 - 입력값을 보고 적절한 타입으로 변환
      * UUID 형식이 아닌 경우 숫자를 문자열로 안전하게 처리
+     * (순수 로직은 ./primaryKeyParsers 로 추출됨)
      */
-    private parseIdSmart = (id: string): any => {
-        // 먼저 입력값 검증
-        if (!id || typeof id !== 'string') {
-            throw new Error('Invalid ID format: ID must be a non-empty string');
-        }
-
-        // UUID 패턴 체크 (엄격한 검증)
-        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-        if (uuidRegex.test(id)) {
-            return id; // 유효한 UUID 그대로 반환
-        }
-        
-        // 순수 숫자인 경우 숫자로 변환
-        if (/^\d+$/.test(id)) {
-            const numValue = parseInt(id, 10);
-            if (!isNaN(numValue) && numValue > 0) {
-                return numValue;
-            }
-        }
-        
-        // 유효한 문자열 ID인 경우 (알파넷, 숫자, 하이픈, 언더스코어 허용)
-        if (/^[a-zA-Z0-9_-]+$/.test(id)) {
-            return id;
-        }
-        
-        // 나머지 경우 에러 발생
-        throw new Error(`Invalid ID format: '${id}' is not a valid UUID, number, or string identifier`);
-    };
+    private parseIdSmart = (id: string): any => parseIdSmartImpl(id);
 
     /**
      * 생성된 액션 목록 계산
@@ -4398,14 +4370,9 @@ export class ExpressRouter {
 
     /**
      * UUID 전용 파서 (검증 포함)
+     * 순수 구현은 ./primaryKeyParsers 로 추출; 문서화된 public API 보존을 위해 정적 별칭 유지
      */
-    public static parseUuid = (uuid: string): string => {
-        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-        if (!uuidRegex.test(uuid)) {
-            throw new Error(`Invalid UUID format: ${uuid}`);
-        }
-        return uuid;
-    };
+    public static parseUuid = parseUuidImpl;
 
 
 
@@ -4413,10 +4380,9 @@ export class ExpressRouter {
 
     /**
      * 문자열 그대로 반환하는 파서
+     * 순수 구현은 ./primaryKeyParsers 로 추출; 문서화된 public API 보존을 위해 정적 별칭 유지
      */
-    public static parseString = (value: string): string => {
-        return value;
-    };
+    public static parseString = parseStringImpl;
 
 
 
@@ -4424,14 +4390,9 @@ export class ExpressRouter {
 
     /**
      * 정수 전용 파서 (검증 포함)
+     * 순수 구현은 ./primaryKeyParsers 로 추출; 문서화된 public API 보존을 위해 정적 별칭 유지
      */
-    public static parseInt = (value: string): number => {
-        const parsed = parseInt(value, 10);
-        if (isNaN(parsed)) {
-            throw new Error(`Invalid integer format: ${value}`);
-        }
-        return parsed;
-    };
+    public static parseInt = parseIntImpl;
 
     /**
      * 문서화 등록 헬퍼

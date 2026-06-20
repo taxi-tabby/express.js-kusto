@@ -239,109 +239,23 @@ export class CrudRouteBuilder {
                 res.setHeader('Content-Type', JSON_API_CONTENT_TYPE);
                 res.setHeader('Vary', 'Accept');
 
-                // 쿼리 파라미터 파싱 (UUID 검증 등의 에러 발생 가능)
-                let queryParams;
-                try {
-                    queryParams = CrudQueryParser.parseQuery(req, modelName, this.ctx.schemaAnalyzer);
-                    CrudQueryParser.validateIncludes(queryParams.include, {
-                        maxCount: options?.maxIncludeCount,
-                        maxDepth: options?.maxIncludeDepth,
-                        allowed: options?.allowedIncludes,
-                    });
-                    queryParams.include = CrudQueryParser.mergeDefaultIncludes(
-                        queryParams.include,
-                        options?.defaultIncludes
-                    );
-                } catch (parseError: any) {
-                    // UUID 검증 실패 등의 에러를 400으로 응답
-                    const errorResponse = this.formatJsonApiError(
-                        parseError,
-                        parseError.code || ERROR_CODES.VALIDATION_ERROR,
-                        parseError.statusCode || 400,
-                        req.path,
-                        req.method
-                    );
-                    return res.status(parseError.statusCode || 400).json(errorResponse);
-                }
+                // 쿼리 파라미터 파싱 + include 정책 적용 (UUID 검증 등의 에러 발생 가능)
+                const queryParams = this.parseQueryWithIncludePolicy(req, res, modelName, options);
+                if (!queryParams) return; // 에러 응답은 이미 헬퍼에서 전송됨
 
-                // 페이지네이션 방식 검증 - 반드시 지정되어야 함
-                if (!queryParams.page) {
-                    const errorResponse = this.formatJsonApiError(
-                        new Error('Pagination is required. You must specify either page-based pagination (page[number] & page[size]) or cursor-based pagination (page[cursor] & page[size])'),
-                        ERROR_CODES.PAGINATION_REQUIRED,
-                        400,
-                        req.path,
-                        req.method
-                    );
-                    return res.status(400).json(errorResponse);
-                }
-
-                // 페이지네이션 파라미터 세부 검증
-                if (!queryParams.page.number && !queryParams.page.cursor) {
-                    const errorResponse = this.formatJsonApiError(
-                        new Error('Invalid pagination parameters. Specify either page[number] for offset-based pagination or page[cursor] for cursor-based pagination'),
-                        ERROR_CODES.INVALID_PAGINATION_PARAMS,
-                        400,
-                        req.path,
-                        req.method
-                    );
-                    return res.status(400).json(errorResponse);
-                }
-
-                // 페이지 크기 검증
-                if (!queryParams.page.size || queryParams.page.size <= 0) {
-                    const errorResponse = this.formatJsonApiError(
-                        new Error('page[size] parameter is required and must be greater than 0'),
-                        ERROR_CODES.INVALID_PAGE_SIZE,
-                        400,
-                        req.path,
-                        req.method
-                    );
-                    return res.status(400).json(errorResponse);
-                }
+                // 페이지네이션 파라미터 검증 (미지정/잘못된 파라미터/잘못된 size)
+                if (this.validateIndexPagination(req, res, queryParams)) return; // 에러 응답은 이미 헬퍼에서 전송됨
 
                 // Prisma 쿼리 옵션 빌드
                 let findManyOptions = PrismaQueryBuilder.buildFindManyOptions(queryParams);
 
                 // beforeIndex 훅 실행 (쿼리 옵션 가공)
-                if (options?.hooks?.beforeIndex) {
-                    try {
-                        const hookResult = await options.hooks.beforeIndex(findManyOptions, req);
-                        if (hookResult) {
-                            findManyOptions = hookResult;
-                        }
-                    } catch (hookError) {
-                        const errorResponse = this.formatJsonApiError(
-                            hookError instanceof Error ? hookError : new Error('Hook execution failed'),
-                            ERROR_CODES.INTERNAL_SERVER_ERROR,
-                            500,
-                            req.path,
-                            req.method
-                        );
-                        return res.status(500).json(errorResponse);
-                    }
-                }
+                const hookResult = await this.runBeforeIndexHook(findManyOptions, req, res, options);
+                if (!hookResult) return; // 에러 응답은 이미 헬퍼에서 전송됨
+                findManyOptions = hookResult.findManyOptions;
 
                 // Soft Delete 필터 추가 (기존 where 조건과 병합)
-                if (isSoftDelete) {
-                    // include_deleted 쿼리 파라미터가 true가 아닌 경우 삭제된 것들 제외
-                    const includeDeleted = req.query.include_deleted === 'true';
-
-                    if (!includeDeleted) {
-                        // 기존 where 조건이 있는 경우 AND 조건으로 추가
-                        if (findManyOptions.where) {
-                            findManyOptions.where = {
-                                AND: [
-                                    findManyOptions.where,
-                                    { [softDeleteField]: null }
-                                ]
-                            };
-                        } else {
-                            // where 조건이 없는 경우 새로 생성
-                            findManyOptions.where = { [softDeleteField]: null };
-                        }
-                    }
-                }
+                findManyOptions = this.applyIndexSoftDeleteFilter(findManyOptions, req, isSoftDelete, softDeleteField);
 
                 // 총 개수 조회 (페이지네이션용)
                 const totalCountOptions = { ...findManyOptions };
@@ -354,103 +268,15 @@ export class CrudRouteBuilder {
                     client[modelName].count({ where: totalCountOptions.where })
                 ]);
 
-                // Base URL 생성
-                const baseUrl = `${req.protocol}://${req.get('host')}${req.baseUrl}`;
-
-                // 포함된 리소스 생성 (include 파라미터가 있는 경우)
-                let included: JsonApiResource[] | undefined;
-                if (queryParams.include && queryParams.include.length > 0 && !options?.includeMerge) {
-                    included = JsonApiTransformer.createIncludedResources(
-                        items,
-                        queryParams.include,
-                        queryParams.fields,
-                        baseUrl
-                    );
-                }
-
-                // 페이지네이션 링크 생성
-                let links: any;
-                if (queryParams.page) {
-                    const pageSize = queryParams.page.size || 10;
-                    const currentPage = queryParams.page.number || 1;
-                    const totalPages = Math.ceil(total / pageSize);
-
-                    links = {
-                        self: this.buildPaginationUrl(baseUrl, req.query, currentPage, pageSize),
-                        first: this.buildPaginationUrl(baseUrl, req.query, 1, pageSize),
-                        last: this.buildPaginationUrl(baseUrl, req.query, totalPages, pageSize)
-                    };
-
-                    if (currentPage > 1) {
-                        links.prev = this.buildPaginationUrl(baseUrl, req.query, currentPage - 1, pageSize);
-                    }
-                    if (currentPage < totalPages) {
-                        links.next = this.buildPaginationUrl(baseUrl, req.query, currentPage + 1, pageSize);
-                    }
-                }
-
-                // 메타데이터 생성 (JSON:API 스펙 준수)
-                const meta: any = {
-                    timestamp: new Date().toISOString(),
-                    total: total,  // 전체 레코드 수(JSON:API에서 일반적으로 사용)
-                    count: items.length  // 현재 응답 레코드 수
-                };
-
-                // 페이지네이션이 설정된 경우에만 페이지 정보 추가
-                if (queryParams.page) {
-                    const pageSize = queryParams.page.size || 10;
-                    const currentPage = queryParams.page.number || 1;
-                    const totalPages = Math.ceil(total / pageSize);
-
-                    meta.page = {
-                        current: currentPage,
-                        size: pageSize,
-                        total: totalPages  // 전체 페이지 수
-                    };
-                }
-
-                // Json 타입 필드 목록 가져오기
-                const jsonFieldsArray = this.ctx.schemaAnalyzer?.getJsonFields(modelName) || [];
-                const jsonFields = new Set(jsonFieldsArray);
-
-                // JSON:API 응답 생성
-                const response: JsonApiResponse = JsonApiTransformer.createJsonApiResponse(
-                    items,
-                    modelName,
-                    {
-                        primaryKey,
-                        fields: queryParams.fields,
-                        baseUrl,
-                        links,
-                        meta,
-                        included,
-                        includeMerge: options?.includeMerge || false,
-                        jsonFields
-                    }
-                );
-
-                // metadata 생성 - 기존 헬퍼 함수 사용
-                const metadata = CrudResponseFormatter.createPaginationMeta(
-                    items,
-                    total,
-                    queryParams.page,
-                    'index',
-                    queryParams.include,
-                    queryParams
-                );
-
-                // BigInt와 DATE 타입 직렬화 처리
-                const serializedResponse = serialize({ ...response, metadata });
+                // JSON:API 응답 엔벨로프 조립 + 직렬화
+                const serializedResponse = this.buildIndexResponse(items, total, queryParams, req, modelName, options, primaryKey);
 
                 res.json(serializedResponse);
 
             } catch (error: any) {
                 log.Error(`CRUD Index Error for ${modelName}:`, error);
 
-                const { code, status } = ErrorFormatter.mapPrismaError(error);
-                const errorResponse = this.formatJsonApiError(error, code, status, req.path, req.method);
-
-                res.status(status).json(errorResponse);
+                this.sendMappedCrudError(res, error, req);
             }
         };
 
@@ -520,30 +346,9 @@ export class CrudRouteBuilder {
                 );
                 if (!success) return; // 에러 응답은 이미 헬퍼에서 처리됨
 
-                // 쿼리 파라미터에서 include 파싱 (UUID 검증 등의 에러 발생 가능)
-                let queryParams;
-                try {
-                    queryParams = CrudQueryParser.parseQuery(req, modelName, this.ctx.schemaAnalyzer);
-                    CrudQueryParser.validateIncludes(queryParams.include, {
-                        maxCount: options?.maxIncludeCount,
-                        maxDepth: options?.maxIncludeDepth,
-                        allowed: options?.allowedIncludes,
-                    });
-                    queryParams.include = CrudQueryParser.mergeDefaultIncludes(
-                        queryParams.include,
-                        options?.defaultIncludes
-                    );
-                } catch (parseError: any) {
-                    // UUID 검증 실패 등의 에러를 400으로 응답
-                    const errorResponse = this.formatJsonApiError(
-                        parseError,
-                        parseError.code || ERROR_CODES.VALIDATION_ERROR,
-                        parseError.statusCode || 400,
-                        req.path,
-                        req.method
-                    );
-                    return res.status(parseError.statusCode || 400).json(errorResponse);
-                }
+                // 쿼리 파라미터에서 include 파싱 + include 정책 적용 (UUID 검증 등의 에러 발생 가능)
+                const queryParams = this.parseQueryWithIncludePolicy(req, res, modelName, options);
+                if (!queryParams) return; // 에러 응답은 이미 헬퍼에서 전송됨
 
                 const includeOptions = queryParams.include
                     ? PrismaQueryBuilder['buildIncludeOptions'](queryParams.include)
@@ -615,7 +420,7 @@ export class CrudRouteBuilder {
                 }
 
                 // Base URL 생성
-                const baseUrl = `${req.protocol}://${req.get('host')}${req.baseUrl}`;
+                const baseUrl = this.buildBaseUrl(req);
 
                 // 포함된 리소스 생성 (include 파라미터가 있는 경우)
                 let included: JsonApiResource[] | undefined;
@@ -629,8 +434,7 @@ export class CrudRouteBuilder {
                 }
 
                 // Json 타입 필드 목록 가져오기
-                const jsonFieldsArray = this.ctx.schemaAnalyzer?.getJsonFields(modelName) || [];
-                const jsonFields = new Set(jsonFieldsArray);
+                const jsonFields = this.getJsonFieldSet(modelName);
 
                 // JSON:API 응답 생성
                 const response: JsonApiResponse = JsonApiTransformer.createJsonApiResponse(
@@ -669,10 +473,7 @@ export class CrudRouteBuilder {
             } catch (error: any) {
                 log.Error(`CRUD Show Error for ${modelName}:`, error);
 
-                const { code, status } = ErrorFormatter.mapPrismaError(error);
-                const errorResponse = this.formatJsonApiError(error, code, status, req.path, req.method);
-
-                res.status(status).json(errorResponse);
+                this.sendMappedCrudError(res, error, req);
             }
         };
 
@@ -734,28 +535,8 @@ export class CrudRouteBuilder {
                 res.setHeader('Vary', 'Accept');
 
                 // 쿼리 파라미터 파싱 + include 정책 적용 (응답 included 지원)
-                let queryParams;
-                try {
-                    queryParams = CrudQueryParser.parseQuery(req, modelName, this.ctx.schemaAnalyzer);
-                    CrudQueryParser.validateIncludes(queryParams.include, {
-                        maxCount: options?.maxIncludeCount,
-                        maxDepth: options?.maxIncludeDepth,
-                        allowed: options?.allowedIncludes,
-                    });
-                    queryParams.include = CrudQueryParser.mergeDefaultIncludes(
-                        queryParams.include,
-                        options?.defaultIncludes
-                    );
-                } catch (parseError: any) {
-                    const errorResponse = this.formatJsonApiError(
-                        parseError,
-                        parseError.code || ERROR_CODES.VALIDATION_ERROR,
-                        parseError.statusCode || 400,
-                        req.path,
-                        req.method
-                    );
-                    return res.status(parseError.statusCode || 400).json(errorResponse);
-                }
+                const queryParams = this.parseQueryWithIncludePolicy(req, res, modelName, options);
+                if (!queryParams) return; // 에러 응답은 이미 헬퍼에서 전송됨
 
                 // Content Negotiation 검증
                 // if (!this.validateJsonApiContentType(req, res)) {
@@ -842,7 +623,7 @@ export class CrudRouteBuilder {
                 }
 
                 // Base URL 생성
-                const baseUrl = `${req.protocol}://${req.get('host')}${req.baseUrl}`;
+                const baseUrl = this.buildBaseUrl(req);
 
                 // 포함된 리소스 생성 (include 파라미터가 있는 경우)
                 let createIncluded: JsonApiResource[] | undefined;
@@ -856,8 +637,7 @@ export class CrudRouteBuilder {
                 }
 
                 // Json 타입 필드 목록 가져오기
-                const jsonFieldsArray = this.ctx.schemaAnalyzer?.getJsonFields(modelName) || [];
-                const jsonFields = new Set(jsonFieldsArray);
+                const jsonFields = this.getJsonFieldSet(modelName);
 
                 // JSON:API 응답 생성
                 const response: JsonApiResponse = JsonApiTransformer.createJsonApiResponse(
@@ -891,10 +671,7 @@ export class CrudRouteBuilder {
             } catch (error: any) {
                 log.Error(`CRUD Create Error for ${modelName}:`, error);
 
-                const { code, status } = ErrorFormatter.mapPrismaError(error);
-                const errorResponse = this.formatJsonApiError(error, code, status, req.path, req.method);
-
-                res.status(status).json(errorResponse);
+                this.sendMappedCrudError(res, error, req);
             }
         };
 
@@ -989,9 +766,7 @@ export class CrudRouteBuilder {
 
             } catch (error: any) {
                 log.Error(`Atomic Operations Error for ${modelName}:`, error);
-                const { code, status } = ErrorFormatter.mapPrismaError(error);
-                const errorResponse = this.formatJsonApiError(error, code, status, req.path, req.method);
-                res.status(status).json(errorResponse);
+                this.sendMappedCrudError(res, error, req);
             }
         };
 
@@ -1575,28 +1350,8 @@ export class CrudRouteBuilder {
                 res.setHeader('Content-Type', JSON_API_CONTENT_TYPE);
 
                 // 쿼리 파라미터 파싱 + include 정책 적용 (응답 included 지원)
-                let queryParams;
-                try {
-                    queryParams = CrudQueryParser.parseQuery(req, modelName, this.ctx.schemaAnalyzer);
-                    CrudQueryParser.validateIncludes(queryParams.include, {
-                        maxCount: options?.maxIncludeCount,
-                        maxDepth: options?.maxIncludeDepth,
-                        allowed: options?.allowedIncludes,
-                    });
-                    queryParams.include = CrudQueryParser.mergeDefaultIncludes(
-                        queryParams.include,
-                        options?.defaultIncludes
-                    );
-                } catch (parseError: any) {
-                    const errorResponse = this.formatJsonApiError(
-                        parseError,
-                        parseError.code || ERROR_CODES.VALIDATION_ERROR,
-                        parseError.statusCode || 400,
-                        req.path,
-                        req.method
-                    );
-                    return res.status(parseError.statusCode || 400).json(errorResponse);
-                }
+                const queryParams = this.parseQueryWithIncludePolicy(req, res, modelName, options);
+                if (!queryParams) return; // 에러 응답은 이미 헬퍼에서 전송됨
 
                 // Content Negotiation 검증
                 // if (!this.validateJsonApiContentType(req, res)) {
@@ -1695,60 +1450,15 @@ export class CrudRouteBuilder {
                     await options.hooks.afterUpdate(result, req);
                 }
 
-                // Base URL 생성
-                const baseUrl = `${req.protocol}://${req.get('host')}${req.baseUrl}`;
-
-                // 포함된 리소스 생성 (include 파라미터가 있는 경우)
-                let updateIncluded: JsonApiResource[] | undefined;
-                if (queryParams.include && queryParams.include.length > 0 && !options?.includeMerge) {
-                    updateIncluded = JsonApiTransformer.createIncludedResources(
-                        [result],
-                        queryParams.include,
-                        queryParams.fields,
-                        baseUrl
-                    );
-                }
-
-                // Json 타입 필드 목록 가져오기
-                const jsonFieldsArray = this.ctx.schemaAnalyzer?.getJsonFields(modelName) || [];
-                const jsonFields = new Set(jsonFieldsArray);
-
-                // JSON:API 응답 생성
-                const response: JsonApiResponse = JsonApiTransformer.createJsonApiResponse(
-                    result,
-                    modelName,
-                    {
-                        primaryKey,
-                        fields: queryParams.fields,
-                        baseUrl,
-                        included: updateIncluded,
-                        includeMerge: options?.includeMerge || false,
-                        jsonFields
-                    }
-                );
-
-                // metadata 객체 생성 - 기존 헬퍼 함수 사용
-                const metadata = CrudResponseFormatter.createPaginationMeta(
-                    [result], // 단일 항목을 배열로 감싸서 전달
-                    1,        // total count = 1
-                    undefined, // page 파라미터 없음 (단일 수정)
-                    'update',
-                    queryParams.include,
-                    queryParams,
-                );
-
-                // BigInt와 DATE 타입 직렬화 처리
-                const serializedResponse = serialize({ ...response, metadata });
+                // JSON:API 단일 리소스 응답 조립 + 직렬화
+                const serializedResponse = this.buildUpdateResponse(result, queryParams, req, modelName, options, primaryKey);
 
                 res.json(serializedResponse);
 
             } catch (error: any) {
                 log.Error(`CRUD Update Error for ${modelName}:`, error);
 
-                const { code, status } = ErrorFormatter.mapPrismaError(error);
-                const errorResponse = this.formatJsonApiError(error, code, status, req.path, req.method);
-
-                res.status(status).json(errorResponse);
+                this.sendMappedCrudError(res, error, req);
             }
         };
 
@@ -1911,10 +1621,7 @@ export class CrudRouteBuilder {
             } catch (error: any) {
                 log.Error(`CRUD Destroy Error for ${modelName}:`, error);
 
-                const { code, status } = ErrorFormatter.mapPrismaError(error);
-                const errorResponse = this.formatJsonApiError(error, code, status, req.path, req.method);
-
-                res.status(status).json(errorResponse);
+                this.sendMappedCrudError(res, error, req);
             }
         };
 
@@ -2069,10 +1776,7 @@ export class CrudRouteBuilder {
             } catch (error: any) {
                 log.Error(`CRUD Recover Error for ${modelName}:`, error);
 
-                const { code, status } = ErrorFormatter.mapPrismaError(error);
-                const errorResponse = this.formatJsonApiError(error, code, status, req.path, req.method);
-
-                res.status(status).json(errorResponse);
+                this.sendMappedCrudError(res, error, req);
             }
         };
 
@@ -2121,7 +1825,7 @@ export class CrudRouteBuilder {
      */
     private transformToJsonApiResource(item: any, modelName: string, req: any, primaryKey: string = 'id'): any {
         const resourceType = modelName.toLowerCase();
-        const baseUrl = `${req.protocol}://${req.get('host')}${req.baseUrl}`;
+        const baseUrl = this.buildBaseUrl(req);
 
         // Primary key 값 추출
         const id = item[primaryKey] || item.id || item.uuid || item._id || Object.values(item)[0];
@@ -2217,6 +1921,284 @@ export class CrudRouteBuilder {
     }
 
     /**
+     * INDEX 라우트의 페이지네이션 파라미터 검증.
+     * 페이지네이션 미지정/잘못된 파라미터/잘못된 page[size] 의 세 가지를 순서대로 검사하며,
+     * 위반 시 기존과 동일한 400 JSON:API 에러를 전송하고 `true` 를 반환한다.
+     * 호출자는 `true` 인 경우 그대로 `return` 하여 기존 early-return 제어 흐름을 보존한다.
+     * (기존 setupIndexRoute 의 3개 인라인 검증 블록과 byte-identical)
+     */
+    private validateIndexPagination(req: any, res: any, queryParams: any): boolean {
+        // 페이지네이션 방식 검증 - 반드시 지정되어야 함
+        if (!queryParams.page) {
+            const errorResponse = this.formatJsonApiError(
+                new Error('Pagination is required. You must specify either page-based pagination (page[number] & page[size]) or cursor-based pagination (page[cursor] & page[size])'),
+                ERROR_CODES.PAGINATION_REQUIRED,
+                400,
+                req.path,
+                req.method
+            );
+            res.status(400).json(errorResponse);
+            return true;
+        }
+
+        // 페이지네이션 파라미터 세부 검증
+        if (!queryParams.page.number && !queryParams.page.cursor) {
+            const errorResponse = this.formatJsonApiError(
+                new Error('Invalid pagination parameters. Specify either page[number] for offset-based pagination or page[cursor] for cursor-based pagination'),
+                ERROR_CODES.INVALID_PAGINATION_PARAMS,
+                400,
+                req.path,
+                req.method
+            );
+            res.status(400).json(errorResponse);
+            return true;
+        }
+
+        // 페이지 크기 검증
+        if (!queryParams.page.size || queryParams.page.size <= 0) {
+            const errorResponse = this.formatJsonApiError(
+                new Error('page[size] parameter is required and must be greater than 0'),
+                ERROR_CODES.INVALID_PAGE_SIZE,
+                400,
+                req.path,
+                req.method
+            );
+            res.status(400).json(errorResponse);
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * INDEX 라우트의 beforeIndex 훅 실행.
+     * 훅이 없으면 전달받은 findManyOptions 를 그대로, 훅이 결과를 반환하면 그 결과를 담은 객체를 반환한다.
+     * 훅 실행 중 에러가 발생하면 기존과 동일한 500 JSON:API 에러를 전송하고 `null` 을 반환한다.
+     * 호출자는 `null` 인 경우 그대로 `return` 하여 기존 early-return 제어 흐름을 보존한다.
+     * (기존 setupIndexRoute 의 beforeIndex 훅 블록과 byte-identical)
+     */
+    private async runBeforeIndexHook(
+        findManyOptions: any,
+        req: any,
+        res: any,
+        options: any
+    ): Promise<{ findManyOptions: any } | null> {
+        if (options?.hooks?.beforeIndex) {
+            try {
+                const hookResult = await options.hooks.beforeIndex(findManyOptions, req);
+                if (hookResult) {
+                    findManyOptions = hookResult;
+                }
+            } catch (hookError) {
+                const errorResponse = this.formatJsonApiError(
+                    hookError instanceof Error ? hookError : new Error('Hook execution failed'),
+                    ERROR_CODES.INTERNAL_SERVER_ERROR,
+                    500,
+                    req.path,
+                    req.method
+                );
+                res.status(500).json(errorResponse);
+                return null;
+            }
+        }
+        return { findManyOptions };
+    }
+
+    /**
+     * INDEX 라우트의 Soft Delete where 필터 병합.
+     * include_deleted=true 가 아니면 softDeleteField IS NULL 조건을 기존 where 와 AND 로 병합한다.
+     * findManyOptions 를 제자리에서 변형(mutate)한 뒤 그대로 반환한다.
+     * (기존 setupIndexRoute 의 soft delete 필터 블록과 byte-identical)
+     */
+    private applyIndexSoftDeleteFilter(
+        findManyOptions: any,
+        req: any,
+        isSoftDelete: boolean,
+        softDeleteField: string
+    ): any {
+        if (isSoftDelete) {
+            // include_deleted 쿼리 파라미터가 true가 아닌 경우 삭제된 것들 제외
+            const includeDeleted = req.query.include_deleted === 'true';
+
+            if (!includeDeleted) {
+                // 기존 where 조건이 있는 경우 AND 조건으로 추가
+                if (findManyOptions.where) {
+                    findManyOptions.where = {
+                        AND: [
+                            findManyOptions.where,
+                            { [softDeleteField]: null }
+                        ]
+                    };
+                } else {
+                    // where 조건이 없는 경우 새로 생성
+                    findManyOptions.where = { [softDeleteField]: null };
+                }
+            }
+        }
+        return findManyOptions;
+    }
+
+    /**
+     * INDEX 라우트의 JSON:API 응답 엔벨로프(included/links/meta/response/metadata) 조립 + 직렬화.
+     * 조회 결과(items/total)를 받아 최종 직렬화된 응답 객체를 반환한다. 제어 흐름(early-return) 없음.
+     * (기존 setupIndexRoute 의 응답 조립 블록과 byte-identical)
+     */
+    private buildIndexResponse(
+        items: any[],
+        total: number,
+        queryParams: any,
+        req: any,
+        modelName: string,
+        options: any,
+        primaryKey: string
+    ): any {
+        // Base URL 생성
+        const baseUrl = this.buildBaseUrl(req);
+
+        // 포함된 리소스 생성 (include 파라미터가 있는 경우)
+        let included: JsonApiResource[] | undefined;
+        if (queryParams.include && queryParams.include.length > 0 && !options?.includeMerge) {
+            included = JsonApiTransformer.createIncludedResources(
+                items,
+                queryParams.include,
+                queryParams.fields,
+                baseUrl
+            );
+        }
+
+        // 페이지네이션 링크 생성
+        let links: any;
+        if (queryParams.page) {
+            const pageSize = queryParams.page.size || 10;
+            const currentPage = queryParams.page.number || 1;
+            const totalPages = Math.ceil(total / pageSize);
+
+            links = {
+                self: this.buildPaginationUrl(baseUrl, req.query, currentPage, pageSize),
+                first: this.buildPaginationUrl(baseUrl, req.query, 1, pageSize),
+                last: this.buildPaginationUrl(baseUrl, req.query, totalPages, pageSize)
+            };
+
+            if (currentPage > 1) {
+                links.prev = this.buildPaginationUrl(baseUrl, req.query, currentPage - 1, pageSize);
+            }
+            if (currentPage < totalPages) {
+                links.next = this.buildPaginationUrl(baseUrl, req.query, currentPage + 1, pageSize);
+            }
+        }
+
+        // 메타데이터 생성 (JSON:API 스펙 준수)
+        const meta: any = {
+            timestamp: new Date().toISOString(),
+            total: total,  // 전체 레코드 수(JSON:API에서 일반적으로 사용)
+            count: items.length  // 현재 응답 레코드 수
+        };
+
+        // 페이지네이션이 설정된 경우에만 페이지 정보 추가
+        if (queryParams.page) {
+            const pageSize = queryParams.page.size || 10;
+            const currentPage = queryParams.page.number || 1;
+            const totalPages = Math.ceil(total / pageSize);
+
+            meta.page = {
+                current: currentPage,
+                size: pageSize,
+                total: totalPages  // 전체 페이지 수
+            };
+        }
+
+        // Json 타입 필드 목록 가져오기
+        const jsonFields = this.getJsonFieldSet(modelName);
+
+        // JSON:API 응답 생성
+        const response: JsonApiResponse = JsonApiTransformer.createJsonApiResponse(
+            items,
+            modelName,
+            {
+                primaryKey,
+                fields: queryParams.fields,
+                baseUrl,
+                links,
+                meta,
+                included,
+                includeMerge: options?.includeMerge || false,
+                jsonFields
+            }
+        );
+
+        // metadata 생성 - 기존 헬퍼 함수 사용
+        const metadata = CrudResponseFormatter.createPaginationMeta(
+            items,
+            total,
+            queryParams.page,
+            'index',
+            queryParams.include,
+            queryParams
+        );
+
+        // BigInt와 DATE 타입 직렬화 처리
+        return serialize({ ...response, metadata });
+    }
+
+    /**
+     * UPDATE 라우트의 단일 리소스 JSON:API 응답(included/response/metadata) 조립 + 직렬화.
+     * 수정 결과(result)를 받아 최종 직렬화된 응답 객체를 반환한다. 제어 흐름(early-return) 없음.
+     * (기존 setupUpdateRoute 의 응답 조립 블록과 byte-identical)
+     */
+    private buildUpdateResponse(
+        result: any,
+        queryParams: any,
+        req: any,
+        modelName: string,
+        options: any,
+        primaryKey: string
+    ): any {
+        // Base URL 생성
+        const baseUrl = this.buildBaseUrl(req);
+
+        // 포함된 리소스 생성 (include 파라미터가 있는 경우)
+        let updateIncluded: JsonApiResource[] | undefined;
+        if (queryParams.include && queryParams.include.length > 0 && !options?.includeMerge) {
+            updateIncluded = JsonApiTransformer.createIncludedResources(
+                [result],
+                queryParams.include,
+                queryParams.fields,
+                baseUrl
+            );
+        }
+
+        // Json 타입 필드 목록 가져오기
+        const jsonFields = this.getJsonFieldSet(modelName);
+
+        // JSON:API 응답 생성
+        const response: JsonApiResponse = JsonApiTransformer.createJsonApiResponse(
+            result,
+            modelName,
+            {
+                primaryKey,
+                fields: queryParams.fields,
+                baseUrl,
+                included: updateIncluded,
+                includeMerge: options?.includeMerge || false,
+                jsonFields
+            }
+        );
+
+        // metadata 객체 생성 - 기존 헬퍼 함수 사용
+        const metadata = CrudResponseFormatter.createPaginationMeta(
+            [result], // 단일 항목을 배열로 감싸서 전달
+            1,        // total count = 1
+            undefined, // page 파라미터 없음 (단일 수정)
+            'update',
+            queryParams.include,
+            queryParams,
+        );
+
+        // BigInt와 DATE 타입 직렬화 처리
+        return serialize({ ...response, metadata });
+    }
+
+    /**
      * JSON:API 에러 형식으로 포맷하는 헬퍼 메서드 (통합 ErrorHandler 사용)
      */
     private formatJsonApiError(error: Error | unknown, code: string, status: number, path: string, method?: string): JsonApiErrorResponse {
@@ -2237,6 +2219,115 @@ export class CrudRouteBuilder {
                 maxDetailLength: 500
             }
         });
+    }
+
+    /**
+     * 요청으로부터 JSON:API 응답에 사용할 base URL 을 생성한다.
+     * (기존 인라인 `${req.protocol}://${req.get('host')}${req.baseUrl}` 표현식과 byte-identical)
+     */
+    private buildBaseUrl(req: any): string {
+        return `${req.protocol}://${req.get('host')}${req.baseUrl}`;
+    }
+
+    /**
+     * 주어진 리소스 타입의 Json 타입 필드 집합을 반환한다.
+     * (기존 `getJsonFields(...) || []` → `new Set(...)` 2-라인과 byte-identical)
+     */
+    private getJsonFieldSet(typeName: string): Set<string> {
+        const jsonFieldsArray = this.ctx.schemaAnalyzer?.getJsonFields(typeName) || [];
+        return new Set(jsonFieldsArray);
+    }
+
+    /**
+     * 핸들러 catch 블록의 공통 에러 응답 전송 로직.
+     * Prisma 에러를 매핑하고 JSON:API 에러로 포맷한 뒤 동일 status 로 전송한다.
+     * (기존 catch 블록의 mapPrismaError → formatJsonApiError → res.status().json() 3-라인과 byte-identical)
+     */
+    private sendMappedCrudError(res: any, error: any, req: any): void {
+        const { code, status } = ErrorFormatter.mapPrismaError(error);
+        const errorResponse = this.formatJsonApiError(error, code, status, req.path, req.method);
+        res.status(status).json(errorResponse);
+    }
+
+    /**
+     * relationship 변경 라우트(POST/PATCH/DELETE)의 Content-Type 검증.
+     * Content-Type 이 존재하지만 JSON:API 타입을 포함하지 않으면 415 를 전송하고 `true` 를 반환한다.
+     * 호출자는 `true` 인 경우 그대로 `return` 하여 기존 early-return 제어 흐름을 보존한다.
+     * (기존 인라인 415 검증 블록과 byte-identical)
+     */
+    private rejectInvalidJsonApiContentType(req: any, res: any): boolean {
+        const contentType = req.get('Content-Type');
+        if (contentType && !contentType.includes(JSON_API_CONTENT_TYPE)) {
+            const errorResponse = this.formatJsonApiError(
+                new Error(`Content-Type must be ${JSON_API_CONTENT_TYPE}`),
+                'INVALID_CONTENT_TYPE',
+                415,
+                req.path
+            );
+            res.status(415).json(errorResponse);
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * 쿼리 파라미터를 파싱하고 include 정책(검증/기본값 병합)을 적용한다.
+     * index/show/create/update 핸들러의 공통 진입 블록을 추출한 것으로 동작은 byte-identical.
+     *
+     * 성공 시 가공된 queryParams 를 반환한다.
+     * 파싱/검증 실패 시 기존과 동일한 400 (또는 parseError.statusCode) JSON:API 에러를 즉시 전송하고
+     * `null` 을 반환한다. 호출자는 `null` 인 경우 그대로 `return` 하여 기존 early-return 제어 흐름을 보존한다.
+     */
+    private parseQueryWithIncludePolicy(req: any, res: any, modelName: string, options?: any): any | null {
+        try {
+            const queryParams = CrudQueryParser.parseQuery(req, modelName, this.ctx.schemaAnalyzer);
+            CrudQueryParser.validateIncludes(queryParams.include, {
+                maxCount: options?.maxIncludeCount,
+                maxDepth: options?.maxIncludeDepth,
+                allowed: options?.allowedIncludes,
+            });
+            queryParams.include = CrudQueryParser.mergeDefaultIncludes(
+                queryParams.include,
+                options?.defaultIncludes
+            );
+            return queryParams;
+        } catch (parseError: any) {
+            // UUID 검증 실패 등의 에러를 400으로 응답
+            const errorResponse = this.formatJsonApiError(
+                parseError,
+                parseError.code || ERROR_CODES.VALIDATION_ERROR,
+                parseError.statusCode || 400,
+                req.path,
+                req.method
+            );
+            res.status(parseError.statusCode || 400).json(errorResponse);
+            return null;
+        }
+    }
+
+    /**
+     * include 정책을 적용하지 않고 쿼리 파라미터만 파싱한다.
+     * 관계 리소스 조회 라우트(?include= 를 소비하지 않는 라우트)의 공통 진입 블록을 추출한 것으로
+     * 동작은 byte-identical.
+     *
+     * 성공 시 queryParams 를, 파싱 실패 시 기존과 동일한 400 JSON:API 에러를 전송하고 `null` 을 반환한다.
+     * 호출자는 `null` 인 경우 그대로 `return` 하여 기존 early-return 제어 흐름을 보존한다.
+     */
+    private parseQueryOrSendError(req: any, res: any, modelName: string): any | null {
+        try {
+            return CrudQueryParser.parseQuery(req, modelName, this.ctx.schemaAnalyzer);
+        } catch (parseError: any) {
+            // UUID 검증 실패 등의 에러를 400으로 응답
+            const errorResponse = this.formatJsonApiError(
+                parseError,
+                parseError.code || ERROR_CODES.VALIDATION_ERROR,
+                parseError.statusCode || 400,
+                req.path,
+                req.method
+            );
+            res.status(parseError.statusCode || 400).json(errorResponse);
+            return null;
+        }
     }
 
     /**
@@ -2358,20 +2449,8 @@ export class CrudRouteBuilder {
 
                 // 쿼리 파라미터 파싱 (include, fields, sort, pagination 지원) (UUID 검증 등의 에러 발생 가능)
                 // NOTE: 이 라우트는 클라이언트의 ?include= 를 소비하지 않으므로 include 정책 적용 생략.
-                let queryParams;
-                try {
-                    queryParams = CrudQueryParser.parseQuery(req, modelName, this.ctx.schemaAnalyzer);
-                } catch (parseError: any) {
-                    // UUID 검증 실패 등의 에러를 400으로 응답
-                    const errorResponse = this.formatJsonApiError(
-                        parseError,
-                        parseError.code || ERROR_CODES.VALIDATION_ERROR,
-                        parseError.statusCode || 400,
-                        req.path,
-                        req.method
-                    );
-                    return res.status(parseError.statusCode || 400).json(errorResponse);
-                }
+                const queryParams = this.parseQueryOrSendError(req, res, modelName);
+                if (!queryParams) return; // 에러 응답은 이미 헬퍼에서 전송됨
 
                 // 기본 리소??조회
                 const item = await client[modelName].findUnique({
@@ -2402,7 +2481,7 @@ export class CrudRouteBuilder {
                 }
 
                 // Base URL 생성
-                const baseUrl = `${req.protocol}://${req.get('host')}${req.baseUrl}`;
+                const baseUrl = this.buildBaseUrl(req);
 
                 // 관계 리소스 타입 추론 (실제 데이터 기반)
                 const isArray = Array.isArray(relationData);
@@ -2414,8 +2493,7 @@ export class CrudRouteBuilder {
                 );
 
                 // Json 타입 필드 목록 가져오기 (관계 리소스 타입 기준)
-                const jsonFieldsArray = this.ctx.schemaAnalyzer?.getJsonFields(relationResourceType) || [];
-                const jsonFields = new Set(jsonFieldsArray);
+                const jsonFields = this.getJsonFieldSet(relationResourceType);
 
                 // JSON:API 응답 생성
                 const response: JsonApiResponse = JsonApiTransformer.createJsonApiResponse(
@@ -2437,9 +2515,7 @@ export class CrudRouteBuilder {
 
             } catch (error: any) {
                 log.Error(`Related Resource Error for ${modelName}:`, error);
-                const { code, status } = ErrorFormatter.mapPrismaError(error);
-                const errorResponse = this.formatJsonApiError(error, code, status, req.path, req.method);
-                res.status(status).json(errorResponse);
+                this.sendMappedCrudError(res, error, req);
             }
         });
 
@@ -2489,7 +2565,7 @@ export class CrudRouteBuilder {
                     }
                 }
 
-                const baseUrl = `${req.protocol}://${req.get('host')}${req.baseUrl}`;
+                const baseUrl = this.buildBaseUrl(req);
                 const response = {
                     data,
                     links: {
@@ -2505,9 +2581,7 @@ export class CrudRouteBuilder {
 
             } catch (error: any) {
                 log.Error(`Relationship Error for ${modelName}:`, error);
-                const { code, status } = ErrorFormatter.mapPrismaError(error);
-                const errorResponse = this.formatJsonApiError(error, code, status, req.path, req.method);
-                res.status(status).json(errorResponse);
+                this.sendMappedCrudError(res, error, req);
             }
         });
 
@@ -2517,16 +2591,7 @@ export class CrudRouteBuilder {
                 res.setHeader('Content-Type', JSON_API_CONTENT_TYPE);
 
                 // Content-Type 검증
-                const contentType = req.get('Content-Type');
-                if (contentType && !contentType.includes(JSON_API_CONTENT_TYPE)) {
-                    const errorResponse = this.formatJsonApiError(
-                        new Error(`Content-Type must be ${JSON_API_CONTENT_TYPE}`),
-                        'INVALID_CONTENT_TYPE',
-                        415,
-                        req.path
-                    );
-                    return res.status(415).json(errorResponse);
-                }
+                if (this.rejectInvalidJsonApiContentType(req, res)) return;
 
                 const { success, parsedIdentifier } = this.extractAndParsePrimaryKey(
                     req, res, primaryKey, primaryKeyParser, modelName
@@ -2563,9 +2628,7 @@ export class CrudRouteBuilder {
 
             } catch (error: any) {
                 log.Error(`Relationship Update Error for ${modelName}:`, error);
-                const { code, status } = ErrorFormatter.mapPrismaError(error);
-                const errorResponse = this.formatJsonApiError(error, code, status, req.path, req.method);
-                res.status(status).json(errorResponse);
+                this.sendMappedCrudError(res, error, req);
             }
         });
 
@@ -2575,16 +2638,7 @@ export class CrudRouteBuilder {
                 res.setHeader('Content-Type', JSON_API_CONTENT_TYPE);
 
                 // Content-Type 검증
-                const contentType = req.get('Content-Type');
-                if (contentType && !contentType.includes(JSON_API_CONTENT_TYPE)) {
-                    const errorResponse = this.formatJsonApiError(
-                        new Error(`Content-Type must be ${JSON_API_CONTENT_TYPE}`),
-                        'INVALID_CONTENT_TYPE',
-                        415,
-                        req.path
-                    );
-                    return res.status(415).json(errorResponse);
-                }
+                if (this.rejectInvalidJsonApiContentType(req, res)) return;
 
                 const { success, parsedIdentifier } = this.extractAndParsePrimaryKey(
                     req, res, primaryKey, primaryKeyParser, modelName
@@ -2630,9 +2684,7 @@ export class CrudRouteBuilder {
 
             } catch (error: any) {
                 log.Error(`Relationship Replace Error for ${modelName}:`, error);
-                const { code, status } = ErrorFormatter.mapPrismaError(error);
-                const errorResponse = this.formatJsonApiError(error, code, status, req.path, req.method);
-                res.status(status).json(errorResponse);
+                this.sendMappedCrudError(res, error, req);
             }
         });
 
@@ -2642,16 +2694,7 @@ export class CrudRouteBuilder {
                 res.setHeader('Content-Type', JSON_API_CONTENT_TYPE);
 
                 // Content-Type 검증
-                const contentType = req.get('Content-Type');
-                if (contentType && !contentType.includes(JSON_API_CONTENT_TYPE)) {
-                    const errorResponse = this.formatJsonApiError(
-                        new Error(`Content-Type must be ${JSON_API_CONTENT_TYPE}`),
-                        'INVALID_CONTENT_TYPE',
-                        415,
-                        req.path
-                    );
-                    return res.status(415).json(errorResponse);
-                }
+                if (this.rejectInvalidJsonApiContentType(req, res)) return;
 
                 const { success, parsedIdentifier } = this.extractAndParsePrimaryKey(
                     req, res, primaryKey, primaryKeyParser, modelName
@@ -2688,9 +2731,7 @@ export class CrudRouteBuilder {
 
             } catch (error: any) {
                 log.Error(`Relationship Delete Error for ${modelName}:`, error);
-                const { code, status } = ErrorFormatter.mapPrismaError(error);
-                const errorResponse = this.formatJsonApiError(error, code, status, req.path, req.method);
-                res.status(status).json(errorResponse);
+                this.sendMappedCrudError(res, error, req);
             }
         });
 
@@ -2708,20 +2749,8 @@ export class CrudRouteBuilder {
 
                 // 쿼리 파라미터 파싱 (UUID 검증 등의 에러 발생 가능)
                 // NOTE: 이 라우트는 클라이언트의 ?include= 를 소비하지 않으므로 include 정책 적용 생략.
-                let queryParams;
-                try {
-                    queryParams = CrudQueryParser.parseQuery(req, modelName, this.ctx.schemaAnalyzer);
-                } catch (parseError: any) {
-                    // UUID 검증 실패 등의 에러를 400으로 응답
-                    const errorResponse = this.formatJsonApiError(
-                        parseError,
-                        parseError.code || ERROR_CODES.VALIDATION_ERROR,
-                        parseError.statusCode || 400,
-                        req.path,
-                        req.method
-                    );
-                    return res.status(parseError.statusCode || 400).json(errorResponse);
-                }
+                const queryParams = this.parseQueryOrSendError(req, res, modelName);
+                if (!queryParams) return; // 에러 응답은 이미 헬퍼에서 전송됨
 
                 // 기본 리소??조회
                 const item = await client[modelName].findUnique({
@@ -2753,7 +2782,7 @@ export class CrudRouteBuilder {
                 }
 
                 // Base URL 생성
-                const baseUrl = `${req.protocol}://${req.get('host')}${req.baseUrl}`;
+                const baseUrl = this.buildBaseUrl(req);
                 const isArrayRelation = Array.isArray(relationData);
                 const sampleRelationData = isArrayRelation ? relationData[0] : relationData;
                 const resourceType = JsonApiTransformer.inferResourceTypeFromData(
@@ -2763,8 +2792,7 @@ export class CrudRouteBuilder {
                 );
 
                 // Json 타입 필드 목록 가져오기 (관계 리소스 타입 기준)
-                const jsonFieldsArray = this.ctx.schemaAnalyzer?.getJsonFields(resourceType) || [];
-                const jsonFields = new Set(jsonFieldsArray);
+                const jsonFields = this.getJsonFieldSet(resourceType);
 
                 // JSON:API 응답 생성
                 const response: JsonApiResponse = JsonApiTransformer.createJsonApiResponse(
@@ -2782,9 +2810,7 @@ export class CrudRouteBuilder {
 
             } catch (error: any) {
                 log.Error(`Related Resource Error for ${modelName}:`, error);
-                const { code, status } = ErrorFormatter.mapPrismaError(error);
-                const errorResponse = this.formatJsonApiError(error, code, status, req.path, req.method);
-                res.status(status).json(errorResponse);
+                this.sendMappedCrudError(res, error, req);
             }
         });
     }

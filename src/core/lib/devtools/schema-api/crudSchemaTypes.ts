@@ -14,7 +14,7 @@ export { CRUD_ACTIONS } from '@lib/crud/crudConstants';
  */
 export const PRISMA_TYPE_MAPPING: Record<string, string> = {
   String: 'string',
-  Int: 'number', 
+  Int: 'number',
   BigInt: 'bigint',
   Float: 'number',
   Decimal: 'number',
@@ -23,6 +23,12 @@ export const PRISMA_TYPE_MAPPING: Record<string, string> = {
   Json: 'object',
   Bytes: 'Buffer',
 };
+
+/**
+ * Prisma 내장 스칼라 타입 목록 (단일 출처) — PRISMA_TYPE_MAPPING 키에서 파생한다.
+ * enum 판별(isEnumType)에서 "내장 스칼라가 아닌가"를 검사하는 데 사용한다.
+ */
+export const PRISMA_SCALAR_TYPES: readonly string[] = Object.keys(PRISMA_TYPE_MAPPING);
 
 /**
  * Prisma 필드 메타데이터

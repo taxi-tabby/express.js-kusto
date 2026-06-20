@@ -4,7 +4,8 @@ import {
   PrismaFieldMetadata,
   PrismaRelationInfo,
   PrismaIndexInfo,
-  PRISMA_TYPE_MAPPING
+  PRISMA_TYPE_MAPPING,
+  PRISMA_SCALAR_TYPES
 } from '@lib/devtools/schema-api/crudSchemaTypes';
 
 // Prisma 7: PrismaClient는 생성된 클라이언트에서 가져오므로 any 타입 사용
@@ -452,8 +453,7 @@ export class PrismaSchemaAnalyzer {
    */
   public isEnumType(type: string): boolean {
     // Prisma에서 Enum은 보통 대문자로 시작하고 내장 타입이 아닙니다
-    const builtInTypes = ['String', 'Int', 'Float', 'Boolean', 'DateTime', 'Json', 'Bytes', 'BigInt', 'Decimal'];
-    return !builtInTypes.includes(type) && type.charAt(0).toUpperCase() === type.charAt(0);
+    return !PRISMA_SCALAR_TYPES.includes(type) && type.charAt(0).toUpperCase() === type.charAt(0);
   }
 
   /**

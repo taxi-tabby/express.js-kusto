@@ -2,7 +2,8 @@
   CrudSchemaInfo,
   SchemaApiResponse,
   AllSchemasResponse,
-  CRUD_ACTIONS
+  CRUD_ACTIONS,
+  PRISMA_SCALAR_TYPES
 } from '@lib/devtools/schema-api/crudSchemaTypes';
 import { PrismaSchemaAnalyzer } from '@lib/devtools/schema-api/prismaSchemaAnalyzer';
 import { RelationshipConfigManager } from '@lib/devtools/schema-api/relationshipConfig';
@@ -980,8 +981,7 @@ export class CrudSchemaRegistry {
     }
     if (this.analyzers.size > 0) return false;
     // analyzer가 없는 경우 fallback
-    const builtInTypes = ['String', 'Int', 'Float', 'Boolean', 'DateTime', 'Json', 'Bytes', 'BigInt', 'Decimal'];
-    return !builtInTypes.includes(type) && type.charAt(0).toUpperCase() === type.charAt(0);
+    return !PRISMA_SCALAR_TYPES.includes(type) && type.charAt(0).toUpperCase() === type.charAt(0);
   }
 
   /**

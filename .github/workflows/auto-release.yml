@@ -162,10 +162,16 @@ jobs:
         fi
 
         # Emit a "### Title" section for a commit-type pattern, only if non-empty.
+        # NOTE: must end in a command that returns 0 — under `bash -e`, a function whose
+        # last command is `[ -n "$body" ] && printf ...` returns 1 when the section is
+        # empty, and a standalone `emit ...` call would then abort the whole step
+        # (e.g. a release range with no `perf` commits). Use `if` so emit always returns 0.
         emit() {
           local body
           body=$(printf "%s\n" "$COMMITS" | grep -iE "$1" || true)
-          [ -n "$body" ] && printf "### %s\n%s\n\n" "$2" "$body"
+          if [ -n "$body" ]; then
+            printf "### %s\n%s\n\n" "$2" "$body"
+          fi
         }
 
         {

@@ -111,10 +111,11 @@ jobs:
       - name: Verify Prisma client generated
         run: test -f src/app/db/default/client/index.d.ts || { echo "::error::Prisma client(default) was not generated"; exit 1; }
       # 실제 Postgres 서비스 컨테이너에 KUSTO_TEST_PG_URL 로 접속한다(db-fixture 의 외부 경로).
-      # 모든 워커가 같은 DB 를 공유하므로 워커 간 간섭을 막기 위해 단일 워커로 실행한다.
-      # (test:ci 가 --maxWorkers=2 를 지정하므로 --runInBand 는 충돌한다 → --maxWorkers=1 로 덮어쓴다.)
-      - name: Run tests against real PostgreSQL
-        run: npm run test:ci -- --maxWorkers=1
+      # 모든 테스트 파일이 같은 DB 를 공유하므로, 같은 고정 ID(u1/p1 등)를 seed 하는 파일들이
+      # 병렬 실행되면 충돌한다. 반드시 단일 워커 직렬 실행이어야 한다 — test:ci 에 --maxWorkers=1
+      # 을 덧붙이면 --maxWorkers=2 와 중복되어 병렬로 떨어지므로, 단일 플래그 전용 스크립트를 쓴다.
+      - name: Run tests against real PostgreSQL (serial)
+        run: npm run test:ci:serial
         env:
           KUSTO_TEST_DB: postgres
           KUSTO_TEST_PG_URL: postgresql://test:test@localhost:5432/testdb

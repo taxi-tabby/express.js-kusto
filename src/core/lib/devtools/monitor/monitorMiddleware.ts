@@ -12,12 +12,15 @@ function labelRoute(req: Request): string {
         const base = req.baseUrl || '';
         return (base + matched) || '/';
     }
-    // 패턴이 없으면 path 의 숫자/UUID 세그먼트를 :id 로 접어 카디널리티를 줄인다.
+    // 패턴이 없으면(주로 404/미매칭) 동적으로 보이는 세그먼트를 :id 로 접어 카디널리티를 줄인다.
+    // 숫자 / UUID / 긴 hex 토큰 / 아주 긴 세그먼트를 모두 접어 fuzzing 잡음을 억제.
     const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const isDynamic = (seg: string): boolean =>
+        /^\d+$/.test(seg) || uuid.test(seg) || /^[0-9a-f]{16,}$/i.test(seg) || seg.length > 24;
     return (
         req.path
             .split('/')
-            .map((seg) => (/^\d+$/.test(seg) || uuid.test(seg) ? ':id' : seg))
+            .map((seg) => (isDynamic(seg) ? ':id' : seg))
             .join('/') || '/'
     );
 }

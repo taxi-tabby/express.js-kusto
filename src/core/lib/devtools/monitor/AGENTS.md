@@ -27,7 +27,7 @@ monitor/
 - **주요 export**: `class MetricsCollector`(`instance()` 싱글톤, `onStart`/`onFinish`/`snapshot`/`reset`). snapshot: total·in-flight·status분류·req/s 버킷+스파크라인·지연 p50/p95/p99/max/avg·최근요청·top routes.
 
 ### `monitorMiddleware.ts`
-- **책임**: 라우트보다 먼저 등록되어 모든 요청을 카운트. `res` finish/close 에서 지연·상태 기록. 메트릭 경로 자기집계 제외, 경로의 숫자/UUID 세그먼트를 `:id` 로 접어 카디널리티 억제.
+- **책임**: 라우트보다 먼저 등록되어 라우팅되는(정적이 아닌) 요청을 카운트. `res` finish/close 에서 지연·상태 기록. 메트릭 엔드포인트 자신과 `express.static` 으로 단락 처리되는 정적 자산은 집계에서 제외된다. 경로의 숫자/UUID/긴 hex/아주 긴 세그먼트를 `:id` 로 접어 카디널리티 억제(top routes 는 최저 count 축출).
 - **주요 export**: `monitorMiddleware`.
 
 ### `monitorSetup.ts`

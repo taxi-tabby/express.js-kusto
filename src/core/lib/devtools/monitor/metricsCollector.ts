@@ -85,12 +85,21 @@ export class MetricsCollector {
         this.recent.push({ ts: Date.now(), method, path: route, status, durationMs });
         if (this.recent.length > RECENT_CAP) this.recent.shift();
 
-        // route 집계(상한 내)
+        // route 집계. 상한에 도달하면 "동결"하지 않고 최저 count 항목을 1개 축출한다 —
+        // 그래야 404 fuzzing/asset 잡음이 200칸을 선점해도 실제 트래픽이 밀어낼 수 있다.
         const r = this.routes.get(route);
         if (r) {
             r.count++;
             r.totalMs += durationMs;
-        } else if (this.routes.size < TOP_ROUTES_CAP) {
+        } else {
+            if (this.routes.size >= TOP_ROUTES_CAP) {
+                let minKey: string | undefined;
+                let minCount = Infinity;
+                for (const [k, v] of this.routes) {
+                    if (v.count < minCount) { minCount = v.count; minKey = k; }
+                }
+                if (minKey !== undefined) this.routes.delete(minKey);
+            }
             this.routes.set(route, { count: 1, totalMs: durationMs });
         }
     }

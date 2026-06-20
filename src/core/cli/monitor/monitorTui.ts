@@ -24,6 +24,15 @@ function resolveUrl(opts: MonitorRunOptions): string {
     return `http://${host}:${port}${MONITOR_PATH}`;
 }
 
+const MAX_BODY_BYTES = 512 * 1024; // 스냅샷 JSON 은 작다 — 예상 밖 대용량 응답 방어
+
+/** 파싱된 값이 최소한 스냅샷 형태인지 검증(버전 스큐/엉뚱한 200 응답 방어). */
+function isSnapshotShape(v: unknown): v is MonitorSnapshot {
+    if (!v || typeof v !== 'object') return false;
+    const o = v as Record<string, unknown>;
+    return !!o.app && !!o.process && !!o.requests && Array.isArray(o.databases);
+}
+
 function fetchSnapshot(url: string, timeoutMs: number): Promise<MonitorSnapshot> {
     return new Promise((resolve, reject) => {
         const req = http.get(url, (res) => {
@@ -33,10 +42,26 @@ function fetchSnapshot(url: string, timeoutMs: number): Promise<MonitorSnapshot>
                 return;
             }
             let data = '';
-            res.on('data', (c) => { data += c; });
+            let aborted = false;
+            res.on('data', (c) => {
+                if (aborted) return;
+                data += c;
+                if (data.length > MAX_BODY_BYTES) {
+                    aborted = true;
+                    req.destroy();
+                    reject(new Error('metrics response too large'));
+                }
+            });
             res.on('end', () => {
-                try { resolve(JSON.parse(data) as MonitorSnapshot); }
-                catch { reject(new Error('invalid metrics JSON')); }
+                if (aborted) return;
+                let parsed: unknown;
+                try { parsed = JSON.parse(data); }
+                catch { reject(new Error('invalid metrics JSON')); return; }
+                if (!isSnapshotShape(parsed)) {
+                    reject(new Error('unexpected metrics shape (server/CLI version skew?)'));
+                    return;
+                }
+                resolve(parsed);
             });
         });
         req.on('error', (e) => reject(e));
@@ -59,9 +84,18 @@ export function runMonitor(opts: MonitorRunOptions = {}): void {
 
     const draw = (full = false) => {
         const { cols, rows } = dims();
-        const buf = (full ? screen.clear : screen.home)
-            + renderFrame(lastSnapshot, { cols, rows, url, intervalMs, lastError });
-        out.write(buf);
+        try {
+            const buf = (full ? screen.clear : screen.home)
+                + renderFrame(lastSnapshot, { cols, rows, url, intervalMs, lastError });
+            out.write(buf);
+        } catch (e) {
+            // 렌더 자체가 실패하면(예: 예상 밖 스냅샷) 화면을 깨지 않고 대기 프레임으로 강등.
+            lastSnapshot = null;
+            lastError = `render error: ${e instanceof Error ? e.message : String(e)}`;
+            try {
+                out.write(screen.clear + renderFrame(null, { cols, rows, url, intervalMs, lastError }));
+            } catch { /* 최후의 보루: 무시 */ }
+        }
     };
 
     const tick = async () => {
@@ -100,6 +134,9 @@ export function runMonitor(opts: MonitorRunOptions = {}): void {
     }
     process.on('SIGINT', () => cleanup(0));
     process.on('SIGTERM', () => cleanup(0));
+    // 어떤 예외 경로에서도 터미널을 alt-screen/커서숨김/raw 상태로 남기지 않도록 최종 안전망.
+    process.on('uncaughtException', (e) => { lastError = String(e); cleanup(1); });
+    process.on('unhandledRejection', (e) => { lastError = String(e); cleanup(1); });
 
     // 터미널 크기 변화 → 전체 클리어 후 재렌더
     out.on('resize', () => { if (!stopped) draw(true); });

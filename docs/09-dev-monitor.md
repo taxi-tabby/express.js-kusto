@@ -36,8 +36,8 @@ npm run kusto -- monitor   # npm 스크립트로도 동일
 ## 동작 구조 / 보안
 
 - 서버가 실행 중일 때만 동작한다. 서버가 없으면 "Waiting for server …" 대기 화면을 보여주며 계속 폴링한다.
-- 서버는 **개발 모드(NODE_ENV ≠ production)에서만** 메트릭 엔드포인트 `GET /__kusto/metrics` 를 노출하고, **localhost(루프백)에서만** 접근을 허용한다(비-로컬은 403). 별도 설정 없이 dev 에서 자동 활성된다.
-- 메트릭 수집 미들웨어는 고정 크기 링버퍼만 사용해 메모리 상한이 있으며, 메트릭 엔드포인트 자신의 폴링 요청은 집계에서 제외한다.
+- 서버는 **개발 모드(NODE_ENV ≠ production)에서만** 메트릭 엔드포인트 `GET /__kusto/metrics` 를 노출하고, 실제 TCP 피어 주소가 **루프백일 때만** 접근을 허용한다(비-로컬은 403). 프록시 헤더(X-Forwarded-For)가 아니라 raw 소켓 주소로 판정하므로 trust proxy 설정과 무관하게 우회되지 않는다. 별도 설정 없이 dev 에서 자동 활성된다.
+- 메트릭 수집 미들웨어는 고정 크기 링버퍼만 사용해 메모리 상한이 있으며, 메트릭 엔드포인트 자신과 `express.static` 으로 처리되는 정적 자산은 집계에서 제외한다(라우팅되는 요청만 카운트).
 - 구현: 서버측 `src/core/lib/devtools/monitor/`, CLI측 `src/core/cli/monitor/`.
 
 ---

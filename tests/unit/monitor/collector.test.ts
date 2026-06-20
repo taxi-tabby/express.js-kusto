@@ -52,6 +52,16 @@ describe('monitor/MetricsCollector', () => {
         expect(c.snapshot().perSecondSeries).toHaveLength(PER_SECOND_WINDOW);
     });
 
+    it('topRoutes 상한 도달 시 최저 count 항목을 축출해 실트래픽이 잡음을 밀어낸다', () => {
+        // 200칸을 일회성 잡음으로 채운다(각 count=1)
+        for (let i = 0; i < 200; i++) c.onFinish('GET', `/junk/${i}-x`, 404, 1);
+        // 이후 실제 핫 라우트를 다수 요청 → 잡음을 축출하고 진입해야 한다
+        for (let i = 0; i < 50; i++) c.onFinish('GET', '/api/users', 200, 2);
+        const top = c.snapshot().topRoutes;
+        expect(top[0].route).toBe('/api/users');
+        expect(top[0].count).toBe(50);
+    });
+
     it('reset 후 모든 카운터가 0', () => {
         c.onFinish('GET', '/a', 200, 1);
         c.reset();

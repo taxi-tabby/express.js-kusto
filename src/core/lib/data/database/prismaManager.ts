@@ -607,7 +607,14 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 	/**
 	 * Get database provider for a specific database
 	 */
+	// provider 는 프로세스 수명 동안 불변(schema.prisma 의 datasource provider) → 1회 읽고 캐시.
+	// 모니터가 폴링마다 호출하므로 동기 fs.readFileSync 를 매번 하지 않도록 한다.
+	private providerCache: Map<string, string> = new Map();
+
 	public getProviderForDatabase(databaseName: string): string {
+		const cached = this.providerCache.get(databaseName);
+		if (cached !== undefined) return cached;
+
 		const config = this.getDatabaseConfig(databaseName);
 		if (!config) {
 			throw new Error(`Database ${databaseName} not found`);
@@ -617,8 +624,9 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 			const schemaPath = path.join(process.cwd(), 'src', 'app', 'db', databaseName, 'schema.prisma');
 			const schemaContent = fs.readFileSync(schemaPath, 'utf-8');
 			const providerMatch = schemaContent.match(/provider\s*=\s*["']([^"']+)["']/);
-			
-			return providerMatch ? providerMatch[1] : 'unknown';
+			const provider = providerMatch ? providerMatch[1] : 'unknown';
+			this.providerCache.set(databaseName, provider);
+			return provider;
 		} catch (error) {
 			log.Error(`Failed to get provider for ${databaseName}:`, error);
 			return 'unknown';

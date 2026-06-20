@@ -34,15 +34,17 @@ export function isMonitorEnabled(): boolean {
     return process.env.NODE_ENV !== 'production';
 }
 
-/** 요청 IP 가 로컬호스트인지(루프백). */
-function isLocalRequest(req: Request): boolean {
-    const ip = req.ip || req.socket.remoteAddress || '';
-    return (
-        ip === '127.0.0.1' ||
-        ip === '::1' ||
-        ip === '::ffff:127.0.0.1' ||
-        ip.endsWith('127.0.0.1')
-    );
+/**
+ * 요청이 루프백(로컬호스트)에서 온 것인지 — 신뢰할 수 없는 프록시 헤더(req.ip/X-Forwarded-For)가
+ * 아니라 실제 TCP 피어 주소(req.socket.remoteAddress)만 본다.
+ *
+ * 주의: trust proxy 가 켜지면(기본값) req.ip 는 클라이언트가 보낸 XFF 에서 파생되므로,
+ * req.ip 로 게이트를 걸면 원격 클라이언트가 `X-Forwarded-For: 127.0.0.1` 로 우회할 수 있다.
+ * 따라서 raw 소켓 주소만 정확히(exact) 비교한다(substring/endsWith 금지).
+ */
+export function isLocalRequest(req: Pick<Request, 'socket'>): boolean {
+    const ra = req.socket?.remoteAddress || '';
+    return ra === '127.0.0.1' || ra === '::1' || ra === '::ffff:127.0.0.1';
 }
 
 function buildDatabases(): DatabaseStatus[] {

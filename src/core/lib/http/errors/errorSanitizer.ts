@@ -9,6 +9,41 @@
  * 주의: stackTrace 패턴은 호출 시점의 NODE_ENV 로 평가해야 하므로(테스트가 env 를 바꿔가며
  * 검증) 테이블을 모듈 로드 시점 상수가 아니라 함수 내부에서 구성한다.
  */
+/**
+ * Prisma 에러 메시지를 사용자 친화적 문구로 치환한다(메시지에 'Prisma'/'prisma' 포함 시에만).
+ * errorHandler.sanitizePrismaErrors 와 crudHelpers.sanitizePrismaSpecificErrors 에 바이트 단위로
+ * 중복돼 있던 매핑 테이블+치환 루프를 단일 출처로 통합한 것.
+ */
+export function sanitizePrismaMessage(message: string): string {
+    if (!message.includes('Prisma') && !message.includes('prisma')) {
+        return message;
+    }
+
+    const prismaErrorMappings = new Map([
+        ['PrismaClientValidationError', 'Validation error occurred'],
+        ['PrismaClientKnownRequestError', 'Database operation failed'],
+        ['PrismaClientUnknownRequestError', 'Database request failed'],
+        ['PrismaClientRustPanicError', 'Database engine error'],
+        ['PrismaClientInitializationError', 'Database connection error'],
+        ['Invalid.*invocation', 'Invalid request parameters'],
+        ['Argument `[^`]+` is missing', 'Required parameter is missing'],
+        ['Unknown argument `[^`]+`', 'Invalid parameter provided'],
+        ['Unique constraint failed on the fields: \\(`[^`]+`\\)', 'Duplicate entry detected'],
+        ['Foreign key constraint failed', 'Related record not found'],
+        ['Record to (update|delete) does not exist', 'Record not found'],
+        ['Database connection string is invalid', 'Database configuration error'],
+        ['Query interpretation error', 'Query processing error']
+    ]);
+
+    let sanitized = message;
+    for (const [pattern, replacement] of prismaErrorMappings) {
+        const regex = new RegExp(pattern, 'gi');
+        sanitized = sanitized.replace(regex, replacement);
+    }
+
+    return sanitized;
+}
+
 export function removeSensitiveInformation(message: string): string {
     const sensitivePatternCategories = {
         // 데이터베이스 연결 문자열

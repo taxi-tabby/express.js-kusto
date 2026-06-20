@@ -6,7 +6,7 @@
 import { JsonApiError, JsonApiErrorResponse, ErrorSecurityOptions } from '@lib/crud/crudHelpers';
 import { ERROR_CODES, PRISMA_ERROR_CODES, HTTP_ERROR_CODES, PRISMA_CANONICAL_ERROR_MAP, getStatusText } from '@lib/http/errors/errorCodes';
 import { JSON_API_VERSION } from '@lib/crud/jsonApiConstants';
-import { removeSensitiveInformation } from '@lib/http/errors/errorSanitizer';
+import { removeSensitiveInformation, sanitizePrismaMessage } from '@lib/http/errors/errorSanitizer';
 import { getImplementationString } from '@lib/config/packageInfo';
 
 // JSON:API meta.implementation 문자열 — 단일 출처(@lib/config/packageInfo)에서 파생.
@@ -199,33 +199,8 @@ export class ErrorHandler {
    * Prisma 에러 처리
    */
   private static sanitizePrismaErrors(message: string): string {
-    if (!message.includes('Prisma') && !message.includes('prisma')) {
-      return message;
-    }
-
-    const prismaErrorMappings = new Map([
-      ['PrismaClientValidationError', 'Validation error occurred'],
-      ['PrismaClientKnownRequestError', 'Database operation failed'],
-      ['PrismaClientUnknownRequestError', 'Database request failed'],
-      ['PrismaClientRustPanicError', 'Database engine error'],
-      ['PrismaClientInitializationError', 'Database connection error'],
-      ['Invalid.*invocation', 'Invalid request parameters'],
-      ['Argument `[^`]+` is missing', 'Required parameter is missing'],
-      ['Unknown argument `[^`]+`', 'Invalid parameter provided'],
-      ['Unique constraint failed on the fields: \\(`[^`]+`\\)', 'Duplicate entry detected'],
-      ['Foreign key constraint failed', 'Related record not found'],
-      ['Record to (update|delete) does not exist', 'Record not found'],
-      ['Database connection string is invalid', 'Database configuration error'],
-      ['Query interpretation error', 'Query processing error']
-    ]);
-
-    let sanitized = message;
-    for (const [pattern, replacement] of prismaErrorMappings) {
-      const regex = new RegExp(pattern, 'gi');
-      sanitized = sanitized.replace(regex, replacement);
-    }
-
-    return sanitized;
+    // 단일 출처(@lib/http/errors/errorSanitizer)로 위임 — crudHelpers 와 동일 규칙 공유.
+    return sanitizePrismaMessage(message);
   }
 
   /**

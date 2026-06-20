@@ -4,7 +4,7 @@ import { log } from '@ext/winston';
 import { ErrorHandler, ErrorResponseFormat } from '@lib/http/errors/errorHandler';
 import { ERROR_CODES, PRISMA_CANONICAL_ERROR_MAP } from '@lib/http/errors/errorCodes';
 import { JSON_API_VERSION } from '@lib/crud/jsonApiConstants';
-import { removeSensitiveInformation } from '@lib/http/errors/errorSanitizer';
+import { removeSensitiveInformation, sanitizePrismaMessage } from '@lib/http/errors/errorSanitizer';
 import { isUuid } from '@lib/crud/primaryKeyParsers';
 import { DEFAULT_PRIMARY_KEY, DEFAULT_PAGE_SIZE } from '@lib/crud/crudConstants';
 import { getImplementationString } from '@lib/config/packageInfo';
@@ -1591,34 +1591,8 @@ export class CrudResponseFormatter {
    * Prisma 특화 에러 처리
    */
   private static sanitizePrismaSpecificErrors(message: string): string {
-    // Prisma 에러인지 확인
-    if (!message.includes('Prisma') && !message.includes('prisma')) {
-      return message;
-    }
-
-    const prismaErrorMappings = new Map([
-      ['PrismaClientValidationError', 'Validation error occurred'],
-      ['PrismaClientKnownRequestError', 'Database operation failed'],
-      ['PrismaClientUnknownRequestError', 'Database request failed'],
-      ['PrismaClientRustPanicError', 'Database engine error'],
-      ['PrismaClientInitializationError', 'Database connection error'],
-      ['Invalid.*invocation', 'Invalid request parameters'],
-      ['Argument `[^`]+` is missing', 'Required parameter is missing'],
-      ['Unknown argument `[^`]+`', 'Invalid parameter provided'],
-      ['Unique constraint failed on the fields: \\(`[^`]+`\\)', 'Duplicate entry detected'],
-      ['Foreign key constraint failed', 'Related record not found'],
-      ['Record to (update|delete) does not exist', 'Record not found'],
-      ['Database connection string is invalid', 'Database configuration error'],
-      ['Query interpretation error', 'Query processing error']
-    ]);
-
-    let sanitized = message;
-    for (const [pattern, replacement] of prismaErrorMappings) {
-      const regex = new RegExp(pattern, 'gi');
-      sanitized = sanitized.replace(regex, replacement);
-    }
-
-    return sanitized;
+    // 단일 출처(@lib/http/errors/errorSanitizer)로 위임 — errorHandler 와 동일 규칙 공유.
+    return sanitizePrismaMessage(message);
   }
 
   /**

@@ -73,3 +73,47 @@ jobs:
           KUSTO_TEST_DB: postgres
           # PGlite 는 wasm 을 동적 import 하므로 jest vm 에서 ESM 동적 import 활성화 필요.
           NODE_OPTIONS: --experimental-vm-modules
+
+  test-postgres-real:
+    name: tests (real postgres 16 service)
+    runs-on: ubuntu-latest
+    needs: test-sqlite
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: testdb
+        ports:
+          - 5432:5432
+        # 컨테이너가 연결을 받을 준비가 될 때까지 잡 시작을 지연한다.
+        options: >-
+          --health-cmd "pg_isready -U test -d testdb"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Prepare CI-only test env
+        run: |
+          echo "NODE_ENV=test" > .env
+          echo "DEFAULT__KUSTO_RDB_URL=postgresql://ci:ci@127.0.0.1:5432/ci_dummy" >> .env
+      - name: Generate Prisma client
+        run: npm run db -- generate -a
+      - name: Verify Prisma client generated
+        run: test -f src/app/db/default/client/index.d.ts || { echo "::error::Prisma client(default) was not generated"; exit 1; }
+      # 실제 Postgres 서비스 컨테이너에 KUSTO_TEST_PG_URL 로 접속한다(db-fixture 의 외부 경로).
+      # 모든 워커가 같은 DB 를 공유하므로 워커 간 간섭을 막기 위해 --runInBand(단일 워커)로 실행.
+      - name: Run tests against real PostgreSQL
+        run: npm run test:ci -- --runInBand
+        env:
+          KUSTO_TEST_DB: postgres
+          KUSTO_TEST_PG_URL: postgresql://test:test@localhost:5432/testdb

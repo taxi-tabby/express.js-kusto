@@ -167,6 +167,14 @@ async function bootSqlite(): Promise<DbFixture> {
 }
 
 async function bootPostgres(): Promise<DbFixture> {
+    // 실제 외부 Postgres 가 지정되면(예: CI 의 postgres service container) PGlite 대신 사용.
+    // 임베디드 PGlite 가 Postgres 와이어 프로토콜·SQL 방언은 이미 커버하므로, 외부 경로는
+    // 실제 네트워크 소켓·서버 프로세스·커넥션 풀 동작을 추가로 검증한다.
+    const externalUrl = process.env.KUSTO_TEST_PG_URL;
+    if (externalUrl) {
+        return await bootPostgresExternal(externalUrl);
+    }
+
     const { PGlite } = await import('@electric-sql/pglite');
     const { PGLiteSocketServer } = await import('@electric-sql/pglite-socket');
     const { PrismaPg } = await import('@prisma/adapter-pg');
@@ -224,6 +232,47 @@ async function bootPostgres(): Promise<DbFixture> {
             await prisma.$disconnect();
             await server.stop();
             await pglite.close();
+        }
+    };
+}
+
+/**
+ * 외부에서 제공된 실제 Postgres URL 로 백엔드를 부팅한다(KUSTO_TEST_PG_URL).
+ * PGlite 경로와 달리 in-process 이벤트 루프 제약이 없으므로 db push 를 동기로 돌려도 된다.
+ * 서버는 우리가 소유하지 않으므로 teardown 은 client disconnect 만 수행한다.
+ *
+ * 주의(CI): 모든 jest 워커가 같은 DB 를 공유하므로, 외부 Postgres 잡은 워커 간 간섭을 막기
+ * 위해 단일 워커(--runInBand)로 실행해야 한다. (db-fixture 자체는 워커 수에 무관하게 동작)
+ */
+async function bootPostgresExternal(externalUrl: string): Promise<DbFixture> {
+    const { PrismaPg } = await import('@prisma/adapter-pg');
+
+    const schemaPath = path.resolve('tests/_fixtures/test-schema.postgres.prisma');
+    const clientDir = path.resolve('node_modules/.prisma/test-postgres-client');
+
+    ensurePrismaClientGenerated(schemaPath, clientDir);
+
+    const push = spawnSync('npx', [
+        'prisma', 'db', 'push',
+        '--accept-data-loss',
+        '--schema', schemaPath,
+        '--url', externalUrl
+    ], { stdio: 'pipe', shell: true });
+    if (push.status !== 0) {
+        throw new Error(`prisma db push failed (external postgres): ${push.stderr?.toString() ?? ''}`);
+    }
+
+    const clientModule = require(clientDir);
+    const PrismaClient = clientModule.PrismaClient;
+    const adapter = new (PrismaPg as any)({ connectionString: externalUrl });
+    const prisma = new PrismaClient({ adapter });
+
+    return {
+        provider: 'postgres',
+        url: externalUrl,
+        prisma,
+        teardown: async () => {
+            await prisma.$disconnect();
         }
     };
 }

@@ -6,6 +6,7 @@ import {
     OpenApiDocument,
     RouteDocumentationLike,
 } from '@lib/devtools/documentation';
+import { getPackageInfo } from '@lib/config/packageInfo';
 
 /**
  * 라우트 문서 등록 타입.
@@ -19,25 +20,12 @@ export interface RouteDocumentation extends Omit<RouteDocumentationLike, 'respon
 /** 기존 ApiDocumentation 호환 alias */
 export type ApiDocumentation = OpenApiDocument;
 
-const FALLBACK_PACKAGE_JSON = { name: 'kusto-api', version: '0.0.0' };
-
 /**
  * 문서 자동화(AUTO_DOCS) 활성화 판정 — 단일 캐논 헬퍼.
  * production 이 아니고 AUTO_DOCS === 'true' 일 때만 활성화.
  */
 export function isDocumentationEnabled(): boolean {
     return process.env.NODE_ENV !== 'production' && process.env.AUTO_DOCS === 'true';
-}
-
-function loadPackageJson(): { name?: string; version?: string; description?: string } {
-    try {
-        // webpack bundling 시 inline. dev 모드에서는 ts-node 가 require 해석.
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        return require('../../../../../package.json');
-    } catch {
-        log.Warn('package.json not found for OpenAPI info, using fallback');
-        return FALLBACK_PACKAGE_JSON;
-    }
 }
 
 /**
@@ -221,7 +209,7 @@ export class DocumentationGenerator {
             routes: this.routes as Parameters<typeof buildOpenApiDocument>[0]['routes'],
             schemas: this.schemas,
             env: process.env,
-            packageJson: loadPackageJson(),
+            packageJson: getPackageInfo(),
             tagDescriptions: this.tagDescriptions,
         });
     }

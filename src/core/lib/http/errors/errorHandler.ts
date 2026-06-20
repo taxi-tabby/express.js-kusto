@@ -7,24 +7,10 @@ import { JsonApiError, JsonApiErrorResponse, ErrorSecurityOptions } from '@lib/c
 import { ERROR_CODES, PRISMA_ERROR_CODES, HTTP_ERROR_CODES, PRISMA_CANONICAL_ERROR_MAP } from '@lib/http/errors/errorCodes';
 import { JSON_API_VERSION } from '@lib/crud/jsonApiConstants';
 import { removeSensitiveInformation } from '@lib/http/errors/errorSanitizer';
+import { getImplementationString } from '@lib/config/packageInfo';
 
-/**
- * JSON:API meta.implementation 문자열을 package.json 의 name/version 에서 파생한다.
- * 하드코딩으로 인한 버전 stale 을 방지한다. (webpack 번들 시 inline, dev 모드는 ts-node require 해석)
- */
-function resolveImplementation(): string {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const pkg = require('../../../../../package.json') as { name?: string; version?: string };
-    const name = pkg.name ?? 'kusto-server';
-    const version = pkg.version ?? '0.0.0';
-    return `${name} v${version}`;
-  } catch {
-    return 'kusto-server';
-  }
-}
-
-const IMPLEMENTATION = resolveImplementation();
+// JSON:API meta.implementation 문자열 — 단일 출처(@lib/config/packageInfo)에서 파생.
+const IMPLEMENTATION = getImplementationString();
 
 /**
  * 정규화된 에러 인터페이스

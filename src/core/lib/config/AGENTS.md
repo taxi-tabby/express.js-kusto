@@ -6,7 +6,8 @@
 
 ```
 config/
-└── environmentLoader.ts   # dotenv 로더 + 환경 판별 + get/getRequired
+├── environmentLoader.ts   # dotenv 로더 + 환경 판별 + get/getRequired
+└── packageInfo.ts         # package.json name/version/description 접근 SSOT
 ```
 
 ## environmentLoader.ts
@@ -24,9 +25,16 @@ config/
   - `getLoadStatus()` — `{ isLoaded, nodeEnv }` 상태 스냅샷.
 - **의존**: `dotenv`(외부), `path`(Node), `@ext/winston`의 `log`(경고 출력). 다른 lib 티어에 의존하지 않는 하위(leaf) 티어다.
 
+## packageInfo.ts
+
+`package.json`의 `name`/`version`/`description`을 읽는 단일 출처. 과거 `crudHelpers`/`errorHandler`/`documentationGenerator`가 각자 `require('.../package.json')` 하고 서로 다른 fallback(`kusto-server` vs `kusto-api`)을 들고 있어 로드 실패 시 앱 이름이 불일치할 수 있던 문제를 통합한다.
+
+- **주요 export**: `getPackageInfo()` → `{ name, version, description? }`(로드 실패 시 단일 fallback `kusto-server`/`0.0.0`, 무로그), `getImplementationString()` → `"name v version"`(JSON:API `meta.implementation`용), `interface PackageInfo`.
+- **의존**: 없음(`require`로 루트 `package.json`만 읽는 leaf). webpack 번들 시 inline, dev 는 ts-node 가 require 해석.
+
 ## Import 규칙
 
-표준 import 경로는 `@lib/config/environmentLoader`다(`@lib` 단일 루트, 티어 경로 심화).
+표준 import 경로는 `@lib/config/environmentLoader` · `@lib/config/packageInfo`다(`@lib` 단일 루트, 티어 경로 심화).
 
 - **Inbound(이 티어를 쓰는 쪽)**: 부트스트랩/설정이 필요한 상위 코드(예: `@core/*`, 데이터·DI 티어, 미들웨어 등)가 환경 판별과 환경변수 접근을 위해 호출한다.
 - **Outbound(이 티어가 쓰는 것)**: `@ext/winston`(로깅)에만 의존. 레이어링 방향상 거의 최하단에 위치하며 다른 lib 티어를 끌어오지 않는다.

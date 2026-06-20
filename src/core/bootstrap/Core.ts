@@ -13,6 +13,8 @@ import { DependencyInjector } from '@lib/data/di/dependencyInjector';
 import { repositoryManager } from '@lib/data/database/repositoryManager';
 import { SchemaApiSetup } from '@lib/devtools/schema-api/schemaApiSetup';
 import { registerMonitor } from '@lib/devtools/monitor/monitorSetup';
+import { kustoInitMiddleware, globalErrorMiddleware } from '@lib/http/routing/frameworkMiddleware';
+import { clientIpMiddleware } from '@lib/http/routing/clientIpMiddleware';
 
 export interface CoreConfig {
     basePath?: string;
@@ -109,6 +111,7 @@ export class Core {
 
         
         this.setupExpress();
+        this.setupCoreMiddleware(); // 프레임워크 필수(req.kusto 주입 + clientIp) — 라우트보다 먼저
         this.setupMonitor();     // dev 모니터(메트릭 미들웨어 + /__kusto/metrics) — 라우트보다 먼저
         this.setupHealthCheck(); // /healthz readiness (글로벌 라우트보다 먼저)
         this.setupDocumentationRoutes(); // 문서화 라우트를 먼저 등록
@@ -124,6 +127,8 @@ export class Core {
             }
         }
 
+        // 전역 에러 핸들러(4-arg)를 가장 마지막에 마운트(모든 라우트/미들웨어 에러 포착).
+        this._app.use(globalErrorMiddleware);
 
         this._isInitialized = true;
         if (process.env.NODE_ENV === 'development') {
@@ -455,6 +460,15 @@ export class Core {
                 prisma: readiness.prisma,
             });
         });
+    }
+
+    /**
+     * 프레임워크 필수 미들웨어를 라우트보다 먼저 등록한다(Core 소유).
+     * req.kusto 주입 → clientIp 해석 순서. 이후 app 의 글로벌 미들웨어/라우트가 이를 사용한다.
+     */
+    private setupCoreMiddleware(): void {
+        this._app.use(kustoInitMiddleware);
+        this._app.use(clientIpMiddleware);
     }
 
     /** dev 모니터 등록(메트릭 수집 미들웨어 + /__kusto/metrics). dev·localhost 전용. */

@@ -16,7 +16,7 @@ routes/
 
 ## File Convention
 
-- **`middleware.ts`**: 해당 폴더 경로에 적용되는 미들웨어 (Helmet, CORS, body-parser 등)
+- **`middleware.ts`**: 해당 폴더 경로에 적용되는 미들웨어 배열. 루트(`routes/middleware.ts`)는 글로벌 정책 스택이며, 기본은 `[...defaultGlobalMiddleware()]`(helmet/CORS/cookie/body/log). **얇고 선택적** — 없으면 Core 가 기본을 자동 적용한다. 필수 미들웨어(`req.kusto`/clientIp/전역 에러)는 Core 가 소유하므로 여기 두지 않는다.
 - **`route.ts`**: 해당 폴더 경로의 HTTP 엔드포인트 정의
 - 폴더 구조가 곧 URL 경로 (`routes/api/v1/users/route.ts` → `/api/v1/users`)
 

@@ -4,6 +4,7 @@ import path from 'path';
 import { log } from '@ext/winston';
 import { normalizeSlash, getElapsedTimeInString } from '@ext/util';
 import { DocumentationGenerator } from '@lib/devtools/documentation/documentationGenerator';
+import { defaultGlobalMiddleware } from '@lib/http/routing/globalMiddleware';
 
 // Webpack 빌드 환경에서 자동 생성된 라우트 맵 가져오기 (빌드 타임에 생성된 파일)
 let routesMap: Record<string, Router> = {};
@@ -631,20 +632,27 @@ async function loadRoutes(app: Express, dir?: string): Promise<void> {
         //       pre-미들웨어와 에러 핸들러를 분리하여 에러 핸들러는 라우트 등록 이후 맨 뒤에 mount 한다.
         let globalErrorMiddlewares: any[] = [];
         const rootDirectory = directories.find(d => d.parentRoute === '' || d.parentRoute === '/');
-        if (rootDirectory && rootDirectory.hasMiddleware) {
-            const globalMiddlewares = loadMiddleware(rootDirectory.path);
-            if (globalMiddlewares && globalMiddlewares.length > 0) {
-                const preMiddlewares = globalMiddlewares.filter(
-                    (m: any) => typeof m !== 'function' || m.length !== 4
-                );
-                globalErrorMiddlewares = globalMiddlewares.filter(
-                    (m: any) => typeof m === 'function' && m.length === 4
-                );
-                if (preMiddlewares.length > 0) {
-                    app.use(...preMiddlewares);
-                }
-                log.Route(`Global middlewares registered: ${preMiddlewares.length} pre + ${globalErrorMiddlewares.length} error handler(s) from ${rootDirectory.path}`);
+        const rootMiddlewares = (rootDirectory && rootDirectory.hasMiddleware)
+            ? loadMiddleware(rootDirectory.path)
+            : [];
+
+        if (rootMiddlewares && rootMiddlewares.length > 0) {
+            // app/routes/middleware.ts 가 정의한 글로벌 정책 스택을 사용한다.
+            const preMiddlewares = rootMiddlewares.filter(
+                (m: any) => typeof m !== 'function' || m.length !== 4
+            );
+            globalErrorMiddlewares = rootMiddlewares.filter(
+                (m: any) => typeof m === 'function' && m.length === 4
+            );
+            if (preMiddlewares.length > 0) {
+                app.use(...preMiddlewares);
             }
+            log.Route(`Global middlewares registered: ${preMiddlewares.length} pre + ${globalErrorMiddlewares.length} error handler(s) from ${rootDirectory!.path}`);
+        } else {
+            // app/routes/middleware.ts 가 없으면 프레임워크 기본 정책 스택을 적용한다(safe default).
+            // (필수 미들웨어 — req.kusto/clientIp/전역 에러 — 는 Core 가 별도로 소유한다.)
+            app.use(...defaultGlobalMiddleware());
+            log.Route('No app/routes/middleware.ts — applied defaultGlobalMiddleware()');
         }
 
         // 2. 모든 라우트 모듈 사전 로드

@@ -13,6 +13,11 @@ export { ExpressRouter, injectedMiddleware } from '@lib/http/routing/expressRout
 export { log, logger } from '@ext/winston';
 export * from '@ext/util';
 
+// Global middleware policy (정책 스택 — app/routes/middleware.ts 에서 spread 해서 사용)
+export { defaultGlobalMiddleware, resolveCorsWhitelist } from '@lib/http/routing/globalMiddleware';
+export type { GlobalMiddlewareOptions } from '@lib/http/routing/globalMiddleware';
+export { clientIpMiddleware } from '@lib/http/routing/clientIpMiddleware';
+
 // Schema API (개발 모드 전용)
 export { CrudSchemaRegistry } from '@lib/devtools/schema-api/crudSchemaRegistry';
 export { PrismaSchemaAnalyzer } from '@lib/devtools/schema-api/prismaSchemaAnalyzer';

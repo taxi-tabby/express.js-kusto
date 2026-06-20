@@ -117,17 +117,17 @@ Folder structure under `src/app/routes/` maps directly to URL paths:
 
 Route files must `export default router.build()` using `ExpressRouter`.
 
-### Global Middleware (`src/app/routes/middleware.ts`)
+### Global Middleware
 
-Exports an array of Express middleware applied to all routes, in order:
-1. KustoManager initialization (`req.kusto`)
-2. Client IP extraction (`clientIpMiddleware`) — populates `req.ip`/`req.ips` honoring proxy headers
-3. Helmet security headers
-4. CORS (dynamic whitelist from `CORS_WHITELIST` env)
-5. Cookie parser
-6. Body parser (JSON + URL-encoded, 50mb limit, supports `application/vnd.api+json`)
-7. Footwalk request logging (winston `Footwalk` level)
-8. Error handler (catches downstream errors, returns 500 JSON)
+Two layers, split by ownership so framework essentials don't live in `src/app`:
+
+**Framework-essential (Core-owned, always on, not in app):** registered by `Core` around the app stack — `req.kusto` injection + client-IP resolution (`clientIpMiddleware`) run before routes, and the global JSON:API error handler runs last. These live in `@lib/http/routing/{frameworkMiddleware,clientIpMiddleware}.ts` and ship/update with core.
+
+**Policy stack (`defaultGlobalMiddleware()` from `@core`, user-overridable):** helmet → CORS (whitelist from `CORS_WHITELIST` env) → cookie-parser → body-parser (JSON + URL-encoded, 50mb, `application/vnd.api+json`) → request logging (`Footwalk`). Defined in `@lib/http/routing/globalMiddleware.ts`.
+
+`src/app/routes/middleware.ts` is a **thin, optional** user file: `export default [...defaultGlobalMiddleware(), /* your middleware */]`. If the file is absent, the loader applies `defaultGlobalMiddleware()` automatically; tune via `defaultGlobalMiddleware({ corsWhitelist, bodyLimit, helmet, disableRequestLog })`.
+
+Effective request order: `req.kusto` → clientIp → helmet → CORS → cookie → body → log → routes → error handler.
 
 ### Handler Signature
 

@@ -4,7 +4,7 @@
  */
 
 import { JsonApiError, JsonApiErrorResponse, ErrorSecurityOptions } from '@lib/crud/crudHelpers';
-import { ERROR_CODES, PRISMA_ERROR_CODES, HTTP_ERROR_CODES, PRISMA_CANONICAL_ERROR_MAP } from '@lib/http/errors/errorCodes';
+import { ERROR_CODES, PRISMA_ERROR_CODES, HTTP_ERROR_CODES, PRISMA_CANONICAL_ERROR_MAP, getStatusText } from '@lib/http/errors/errorCodes';
 import { JSON_API_VERSION } from '@lib/crud/jsonApiConstants';
 import { removeSensitiveInformation } from '@lib/http/errors/errorSanitizer';
 import { getImplementationString } from '@lib/config/packageInfo';
@@ -453,21 +453,7 @@ export class ErrorHandler {
    * HTTP 상태 코드에 따른 에러 제목 생성
    */
   private static getErrorTitle(status: number): string {
-    const titleMap: Record<number, string> = {
-      400: 'Bad Request',
-      401: 'Unauthorized',
-      403: 'Forbidden',
-      404: 'Not Found',
-      405: 'Method Not Allowed',
-      409: 'Conflict',
-      422: 'Unprocessable Entity',
-      429: 'Too Many Requests',
-      500: 'Internal Server Error',
-      502: 'Bad Gateway',
-      503: 'Service Unavailable',
-      504: 'Gateway Timeout'
-    };
-
-    return titleMap[status] || 'Error';
+    // HTTP_STATUS_TEXT 단일 출처(@lib/http/errors/errorCodes)로 위임.
+    return getStatusText(status) || 'Error';
   }
 }

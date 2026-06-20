@@ -15,21 +15,10 @@ import { buildInfo } from '@lib/devtools/documentation/infoSource';
 import { buildServers } from '@lib/devtools/documentation/serversSource';
 import { toOpenApiPath, deriveResourceTag, deriveOperationId } from '@lib/devtools/documentation/pathConverter';
 import { mediaTypeFor } from '@lib/devtools/documentation/contentTypeRule';
+import { getStatusText } from '@lib/http/errors/errorCodes';
 
 const OPENAPI_VERSION = '3.1.0';
 const DEFAULT_CONTENT_TYPE_MODE: ContentTypeMode = 'json';
-
-/** HTTP 상태코드 → 표준 reason phrase (응답 설명 기본값). */
-const STATUS_TEXT: Record<string, string> = {
-    '200': 'OK', '201': 'Created', '202': 'Accepted', '204': 'No Content',
-    '301': 'Moved Permanently', '302': 'Found', '304': 'Not Modified',
-    '400': 'Bad Request', '401': 'Unauthorized', '403': 'Forbidden',
-    '404': 'Not Found', '405': 'Method Not Allowed', '406': 'Not Acceptable',
-    '409': 'Conflict', '410': 'Gone', '415': 'Unsupported Media Type',
-    '422': 'Unprocessable Entity', '429': 'Too Many Requests',
-    '500': 'Internal Server Error', '502': 'Bad Gateway',
-    '503': 'Service Unavailable', '504': 'Gateway Timeout',
-};
 
 export interface RouteDocumentationLike {
     method: string;
@@ -132,7 +121,7 @@ function buildResponses(route: RouteDocumentationLike, mediaType: string): Recor
                 ? (schema as OpenApiSchemaOrRef)
                 : schemaToOpenApi(schema as Schema);
             out[code] = {
-                description: STATUS_TEXT[code] ?? `Response ${code}`,
+                description: getStatusText(code) ?? `Response ${code}`,
                 content: {
                     [mediaType]: { schema: resolved },
                 },

@@ -292,6 +292,27 @@ export function getHttpStatusForErrorCode(errorCode: string): number {
 }
 
 /**
+ * HTTP 상태 코드 → 표준 reason phrase 단일 출처 (SSOT).
+ * 과거 openApiBuilder(STATUS_TEXT)·errorHandler(getErrorTitle)·proxyMiddleware 가
+ * 동일 문구를 각자 들고 있던 것을 한 곳으로 모은다.
+ */
+export const HTTP_STATUS_TEXT: Record<number, string> = {
+  200: 'OK', 201: 'Created', 202: 'Accepted', 204: 'No Content',
+  301: 'Moved Permanently', 302: 'Found', 304: 'Not Modified',
+  400: 'Bad Request', 401: 'Unauthorized', 403: 'Forbidden',
+  404: 'Not Found', 405: 'Method Not Allowed', 406: 'Not Acceptable',
+  409: 'Conflict', 410: 'Gone', 415: 'Unsupported Media Type',
+  422: 'Unprocessable Entity', 429: 'Too Many Requests',
+  500: 'Internal Server Error', 502: 'Bad Gateway',
+  503: 'Service Unavailable', 504: 'Gateway Timeout',
+};
+
+/** HTTP 상태 코드(숫자/문자열)의 표준 reason phrase 를 반환(없으면 undefined). */
+export function getStatusText(code: number | string): string | undefined {
+  return HTTP_STATUS_TEXT[Number(code)];
+}
+
+/**
  * Prisma 에러 코드 → { errorCode, httpStatus } 정규(canonical) 매핑.
  *
  * 단일 진실 공급원(single source of truth). 과거 ErrorHandler.mapPrismaErrorCodes 와

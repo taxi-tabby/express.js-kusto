@@ -4,7 +4,7 @@ import * as https from 'https';
 import { URL } from 'url';
 import qs from 'qs';
 import { log } from '@ext/winston';
-import { ERROR_CODES, getHttpStatusForErrorCode } from '@lib/http/errors/errorCodes';
+import { ERROR_CODES, getHttpStatusForErrorCode, getStatusText } from '@lib/http/errors/errorCodes';
 
 export interface ProxyOptions {
   /** 업스트림 베이스 URL. 필수. 예: 'http://localhost:3001', 'https://api.example.com' */
@@ -121,7 +121,7 @@ function sendProxyError(err: NodeJS.ErrnoException, req: Request, res: Response)
     errors: [{
       status: String(status),
       code,
-      title: isTimeout ? 'Gateway Timeout' : 'Bad Gateway',
+      title: getStatusText(status) ?? 'Bad Gateway',
       detail: isDev ? `Upstream request failed: ${err.code || err.message}` : 'Upstream request failed',
     }],
   });

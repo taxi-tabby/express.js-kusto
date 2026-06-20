@@ -4,6 +4,12 @@
  */
 
 /**
+ * 기본 CRUD 액션 목록 (단일 진실 공급원)
+ * recover 는 소프트 삭제가 활성화된 경우에만 추가되는 액션이므로 기본 목록에 포함하지 않는다.
+ */
+export const CRUD_ACTIONS: readonly string[] = ['index', 'show', 'create', 'update', 'destroy'];
+
+/**
  * Prisma 필드 타입 매핑
  */
 export const PRISMA_TYPE_MAPPING: Record<string, string> = {

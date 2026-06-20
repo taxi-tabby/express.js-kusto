@@ -1,28 +1,19 @@
-import { Schema } from './validator';
 import { ResponseConfig } from './requestHandler';
 import { log } from '@ext/winston';
 import {
     buildOpenApiDocument,
     OpenApiSchemaOrRef,
     OpenApiDocument,
-    ContentTypeMode,
+    RouteDocumentationLike,
 } from './documentation';
 
-export interface RouteDocumentation {
-    method: string;
-    path: string;
-    summary?: string;
-    description?: string;
-    operationId?: string;
-    deprecated?: boolean;
-    parameters?: {
-        query?: Schema;
-        params?: Schema;
-        body?: Schema | OpenApiSchemaOrRef;
-    };
+/**
+ * 라우트 문서 등록 타입.
+ * 공통 필드는 캐논 타입(RouteDocumentationLike, openApiBuilder)에서 가져오고,
+ * responses 만 등록 측 시그니처(ResponseConfig 허용)로 좁혀 재정의한다.
+ */
+export interface RouteDocumentation extends Omit<RouteDocumentationLike, 'responses'> {
     responses?: ResponseConfig | Record<string | number, OpenApiSchemaOrRef>;
-    tags?: string[];
-    contentType?: ContentTypeMode;
 }
 
 /** 기존 ApiDocumentation 호환 alias */
@@ -47,6 +38,124 @@ function loadPackageJson(): { name?: string; version?: string; description?: str
         log.Warn('package.json not found for OpenAPI info, using fallback');
         return FALLBACK_PACKAGE_JSON;
     }
+}
+
+/**
+ * Swagger UI 5.x HTML 셸. generateHTMLDocumentation() 이 그대로 반환한다.
+ * (정적 템플릿 — 바이트 단위로 기존 출력과 동일)
+ */
+const SWAGGER_HTML = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Documentation</title>
+    <link rel="stylesheet" type="text/css" href="https://unpkg.com/swagger-ui-dist@5.0.0/swagger-ui.css" />
+    <style>
+        body { margin: 0; padding: 0; }
+        .swagger-ui .topbar { display: none; }
+    </style>
+</head>
+<body>
+    <div id="swagger-ui"></div>
+    <script src="https://unpkg.com/swagger-ui-dist@5.0.0/swagger-ui-bundle.js"></script>
+    <script>
+        window.onload = function() {
+            SwaggerUIBundle({
+                url: '/docs/openapi.json',
+                dom_id: '#swagger-ui',
+                deepLinking: true,
+                presets: [
+                    SwaggerUIBundle.presets.apis,
+                    SwaggerUIBundle.presets.standalone
+                ],
+                plugins: [SwaggerUIBundle.plugins.DownloadUrl]
+            });
+        };
+    </script>
+</body>
+</html>`;
+
+/**
+ * 개발 모드 정보 페이지 템플릿. generateDevInfoPage() 이 등록 라우트를 넘겨 렌더한다.
+ * (바이트 단위로 기존 출력과 동일)
+ */
+function renderDevInfoPage(routes: RouteDocumentation[]): string {
+    const totalRoutes = routes.length;
+    const routesByMethod = routes.reduce((acc, route) => {
+        acc[route.method] = (acc[route.method] || 0) + 1;
+        return acc;
+    }, {} as Record<string, number>);
+
+    return `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Development Info</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 40px; }
+        .header { background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 30px; }
+        .stats { display: flex; gap: 20px; margin: 20px 0; }
+        .stat-card { background: white; border: 1px solid #e9ecef; padding: 15px; border-radius: 8px; min-width: 120px; }
+        .stat-number { font-size: 24px; font-weight: bold; color: #0d6efd; }
+        .stat-label { color: #6c757d; font-size: 14px; }
+        .route-list { margin-top: 20px; }
+        .route-item { background: white; border: 1px solid #e9ecef; padding: 10px 15px; margin: 5px 0; border-radius: 4px; display: flex; align-items: center; }
+        .method { font-weight: bold; margin-right: 15px; padding: 3px 8px; border-radius: 3px; font-size: 12px; }
+        .method.GET { background: #d4edda; color: #155724; }
+        .method.POST { background: #cce5ff; color: #004085; }
+        .method.PUT { background: #fff3cd; color: #856404; }
+        .method.DELETE { background: #f8d7da; color: #721c24; }
+        .path { font-family: monospace; color: #495057; }
+        .links { margin-top: 30px; }
+        .link-button { display: inline-block; background: #0d6efd; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px; margin-right: 10px; }
+        .link-button:hover { background: #0b5ed7; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>API Development Dashboard</h1>
+        <p>Auto-generated documentation for Express Kusto API</p>
+        <p><strong>Environment:</strong> ${process.env.NODE_ENV || 'development'} | <strong>Auto Docs:</strong> ${process.env.AUTO_DOCS}</p>
+    </div>
+
+    <div class="stats">
+        <div class="stat-card">
+            <div class="stat-number">${totalRoutes}</div>
+            <div class="stat-label">Total Routes</div>
+        </div>
+        ${Object.entries(routesByMethod).map(([method, count]) => `
+        <div class="stat-card">
+            <div class="stat-number">${count}</div>
+            <div class="stat-label">${method} Routes</div>
+        </div>
+        `).join('')}
+    </div>
+
+    <h2>Registered Routes</h2>
+    <div class="route-list">
+        ${routes.map(route => `
+        <div class="route-item">
+            <span class="method ${route.method}">${route.method}</span>
+            <span class="path">${route.path}</span>
+            ${route.summary ? `<span style="margin-left: auto; color: #6c757d; font-style: italic;">${route.summary}</span>` : ''}
+        </div>
+        `).join('')}
+    </div>
+    <div class="links">
+        <a href="/docs/openapi.json" class="link-button">OpenAPI JSON</a>
+    </div>
+
+    <script>
+        if (window.location.search.includes('refresh=true')) {
+            setTimeout(() => window.location.reload(), 5000);
+        }
+    </script>
+</body>
+</html>`;
 }
 
 export class DocumentationGenerator {
@@ -122,38 +231,7 @@ export class DocumentationGenerator {
         if (!this.isDocumentationEnabled()) {
             return '<h1>Documentation is not enabled</h1>';
         }
-        return `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>API Documentation</title>
-    <link rel="stylesheet" type="text/css" href="https://unpkg.com/swagger-ui-dist@5.0.0/swagger-ui.css" />
-    <style>
-        body { margin: 0; padding: 0; }
-        .swagger-ui .topbar { display: none; }
-    </style>
-</head>
-<body>
-    <div id="swagger-ui"></div>
-    <script src="https://unpkg.com/swagger-ui-dist@5.0.0/swagger-ui-bundle.js"></script>
-    <script>
-        window.onload = function() {
-            SwaggerUIBundle({
-                url: '/docs/openapi.json',
-                dom_id: '#swagger-ui',
-                deepLinking: true,
-                presets: [
-                    SwaggerUIBundle.presets.apis,
-                    SwaggerUIBundle.presets.standalone
-                ],
-                plugins: [SwaggerUIBundle.plugins.DownloadUrl]
-            });
-        };
-    </script>
-</body>
-</html>`;
+        return SWAGGER_HTML;
     }
 
     static getRoutes(): RouteDocumentation[] {
@@ -168,79 +246,6 @@ export class DocumentationGenerator {
 
     /** 개발 모드 정보 페이지 생성 (기존 동작 보존) */
     static generateDevInfoPage(): string {
-        const totalRoutes = this.routes.length;
-        const routesByMethod = this.routes.reduce((acc, route) => {
-            acc[route.method] = (acc[route.method] || 0) + 1;
-            return acc;
-        }, {} as Record<string, number>);
-
-        return `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>API Development Info</title>
-    <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 40px; }
-        .header { background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 30px; }
-        .stats { display: flex; gap: 20px; margin: 20px 0; }
-        .stat-card { background: white; border: 1px solid #e9ecef; padding: 15px; border-radius: 8px; min-width: 120px; }
-        .stat-number { font-size: 24px; font-weight: bold; color: #0d6efd; }
-        .stat-label { color: #6c757d; font-size: 14px; }
-        .route-list { margin-top: 20px; }
-        .route-item { background: white; border: 1px solid #e9ecef; padding: 10px 15px; margin: 5px 0; border-radius: 4px; display: flex; align-items: center; }
-        .method { font-weight: bold; margin-right: 15px; padding: 3px 8px; border-radius: 3px; font-size: 12px; }
-        .method.GET { background: #d4edda; color: #155724; }
-        .method.POST { background: #cce5ff; color: #004085; }
-        .method.PUT { background: #fff3cd; color: #856404; }
-        .method.DELETE { background: #f8d7da; color: #721c24; }
-        .path { font-family: monospace; color: #495057; }
-        .links { margin-top: 30px; }
-        .link-button { display: inline-block; background: #0d6efd; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px; margin-right: 10px; }
-        .link-button:hover { background: #0b5ed7; }
-    </style>
-</head>
-<body>
-    <div class="header">
-        <h1>API Development Dashboard</h1>
-        <p>Auto-generated documentation for Express Kusto API</p>
-        <p><strong>Environment:</strong> ${process.env.NODE_ENV || 'development'} | <strong>Auto Docs:</strong> ${process.env.AUTO_DOCS}</p>
-    </div>
-
-    <div class="stats">
-        <div class="stat-card">
-            <div class="stat-number">${totalRoutes}</div>
-            <div class="stat-label">Total Routes</div>
-        </div>
-        ${Object.entries(routesByMethod).map(([method, count]) => `
-        <div class="stat-card">
-            <div class="stat-number">${count}</div>
-            <div class="stat-label">${method} Routes</div>
-        </div>
-        `).join('')}
-    </div>
-
-    <h2>Registered Routes</h2>
-    <div class="route-list">
-        ${this.routes.map(route => `
-        <div class="route-item">
-            <span class="method ${route.method}">${route.method}</span>
-            <span class="path">${route.path}</span>
-            ${route.summary ? `<span style="margin-left: auto; color: #6c757d; font-style: italic;">${route.summary}</span>` : ''}
-        </div>
-        `).join('')}
-    </div>
-    <div class="links">
-        <a href="/docs/openapi.json" class="link-button">OpenAPI JSON</a>
-    </div>
-
-    <script>
-        if (window.location.search.includes('refresh=true')) {
-            setTimeout(() => window.location.reload(), 5000);
-        }
-    </script>
-</body>
-</html>`;
+        return renderDevInfoPage(this.routes);
     }
 }

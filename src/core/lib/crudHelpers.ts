@@ -2281,27 +2281,8 @@ export class JsonApiTransformer {
     return {
       jsonapi: {
         version: "1.1",
-        // ext: ["https://jsonapi.org/ext/atomic"],
-        // profile: ["https://jsonapi.org/profiles/ethanresnick/cursor-pagination/"],
         meta: {
-          implementation: "express.js-kusto v2.0",
-          // implementedFeatures: [
-          //   "sparse-fieldsets",
-          //   "compound-documents", 
-          //   "resource-relationships",
-          //   "pagination",
-          //   "sorting",
-          //   "filtering",
-          //   "atomic-operations",
-          //   "content-negotiation",
-          //   "resource-identification"
-          // ],
-          // supportedExtensions: [
-          //   "https://jsonapi.org/ext/atomic"
-          // ],
-          // supportedProfiles: [
-          //   "https://jsonapi.org/profiles/ethanresnick/cursor-pagination/"
-          // ]
+          implementation: "express.js-kusto v2.0"
         }
       }
     };

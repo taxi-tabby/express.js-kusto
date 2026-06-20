@@ -1,7 +1,8 @@
 ﻿import {
   CrudSchemaInfo,
   SchemaApiResponse,
-  AllSchemasResponse
+  AllSchemasResponse,
+  CRUD_ACTIONS
 } from './crudSchemaTypes';
 import { PrismaSchemaAnalyzer } from './prismaSchemaAnalyzer';
 import { RelationshipConfigManager } from './relationshipConfig';
@@ -106,7 +107,7 @@ export class CrudSchemaRegistry {
       const basePath = this.generateBasePath(modelName);
 
       // 기본 액션들 (CRUD 미사용 모델도 구조는 제공)
-      const enabledActions = ['index', 'show', 'create', 'update', 'destroy'];
+      const enabledActions = [...CRUD_ACTIONS];
 
       // 소프트 삭제 필드 확인
       const softDeleteField = modelInfo.fields.find(field => 
@@ -220,7 +221,7 @@ export class CrudSchemaRegistry {
       const primaryKeyType = primaryKeyField?.jsType || 'string';
 
       // 활성화된 액션들 결정
-      const defaultActions = ['index', 'show', 'create', 'update', 'destroy'];
+      const defaultActions = [...CRUD_ACTIONS];
       let enabledActions: string[];
 
       if (options.only) {

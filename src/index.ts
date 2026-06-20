@@ -3,6 +3,7 @@ import 'module-alias/register';
 
 import { EnvironmentLoader } from './core/lib/environmentLoader';
 import { Application, log } from './core';
+import { resolveServerDefaults } from './core/Core';
 
 // 환경변수 로드 (가장 먼저 실행)
 EnvironmentLoader.load();
@@ -13,9 +14,10 @@ log.Debug(`Host: ${EnvironmentLoader.get('HOST', 'localhost')}:${EnvironmentLoad
 log.Debug(`Production Mode: ${EnvironmentLoader.isProduction()}`);
 
 // 애플리케이션 생성 및 설정
+// port/host 의 env 기본값 해석은 Core 와 공유하는 resolveServerDefaults() 로 일원화한다.
+// (EnvironmentLoader.load() 이후 호출하므로 .env 값이 반영된다 — 기존 동작과 동일)
 const app = new Application({
-    port: parseInt(EnvironmentLoader.get('PORT') || '3000'),
-    host: EnvironmentLoader.get('HOST') || '0.0.0.0',
+    ...resolveServerDefaults(),
     routesPath: './src/app/routes',
     viewsPath: './src/app/views',
     viewEngine: 'ejs',

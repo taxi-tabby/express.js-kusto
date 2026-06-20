@@ -23,6 +23,23 @@ export interface CoreConfig {
     trustProxy?: boolean;
 }
 
+/**
+ * 서버 바인딩 기본값(port/host)을 `process.env` 에서 해석한다.
+ *
+ * 부트스트랩 설정 중복 제거: 이전에는 동일한 fallback('3000'/'0.0.0.0')이
+ * `Core.getDefaultConfig()` 와 `src/index.ts` 양쪽에 각각 하드코딩되어 있었다.
+ * 이 함수가 단일 출처가 되어 양쪽에서 호출된다.
+ *
+ * 주의: 호출 시점의 `process.env` 를 그대로 읽으므로, 호출 타이밍별 결과는
+ * 기존 코드와 동일하다(index.ts 는 .env 로드 이후, Core 기본값은 로드 이전).
+ */
+export function resolveServerDefaults(): { port: number; host: string } {
+    return {
+        port: parseInt(process.env.PORT || '3000'),
+        host: process.env.HOST || '0.0.0.0'
+    };
+}
+
 export class Core {
     private static instance: Core;
     private _app: Express;
@@ -47,16 +64,17 @@ export class Core {
 
     private getDefaultConfig(): Required<CoreConfig> {
         const basePath = process.env.CORE_APP_BASEPATH || './app';
+        const { port, host } = resolveServerDefaults();
         return {
             basePath,
             routesPath: `${basePath}/routes`,
             viewsPath: `${basePath}/views`,
             viewEngine: 'ejs',
-            port: parseInt(process.env.PORT || '3000'),
-            host: process.env.HOST || '0.0.0.0',
+            port,
+            host,
             trustProxy: process.env.TRUST_PROXY === 'true'
         };
-    }    
+    }
     
     
     /**

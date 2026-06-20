@@ -7,6 +7,7 @@ import { runUpdateCheck } from '@core/updater/compare';
 import { runUpdate } from '@core/updater/update';
 import { generateAndCompress } from '@core/updater/generate';
 import { PACKAGE_JSON_PATH } from '@core/updater/paths';
+import { runMonitor } from '@core/cli/monitor/monitorTui';
 
 /**
  * 통합 프로젝트 CLI — `kusto`.
@@ -62,6 +63,19 @@ update
     .action(async () => { await generateAndCompress(); });
 
 kusto.addCommand(update);
+
+// ── monitor: 실행 중인 dev 서버의 실시간 상태(htop 형) ───────────────────────
+kusto
+    .command('monitor')
+    .alias('top')
+    .description('Live server dashboard (process / requests / DB / routes). Dev server must be running.')
+    .option('--url <url>', 'Full metrics URL (overrides host/port)')
+    .option('--host <host>', 'Server host (default localhost)')
+    .option('--port <port>', 'Server port (default $PORT or 3000)', (v) => parseInt(v, 10))
+    .option('--interval <ms>', 'Refresh interval in ms (default 1000)', (v) => parseInt(v, 10))
+    .action((opts) => {
+        runMonitor({ url: opts.url, host: opts.host, port: opts.port, interval: opts.interval });
+    });
 
 // ── generate: 프레임워크 타입 생성 (db/injectable/repository) ─────────────────
 kusto

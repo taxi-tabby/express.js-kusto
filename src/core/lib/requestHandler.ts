@@ -1,4 +1,4 @@
-﻿import { Request, Response, NextFunction } from 'express';
+﻿import { Request, Response, NextFunction, RequestHandler as ExpressRequestHandler } from 'express';
 import { Validator, Schema, ValidationResult, FieldSchema } from './validator';
 import { log } from '@ext/winston';
 import { DependencyInjector } from './dependencyInjector';
@@ -15,6 +15,15 @@ export interface RequestConfig {
 
 export interface ResponseConfig {
     [statusCode: number]: Schema;
+}
+
+/**
+ * 응답 설정 항목에 부가될 수 있는 정적 분석 opt-out 마커.
+ * 실제 스키마 필드가 아니라, 핸들러 구현 검증(휴리스틱)에서 알려진 오탐을
+ * 개별 상태 코드 단위로 건너뛰기 위한 플래그다.
+ */
+interface ResponseConfigEntryMeta {
+    __skipImplementationCheck?: boolean;
 }
 
 export interface HandlerConfig {
@@ -245,7 +254,8 @@ export class RequestHandler {
             // P2-13: 정규식 정적 분석은 휴리스틱이라 false positive 가 발생할 수 있다.
             //        알려진 오탐은 해당 응답 설정에 `__skipImplementationCheck: true` 로
             //        명시적으로 opt-out 하여, STRICT 모드 전체를 끄지 않고 개별 코드만 건너뛴다.
-            if ((responseConfig as any)?.[code]?.__skipImplementationCheck === true) {
+            const entryMeta = (responseConfig[code as unknown as number] as Schema & ResponseConfigEntryMeta | undefined);
+            if (entryMeta?.__skipImplementationCheck === true) {
                 continue;
             }
 
@@ -301,7 +311,8 @@ export class RequestHandler {
         config: HandlerConfig,
         handler: (req: ValidatedRequest, res: Response, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => Promise<any> | any
     ) {
-        const middlewares: any[] = [];
+        // 표준 Express 미들웨어 배열. Express 라우터에 그대로 spread 된다.
+        const middlewares: ExpressRequestHandler[] = [];
 
         // 핸들러의 소스 코드를 얻어서 정적 분석 수행
         if (config.response && process.env.NODE_ENV !== 'production') {
@@ -327,14 +338,20 @@ export class RequestHandler {
         }
 
         // 요청 검증 미들웨어 추가
+        // (ValidatedRequest 는 Request 를 확장하지만 strictFunctionTypes 하에서는
+        //  더 좁은 req 파라미터가 RequestHandler 에 직접 대입되지 않으므로, 런타임
+        //  동작은 그대로 둔 채 Express 미들웨어 타입으로만 명시적으로 맞춘다.)
         if (config.request) {
-            middlewares.push(this.validateRequest(config.request));
+            middlewares.push(this.validateRequest(config.request) as ExpressRequestHandler);
         }        // Dependency injection을 지원하는 실제 핸들러
-        middlewares.push(async (req: ValidatedRequest, res: Response, next: NextFunction) => {
+        // req 파라미터는 Express RequestHandler 와 정확히 일치하도록 Request 로 받고,
+        // validatedData 가 보장되는 핸들러 컨텍스트에서만 ValidatedRequest 로 좁힌다.
+        middlewares.push(async (req: Request, res: Response, next: NextFunction) => {
+            const vreq = req as ValidatedRequest;
             try {                // Dependency injector에서 모든 injectable 모듈 가져오기
                 const injected = DependencyInjector.getInstance().getInjectedModules();
-                
-                const result = await handler(req, res, injected, repositoryManager, prismaManager);
+
+                const result = await handler(vreq, res, injected, repositoryManager, prismaManager);
 
                 // 이미 응답이 전송되었으면 리턴
                 if (res.headersSent) {
@@ -347,7 +364,7 @@ export class RequestHandler {
                     const responseSchema = config.response?.[statusCode];
                     // serialize 는 responseConfig 검증/필터(sendSuccess)보다 먼저 변형한다.
                     const out = config.serialize
-                        ? await applyResponseSerializer(result, config.serialize, req)
+                        ? await applyResponseSerializer(result, config.serialize, vreq)
                         : result;
                     this.sendSuccess(res, out, statusCode, responseSchema, config.response);
                 }

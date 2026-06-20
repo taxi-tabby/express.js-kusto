@@ -7,6 +7,24 @@ import { JsonApiError, JsonApiErrorResponse, ErrorSecurityOptions } from './crud
 import { ERROR_CODES, PRISMA_ERROR_CODES, HTTP_ERROR_CODES, PRISMA_CANONICAL_ERROR_MAP } from './errorCodes';
 
 /**
+ * JSON:API meta.implementation 문자열을 package.json 의 name/version 에서 파생한다.
+ * 하드코딩으로 인한 버전 stale 을 방지한다. (webpack 번들 시 inline, dev 모드는 ts-node require 해석)
+ */
+function resolveImplementation(): string {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const pkg = require('../../../package.json') as { name?: string; version?: string };
+    const name = pkg.name ?? 'kusto-server';
+    const version = pkg.version ?? '0.0.0';
+    return `${name} v${version}`;
+  } catch {
+    return 'kusto-server';
+  }
+}
+
+const IMPLEMENTATION = resolveImplementation();
+
+/**
  * 정규화된 에러 인터페이스
  */
 export interface NormalizedError {
@@ -26,8 +44,7 @@ export interface NormalizedError {
  */
 export enum ErrorResponseFormat {
   CRUD = 'crud',
-  JSON_API = 'jsonapi',
-  EXPRESS = 'express'
+  JSON_API = 'jsonapi'
 }
 
 /**
@@ -68,15 +85,9 @@ export class ErrorHandler {
     switch (options.format) {
       case ErrorResponseFormat.CRUD:
         return this.formatCrudError(sanitizedError, options.context);
-      
+
       case ErrorResponseFormat.JSON_API:
         return this.formatJsonApiError(sanitizedError, options.context);
-      
-      case ErrorResponseFormat.EXPRESS:
-        return this.formatExpressError(sanitizedError, options.context);
-      
-      default:
-        return this.formatGenericError(sanitizedError, options.context);
     }
   }
 
@@ -456,7 +467,7 @@ export class ErrorHandler {
       jsonapi: {
         version: "1.1",
         meta: {
-          implementation: "express.js-kusto v2.0"
+          implementation: IMPLEMENTATION
         }
       },
       errors: [
@@ -492,40 +503,6 @@ export class ErrorHandler {
       links: {
         self: context?.path || ''
       }
-    };
-  }
-
-  /**
-   * Express 형식 에러 응답 생성
-   */
-  private static formatExpressError(
-    normalizedError: NormalizedError, 
-    context?: any
-  ): any {
-    return {
-      error: normalizedError.message,
-      code: normalizedError.code || ERROR_CODES.UNKNOWN_ERROR,
-      status: context?.status || 500,
-      timestamp: new Date().toISOString(),
-      path: context?.path || 'unknown',
-      ...(normalizedError.stack && { stack: normalizedError.stack })
-    };
-  }
-
-  /**
-   * 일반 형식 에러 응답 생성
-   */
-  private static formatGenericError(
-    normalizedError: NormalizedError, 
-    context?: any
-  ): any {
-    return {
-      message: normalizedError.message,
-      error: true,
-      timestamp: new Date().toISOString(),
-      ...(normalizedError.code && { code: normalizedError.code }),
-      ...(normalizedError.name && { type: normalizedError.name }),
-      ...(context && { context })
     };
   }
 

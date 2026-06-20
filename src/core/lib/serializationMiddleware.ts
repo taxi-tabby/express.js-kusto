@@ -45,16 +45,3 @@ export function setupGlobalBigIntSerialization() {
         };
     }
 }
-
-/**
- * Express 애플리케이션의 json 설정을 오버라이드
- */
-export function setupExpressBigIntSerialization(app: any) {
-    // Express의 기본 JSON 직렬화 설정
-    app.set('json replacer', (key: string, value: any) => {
-        if (typeof value === 'bigint') {
-            return value.toString();
-        }
-        return value;
-    });
-}

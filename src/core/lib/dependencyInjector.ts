@@ -28,8 +28,8 @@ export function pathToCamelCaseIdentifier(filePath: string): string {
 
 export class DependencyInjector {
     private static instance: DependencyInjector;
-    private modules: any = {};
-    private middlewares: any = {};
+    private modules: Record<string, unknown> = {};
+    private middlewares: Record<string, unknown> = {};
     private initialized = false;
 
     private constructor() {}
@@ -76,7 +76,7 @@ export class DependencyInjector {
                     continue;
                 }
                 
-                const moduleExports = await (moduleLoader as () => Promise<any>)();
+                const moduleExports = await (moduleLoader as () => Promise<unknown>)();
 
                 // Handle different export patterns
                 const ModuleClass = this.resolveModuleClass(moduleExports, moduleName);
@@ -120,7 +120,7 @@ export class DependencyInjector {
                     continue;
                 }
                 
-                const middlewareExports = await (middlewareLoader as () => Promise<any>)();
+                const middlewareExports = await (middlewareLoader as () => Promise<unknown>)();
 
                 // Handle different export patterns for middlewares (functions, not classes)
                 const MiddlewareFunction = this.resolveMiddlewareFunction(middlewareExports, middlewareName);
@@ -169,15 +169,15 @@ export class DependencyInjector {
      * Get a specific module by name
      */
     public getModule<T extends ModuleName>(name: T): Injectable[T] | undefined {
-        return this.modules[name];
-    }    
+        return this.modules[name] as Injectable[T] | undefined;
+    }
     
     
     /**
      * Get a specific middleware by name
      */
     public getMiddleware<T extends MiddlewareName>(name: T): Middleware[T] | undefined {
-        const middleware = this.middlewares[name];
+        const middleware = this.middlewares[name] as Middleware[T] | undefined;
         return middleware;
     }
 

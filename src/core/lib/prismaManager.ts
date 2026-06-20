@@ -1104,60 +1104,6 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 	}
 
 	/**
-	 * Get a wrapped client (async version)
-	 * getWrap()과 동일한 재연결 로직을 포함하며, 추가로 타입 정보를 보존합니다.
-	 * 내부적으로 getWrap()을 사용하여 재연결 Proxy를 적용합니다.
-	 */
-	public async getWrapAsync(databaseName: string): Promise<any> {
-		// getWrap이 이미 모든 재연결 로직을 가지고 있으므로 위임
-		return this.getWrap(databaseName);
-	}
-
-	/**
-	 * Get a client with runtime type checking and enhanced type information
-	 */
-	public async getTypedClient(databaseName: string) {
-		const client = await this.getClient(databaseName);
-		const clientType = this.clientTypes.get(databaseName);
-
-		// Add runtime type information
-		Object.defineProperty(client, '__databaseName', {
-			value: databaseName,
-			writable: false,
-			enumerable: false
-		});
-
-		Object.defineProperty(client, '__clientType', {
-			value: clientType,
-			writable: false,
-			enumerable: false
-		});
-
-		return client;
-	}
-
-
-
-	
-	/**
-	 * Dynamically create a typed getter method for any database
-	 * This preserves the original client type from dynamic import
-	 */
-	public createTypedGetter(databaseName: string) {
-		const client = this.databases.get(databaseName);
-		const clientType = this.clientTypes.get(databaseName);
-
-		if (!client || !clientType) {
-			throw new Error(`Database '${databaseName}' not found or not properly initialized`);
-		}
-
-		// Return a function that provides the typed client (synchronous)
-		return () => {
-			return this.getWrap(databaseName);
-		};
-	}
-
-	/**
 	 * Get all available database names
 	 */
 	public getAvailableDatabases(): string[] {
@@ -1400,20 +1346,6 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 			log.Error(`Failed to refresh client for database: ${databaseName}`, error);
 			throw error;
 		}
-	}
-
-	/**
-	 * Force refresh all database clients
-	 */
-	public async forceRefreshAllClients(): Promise<void> {
-		log.Debug('Force refreshing all database clients...');
-		
-		const databases = Array.from(this.databases.keys());
-		for (const dbName of databases) {
-			await this.forceRefreshClient(dbName);
-		}
-		
-		log.Info('All clients refreshed');
 	}
 
 	/**

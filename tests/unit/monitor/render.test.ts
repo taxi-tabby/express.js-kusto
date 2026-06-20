@@ -38,13 +38,17 @@ describe('monitor/renderFrame — 터미널 크기 인식', () => {
         expect(eachLine(f)).toHaveLength(24);
     });
 
-    it('주요 패널 라벨을 포함한다', () => {
+    it('주요 패널 라벨과 박스 테두리를 포함한다', () => {
         const f = renderFrame(fakeSnapshot(), { cols: 100, rows: 30, url: 'u', intervalMs: 1000 });
         for (const label of ['kusto monitor', 'PROCESS', 'REQUESTS', 'DATABASES', 'APP', 'RECENT']) {
             expect(f).toContain(label);
         }
         expect(f).toContain('default'); // db name
-        expect(f).toContain('routes 24');
+        expect(f).toContain('routes');
+        // btop 풍 둥근 박스 테두리
+        expect(f).toContain('╭');
+        expect(f).toContain('│');
+        expect(f).toContain('╰');
     });
 
     it('정확히 rows 줄을 출력하고, 각 줄의 보이는 폭이 cols 를 넘지 않는다', () => {

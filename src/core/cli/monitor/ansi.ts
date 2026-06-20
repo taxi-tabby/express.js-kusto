@@ -72,6 +72,68 @@ export function bar(value: number, max: number, width: number): string {
     return '█'.repeat(filled) + dim('░'.repeat(width - filled));
 }
 
+/** 둥근 박스 테두리 색(차분한 시안). 한 SGR 로 처리해 중첩 reset 회피. */
+export const border = (s: string): string => `\x1b[38;5;30m${s}${RESET}`;
+
+const GRAD = [32, 32, 32, 33, 33, 31]; // 채움 위치별 색(green→yellow→red)
+/**
+ * btop 풍 그라데이션 게이지 — 채워지는 칸을 위치 비율에 따라 green→yellow→red 로 칠한다.
+ * (막대가 찰수록 노랑/빨강이 드러나 부하를 직관적으로 보여줌)
+ */
+export function meter(value: number, max: number, width: number): string {
+    if (width <= 0) return '';
+    const ratio = max > 0 ? Math.max(0, Math.min(1, value / max)) : 0;
+    const filled = Math.round(ratio * width);
+    let s = '';
+    for (let i = 0; i < width; i++) {
+        if (i < filled) {
+            const t = width > 1 ? i / (width - 1) : 0;
+            const code = GRAD[Math.min(GRAD.length - 1, Math.floor(t * GRAD.length))];
+            s += `\x1b[${code}m█${RESET}`;
+        } else {
+            s += border('─');
+        }
+    }
+    return s;
+}
+
+const BOX = { tl: '╭', tr: '╮', bl: '╰', br: '╯', h: '─', v: '│' };
+
+/**
+ * 제목이 박힌 둥근 박스를 그린다. 반환 각 줄의 "보이는" 폭은 정확히 width.
+ * @param content 내부 줄(이미 색 포함 가능). 폭이 넘치면 자르고 모자라면 패딩.
+ */
+export function boxLines(title: string, content: string[], width: number, innerHeight?: number): string[] {
+    const w = Math.max(8, width);
+    const innerW = w - 4; // "│ " + content + " │"
+    // top: tl ─ ' TITLE ' ─*fill tr
+    const t = ` ${title} `;
+    const used = 2 + visibleLength(t); // tl + 첫 ─ + title
+    const fill = Math.max(0, w - used - 1); // - tr
+    const top = border(BOX.tl + BOX.h) + bold(cyan(title.length ? t : '')) + border(BOX.h.repeat(fill) + BOX.tr);
+
+    const rows = innerHeight ?? content.length;
+    const body: string[] = [];
+    for (let i = 0; i < rows; i++) {
+        const c = content[i] ?? '';
+        body.push(border(BOX.v) + ' ' + padEnd(c, innerW) + ' ' + border(BOX.v));
+    }
+    const bottom = border(BOX.bl + BOX.h.repeat(w - 2) + BOX.br);
+    return [top, ...body, bottom];
+}
+
+/** 두 박스(같은/다른 높이)를 좌우로 합친다. 각 박스 줄은 자기 폭으로 패딩돼 있어야 한다. */
+export function sideBySide(left: string[], right: string[], leftW: number, rightW: number, gap = 1): string[] {
+    const h = Math.max(left.length, right.length);
+    const blankL = ' '.repeat(leftW);
+    const blankR = ' '.repeat(rightW);
+    const out: string[] = [];
+    for (let i = 0; i < h; i++) {
+        out.push((left[i] ?? blankL) + ' '.repeat(gap) + (right[i] ?? blankR));
+    }
+    return out;
+}
+
 const SPARK = '▁▂▃▄▅▆▇█';
 /** 스파크라인. 시리즈의 마지막 width 개를 max 기준으로 8단계 막대로. */
 export function sparkline(series: number[], width: number): string {

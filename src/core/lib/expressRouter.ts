@@ -269,6 +269,14 @@ export class ExpressRouter {
         };
     }
 
+    /** 정확 경로 매칭용 미들웨어: 세그먼트 수가 slug 길이와 정확히 일치할 때만 통과. */
+    private makeExactMatchMiddleware(slug: string[]): RequestHandler {
+        return (req: Request, res: Response, next: NextFunction) => {
+            const pathParts = req.path.split('/').filter(Boolean);
+            if (pathParts.length === slug.length) { next(); } else { next('route'); }
+        };
+    }
+
     /**
      * 스택 트레이스를 이용하여 호출자의 파일 위치 정보를 추출하는 헬퍼 메서드
      * @returns 파일 경로와 라인 번호 정보가 포함된 객체
@@ -1282,19 +1290,7 @@ export class ExpressRouter {
 
         if (options?.exact) {
             // 정확한 매칭: 하위 경로에 영향을 주지 않음
-            const exactMiddleware = (req: any, res: any, next: any) => {
-                // 현재 요청 경로가 정확한 패턴과 일치하는지 확인
-                const pathParts = req.path.split('/').filter(Boolean);
-                const expectedParts = slug.length;
-
-                // 경로 세그먼트 수가 정확히 일치해야 함
-                if (pathParts.length === expectedParts) {
-                    next();
-                } else {
-                    next('route'); // 다른 라우터로 건너뛰고 다음 라우터로
-                }
-            };
-            this.router.get(slugPath, exactMiddleware, ...middlewares);
+            this.router.get(slugPath, this.makeExactMatchMiddleware(slug), ...middlewares);
         } else {
             // 기본 동작: 하위 경로도 매칭
             this.router.get(slugPath, ...middlewares);
@@ -1404,17 +1400,7 @@ export class ExpressRouter {
         }, options);
 
         if (options?.exact) {
-            const exactMiddleware = (req: any, res: any, next: any) => {
-                const pathParts = req.path.split('/').filter(Boolean);
-                const expectedParts = slug.length;
-
-                if (pathParts.length === expectedParts) {
-                    next();
-                } else {
-                    next('route');
-                }
-            };
-            this.router.post(slugPath, exactMiddleware, ...middlewares);
+            this.router.post(slugPath, this.makeExactMatchMiddleware(slug), ...middlewares);
         } else {
             this.router.post(slugPath, ...middlewares);
         }
@@ -1618,19 +1604,7 @@ export class ExpressRouter {
 
         if (options?.exact) {
             // 정확한 매칭: 하위 경로에 영향을 주지 않음
-            const exactMiddleware = (req: any, res: any, next: any) => {
-                // 현재 요청 경로가 정확한 패턴과 일치하는지 확인
-                const pathParts = req.path.split('/').filter(Boolean);
-                const expectedParts = slug.length;
-
-                // 경로 세그먼트 수가 정확히 일치해야 함
-                if (pathParts.length === expectedParts) {
-                    next();
-                } else {
-                    next('route'); // 다른 라우터로 넘김
-                }
-            };
-            this.router.patch(slugPath, exactMiddleware, ...middlewares);
+            this.router.patch(slugPath, this.makeExactMatchMiddleware(slug), ...middlewares);
         } else {
             // 기본 동작: 하위 경로도 매칭
             this.router.patch(slugPath, ...middlewares);
@@ -1819,19 +1793,7 @@ export class ExpressRouter {
 
         if (options?.exact) {
             // 정확한 매칭: 하위 경로에 영향을 주지 않음
-            const exactMiddleware = (req: any, res: any, next: any) => {
-                // 현재 요청 경로가 정확한 패턴과 일치하는지 확인
-                const pathParts = req.path.split('/').filter(Boolean);
-                const expectedParts = slug.length;
-
-                // 경로 세그먼트 수가 정확히 일치해야 함
-                if (pathParts.length === expectedParts) {
-                    next();
-                } else {
-                    next('route'); // 다른 라우터로 넘김
-                }
-            };
-            this.router.put(slugPath, exactMiddleware, ...middlewares);
+            this.router.put(slugPath, this.makeExactMatchMiddleware(slug), ...middlewares);
         } else {
             // 기본 동작: 하위 경로도 매칭
             this.router.put(slugPath, ...middlewares);
@@ -1914,19 +1876,7 @@ export class ExpressRouter {
 
         if (options?.exact) {
             // 정확한 매칭: 하위 경로에 영향을 주지 않음
-            const exactMiddleware = (req: any, res: any, next: any) => {
-                // 현재 요청 경로가 정확한 패턴과 일치하는지 확인
-                const pathParts = req.path.split('/').filter(Boolean);
-                const expectedParts = slug.length;
-
-                // 경로 세그먼트 수가 정확히 일치해야 함
-                if (pathParts.length === expectedParts) {
-                    next();
-                } else {
-                    next('route'); // 다른 라우터로 넘김
-                }
-            };
-            this.router.delete(slugPath, exactMiddleware, ...middlewares);
+            this.router.delete(slugPath, this.makeExactMatchMiddleware(slug), ...middlewares);
         } else {
             // 기본 동작: 하위 경로도 매칭
             this.router.delete(slugPath, ...middlewares);

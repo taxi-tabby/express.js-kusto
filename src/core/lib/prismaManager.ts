@@ -729,8 +729,8 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 					throw connectError;
 				}
 
-				// 짧은 대기 후 재시도 (로그 없음). 기존 초기연결 경로의 점증 백오프(1s, 2s) 보존.
-				await new Promise(resolve => setTimeout(resolve, 1000 * connectionAttempts));
+				// 짧은 대기 후 재시도 (로그 없음). 기존 초기연결 경로의 flat 1s 대기 보존.
+				await new Promise(resolve => setTimeout(resolve, 1000));
 			}
 		}
 	}

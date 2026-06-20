@@ -8,6 +8,24 @@ import { ERROR_CODES, PRISMA_CANONICAL_ERROR_MAP } from './errorCodes';
  * CRUD 쿼리 파싱 및 필터링을 위한 헬퍼 유틸리티
  */
 
+/**
+ * JSON:API meta.implementation 문자열을 package.json 의 name/version 에서 파생한다.
+ * 하드코딩으로 인한 버전 stale 을 방지한다. (webpack 번들 시 inline, dev 모드는 ts-node require 해석)
+ */
+function resolveImplementation(): string {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const pkg = require('../../../package.json') as { name?: string; version?: string };
+    const name = pkg.name ?? 'kusto-server';
+    const version = pkg.version ?? '0.0.0';
+    return `${name} v${version}`;
+  } catch {
+    return 'kusto-server';
+  }
+}
+
+const IMPLEMENTATION = resolveImplementation();
+
 export interface CrudQueryParams {
   include?: string[];
   select?: string[];  // 필드 선택 파라미터 추가
@@ -2282,7 +2300,7 @@ export class JsonApiTransformer {
       jsonapi: {
         version: "1.1",
         meta: {
-          implementation: "express.js-kusto v2.0"
+          implementation: IMPLEMENTATION
         }
       }
     };

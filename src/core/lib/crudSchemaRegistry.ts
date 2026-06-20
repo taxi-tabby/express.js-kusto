@@ -492,23 +492,57 @@ export class CrudSchemaRegistry {
 
     // 상세 로그 제거
 
-    // 컬럼 변환
-    const columns = model.fields
+    const result = {
+      entityName: model.name,
+      tableName: model.dbName || model.name.toLowerCase() + 's',
+      targetName: model.name,
+      databaseName: schema.databaseName, // 데이터베이스 명칭 추가
+      // 기본 키 변환
+      primaryKeys: this.buildTypeOrmPrimaryKeys(model),
+      // 컬럼 변환
+      columns: this.buildTypeOrmColumns(model, schema.databaseName),
+      // 관계 변환 - many-to-many 관계를 우선적으로 처리
+      relations: this.convertRelationsToTypeOrmFormat(model.relations, model.name),
+      // 인덱스 변환
+      indices: this.buildTypeOrmIndices(model),
+      checks: [],
+      // 고유 제약조건 변환
+      uniques: this.buildTypeOrmUniques(model),
+      foreignKeys: [], // 관계에서 추출 가능
+      synchronize: true,
+      withoutRowid: false,
+      // CRUD 정보 생성
+      crudInfo: this.generateCrudInfo(schema)
+    };
+
+    return result;
+  }
+
+  /**
+   * 모델의 컬럼들을 TypeORM 컬럼 형식으로 변환합니다 (관계 필드 제외)
+   */
+  private buildTypeOrmColumns(model: CrudSchemaInfo['model'], databaseName: string): any[] {
+    return model.fields
       .filter(field => !field.relationName) // 관계 필드 제외
-      .map(field => this.convertFieldToTypeOrmColumn(field, schema.databaseName));
+      .map(field => this.convertFieldToTypeOrmColumn(field, databaseName));
+  }
 
-    // 관계 변환 - many-to-many 관계를 우선적으로 처리
-    const relations = this.convertRelationsToTypeOrmFormat(model.relations, model.name);
-
-    // 인덱스 변환
-    const indices = model.indexes.map(index => ({
+  /**
+   * 모델의 인덱스들을 TypeORM 인덱스 형식으로 변환합니다
+   */
+  private buildTypeOrmIndices(model: CrudSchemaInfo['model']): any[] {
+    return model.indexes.map(index => ({
       name: `IDX_${model.name.toUpperCase()}_${index.fields.join('_').toUpperCase()}`,
       columns: index.fields,
       isUnique: index.type === 'unique'
     }));
+  }
 
-    // 기본 키 변환
-    const primaryKeys = model.primaryKey ? 
+  /**
+   * 모델의 기본 키를 TypeORM 기본 키 형식으로 변환합니다
+   */
+  private buildTypeOrmPrimaryKeys(model: CrudSchemaInfo['model']): any[] {
+    return model.primaryKey ?
       model.primaryKey.fields.map(fieldName => {
         const field = model.fields.find(f => f.name === fieldName);
         return {
@@ -519,34 +553,16 @@ export class CrudSchemaRegistry {
           generationStrategy: field?.isGenerated ? "increment" : undefined
         };
       }) : [];
+  }
 
-    // 고유 제약조건 변환
-    const uniques = model.uniqueConstraints.map(constraint => ({
+  /**
+   * 모델의 고유 제약조건들을 TypeORM unique 형식으로 변환합니다
+   */
+  private buildTypeOrmUniques(model: CrudSchemaInfo['model']): any[] {
+    return model.uniqueConstraints.map(constraint => ({
       name: `UQ_${model.name.toUpperCase()}_${constraint.fields.join('_').toUpperCase()}`,
       columns: constraint.fields
     }));
-
-    // CRUD 정보 생성
-    const crudInfo = this.generateCrudInfo(schema);
-
-    const result = {
-      entityName: model.name,
-      tableName: model.dbName || model.name.toLowerCase() + 's',
-      targetName: model.name,
-      databaseName: schema.databaseName, // 데이터베이스 명칭 추가
-      primaryKeys,
-      columns,
-      relations,
-      indices,
-      checks: [],
-      uniques,
-      foreignKeys: [], // 관계에서 추출 가능
-      synchronize: true,
-      withoutRowid: false,
-      crudInfo
-    };
-
-    return result;
   }
 
   /**
@@ -554,118 +570,25 @@ export class CrudSchemaRegistry {
    */
   private generateCrudInfo(schema: CrudSchemaInfo): any {
     const { basePath, enabledActions, model, options, isAutoRegistered } = schema;
-    
+
     // 자동 등록된 모델인 경우 기본 구조만 제공
     if (isAutoRegistered) {
-      return {
-        isConfigured: false, // 실제 CRUD 설정이 되지 않았음을 표시
-        controllerPath: basePath,
-        entityName: model.name,
-        allowedMethods: [], // 실제 사용 가능한 메서드 없음
-        allowedFilters: [], // 필터 사용 불가
-        allowedParams: [], // 파라미터 사용 불가
-        allowedIncludes: [], // 관계 포함 사용 불가
-        routeSettings: {
-          note: 'This model is auto-registered but not configured for CRUD operations',
-          autoRegistered: true
-        },
-        availableEndpoints: [], // 실제 사용 가능한 엔드포인트 없음
-        schemaStructure: {
-          // 하지만 스키마 구조는 제공
-          fields: model.fields.map(field => ({
-            name: field.name,
-            type: field.type,
-            jsType: field.jsType,
-            isOptional: field.isOptional,
-            isId: field.isId,
-            isUnique: field.isUnique
-          })),
-          relations: model.relations.map(relation => ({
-            name: relation.name,
-            type: relation.type,
-            model: relation.model
-          }))
-        }
-      };
+      return this.buildAutoRegisteredCrudInfo(basePath, model);
     }
-    
+
     // 수동 등록된 모델인 경우 기존 로직 사용
-    
-    // 허용된 메서드 생성
-    const allowedMethods = enabledActions.map(action => {
-      switch (action) {
-        case 'index': return 'index';
-        case 'show': return 'show';
-        case 'create': return 'create';
-        case 'update': return 'update';
-        case 'destroy': return 'delete';
-        case 'recover': return 'recover';
-        default: return action;
-      }
-    });
-
-    // 사용 가능한 엔드포인트 생성
-    const availableEndpoints: string[] = [];
-    enabledActions.forEach(action => {
-      switch (action) {
-        case 'index':
-          availableEndpoints.push(`GET /${basePath}`);
-          break;
-        case 'show':
-          availableEndpoints.push(`GET /${basePath}/:${schema.primaryKey}`);
-          break;
-        case 'create':
-          availableEndpoints.push(`POST /${basePath}`);
-          break;
-        case 'update':
-          availableEndpoints.push(`PUT /${basePath}/:${schema.primaryKey}`);
-          availableEndpoints.push(`PATCH /${basePath}/:${schema.primaryKey}`);
-          break;
-        case 'destroy':
-          availableEndpoints.push(`DELETE /${basePath}/:${schema.primaryKey}`);
-          break;
-        case 'recover':
-          if (options.softDelete?.enabled) {
-            availableEndpoints.push(`POST /${basePath}/:${schema.primaryKey}/recover`);
-          }
-          break;
-      }
-    });
-
-    // 허용된 필터 (예시: 문자열 필드들)
-    const allowedFilters = model.fields
-      .filter(field => 
-        field.jsType === 'string' && 
-        !field.relationName && 
-        !field.isId
-      )
-      .slice(0, 5) // 최대 5개만
-      .map(field => field.name);
-
-    // 허용된 파라미터 (예시: 선택적 필드들)
-    const allowedParams = model.fields
-      .filter(field => 
-        field.isOptional && 
-        !field.relationName && 
-        !field.isId &&
-        field.jsType === 'string'
-      )
-      .slice(0, 3) // 최대 3개만
-      .map(field => field.name);
-
-    // 허용된 포함 관계 (예시: 관계 필드들)
-    const allowedIncludes = model.relations
-      .slice(0, 5) // 최대 5개만
-      .map(relation => relation.name);
-
     return {
       isConfigured: true,
       controllerPath: basePath,
       entityName: model.name,
-      allowedMethods,
-      allowedFilters,
-      allowedParams,
-      allowedIncludes,
+      // 허용된 메서드 생성
+      allowedMethods: enabledActions.map(action => this.mapActionToMethod(action)),
+      // 허용된 필터 (예시: 문자열 필드들)
+      allowedFilters: this.collectAllowedFilters(model),
+      // 허용된 파라미터 (예시: 선택적 필드들)
+      allowedParams: this.collectAllowedParams(model),
+      // 허용된 포함 관계 (예시: 관계 필드들)
+      allowedIncludes: this.collectAllowedIncludes(model),
       routeSettings: {
         softDelete: options.softDelete,
         includeMerge: options.includeMerge,
@@ -673,8 +596,136 @@ export class CrudSchemaRegistry {
         validation: options.validation,
         hooks: options.hooks
       },
-      availableEndpoints
+      // 사용 가능한 엔드포인트 생성
+      availableEndpoints: this.buildEndpointsForActions(enabledActions, basePath, schema.primaryKey, options)
     };
+  }
+
+  /**
+   * 자동 등록된 모델의 CRUD 정보(기본 구조)를 생성합니다
+   */
+  private buildAutoRegisteredCrudInfo(basePath: string, model: CrudSchemaInfo['model']): any {
+    return {
+      isConfigured: false, // 실제 CRUD 설정이 되지 않았음을 표시
+      controllerPath: basePath,
+      entityName: model.name,
+      allowedMethods: [], // 실제 사용 가능한 메서드 없음
+      allowedFilters: [], // 필터 사용 불가
+      allowedParams: [], // 파라미터 사용 불가
+      allowedIncludes: [], // 관계 포함 사용 불가
+      routeSettings: {
+        note: 'This model is auto-registered but not configured for CRUD operations',
+        autoRegistered: true
+      },
+      availableEndpoints: [], // 실제 사용 가능한 엔드포인트 없음
+      schemaStructure: {
+        // 하지만 스키마 구조는 제공
+        fields: model.fields.map(field => ({
+          name: field.name,
+          type: field.type,
+          jsType: field.jsType,
+          isOptional: field.isOptional,
+          isId: field.isId,
+          isUnique: field.isUnique
+        })),
+        relations: model.relations.map(relation => ({
+          name: relation.name,
+          type: relation.type,
+          model: relation.model
+        }))
+      }
+    };
+  }
+
+  /**
+   * CRUD 액션을 외부에 노출되는 메서드 이름으로 매핑합니다
+   */
+  private mapActionToMethod(action: string): string {
+    switch (action) {
+      case 'index': return 'index';
+      case 'show': return 'show';
+      case 'create': return 'create';
+      case 'update': return 'update';
+      case 'destroy': return 'delete';
+      case 'recover': return 'recover';
+      default: return action;
+    }
+  }
+
+  /**
+   * 활성화된 액션들로부터 사용 가능한 엔드포인트 목록을 생성합니다
+   */
+  private buildEndpointsForActions(
+    actions: string[],
+    basePath: string,
+    primaryKey: string,
+    options: CrudSchemaInfo['options']
+  ): string[] {
+    const availableEndpoints: string[] = [];
+    actions.forEach(action => {
+      switch (action) {
+        case 'index':
+          availableEndpoints.push(`GET /${basePath}`);
+          break;
+        case 'show':
+          availableEndpoints.push(`GET /${basePath}/:${primaryKey}`);
+          break;
+        case 'create':
+          availableEndpoints.push(`POST /${basePath}`);
+          break;
+        case 'update':
+          availableEndpoints.push(`PUT /${basePath}/:${primaryKey}`);
+          availableEndpoints.push(`PATCH /${basePath}/:${primaryKey}`);
+          break;
+        case 'destroy':
+          availableEndpoints.push(`DELETE /${basePath}/:${primaryKey}`);
+          break;
+        case 'recover':
+          if (options.softDelete?.enabled) {
+            availableEndpoints.push(`POST /${basePath}/:${primaryKey}/recover`);
+          }
+          break;
+      }
+    });
+    return availableEndpoints;
+  }
+
+  /**
+   * 허용된 필터 필드들을 수집합니다 (예시: 문자열 필드들, 최대 5개)
+   */
+  private collectAllowedFilters(model: CrudSchemaInfo['model']): string[] {
+    return model.fields
+      .filter(field =>
+        field.jsType === 'string' &&
+        !field.relationName &&
+        !field.isId
+      )
+      .slice(0, 5) // 최대 5개만
+      .map(field => field.name);
+  }
+
+  /**
+   * 허용된 파라미터 필드들을 수집합니다 (예시: 선택적 필드들, 최대 3개)
+   */
+  private collectAllowedParams(model: CrudSchemaInfo['model']): string[] {
+    return model.fields
+      .filter(field =>
+        field.isOptional &&
+        !field.relationName &&
+        !field.isId &&
+        field.jsType === 'string'
+      )
+      .slice(0, 3) // 최대 3개만
+      .map(field => field.name);
+  }
+
+  /**
+   * 허용된 포함 관계들을 수집합니다 (예시: 관계 필드들, 최대 5개)
+   */
+  private collectAllowedIncludes(model: CrudSchemaInfo['model']): string[] {
+    return model.relations
+      .slice(0, 5) // 최대 5개만
+      .map(relation => relation.name);
   }
 
   /**

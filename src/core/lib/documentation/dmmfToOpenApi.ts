@@ -1,5 +1,5 @@
-import { PrismaModelInfo, PrismaFieldMetadata } from '@lib/crudSchemaTypes';
-import { OpenApiSchema, OpenApiObjectSchema, OpenApiSchemaOrRef } from './openApiTypes';
+import { PrismaFieldMetadata } from '@lib/crudSchemaTypes';
+import { OpenApiSchema, OpenApiSchemaOrRef } from './openApiTypes';
 import { log } from '@ext/winston';
 
 /**
@@ -53,36 +53,6 @@ export function fieldToSchema(field: PrismaFieldMetadata, enumValuesByName: Map<
     if (field.documentation) schema.description = field.documentation;
 
     return schema;
-}
-
-/**
- * Prisma 모델 정보 → OpenAPI object schema.
- * 관계 필드 (relationName 가 있는) 는 attributes 에서 제외.
- */
-export function modelToOpenApi(model: PrismaModelInfo, enumValuesByName: Map<string, string[]>): OpenApiObjectSchema {
-    if (model.fields.length === 0) {
-        log.warn('Model has no fields', { modelName: model.name });
-    }
-
-    const properties: Record<string, OpenApiSchemaOrRef> = {};
-
-    for (const field of model.fields) {
-        if (field.relationName) continue; // 관계는 jsonApiSchemas 에서 처리
-        properties[field.name] = fieldToSchema(field, enumValuesByName);
-    }
-
-    // non-optional 필드를 required 로 표시.
-    // Attributes/Resource 변형 분리는 jsonApiSchemas 에서 처리한다.
-    const allRequired: string[] = [];
-    for (const field of model.fields) {
-        if (field.relationName) continue;
-        if (!field.isOptional) allRequired.push(field.name);
-    }
-
-    const result: OpenApiObjectSchema = { type: 'object', properties };
-    if (allRequired.length > 0) result.required = allRequired;
-    if (model.documentation) result.description = model.documentation;
-    return result;
 }
 
 /**

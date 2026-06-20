@@ -5,7 +5,7 @@ import * as https from 'https';
 import * as readline from 'readline';
 import { checkForUpdates } from './compare';
 import { PROJECT_ROOT, PACKAGE_JSON_PATH, UPDATER_DIR } from './paths';
-import { FileMap, FileMapEntry, matchesEntry, checksumFile, entryAlgo } from './checksum';
+import { FileMap, matchesEntry, checksumFile, entryAlgo } from './checksum';
 import { extractZipSafe } from './archive';
 
 /**
@@ -112,7 +112,8 @@ function loadPackageFileMap(extractedPath: string): FileMap {
     if (!fs.existsSync(fileMapDir)) {
         throw new Error('Invalid update package: file-map directory not found');
     }
-    const mapFiles = fs.readdirSync(fileMapDir).filter((f) => f.endsWith('.json'));
+    // 결정적 선택: 정렬 후 첫 항목(현재 패키지는 항상 1개만 담지만 미래 방어).
+    const mapFiles = fs.readdirSync(fileMapDir).filter((f) => f.endsWith('.json')).sort();
     if (mapFiles.length === 0) {
         throw new Error('No file map found in update package');
     }
@@ -120,8 +121,14 @@ function loadPackageFileMap(extractedPath: string): FileMap {
 }
 
 /**
- * 패키지 무결성 검증 — 추출된 각 소스 파일(files/<path>)의 체크섬이 패키지 자신의
- * 파일맵과 일치하는지 확인한다(엔트리 algo 기준). 불일치/누락 시 변조·손상으로 간주.
+ * 패키지 무결성 검증 — 추출된 각 소스 파일(files/<path>)의 체크섬이 *권위 있는* 파일맵과
+ * 일치하는지 확인한다(엔트리 algo 기준). 불일치/누락 시 변조·손상으로 간주.
+ *
+ * 신뢰 모델(중요): GitHub 경로에서는 zip 내부 맵이 아니라 릴리스에 별도 게시된 파일맵
+ * 에셋(downloadUrls.fileMap)을 권위 맵으로 받아 검증한다. 다만 이는 손상/부분전송 탐지와
+ * "릴리스가 게시한 맵과 패키지 파일의 일치"까지만 보장한다. 코드 서명이 없으므로 GitHub
+ * 릴리스 자체를 위조할 수 있는 공격자에 대한 암호학적 진위(authenticity)는 보장하지 않는다.
+ * 신뢰 기반은 'github.com 으로의 HTTPS + 릴리스 소유권'이다. (로컬 --package 는 사용자 신뢰.)
  */
 function verifyPackageIntegrity(filesDir: string, fileMap: FileMap): void {
     let checked = 0;
@@ -163,12 +170,20 @@ function computePlan(fileMap: FileMap, installedMap: FileMap | null): UpdatePlan
         else plan.unchanged.push(rel);
     }
 
-    // 삭제: 직전 설치 맵에는 있었으나 새 맵에 없는 파일(현재 존재하는 것만)
+    // 삭제: 직전 설치 맵에는 있었으나 새 맵에 없는 파일.
+    // 단, 로컬에서 사용자가 수정한 파일은 지우지 않는다 — 설치 당시 체크섬과 여전히 일치하는
+    // (= 손대지 않은 프레임워크 파일)만 삭제 대상으로 삼고, 변경됐으면 경고 후 건너뛴다.
     if (installedMap) {
-        for (const rel of Object.keys(installedMap)) {
-            if (!(rel in fileMap) && fs.existsSync(path.join(PROJECT_ROOT, rel))) {
-                plan.remove.push(rel);
+        for (const [rel, installedEntry] of Object.entries(installedMap)) {
+            if (rel in fileMap) continue;
+            const target = path.join(PROJECT_ROOT, rel);
+            const m = matchesEntry(target, installedEntry); // null=미존재, true=불변, false=수정됨
+            if (m === null) continue; // 이미 없음
+            if (m === false) {
+                console.warn(`   Keeping locally-modified file (not removed): ${rel}`);
+                continue;
             }
+            plan.remove.push(rel);
         }
     }
     return plan;
@@ -237,21 +252,28 @@ function applyPlan(plan: UpdatePlan, filesDir: string, backupDir: string, ops: A
     }
 }
 
-/** 적용 중 오류 시 원복 — 생성 삭제 / 백업 복원. */
-function rollback(ops: AppliedOps, backupDir: string): void {
+/**
+ * 적용 중 오류 시 원복 — 생성 삭제 / 백업 복원.
+ * @returns 모든 원복이 성공하면 true. 하나라도 실패하면 false(호출자는 백업을 보존해야 함).
+ */
+function rollback(ops: AppliedOps, backupDir: string): boolean {
     console.warn('\nRolling back changes...');
+    let ok = true;
     for (const rel of ops.created) {
-        try { fs.rmSync(path.join(PROJECT_ROOT, rel), { force: true }); } catch { /* ignore */ }
+        try { fs.rmSync(path.join(PROJECT_ROOT, rel), { force: true }); }
+        catch (e) { ok = false; console.error(`   Failed to remove created ${rel}:`, e); }
     }
     for (const rel of [...ops.backedUp, ...ops.removed]) {
         try {
             fs.mkdirSync(path.dirname(path.join(PROJECT_ROOT, rel)), { recursive: true });
             fs.copyFileSync(path.join(backupDir, rel), path.join(PROJECT_ROOT, rel));
         } catch (e) {
+            ok = false;
             console.error(`   Failed to restore ${rel}:`, e);
         }
     }
-    console.warn('Rollback complete (restored from backup).');
+    console.warn(ok ? 'Rollback complete (restored from backup).' : 'Rollback INCOMPLETE — see errors above.');
+    return ok;
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -280,25 +302,35 @@ function showBackupWarning(): void {
     console.log('but committing your work to git beforehand is still recommended.\n');
 }
 
+/** URL 에서 JSON 을 받아 파싱한다(권위 파일맵 등). */
+async function downloadJson(url: string, tempPath: string): Promise<any> {
+    await downloadFile(url, tempPath);
+    return JSON.parse(fs.readFileSync(tempPath, 'utf8'));
+}
+
 export async function performUpdate(options: UpdateOptions = {}): Promise<void> {
     const tempDir = path.join(UPDATER_DIR, 'temp-update');
     const extractDir = path.join(tempDir, 'extracted');
     const backupDir = path.join(tempDir, 'backup');
     let targetVersion: string | null = null;
     let packageZip: string;
+    let authoritativeMap: FileMap | null = null;
+    // 롤백이 불완전하면 백업을 보존해야 하므로 finally 의 정리를 막는다.
+    let preserveBackup = !!options.keepBackup;
 
-    // 1) 패키지 확보: 로컬(--package) 또는 GitHub 최신 릴리스
     fs.rmSync(tempDir, { recursive: true, force: true });
     fs.mkdirSync(extractDir, { recursive: true });
     fs.mkdirSync(backupDir, { recursive: true });
 
     try {
+        // 1) 패키지 확보: 로컬(--package) 또는 GitHub 최신 릴리스
         if (options.packagePath) {
             if (!fs.existsSync(options.packagePath)) {
                 throw new Error(`Local package not found: ${options.packagePath}`);
             }
             packageZip = options.packagePath;
             console.log(`Using local package: ${packageZip}`);
+            // 로컬 모드: 별도 권위 맵이 없으므로 추출 후 패키지 내부 맵을 사용(사용자 신뢰).
         } else {
             const result = await checkForUpdates();
             if (!result.updateAvailable) {
@@ -322,62 +354,73 @@ export async function performUpdate(options: UpdateOptions = {}): Promise<void> 
             }
             packageZip = path.join(tempDir, 'update-package.zip');
             await downloadFile(result.downloadUrls.package, packageZip);
+            // 권위 맵: zip 내부가 아니라 릴리스에 별도 게시된 파일맵 에셋을 받아 검증 기준으로 삼는다.
+            authoritativeMap = await downloadJson(
+                result.downloadUrls.fileMap, path.join(tempDir, 'authoritative-map.json')
+            ) as FileMap;
         }
 
-        // 2) 추출(zip-slip 방어) + 무결성 검증
+        // 2) 추출(zip-slip 방어)
         console.log('Extracting update package...');
         await extractZipSafe(packageZip, extractDir);
         const filesDir = path.join(extractDir, 'files');
         if (!fs.existsSync(filesDir)) {
             throw new Error('Invalid update package: files directory not found');
         }
-        const fileMap = loadPackageFileMap(extractDir);
+        // 권위 맵이 없으면(로컬 모드) 패키지 내부 맵 사용.
+        const fileMap: FileMap = authoritativeMap ?? loadPackageFileMap(extractDir);
+
+        // 3) 무결성 검증(권위 맵 기준)
         verifyPackageIntegrity(filesDir, fileMap);
 
-        // 3) 계획 수립 + 출력
+        // 4) 계획 수립 + 출력
         const plan = computePlan(fileMap, loadInstalledMap());
         printPlan(plan);
+        const empty = plan.create.length === 0 && plan.update.length === 0 && plan.remove.length === 0;
 
-        if (plan.create.length === 0 && plan.update.length === 0 && plan.remove.length === 0) {
-            console.log('\nNothing to apply — already up to date.');
-            writeInstalledMap(fileMap); // 설치 맵 동기화(삭제 감지 기준 최신화)
-            return;
-        }
-
-        // 4) dry-run 이면 여기서 종료
+        // 5) dry-run: 어떤 쓰기도 하지 않고 종료(설치 맵 동기화조차 하지 않음)
         if (options.dryRun) {
-            console.log('\n[dry-run] No files were written.');
+            console.log(empty ? '\n[dry-run] Nothing to apply.' : '\n[dry-run] No files were written.');
             return;
         }
 
-        // 5) 비대화형 최종 확인
-        if (!options.yes && !options.packagePath) {
+        // 6) 적용할 것이 없으면 설치 맵만 동기화(삭제 감지 기준 최신화)하고 종료
+        if (empty) {
+            console.log('\nNothing to apply — already up to date.');
+            writeInstalledMap(fileMap);
+            return;
+        }
+
+        // 7) 최종 확인(비대화형 --yes 가 아니면 로컬/원격 모두 확인)
+        if (!options.yes) {
             const ok = await askUserConfirmation('Apply the plan above?');
             if (!ok) { console.log('Update cancelled.'); return; }
         }
 
-        // 6) 적용(백업) + 실패 시 정확한 롤백
+        // 8) 적용(백업) + 실패 시 정확한 롤백
         const ops: AppliedOps = { created: [], backedUp: [], removed: [] };
         try {
             applyPlan(plan, filesDir, backupDir, ops);
         } catch (err) {
-            rollback(ops, backupDir);
+            const restored = rollback(ops, backupDir);
+            if (!restored) {
+                // 원복이 불완전 — 백업을 지우면 안 됨. 사용자에게 경로 안내.
+                preserveBackup = true;
+                console.error(`Backup preserved for manual recovery at: ${backupDir}`);
+            }
             throw err;
         }
 
-        // 7) 성공: 설치 맵 기록 + 버전 갱신
+        // 9) 성공: 설치 맵 기록 + 버전 갱신
         writeInstalledMap(fileMap);
         if (targetVersion) updatePackageVersion(targetVersion);
 
         console.log('\nUpdate applied successfully.');
         console.log(`   Created: ${ops.created.length}, Updated: ${ops.backedUp.length}, Removed: ${ops.removed.length}`);
         console.log('Restart your application to use the new version.');
-
-        if (options.keepBackup) {
-            console.log(`Backup kept at: ${backupDir}`);
-        }
+        if (preserveBackup) console.log(`Backup kept at: ${backupDir}`);
     } finally {
-        if (!options.keepBackup) {
+        if (!preserveBackup) {
             fs.rmSync(tempDir, { recursive: true, force: true });
         }
     }

@@ -2,28 +2,27 @@
 	"compilerOptions": {
 		"typeRoots": ["./node_modules/@types", "./types"],
 		"types": ["node"],
-		"baseUrl": ".",
 		"paths": {
 			"@/*": [
 				"./*"
 			],
 			"@app/*": [
-				"src/app/*"
+				"./src/app/*"
 			],
 			"@core/*": [
-				"src/core/*"
+				"./src/core/*"
 			],
 			"@lib/*": [
-				"src/core/lib/*"
+				"./src/core/lib/*"
 			],
 			"@ext/*": [
-				"src/core/external/*"
+				"./src/core/external/*"
 			],
 			"@db/*": [
-				"src/app/db/*"
+				"./src/app/db/*"
 			],
 			"@tests/*": [
-				"tests/*"
+				"./tests/*"
 			]
 		},
 		

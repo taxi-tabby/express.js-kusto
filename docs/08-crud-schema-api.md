@@ -27,7 +27,7 @@ ENABLE_SCHEMA_API=true
 
 ```typescript
 import express from 'express';
-import { SchemaApiSetup } from '@core/lib/schemaApiSetup';
+import { SchemaApiSetup } from '@lib/schemaApiSetup';
 import { log } from '@ext/winston';
 
 const app = express();
@@ -45,7 +45,7 @@ app.listen(3000, () => {
 ### 3. CRUD 라우터 사용
 
 ```typescript
-import { ExpressRouter } from '@core/lib/expressRouter';
+import { ExpressRouter } from '@lib/expressRouter';
 
 const router = new ExpressRouter();
 
@@ -192,7 +192,7 @@ GET /api/schema/meta/health
 
 ### 스키마 레지스트리 직접 사용
 ```typescript
-import { CrudSchemaRegistry } from '@core/lib/crudSchemaRegistry';
+import { CrudSchemaRegistry } from '@lib/crudSchemaRegistry';
 
 const registry = CrudSchemaRegistry.getInstance();
 
@@ -208,7 +208,7 @@ if (registry.isSchemaApiEnabled()) {
 
 ### Prisma 스키마 분석기 사용
 ```typescript
-import { PrismaSchemaAnalyzer } from '@core/lib/prismaSchemaAnalyzer';
+import { PrismaSchemaAnalyzer } from '@lib/prismaSchemaAnalyzer';
 import { prismaManager } from '@lib/prismaManager';
 
 const client = prismaManager.getClientSync('default'); // getClient() 는 async(Promise 반환)이므로 동기 사용 시 getClientSync()

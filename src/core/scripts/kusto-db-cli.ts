@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 // filepath: r:\project\express.js-kusto\src\core\scripts\kusto-db-cli.ts
 
+// 경로 별칭(@lib 등)을 ts-node 런타임에서 해석할 수 있도록 등록. (앱 진입점 src/index.ts 와 동일)
+import 'module-alias/register';
 import { Command } from 'commander';
 import * as fs from 'fs';
 import * as path from 'path';

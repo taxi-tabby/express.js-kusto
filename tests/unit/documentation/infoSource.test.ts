@@ -1,5 +1,5 @@
 import { buildInfo } from '@lib/documentation/infoSource';
-import { snapshotEnv } from '../../_setup/env-fixture';
+import { snapshotEnv } from '@tests/_setup/env-fixture';
 
 describe('infoSource', () => {
     let restoreEnv: () => void;

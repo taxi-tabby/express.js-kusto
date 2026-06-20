@@ -1,5 +1,5 @@
 import express from 'express';
-import { DbFixture } from '../../_setup/db-fixture';
+import { DbFixture } from '@tests/_setup/db-fixture';
 
 /**
  * 통합 테스트용 Express app 빌드.

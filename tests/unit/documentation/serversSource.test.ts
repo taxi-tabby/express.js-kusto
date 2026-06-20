@@ -1,5 +1,5 @@
 import { buildServers } from '@lib/documentation/serversSource';
-import { snapshotEnv } from '../../_setup/env-fixture';
+import { snapshotEnv } from '@tests/_setup/env-fixture';
 
 describe('serversSource', () => {
     let restoreEnv: () => void;

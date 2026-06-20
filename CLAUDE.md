@@ -200,8 +200,14 @@ Related modules: `CrudSchemaRegistry`, `PrismaSchemaAnalyzer`, `SchemaApiRouter`
 | `@lib/*` | `src/core/lib` |
 | `@ext/*` | `src/core/external` |
 | `@db/*` | `src/app/db` |
+| `@tests/*` | `tests` |
 
-Defined in both `tsconfig.json` (for TS) and `package.json` `_moduleAliases` (for runtime via `module-alias`), and mirrored in `webpack.config.js`.
+**Single source of truth: `tsconfig.json` `compilerOptions.paths`.** Everything else derives from it so they can't drift:
+- **jest** (`jest.config.ts`): `moduleNameMapper` is generated via `pathsToModuleNameMapper(tsconfig.paths)`.
+- **webpack** (`webpack.config.js`): `resolve.alias` is built from tsconfig paths by `buildAliasesFromTsconfig()`.
+- **runtime** (`package.json` `_moduleAliases`, used by `module-alias`): the only hand-maintained copy — kept in lockstep by the guard test `tests/unit/config/alias-consistency.test.ts`. The entrypoints `src/index.ts`, `src/core/scripts/kusto-db-cli.ts`, and `updater/{generate,compare,update}.ts` register it via `import 'module-alias/register'`.
+
+**To add an alias:** add it to `tsconfig.json` paths **and** `package.json` `_moduleAliases` (jest/webpack pick it up automatically; the guard test enforces the pair). Use `@lib/...` (not `@core/lib/...`) — `@lib` is the canonical spelling for `src/core/lib`.
 
 ## Key Environment Variables
 

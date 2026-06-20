@@ -1,5 +1,5 @@
 import request from 'supertest';
-import { bootDbFixture, truncateAll, DbFixture } from '../../_setup/db-fixture';
+import { bootDbFixture, truncateAll, DbFixture } from '@tests/_setup/db-fixture';
 import { applyPrismaManagerMock, buildTestApp } from '../_shared/test-app';
 
 describe('CRUD include 정책 wiring (통합)', () => {

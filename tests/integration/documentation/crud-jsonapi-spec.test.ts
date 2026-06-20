@@ -1,7 +1,7 @@
 // tests/integration/documentation/crud-jsonapi-spec.test.ts
 import SwaggerParser from '@apidevtools/swagger-parser';
 import { DocumentationGenerator } from '@lib/documentationGenerator';
-import { snapshotEnv } from '../../_setup/env-fixture';
+import { snapshotEnv } from '@tests/_setup/env-fixture';
 
 describe('CRUD 가 등록한 OpenAPI spec 의 표준 준수', () => {
     let restoreEnv: () => void;

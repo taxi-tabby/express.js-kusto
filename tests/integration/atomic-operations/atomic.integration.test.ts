@@ -1,5 +1,5 @@
 import request from 'supertest';
-import { bootDbFixture, truncateAll, DbFixture } from '../../_setup/db-fixture';
+import { bootDbFixture, truncateAll, DbFixture } from '@tests/_setup/db-fixture';
 import { applyPrismaManagerMock, buildTestApp } from '../_shared/test-app';
 
 const ATOMIC_CONTENT_TYPE = 'application/vnd.api+json; ext="https://jsonapi.org/ext/atomic"';

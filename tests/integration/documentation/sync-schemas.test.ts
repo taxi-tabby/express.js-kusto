@@ -1,8 +1,8 @@
 import { DocumentationGenerator } from '@lib/documentationGenerator';
 import { PrismaSchemaAnalyzer } from '@lib/prismaSchemaAnalyzer';
 import { syncSchemasFromAnalyzer, registerJsonApiErrorSchema } from '@lib/documentation';
-import { snapshotEnv } from '../../_setup/env-fixture';
-import { bootDbFixture, DbFixture } from '../../_setup/db-fixture';
+import { snapshotEnv } from '@tests/_setup/env-fixture';
+import { bootDbFixture, DbFixture } from '@tests/_setup/db-fixture';
 
 describe('syncSchemasFromAnalyzer 통합', () => {
     let restoreEnv: () => void;

@@ -23,8 +23,8 @@ routes/
 ## ExpressRouter API
 
 ```typescript
-import { ExpressRouter } from '@core/lib/expressRouter';
-import { RequestHandler } from '@core/lib/requestHandler';
+import { ExpressRouter } from '@lib/expressRouter';
+import { RequestHandler } from '@lib/requestHandler';
 
 const router = new ExpressRouter();
 

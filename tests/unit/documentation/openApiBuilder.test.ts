@@ -1,5 +1,5 @@
 import { buildOpenApiDocument } from '@lib/documentation/openApiBuilder';
-import { snapshotEnv } from '../../_setup/env-fixture';
+import { snapshotEnv } from '@tests/_setup/env-fixture';
 
 describe('openApiBuilder', () => {
     let restoreEnv: () => void;

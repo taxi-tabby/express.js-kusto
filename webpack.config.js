@@ -5,6 +5,20 @@ const nodeExternals = require("webpack-node-externals");
 const { config } = require('dotenv');
 const fs = require('fs');
 
+// 단일 소스: tsconfig.json 의 compilerOptions.paths 에서 webpack resolve.alias 를 파생한다.
+// 별칭을 tsconfig 한 곳에서만 관리하므로 webpack 이 tsconfig 와 drift 할 수 없다.
+function buildAliasesFromTsconfig() {
+    const tsconfig = JSON.parse(fs.readFileSync(path.resolve(__dirname, 'tsconfig.json'), 'utf-8'));
+    const paths = (tsconfig.compilerOptions && tsconfig.compilerOptions.paths) || {};
+    const alias = {};
+    for (const [key, targets] of Object.entries(paths)) {
+        const aliasKey = key.replace(/\/\*$/, '');
+        const target = (targets[0] || '.').replace(/\/\*$/, '').replace(/^\.\//, '') || '.';
+        alias[aliasKey] = path.resolve(__dirname, target);
+    }
+    return alias;
+}
+
 // 환경 변수 로딩 함수
 function loadEnvironmentVariables() {
     // 기본 .env 파일 로드
@@ -88,14 +102,7 @@ module.exports = (env, argv) => {
             /require function is used in a way in which dependencies cannot be statically extracted/
         ], resolve: {
             extensions: [".ts", ".js"], // .ts 파일을 인식할 수 있도록 확장자 추가
-            alias: {
-                '@': path.resolve(__dirname, '.'),
-                '@app': path.resolve(__dirname, 'src/app'),
-                '@core': path.resolve(__dirname, 'src/core'),
-                '@lib': path.resolve(__dirname, 'src/core/lib'),
-                '@ext': path.resolve(__dirname, 'src/core/external'),
-                '@db': path.resolve(__dirname, 'src/app/db')
-            }
+            alias: buildAliasesFromTsconfig()
         }, plugins: [
             new webpack.DefinePlugin({
                 'process.env.NODE_ENV': JSON.stringify(mode),

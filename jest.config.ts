@@ -1,22 +1,22 @@
 import type { Config } from 'jest';
+import { pathsToModuleNameMapper } from 'ts-jest';
+import * as fs from 'fs';
+import * as path from 'path';
+
+// 단일 소스: tsconfig.json 의 compilerOptions.paths 에서 jest 모듈 별칭을 파생한다.
+// 별칭을 한 곳(tsconfig)에서만 관리하므로 jest 가 tsconfig 와 drift 할 수 없다.
+const tsconfig = JSON.parse(
+  fs.readFileSync(path.join(__dirname, 'tsconfig.json'), 'utf-8')
+) as { compilerOptions: { paths: Record<string, string[]> } };
 
 const config: Config = {
   preset: 'ts-jest',
   testEnvironment: 'node',
   rootDir: '.',
   testMatch: ['<rootDir>/tests/**/*.test.ts'],
-  moduleNameMapper: {
-    '^@app/(.*)$': '<rootDir>/src/app/$1',
-    '^@core/(.*)$': '<rootDir>/src/core/$1',
-    '^@lib/(.*)$': '<rootDir>/src/core/lib/$1',
-    '^@ext/(.*)$': '<rootDir>/src/core/external/$1',
-    '^@db/(.*)$': '<rootDir>/src/app/db/$1',
-    '^@/(.*)$': '<rootDir>/$1'
-  },
-  globals: {
-    'ts-jest': {
-      tsconfig: 'tsconfig.test.json'
-    }
+  moduleNameMapper: pathsToModuleNameMapper(tsconfig.compilerOptions.paths, { prefix: '<rootDir>/' }),
+  transform: {
+    '^.+\\.ts$': ['ts-jest', { tsconfig: 'tsconfig.test.json' }],
   },
   coveragePathIgnorePatterns: [
     '/node_modules/',

@@ -11,7 +11,7 @@ import { StaticFileMiddleware } from './lib/staticFileMiddleware';
 import { prismaManager } from './lib/prismaManager';
 import { DependencyInjector } from './lib/dependencyInjector';
 import { repositoryManager } from './lib/repositoryManager';
-import { SchemaApiSetup } from '@core/lib/schemaApiSetup';
+import { SchemaApiSetup } from '@lib/schemaApiSetup';
 
 export interface CoreConfig {
     basePath?: string;

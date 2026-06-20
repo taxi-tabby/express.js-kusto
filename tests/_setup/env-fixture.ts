@@ -3,7 +3,7 @@
  *
  * 사용 예:
  * ```
- * import { snapshotEnv } from '@/tests/_setup/env-fixture';
+ * import { snapshotEnv } from '@tests/_setup/env-fixture';
  * describe('...', () => {
  *   const restoreEnv = snapshotEnv();
  *   afterEach(() => restoreEnv());

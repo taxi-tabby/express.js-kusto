@@ -1,4 +1,4 @@
-import { bootDbFixture, truncateAll, DbFixture } from '../../_setup/db-fixture';
+import { bootDbFixture, truncateAll, DbFixture } from '@tests/_setup/db-fixture';
 import { BaseRepository } from '@lib/baseRepository';
 
 /**

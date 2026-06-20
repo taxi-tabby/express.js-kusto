@@ -94,6 +94,7 @@
     "@core": "./src/core",
     "@lib": "./src/core/lib",
     "@ext": "./src/core/external",
-    "@db": "./src/app/db"
+    "@db": "./src/app/db",
+    "@tests": "./tests"
   }
 }

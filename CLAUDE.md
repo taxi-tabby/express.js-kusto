@@ -51,12 +51,19 @@ No test runner is configured in this project.
 
 ### Two-Zone Design
 
-- **`src/core/`** — Framework internals. **Do not modify** unless updating the framework itself.
+- **`src/core/`** — Framework internals. **In any project that consumes this framework, `src/core/` is STRICTLY OFF-LIMITS — never edit it directly; updates arrive only via `kusto update`.** This repository is the *sole* exception: it *implements* the framework, so `src/core/` is edited here — but only with full discipline (read the folder's `AGENTS.md` first, respect the one-way tier dependency direction, and keep `AGENTS.md` in sync). See **`src/core/AGENTS.md`**.
 - **`src/app/`** — Developer workspace where all application code lives.
+
+### AGENTS.md — mandatory to read AND to keep in sync
+
+**Every folder carries an `AGENTS.md`** that summarizes its files, exports, and dependency direction. Two rules, both non-negotiable:
+
+- **Always reference it before any work.** Before reading or editing any file in a folder, you MUST first read that folder's `AGENTS.md` (and its parent-tier `AGENTS.md`). It is the single source of truth for what each file does and which way dependencies flow — do not start from the code alone.
+- **Always update it on any change.** When you add a feature, file, or export, or change behavior or dependency direction, you MUST update the affected folder's `AGENTS.md` in the same change. Code and its `AGENTS.md` must never drift; a stale `AGENTS.md` is a defect.
 
 ### Core Internal Structure (Tier Layout)
 
-`src/core` is organized into purpose- and layer-grouped tiers (SSOT methodology). The `@lib` alias root is unchanged (`@lib/*` → `src/core/lib/*`); paths are deepened by tier. **Every folder carries an `AGENTS.md`** describing its files, exports, and dependency direction — read it before working in that folder.
+`src/core` is organized into purpose- and layer-grouped tiers (SSOT methodology). The `@lib` alias root is unchanged (`@lib/*` → `src/core/lib/*`); paths are deepened by tier. Each tier/folder has its own `AGENTS.md` (see the **AGENTS.md** rule above) listing its files, exports, and dependency direction.
 
 ```
 src/core/

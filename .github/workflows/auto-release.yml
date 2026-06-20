@@ -14,248 +14,213 @@ permissions:
 
 jobs:
   auto-release:
-    if: (github.event_name == 'push' || (github.event.pull_request.merged == true)) && github.repository == 'taxi-tabby/express.js-kusto'
+    # Only when a PR is actually merged into main (not just closed) on the canonical repo.
+    if: github.event.pull_request.merged == true && github.repository == 'taxi-tabby/express.js-kusto'
     runs-on: ubuntu-latest
-    
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
       with:
         fetch-depth: 0
         token: ${{ secrets.GITHUB_TOKEN }}
-    
+
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
         node-version: '20'
         cache: 'npm'
-    
+
     - name: Install dependencies
-      run: npm install
-    
-    - name: Get current version
-      id: version_info
-      run: |
-        # 현재 버전 읽기 (증가시키지 않음)
-        CURRENT_VERSION=$(node -p "require('./package.json').version")
-        echo "Current version: $CURRENT_VERSION"
-        
-        echo "package_version=${CURRENT_VERSION}" >> $GITHUB_OUTPUT
-    
-    - name: Generate version tag
+      run: npm ci
+
+    - name: Resolve release metadata
       id: version
       run: |
-        # 현재 버전 사용 (증가시키지 않음)
-        PACKAGE_VERSION="${{ steps.version_info.outputs.package_version }}"
-        
-        # 현재 날짜와 시간 (릴리즈 노트용)
-        TIMESTAMP=$(date +"%Y.%m.%d-%H%M")
-        
-        # 태그 생성 (framework-v{package_version})
+        PACKAGE_VERSION=$(node -p "require('./package.json').version")
         TAG_NAME="framework-v${PACKAGE_VERSION}"
-        
-        echo "tag_name=${TAG_NAME}" >> $GITHUB_OUTPUT
-        echo "package_version=${PACKAGE_VERSION}" >> $GITHUB_OUTPUT
-        echo "timestamp=${TIMESTAMP}" >> $GITHUB_OUTPUT
-        
-        echo "Generated tag: ${TAG_NAME}"
-    
-    - name: Generate update package
-      run: |
-        echo "Generating framework update package..."
-        npm run updater:generate
-    
-    - name: Find generated package
-      id: package
-      run: |
-        # 가장 최근에 생성된 패키지 파일 찾기
-        PACKAGE_FILE=$(ls -t updater/packages/update-package-*.zip | head -1)
-        
-        if [ -z "$PACKAGE_FILE" ] || [ ! -f "$PACKAGE_FILE" ]; then
-          echo "No package file found!"
-          exit 1
-        fi
-        
-        echo "package_file=${PACKAGE_FILE}" >> $GITHUB_OUTPUT
-        echo "Found package: ${PACKAGE_FILE}"
-        
-        # 파일 크기 확인 (Linux 환경)
-        FILE_SIZE=$(stat -c%s "$PACKAGE_FILE")
-        FILE_SIZE_MB=$(awk "BEGIN {printf \"%.2f\", $FILE_SIZE/1024/1024}")
-        echo "package_size=${FILE_SIZE_MB}MB" >> $GITHUB_OUTPUT
-    
-    - name: Find generated map file
-      id: mapfile
-      run: |
-        # 가장 최근에 생성된 맵 파일 찾기
-        MAP_FILE=$(ls -t updater/map/v*.json | head -1)
-        
-        if [ -z "$MAP_FILE" ] || [ ! -f "$MAP_FILE" ]; then
-          echo "No map file found!"
-          exit 1
-        fi
-        
-        echo "map_file=${MAP_FILE}" >> $GITHUB_OUTPUT
-        echo "Found map: ${MAP_FILE}"
-        
-        # 맵 파일에서 파일 수 계산
-        FILE_COUNT=$(jq 'length' "$MAP_FILE")
-        echo "file_count=${FILE_COUNT}" >> $GITHUB_OUTPUT
-    
-    - name: Generate smart release notes
-      id: notes
-      run: |
-        # 이전 릴리즈 태그 찾기
-        PREVIOUS_TAG=$(git tag --sort=-version:refname | grep "framework-v" | head -1 || echo "")
-        
-        if [ -z "$PREVIOUS_TAG" ]; then
-          echo "No previous release found, using initial commit"
-          COMMIT_RANGE="$(git rev-list --max-parents=0 HEAD)..HEAD"
-        else
-          echo "Previous release: $PREVIOUS_TAG"
-          COMMIT_RANGE="${PREVIOUS_TAG}..HEAD"
-        fi
-        
-        # 커밋 로그 가져오기
-        COMMITS=$(git log --pretty=format:"- %s (%h)" $COMMIT_RANGE)
-        
-        # 변경된 파일 목록
-        CHANGED_FILES=$(git diff --name-only $COMMIT_RANGE | head -10)
-        
-        # 스마트 AI 요약 생성 (커밋 메시지 분석 기반)
-        AI_SUMMARY=""
-        echo "🤖 Generating smart summary from commit analysis..."
-        
-        # 커밋 메시지 키워드 분석 및 스마트 요약 생성
-        COMMIT_TEXT=$(echo "$COMMITS" | tr '[:upper:]' '[:lower:]')
-        
-        # 버그 수정 관련
-        if echo "$COMMIT_TEXT" | grep -qE "(fix|bug|error|crash|issue|problem|resolve)"; then
-          AI_SUMMARY="🐛 버그 수정 및 안정성 개선 - 시스템 오류 해결 및 안정성 강화"
-        
-        # 새 기능 추가
-        elif echo "$COMMIT_TEXT" | grep -qE "(add|new|feature|implement|create|introduce)"; then
-          AI_SUMMARY="✨ 새로운 기능 추가 - 프레임워크 기능 확장 및 사용자 경험 개선"
-        
-        # 업데이트 및 개선
-        elif echo "$COMMIT_TEXT" | grep -qE "(update|upgrade|improve|enhance|optimize|performance)"; then
-          AI_SUMMARY="🔄 시스템 업데이트 및 성능 개선 - 최신 기술 적용 및 효율성 향상"
-        
-        # 리팩토링
-        elif echo "$COMMIT_TEXT" | grep -qE "(refactor|clean|restructure|reorganize|simplify)"; then
-          AI_SUMMARY="🔧 코드 리팩토링 및 구조 개선 - 유지보수성 향상 및 코드 품질 개선"
-        
-        # 문서화
-        elif echo "$COMMIT_TEXT" | grep -qE "(doc|readme|comment|guide|manual)"; then
-          AI_SUMMARY="📚 문서화 개선 - 사용자 가이드 및 코드 문서 업데이트"
-        
-        # 테스트
-        elif echo "$COMMIT_TEXT" | grep -qE "(test|spec|coverage|unit|integration)"; then
-          AI_SUMMARY="🧪 테스트 강화 - 품질 보증 및 안정성 검증 개선"
-        
-        # 설정 및 환경
-        elif echo "$COMMIT_TEXT" | grep -qE "(config|setup|env|deploy|build|ci|cd)"; then
-          AI_SUMMARY="⚙️ 설정 및 배포 환경 개선 - 개발 및 운영 환경 최적화"
-        
-        # 의존성 관리
-        elif echo "$COMMIT_TEXT" | grep -qE "(dependency|deps|package|npm|yarn|version)"; then
-          AI_SUMMARY="� 의존성 관리 및 패키지 업데이트 - 라이브러리 최신화 및 보안 강화"
-        
-        # 릴리즈 관련
-        elif echo "$COMMIT_TEXT" | grep -qE "(release|version|tag|publish|deploy)"; then
-          AI_SUMMARY="� 릴리즈 준비 및 배포 - 새 버전 출시 및 배포 프로세스 개선"
-        
-        # 기본값 (커밋 수에 따른 동적 메시지)
-        else
-          COMMIT_COUNT=$(echo "$COMMITS" | wc -l)
-          if [ "$COMMIT_COUNT" -gt 10 ]; then
-            AI_SUMMARY="🔧 대규모 업데이트 - 다양한 개선사항 및 기능 업데이트 ($COMMIT_COUNT개 변경사항)"
-          elif [ "$COMMIT_COUNT" -gt 5 ]; then
-            AI_SUMMARY="🔧 중간 규모 업데이트 - 여러 기능 개선 및 최적화 작업 ($COMMIT_COUNT개 변경사항)"
-          elif [ "$COMMIT_COUNT" -gt 0 ]; then
-            AI_SUMMARY="🔧 소규모 업데이트 - 프레임워크 유지보수 및 개선 작업 ($COMMIT_COUNT개 변경사항)"
-          else
-            AI_SUMMARY="📦 Express.js Kusto 프레임워크 정기 릴리즈"
-          fi
-        fi
-        
-        echo "✅ Smart summary generated: $AI_SUMMARY"
-        
-        # 릴리즈 노트 생성
-        {
-          echo "# 🚀 Express.js Kusto Framework v${{ steps.version.outputs.package_version }}"
-          echo ""
-          echo "## Summary"
-          echo "${AI_SUMMARY}"
-          echo ""
-          echo "## 📦 Package Information"
-          echo "- **Framework Version**: v${{ steps.version.outputs.package_version }}"
-          echo "- **Build Timestamp**: ${{ steps.version.outputs.timestamp }}"
-          echo "- **Package Size**: ${{ steps.package.outputs.package_size }}"
-          echo "- **Files Included**: ${{ steps.mapfile.outputs.file_count }} files"
-          echo ""
-          echo "## 📝 Recent Changes"
-          if [ -n "$COMMITS" ]; then
-            echo "$COMMITS"
-          else
-            echo "변경 사항이 없습니다."
-          fi
-          echo ""
-          echo "## 🔧 Changed Files (Top 10)"
-          echo '```'
-          if [ -n "$CHANGED_FILES" ]; then
-            echo "$CHANGED_FILES"
-          else
-            echo "변경된 파일이 없습니다."
-          fi
-          echo '```'
-          echo ""
-          echo "---"
-          echo "**Generated on**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")"
-          echo "**Commit**: ${{ github.sha }}"
-          echo "**Workflow**: ${{ github.workflow }}"
-        } > release_notes.md
-        
-        echo "✅ Smart release notes generated"
-    
-    - name: Create Release
-      id: create_release
+        TIMESTAMP=$(date -u +"%Y.%m.%d-%H%M")
+        echo "package_version=${PACKAGE_VERSION}" >> "$GITHUB_OUTPUT"
+        echo "tag_name=${TAG_NAME}" >> "$GITHUB_OUTPUT"
+        echo "timestamp=${TIMESTAMP}" >> "$GITHUB_OUTPUT"
+        echo "Resolved release tag: ${TAG_NAME}"
+
+    - name: Guard — skip if this version was already released
+      id: guard
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        # GitHub의 자동 릴리즈 노트 생성 기능 활용
-        PREVIOUS_TAG=$(git tag --sort=-version:refname | grep "framework-v" | head -1 || echo "")
-        
-        # GitHub CLI를 사용하여 릴리즈 생성 (자동 릴리즈 노트 포함)
-        if [ -n "$PREVIOUS_TAG" ]; then
-          echo "Creating release with auto-generated notes from $PREVIOUS_TAG"
-          gh release create "${{ steps.version.outputs.tag_name }}" \
-            --title "Framework v${{ steps.version.outputs.package_version }} (${{ steps.version.outputs.timestamp }})" \
-            --notes-file release_notes.md \
-            --generate-notes \
-            --notes-start-tag "$PREVIOUS_TAG" \
-            --target main \
-            "${{ steps.package.outputs.package_file }}#express-kusto-framework-v${{ steps.version.outputs.package_version }}-${{ steps.version.outputs.timestamp }}.zip" \
-            "${{ steps.mapfile.outputs.map_file }}#file-map-v${{ steps.version.outputs.package_version }}-${{ steps.version.outputs.timestamp }}.json"
+        # The release tag is derived from package.json. A PR merged without a version
+        # bump must NOT try to re-release an existing tag (that would fail). Skip cleanly.
+        if gh release view "${{ steps.version.outputs.tag_name }}" >/dev/null 2>&1; then
+          echo "Release ${{ steps.version.outputs.tag_name }} already exists — skipping."
+          echo "Bump \"version\" in package.json to publish a new release."
+          echo "should_release=false" >> "$GITHUB_OUTPUT"
         else
-          echo "Creating first release with custom notes"
-          gh release create "${{ steps.version.outputs.tag_name }}" \
-            --title "Framework v${{ steps.version.outputs.package_version }} (${{ steps.version.outputs.timestamp }})" \
-            --notes-file release_notes.md \
-            --target main \
-            "${{ steps.package.outputs.package_file }}#express-kusto-framework-v${{ steps.version.outputs.package_version }}-${{ steps.version.outputs.timestamp }}.zip" \
-            "${{ steps.mapfile.outputs.map_file }}#file-map-v${{ steps.version.outputs.package_version }}-${{ steps.version.outputs.timestamp }}.json"
+          echo "should_release=true" >> "$GITHUB_OUTPUT"
         fi
-        
-        # 릴리즈 URL 가져오기
-        RELEASE_URL=$(gh release view "${{ steps.version.outputs.tag_name }}" --json url --jq .url)
-        echo "html_url=${RELEASE_URL}" >> $GITHUB_OUTPUT
-    
-    - name: Release Summary
+
+    - name: Generate update package
+      if: steps.guard.outputs.should_release == 'true'
+      run: npm run updater:generate
+
+    - name: Find generated package
+      id: package
+      if: steps.guard.outputs.should_release == 'true'
       run: |
-        echo "🎉 Release Created Successfully!"
-        echo "📦 Release: ${{ steps.create_release.outputs.html_url }}"
-        echo "🏷️ Tag: ${{ steps.version.outputs.tag_name }}"
-        echo "📁 Package: ${{ steps.package.outputs.package_file }} (${{ steps.package.outputs.package_size }})"
-        echo "📋 Map File: ${{ steps.mapfile.outputs.map_file }} (${{ steps.mapfile.outputs.file_count }} files)"
-        echo "📊 Version: v${{ steps.version.outputs.package_version }}"
+        PACKAGE_FILE=$(ls -t src/core/updater/packages/update-package-*.zip | head -1)
+        if [ -z "$PACKAGE_FILE" ] || [ ! -f "$PACKAGE_FILE" ]; then
+          echo "::error::No update package (.zip) was produced by updater:generate"
+          exit 1
+        fi
+        FILE_SIZE=$(stat -c%s "$PACKAGE_FILE")
+        FILE_SIZE_MB=$(awk "BEGIN {printf \"%.2f\", $FILE_SIZE/1024/1024}")
+        echo "package_file=${PACKAGE_FILE}" >> "$GITHUB_OUTPUT"
+        echo "package_size=${FILE_SIZE_MB}MB" >> "$GITHUB_OUTPUT"
+        echo "Package: ${PACKAGE_FILE} (${FILE_SIZE_MB}MB)"
+
+    - name: Find generated map file
+      id: mapfile
+      if: steps.guard.outputs.should_release == 'true'
+      run: |
+        MAP_FILE=$(ls -t src/core/updater/map/v*.json | head -1)
+        if [ -z "$MAP_FILE" ] || [ ! -f "$MAP_FILE" ]; then
+          echo "::error::No file map (v*.json) was produced by updater:generate"
+          exit 1
+        fi
+        FILE_COUNT=$(jq 'length' "$MAP_FILE")
+        echo "map_file=${MAP_FILE}" >> "$GITHUB_OUTPUT"
+        echo "file_count=${FILE_COUNT}" >> "$GITHUB_OUTPUT"
+        echo "Map: ${MAP_FILE} (${FILE_COUNT} files)"
+
+    - name: Resolve contributors
+      id: contributors
+      if: steps.guard.outputs.should_release == 'true'
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        # Contributors come from the GitHub *commit authors* in this release range —
+        # i.e. real GitHub accounts. We deliberately do NOT parse commit scopes
+        # (e.g. "core", "crud") or "@ext/@core/@lib" import aliases, which are not people.
+        # Bots, the merge account (web-flow), and *[bot] logins are excluded.
+        PREVIOUS_TAG=$(git tag --sort=-version:refname | grep "framework-v" | head -1 || true)
+        JQ_FILTER='[.commits[].author | select(. != null) | select(.type != "Bot") | .login] | map(select(. != "web-flow" and (endswith("[bot]") | not))) | unique | .[]'
+
+        if [ -n "$PREVIOUS_TAG" ]; then
+          LOGINS=$(gh api --paginate "repos/${{ github.repository }}/compare/${PREVIOUS_TAG}...${{ github.sha }}" --jq "$JQ_FILTER" 2>/dev/null | sort -u || true)
+        else
+          LOGINS=$(gh api --paginate "repos/${{ github.repository }}/commits?sha=${{ github.sha }}" --jq '[.[].author | select(. != null) | select(.type != "Bot") | .login] | map(select(. != "web-flow" and (endswith("[bot]") | not))) | unique | .[]' 2>/dev/null | sort -u || true)
+        fi
+
+        : > contributors.md
+        COUNT=0
+        if [ -n "$LOGINS" ]; then
+          while IFS= read -r login; do
+            [ -z "$login" ] && continue
+            echo "- @${login}" >> contributors.md
+            COUNT=$((COUNT + 1))
+          done <<< "$LOGINS"
+        else
+          echo "- _(no GitHub-identified contributors in this range)_" >> contributors.md
+        fi
+        echo "count=${COUNT}" >> "$GITHUB_OUTPUT"
+        echo "Contributors resolved: ${COUNT}"
+
+    - name: Generate release notes
+      id: notes
+      if: steps.guard.outputs.should_release == 'true'
+      run: |
+        PREVIOUS_TAG=$(git tag --sort=-version:refname | grep "framework-v" | head -1 || true)
+        if [ -z "$PREVIOUS_TAG" ]; then
+          COMPARE_BASE=$(git rev-list --max-parents=0 HEAD | tail -1)
+        else
+          COMPARE_BASE="$PREVIOUS_TAG"
+        fi
+        RANGE="${COMPARE_BASE}..HEAD"
+
+        # Non-merge commits, one bullet each: "- <subject> (<short-sha>)"
+        COMMITS=$(git log --no-merges --pretty=format:"- %s (%h)" "$RANGE")
+        TOTAL=$(printf "%s\n" "$COMMITS" | grep -c . || true)
+        DIFFSTAT=$(git diff --shortstat "$RANGE" | sed 's/^ *//')
+        [ -z "$DIFFSTAT" ] && DIFFSTAT="no file changes"
+
+        n() { printf "%s\n" "$COMMITS" | grep -ciE "$1" || true; }
+        FEAT=$(n "^- feat"); FIX=$(n "^- fix"); REF=$(n "^- refactor"); DOC=$(n "^- docs"); TST=$(n "^- test")
+
+        # Plain-English summary derived from conventional-commit type counts.
+        PARTS=""
+        [ "$FEAT" -gt 0 ] && PARTS="${PARTS}${FEAT} feature(s), "
+        [ "$FIX" -gt 0 ] && PARTS="${PARTS}${FIX} fix(es), "
+        [ "$REF" -gt 0 ] && PARTS="${PARTS}${REF} refactor(s), "
+        [ "$DOC" -gt 0 ] && PARTS="${PARTS}${DOC} docs change(s), "
+        [ "$TST" -gt 0 ] && PARTS="${PARTS}${TST} test change(s), "
+        PARTS=$(printf "%s" "$PARTS" | sed 's/, $//')
+        if [ -n "$PARTS" ]; then
+          SUMMARY="This release contains ${PARTS} across ${TOTAL} commits."
+        else
+          SUMMARY="Maintenance release — ${TOTAL} commits."
+        fi
+
+        # Emit a "### Title" section for a commit-type pattern, only if non-empty.
+        emit() {
+          local body
+          body=$(printf "%s\n" "$COMMITS" | grep -iE "$1" || true)
+          [ -n "$body" ] && printf "### %s\n%s\n\n" "$2" "$body"
+        }
+
+        {
+          echo "# Express.js Kusto Framework v${{ steps.version.outputs.package_version }}"
+          echo ""
+          echo "$SUMMARY"
+          echo ""
+          echo "## Package"
+          echo "- **Version**: \`v${{ steps.version.outputs.package_version }}\`"
+          echo "- **Built (UTC)**: ${{ steps.version.outputs.timestamp }}"
+          echo "- **Update package**: ${{ steps.package.outputs.package_size }} — ${{ steps.mapfile.outputs.file_count }} files"
+          echo "- **Commits**: ${TOTAL} · ${DIFFSTAT}"
+          echo ""
+          echo "## Changes"
+          emit "^- feat" "Features"
+          emit "^- fix" "Fixes"
+          emit "^- perf" "Performance"
+          emit "^- refactor" "Refactoring"
+          emit "^- docs" "Documentation"
+          emit "^- test" "Tests"
+          emit "^- (build|ci|chore)" "Build & Tooling"
+          OTHERS=$(printf "%s\n" "$COMMITS" | grep -ivE "^- (feat|fix|perf|refactor|docs|test|build|ci|chore)" || true)
+          [ -n "$OTHERS" ] && printf "### Other\n%s\n\n" "$OTHERS"
+          echo "## Contributors"
+          cat contributors.md
+          echo ""
+          echo "---"
+          echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${COMPARE_BASE}...${{ steps.version.outputs.tag_name }}"
+        } > release_notes.md
+
+        echo "Release notes generated (${TOTAL} commits, ${{ steps.contributors.outputs.count }} contributors)."
+
+    - name: Create Release
+      id: create_release
+      if: steps.guard.outputs.should_release == 'true'
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        # NOTE: the part after '#' is only the asset display label. The actual asset
+        # filename stays the basename (update-package-*.zip / v*.json) which the updater
+        # client (src/core/updater/compare.ts) matches on — do not change those basenames.
+        gh release create "${{ steps.version.outputs.tag_name }}" \
+          --title "Framework v${{ steps.version.outputs.package_version }} (${{ steps.version.outputs.timestamp }})" \
+          --notes-file release_notes.md \
+          --target main \
+          "${{ steps.package.outputs.package_file }}#Framework update package (v${{ steps.version.outputs.package_version }})" \
+          "${{ steps.mapfile.outputs.map_file }}#File map (v${{ steps.version.outputs.package_version }})"
+
+        RELEASE_URL=$(gh release view "${{ steps.version.outputs.tag_name }}" --json url --jq .url)
+        echo "html_url=${RELEASE_URL}" >> "$GITHUB_OUTPUT"
+
+    - name: Summary
+      if: steps.guard.outputs.should_release == 'true'
+      run: |
+        echo "Released ${{ steps.version.outputs.tag_name }}"
+        echo "URL:      ${{ steps.create_release.outputs.html_url }}"
+        echo "Package:  ${{ steps.package.outputs.package_file }} (${{ steps.package.outputs.package_size }})"
+        echo "Map:      ${{ steps.mapfile.outputs.map_file }} (${{ steps.mapfile.outputs.file_count }} files)"

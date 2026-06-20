@@ -169,9 +169,6 @@ function loadEnvironmentConfig() {
     console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
 }
 
-// Load environment before defining any commands
-loadEnvironmentConfig();
-
 // Define the program
 const program = new Command();
 
@@ -180,6 +177,13 @@ program
     .name('kusto-db')
     .description('CLI tool for managing Prisma databases in express.js-kusto project')
     .version('1.0.0');
+
+// 환경 설정은 실제 db 커맨드가 실행될 때만 로드한다(preAction 훅).
+// 과거에는 모듈 top-level 에서 호출돼, 통합 CLI(kusto)나 테스트가 이 모듈을 import 하기만 해도
+// DB env 로그/".env 없음" 오류가 새어나왔다. 훅은 서브커맨드(kusto db <...>)에도 전파된다.
+program.hook('preAction', () => {
+    loadEnvironmentConfig();
+});
 
 /**
  * Get all database directories from src/app/db
@@ -1992,10 +1996,14 @@ async function checkForceWait(operation: string): Promise<void> {
     }
 }
 
-// Parse arguments
-program.parse(process.argv);
+// 통합 CLI(kusto)가 이 program 을 'db' 서브커맨드로 마운트할 수 있도록 export 한다.
+export { program };
 
-// Show help if no arguments provided
-if (!process.argv.slice(2).length) {
-    program.outputHelp();
+// 단독 실행(npm run db / node kusto-db-cli)일 때만 인자를 파싱한다.
+// import(테스트·통합 CLI) 시에는 파싱하지 않는다(과거엔 import 만으로도 parse 가 돌았음).
+if (require.main === module) {
+    program.parse(process.argv);
+    if (!process.argv.slice(2).length) {
+        program.outputHelp();
+    }
 }

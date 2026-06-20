@@ -1,14 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import * as crypto from 'crypto';
-
-interface FileMapEntry {
-    checksum: string;
-}
-
-interface FileMap {
-    [filePath: string]: FileMapEntry;
-}
+import { PROJECT_ROOT, MAP_DIR } from './paths';
+import { FileMap, checksumFile, DEFAULT_ALGO } from './checksum';
 
 /**
  * .gitignore 파일을 파싱하여 무시할 패턴 목록을 반환합니다.
@@ -194,20 +187,11 @@ function shouldExcludeFromDeployment(fileName: string, relativePath: string): bo
 }
 
 /**
- * 파일의 체크섬을 계산합니다.
- * @param filePath 파일 경로
- * @returns MD5 해시 체크섬
+ * 파일의 체크섬을 계산합니다(DEFAULT_ALGO = sha256). 실패 시 빈 문자열.
+ * 해시 로직은 단일 출처 `./checksum` 에 있다.
  */
 function calculateFileChecksum(filePath: string): string {
-    try {
-        const fileBuffer = fs.readFileSync(filePath);
-        const hashSum = crypto.createHash('md5');
-        hashSum.update(fileBuffer);
-        return hashSum.digest('hex');
-    } catch (error) {
-        console.error(`Error calculating checksum for ${filePath}:`, error);
-        return '';
-    }
+    return checksumFile(filePath, DEFAULT_ALGO) ?? '';
 }
 
 /**
@@ -229,12 +213,14 @@ function scanDirectory(dirPath: string, fileList: string[] = [], baseDir?: strin
                 // 상대 경로로 변환하여 src/app 경로인지 확인
                 const relativePath = path.relative(base, fullPath).replace(/\\/g, '/');
 
-                // node_modules, .git, .github 등 제외할 디렉토리 및 src/app, updater 폴더 제외
+                // node_modules, .git, .github 등 제외할 디렉토리 및 src/app, updater 폴더 제외.
+                // updater 는 src/core/updater 로 이동했으며, 자기 자신을 배포 맵에 포함하면
+                // 업데이트 도중 자기 덮어쓰기 위험이 있으므로 계속 제외한다(소비자는 자체 updater 유지).
                 const shouldSkip = ['node_modules', '.git', '.github', '.vscode', 'dist', 'build'].includes(item) ||
                     relativePath === 'src/app' ||
                     relativePath.startsWith('src/app/') ||
-                    relativePath === 'updater' ||
-                    relativePath.startsWith('updater/');
+                    relativePath === 'src/core/updater' ||
+                    relativePath.startsWith('src/core/updater/');
 
                 if (!shouldSkip) {
                     scanDirectory(fullPath, fileList, base);
@@ -255,10 +241,10 @@ function scanDirectory(dirPath: string, fileList: string[] = [], baseDir?: strin
  * @param outputDir 출력할 디렉토리 (기본값: './updater/map')
  * @returns 생성된 파일 경로
  */
-export function generateFileMap(outputDir: string = './updater/map'): string {
+export function generateFileMap(outputDir: string = MAP_DIR): string {
     try {
-        // 현재 디렉토리의 상위 폴더 경로
-        const parentDir = path.resolve(__dirname, '..');
+        // 스캔 기준은 프로젝트 루트 (updater 가 src/core/updater 로 이동했으므로 SSOT 경로 사용)
+        const parentDir = PROJECT_ROOT;
         console.log(`Scanning parent directory: ${parentDir}`);
 
         // .gitignore 패턴 로드
@@ -299,7 +285,8 @@ export function generateFileMap(outputDir: string = './updater/map'): string {
 
                 const checksum = calculateFileChecksum(filePath);
                 if (checksum) {
-                    fileMap[normalizedPath] = { checksum };
+                    // algo 를 명시해 적용기가 하위호환(없으면 md5)으로 안전하게 해석하도록 한다.
+                    fileMap[normalizedPath] = { checksum, algo: DEFAULT_ALGO };
                     processedCount++;
                 }
             } catch (error) {

@@ -176,12 +176,14 @@ app/repos/
 2. **데이터베이스 연결**: `app/db/` 폴더의 Prisma 클라이언트 자동 초기화
 3. **리포지터리 로드**: `app/repos/` 폴더의 리포지터리 자동 등록
 4. **의존성 주입**: `app/injectable/` 폴더의 모듈/미들웨어 로드
-5. **Express 설정**: 미들웨어 체인 구성
+5. **Express 미들웨어 구성**: Core 필수 미들웨어(`req.kusto` 주입 · clientIp)를 먼저 등록한 뒤, app 의 정책 스택(`middleware.ts` 또는 `defaultGlobalMiddleware()` 기본: helmet/CORS/cookie/body/요청 로깅)을 적용
 6. **Health check 등록**: `/healthz` readiness 엔드포인트를 글로벌 라우트보다 먼저 등록
-7. **라우트 탐색 및 등록**: `app/routes/` 폴더 구조에 따라 URL 경로 자동 생성
+7. **라우트 탐색 및 등록**: `app/routes/` 폴더 구조에 따라 URL 경로 자동 생성. 이후 전역 JSON:API 에러 핸들러를 **맨 마지막**에 마운트(모든 라우트/미들웨어 에러 포착)
 8. **서버 실행**: 지정된 포트에서 HTTP 서버 시작
 
 
+
+> **미들웨어 소유 계층**: `req.kusto` 주입 · 클라이언트 IP 해석 · 전역 에러 핸들러 같은 **프레임워크 필수** 미들웨어는 Core 가 직접 소유·등록하므로 `src/app` 에 두지 않습니다(프레임워크 업데이트로 함께 갱신). 보안/파싱/로깅 **정책 스택**만 `src/app/routes/middleware.ts`(생략 시 `defaultGlobalMiddleware()` 기본)에서 조정합니다. 실효 요청 순서와 옵션은 [라우팅 시스템 문서](./02-routing-system.md)를 참고하세요.
 
 > **부팅 정책(P0-1)**: DB(Prisma) 연결 실패는 **non-fatal** 입니다. 서버리스 lazy-reconnect 전제로 서버는 *degraded* 상태로 부팅을 계속합니다. 반면 **RepositoryManager / DependencyInjector 초기화의 top-level 실패는 fail-fast** 로 처리되어 부팅이 중단되고 서버가 listen 하지 않습니다.
 >

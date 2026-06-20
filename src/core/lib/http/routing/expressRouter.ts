@@ -40,6 +40,36 @@ export type MiddlewareHandlerFunction = (req: Request, res: Response, next: Next
 export type ValidatedMiddlewareHandlerFunction<TConfig extends RequestConfig = RequestConfig> = (req: ValidatedRequest<TConfig>, res: Response, next: NextFunction, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => Promise<any> | any;
 
 /**
+ * Stable capability surface that a router-driving builder/extension receives.
+ * An `ExpressRouter` instance structurally satisfies this; both `CRUD()` and
+ * extension-registered router methods are driven through it. Single source of
+ * truth for the router context (the CRUD engine aliases this as `CrudBuilderContext`).
+ */
+export interface RouterContext {
+    /** Express Router that routes are registered on. */
+    router: Router;
+    /** Current router base path (used for docs/schema registration). */
+    basePath: string;
+    /** CRUD schema registry (dev-mode schema registration). */
+    schemaRegistry: CrudSchemaRegistry;
+    /** Prisma schema analyzer (Json fields / include policy, etc.). */
+    schemaAnalyzer: PrismaSchemaAnalyzer | null;
+    /** Wrap a HandlerFunction into an Express-compatible handler. */
+    wrapHandler(handler: HandlerFunction, serialize?: ResponseSerializer<any>): RequestHandler;
+    /** Wrap a MiddlewareHandlerFunction into Express-compatible middleware. */
+    wrapMiddleware(handler: MiddlewareHandlerFunction): RequestHandler;
+    /** OpenAPI documentation registration helper. */
+    registerDocumentation(method: string, path: string, config: any): void;
+}
+
+/**
+ * Implementation of an extension-registered router method. Receives the router
+ * context plus the call-site arguments; the chaining wrapper added to the
+ * prototype returns the router instance so calls remain fluent.
+ */
+export type RouterMethodImpl = (ctx: RouterContext, ...args: any[]) => void;
+
+/**
  * Extract model names from a Prisma client type
  * (prisma client에서 사전에 정의된 것들)
  */
@@ -126,7 +156,7 @@ import { JSON_API_CONTENT_TYPE, JSON_API_ATOMIC_CONTENT_TYPE } from '@lib/crud/j
 
 
 import { ErrorHandler, ErrorResponseFormat } from '@lib/http/errors/errorHandler';
-import { CrudRouteBuilder, CrudBuilderContext } from '@lib/crud/crudRouteBuilder';
+import { CrudRouteBuilder } from '@lib/crud/crudRouteBuilder';
 
 /** 라우트에 선택적으로 붙이는 OpenAPI 문서 메타데이터(verb 옵션 인자로 전달). */
 export interface RouteDocOptions {
@@ -2050,7 +2080,7 @@ export class ExpressRouter {
     ): ExpressRouter {
         // CRUD 엔진은 CrudRouteBuilder 로 분리됨(Step 3). ExpressRouter 는 컨텍스트로 위임만 한다.
         // `this` 가 CrudBuilderContext 를 구조적으로 만족한다.
-        new CrudRouteBuilder(this as CrudBuilderContext).build(databaseName, modelName as string, options);
+        new CrudRouteBuilder(this as RouterContext).build(databaseName, modelName as string, options);
 
         return this;
     }
@@ -2121,6 +2151,55 @@ export class ExpressRouter {
     
 
 
+
+    /** Extension-registered router methods (name -> impl), for collision/idempotency tracking. */
+    private static registeredExtensionMethods: Map<string, RouterMethodImpl> = new Map();
+
+    /** Constructor-assigned instance fields (the RouterContext surface) an extension method must not shadow. */
+    private static readonly reservedInstanceFields: ReadonlySet<string> = new Set([
+        'router', 'basePath', 'schemaRegistry', 'schemaAnalyzer',
+    ]);
+
+    /**
+     * Register a new router method at runtime (used by the extension system).
+     * Attaches a fluent wrapper to `ExpressRouter.prototype` so `router.<name>(...)`
+     * delegates to `impl(routerContext, ...args)` and returns the router for chaining.
+     *
+     * Guards: re-registering the same name with the same impl is a no-op (safe under
+     * reload); a different impl for an existing name, or any name that collides with a
+     * built-in ExpressRouter member, throws.
+     */
+    public static registerMethod(name: string, impl: RouterMethodImpl): void {
+        if (!name || typeof name !== 'string') {
+            throw new Error('[kusto] registerMethod requires a non-empty method name.');
+        }
+        if (typeof impl !== 'function') {
+            throw new Error(`[kusto] Router method '${name}' implementation must be a function (got ${typeof impl}).`);
+        }
+        const existing = ExpressRouter.registeredExtensionMethods.get(name);
+        if (existing) {
+            if (existing === impl) return; // idempotent
+            throw new Error(`[kusto] Router method '${name}' is already registered by another extension.`);
+        }
+        // Reject both prototype members (verbs/build/CRUD/Object.prototype) and constructor-assigned
+        // instance fields (router/basePath/...), which are not on the prototype at registration time.
+        if (name in ExpressRouter.prototype || ExpressRouter.reservedInstanceFields.has(name)) {
+            throw new Error(`[kusto] Router method '${name}' conflicts with a built-in ExpressRouter member.`);
+        }
+        ExpressRouter.registeredExtensionMethods.set(name, impl);
+        (ExpressRouter.prototype as Record<string, any>)[name] = function (this: ExpressRouter, ...args: any[]) {
+            impl(this as unknown as RouterContext, ...args);
+            return this;
+        };
+    }
+
+    /** Test-only: remove all extension-registered router methods (restores a clean prototype). */
+    public static clearExtensionMethods(): void {
+        for (const name of ExpressRouter.registeredExtensionMethods.keys()) {
+            delete (ExpressRouter.prototype as Record<string, any>)[name];
+        }
+        ExpressRouter.registeredExtensionMethods.clear();
+    }
 
     public build(): Router {
         const router = this.router;

@@ -1,36 +1,32 @@
 import request from 'supertest';
 import express, { Request, Response, NextFunction } from 'express';
+import { kustoInitMiddleware, globalErrorMiddleware } from '@lib/http/routing/frameworkMiddleware';
+import { clientIpMiddleware } from '@lib/http/routing/clientIpMiddleware';
 
 /**
- * 전역 미들웨어 스택(src/app/routes/middleware.ts)을 "있는 그대로" 마운트해
- * helmet / CORS / cookie-parser / body-parser(JSON:API) / clientIp / kusto 초기화 /
- * 전역 에러 핸들러(redaction)가 실제로 동작하는지 end-to-end 로 검증한다.
+ * 실제 런타임의 전역 미들웨어 합성을 end-to-end 로 검증한다.
+ * Core 소유 필수(kustoInit · clientIp · 전역 에러 핸들러) + app 정책 스택
+ * (src/app/routes/middleware.ts = defaultGlobalMiddleware: helmet/CORS/cookie/body/log)을
+ * Core 와 동일한 순서로 조립한다.
  *
- * 기존 통합 테스트(test-app.ts)는 라우팅·CRUD 검증에 집중하느라 express.json() 만 단
- * 최소 앱을 썼다 — 운영 미들웨어 체인 자체는 어디서도 통과하지 않았다. 이 테스트가 그 빈틈을 메운다.
- *
- * DB 의존이 없다(미들웨어는 req.kusto 에 싱글톤을 대입할 뿐 DB 에 접속하지 않음).
+ * 운영 미들웨어 체인 자체를 통과시키는 유일한 테스트(test-app.ts 는 라우팅·CRUD 만 검증).
  */
 
-// 미들웨어 배열은 import 시점에 평가된다(예: CORS whitelist). 결정적 테스트를 위해
-// import 전에 환경을 고정한다.
 const ORIGINAL_ENV = { ...process.env };
 
-function loadMiddlewareStack(): Array<express.RequestHandler | express.ErrorRequestHandler> {
-    // late require 로, 위에서 고정한 env 가 반영된 상태에서 모듈을 로드한다.
+/** app 의 정책 스택(middleware.ts = defaultGlobalMiddleware). import 시점에 env 반영. */
+function loadPolicyStack(): express.RequestHandler[] {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const mod = require('@app/routes/middleware');
-    return (mod.default ?? mod) as Array<express.RequestHandler | express.ErrorRequestHandler>;
+    return (mod.default ?? mod) as express.RequestHandler[];
 }
 
 /**
- * 실제 라우트 로더와 동일하게 4-arg(에러) 핸들러를 라우트 뒤에 mount 한다.
- * pre = fn.length !== 4, errorHandlers = fn.length === 4.
+ * Core 와 동일한 순서로 합성: [kustoInit, clientIp] + 정책 스택 + 라우트 + [전역 에러 핸들러].
  */
 function buildAppWithRealMiddleware(): express.Express {
-    const stack = loadMiddlewareStack();
-    const pre = stack.filter((fn) => (fn as Function).length !== 4) as express.RequestHandler[];
-    const errs = stack.filter((fn) => (fn as Function).length === 4) as express.ErrorRequestHandler[];
+    const pre = [kustoInitMiddleware, clientIpMiddleware, ...loadPolicyStack()];
+    const errs = [globalErrorMiddleware];
 
     const app = express();
     app.set('trust proxy', true); // clientIpMiddleware 의 XFF 처리를 신뢰

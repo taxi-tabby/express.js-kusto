@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Express.js-Kusto is a TypeScript framework for building REST APIs using Convention over Configuration. It wraps Express.js with a fluent routing API, multi-database Prisma management, dependency injection, and JSON:API v1.1 compliant CRUD generation. (Current version: see `package.json`.)
 
-**Language**: Korean is used in commit messages and some documentation. Follow this convention.
+**Language**: Korean is used in commit messages and some documentation. Follow this convention. (Exception: every `AGENTS.md` is written in English — see the **AGENTS.md** rule under Architecture.)
 
 ## Commands
 
@@ -23,7 +23,15 @@ npm run build:dev        # Development webpack build
 # Type generation (auto-runs in dev mode via nodemon on file changes)
 npm run generate         # Generate types for injectable/repository/db
 
-# Database (kusto-db CLI, via ts-node)
+# Unified CLI (kusto) — single commander entry over db / update / generate
+#   src/core/cli/kusto.ts, also exposed as the `kusto` bin (npx kusto ...)
+npm run kusto -- db list                  # = npm run db -- list
+npm run kusto -- update check             # check for framework updates
+npm run kusto -- update apply --dry-run   # preview an update (no writes)
+npm run kusto -- generate                 # generate framework types
+npx kusto monitor                         # live htop-style dev dashboard (separate terminal)
+
+# Database (kusto-db CLI, via ts-node) — also `kusto db <...>`
 npm run db -- generate --all              # Generate all Prisma clients
 npm run db -- migrate -t dev -n "name" -d dbname  # Run migration
 npm run db -- studio -d dbname            # Open Prisma Studio
@@ -31,9 +39,10 @@ npm run db -- seed -d dbname              # Seed data
 npm run db -- validate -d dbname          # Validate schema
 npm run db -- debug                       # System info
 
-# Framework self-update (updater/ folder, uses archiver/yauzl)
-npm run updater:check    # Check for new versions
-npm run updater:update   # Auto-update framework core
+# Framework self-update (src/core/updater/, uses archiver/yauzl) — also `kusto update <...>`
+npm run updater:check    # Check for new versions  (= kusto update check)
+npm run updater:update   # Apply update; supports -- --dry-run / --yes / --package <zip>
+npm run updater:generate # Build a release update package  (= kusto update build)
 ```
 
 No test runner is configured in this project.
@@ -42,18 +51,29 @@ No test runner is configured in this project.
 
 ### Two-Zone Design
 
-- **`src/core/`** — Framework internals. **Do not modify** unless updating the framework itself.
+- **`src/core/`** — Framework internals. **In any project that consumes this framework, `src/core/` is STRICTLY OFF-LIMITS — never edit it directly; updates arrive only via `kusto update`.** This repository is the *sole* exception: it *implements* the framework, so `src/core/` is edited here — but only with full discipline (read the folder's `AGENTS.md` first, respect the one-way tier dependency direction, and keep `AGENTS.md` in sync). See **`src/core/AGENTS.md`**.
 - **`src/app/`** — Developer workspace where all application code lives.
+
+### AGENTS.md — mandatory to read AND to keep in sync
+
+**Every folder carries an `AGENTS.md`** that summarizes its files, exports, and dependency direction. Three rules, all non-negotiable:
+
+- **Always reference it before any work.** Before reading or editing any file in a folder, you MUST first read that folder's `AGENTS.md` (and its parent-tier `AGENTS.md`). It is the single source of truth for what each file does and which way dependencies flow — do not start from the code alone.
+- **Always update it on any change.** When you add a feature, file, or export, or change behavior or dependency direction, you MUST update the affected folder's `AGENTS.md` in the same change. Code and its `AGENTS.md` must never drift; a stale `AGENTS.md` is a defect.
+- **Always write it in English.** Every `AGENTS.md` is authored in English — one unified language, chosen for reliable LLM comprehension — even though commit messages and other docs may be Korean. Do not mix languages within or across `AGENTS.md` files.
 
 ### Core Internal Structure (Tier Layout)
 
-`src/core` is organized into purpose- and layer-grouped tiers (SSOT methodology). The `@lib` alias root is unchanged (`@lib/*` → `src/core/lib/*`); paths are deepened by tier. **Every folder carries an `AGENTS.md`** describing its files, exports, and dependency direction — read it before working in that folder.
+`src/core` is organized into purpose- and layer-grouped tiers (SSOT methodology). The `@lib` alias root is unchanged (`@lib/*` → `src/core/lib/*`); paths are deepened by tier. Each tier/folder has its own `AGENTS.md` (see the **AGENTS.md** rule above) listing its files, exports, and dependency direction.
 
 ```
 src/core/
 ├── index.ts              # public API barrel (curated re-exports)
 ├── bootstrap/            # lifecycle: Application, Core, expressAppSingleton(@deprecated)
 ├── external/             # 3rd-party wrappers (leaf, zero intra-core imports): winston, util
+├── cli/                  # unified `kusto` CLI (commander) over db/update/generate
+├── scripts/              # standalone build/codegen CLI tooling (operator-facing)
+├── updater/              # framework self-update (excluded from its own deploy map)
 └── lib/
     ├── http/             # request-handling tier
     │   ├── routing/      # expressRouter, loadRoutes_V6_Clean, middlewareHelpers, proxyMiddleware
@@ -64,14 +84,16 @@ src/core/
     │   ├── database/     # prismaManager, baseRepository, repositoryManager, transactionCommitManager, dbNaming
     │   └── di/           # dependencyInjector, kustoManager (req.kusto facade)
     ├── crud/             # JSON:API CRUD engine: crudRouteBuilder, crudHelpers, primaryKeyParsers, jsonApiConstants
-    ├── devtools/         # DEV-ONLY (AUTO_DOCS / ENABLE_SCHEMA_API)
+    ├── extensions/       # CoC extension system: extensionTypes, extensionRegistry, loadExtensions (router methods / lifecycle / build hooks)
+    ├── devtools/         # DEV-ONLY (AUTO_DOCS / ENABLE_SCHEMA_API / dev monitor)
     │   ├── documentation/# OpenAPI 3.1 generation + Swagger UI + dev static assets
-    │   └── schema-api/   # /api/schema introspection: crudSchema*, relationshipConfig, prismaSchemaAnalyzer
+    │   ├── schema-api/   # /api/schema introspection: crudSchema*, relationshipConfig, prismaSchemaAnalyzer
+    │   └── monitor/      # `kusto monitor` metrics source: GET /__kusto/metrics (dev+localhost)
     ├── config/           # environmentLoader
     └── types/            # express-extensions + generated-*.ts (do-not-edit codegen)
 ```
 
-**Dependency direction (one-way):** `bootstrap` → tiers; within `lib`, higher tiers depend inward on lower ones; `external` and `config` are leaves. Do not introduce a back-edge (e.g. `data` importing `http`). `devtools` is dev-only and may depend on runtime tiers, never the reverse.
+**Dependency direction (one-way):** `bootstrap` → tiers; within `lib`, higher tiers depend inward on lower ones; `external` and `config` are leaves. Do not introduce a back-edge (e.g. `data` importing `http`). `devtools` is dev-only and may depend on runtime tiers, never the reverse. `extensions` depends inward on `http/routing` (for `RouterContext` / `ExpressRouter.registerMethod`) and must not depend on `bootstrap`.
 
 ### Initialization Flow
 
@@ -79,11 +101,21 @@ src/core/
 1. PrismaManager (DB clients from `src/app/db/`)
 2. RepositoryManager (repos from `src/app/repos/`)
 3. DependencyInjector (modules from `src/app/injectable/`)
-4. Express middleware setup (from `src/app/routes/middleware.ts`)
-5. Route auto-discovery (from `src/app/routes/**/route.ts`)
-6. Documentation routes setup (when `AUTO_DOCS=true`, dev only)
+4. Extension loading (from `src/app/extensions/**`) — registers extension router methods before routes
+5. Express middleware setup (from `src/app/routes/middleware.ts`) + extension `onInit` hooks
+6. Route auto-discovery (from `src/app/routes/**/route.ts`)
+7. Documentation routes setup (when `AUTO_DOCS=true`, dev only)
 
 All managers are singletons.
+
+### Extension System (CoC, optional)
+
+The framework is extensible **without modifying `src/core`**. An **extension** is a `KustoExtension` object shipped by a separate npm package and activated by a thin file under `src/app/extensions/` that `export default`s it. Extensions can:
+- **register `ExpressRouter` methods** (e.g. a `GET_REACT`) via `routerMethods` — applied to the prototype at boot, before routes load;
+- hook **`onInit`** (Core init, after Express setup / before routes — register middleware, static assets, services);
+- hook **`onBuild`** (run by `kusto extensions build` — participate in the build, e.g. bundling).
+
+IDE type visibility comes from the extension package's own `.d.ts` (TypeScript **declaration merging** into the `ExpressRouter` interface): methods appear in IntelliSense only when the package is installed, so an **unused extension adds zero dependencies and zero types**. Discovery is a runtime scan of `src/app/extensions/*.ts` (no codegen); an absent folder is a no-op. Both `CRUD()` and extension methods are driven through the shared `RouterContext` (single source of truth in `@lib/http/routing/expressRouter`). Author with `defineExtension(...)` from `@core`. Tier: `@lib/extensions/` (`extensionTypes`/`extensionRegistry`/`loadExtensions`). See `docs/10-extension-system.md`.
 
 ### Auto-Generated Type Files
 
@@ -104,17 +136,17 @@ Folder structure under `src/app/routes/` maps directly to URL paths:
 
 Route files must `export default router.build()` using `ExpressRouter`.
 
-### Global Middleware (`src/app/routes/middleware.ts`)
+### Global Middleware
 
-Exports an array of Express middleware applied to all routes, in order:
-1. KustoManager initialization (`req.kusto`)
-2. Client IP extraction (`clientIpMiddleware`) — populates `req.ip`/`req.ips` honoring proxy headers
-3. Helmet security headers
-4. CORS (dynamic whitelist from `CORS_WHITELIST` env)
-5. Cookie parser
-6. Body parser (JSON + URL-encoded, 50mb limit, supports `application/vnd.api+json`)
-7. Footwalk request logging (winston `Footwalk` level)
-8. Error handler (catches downstream errors, returns 500 JSON)
+Two layers, split by ownership so framework essentials don't live in `src/app`:
+
+**Framework-essential (Core-owned, always on, not in app):** registered by `Core` around the app stack — `req.kusto` injection + client-IP resolution (`clientIpMiddleware`) run before routes, and the global JSON:API error handler runs last. These live in `@lib/http/routing/{frameworkMiddleware,clientIpMiddleware}.ts` and ship/update with core.
+
+**Policy stack (`defaultGlobalMiddleware()` from `@core`, user-overridable):** helmet → CORS (whitelist from `CORS_WHITELIST` env) → cookie-parser → body-parser (JSON + URL-encoded, 50mb, `application/vnd.api+json`) → request logging (`Footwalk`). Defined in `@lib/http/routing/globalMiddleware.ts`.
+
+`src/app/routes/middleware.ts` is a **thin, optional** user file: `export default [...defaultGlobalMiddleware(), /* your middleware */]`. If the file is absent, the loader applies `defaultGlobalMiddleware()` automatically; tune via `defaultGlobalMiddleware({ corsWhitelist, bodyLimit, helmet, disableRequestLog })`.
+
+Effective request order: `req.kusto` → clientIp → helmet → CORS → cookie → body → log → routes → error handler.
 
 ### Handler Signature
 
@@ -219,6 +251,10 @@ When `AUTO_DOCS=true` and `NODE_ENV=development`, Core.ts registers:
 When `ENABLE_SCHEMA_API=true`, provides CRUD schema introspection at `/api/schema`.
 Related modules: `CrudSchemaRegistry`, `PrismaSchemaAnalyzer`, `SchemaApiRouter`, `SchemaApiSetup`.
 
+### Dev Monitor (`kusto monitor`)
+
+When `NODE_ENV !== production`, `Core.setupMonitor()` registers a request-metrics middleware (before routes) and a **localhost-only** `GET /__kusto/metrics` endpoint (`src/core/lib/devtools/monitor/`). `npx kusto monitor` (alias `top`) is a separate-terminal htop-style TUI (`src/core/cli/monitor/`, zero deps) that polls the endpoint and renders process/requests/DB/routing live, adapting to terminal size. Server and CLI share the `MonitorSnapshot` contract. See `docs/09-dev-monitor.md`.
+
 ## Path Aliases
 
 | Alias | Path |
@@ -234,7 +270,7 @@ Related modules: `CrudSchemaRegistry`, `PrismaSchemaAnalyzer`, `SchemaApiRouter`
 **Single source of truth: `tsconfig.json` `compilerOptions.paths`.** Everything else derives from it so they can't drift:
 - **jest** (`jest.config.ts`): `moduleNameMapper` is generated via `pathsToModuleNameMapper(tsconfig.paths)`.
 - **webpack** (`webpack.config.js`): `resolve.alias` is built from tsconfig paths by `buildAliasesFromTsconfig()`.
-- **runtime** (`package.json` `_moduleAliases`, used by `module-alias`): the only hand-maintained copy — kept in lockstep by the guard test `tests/unit/config/alias-consistency.test.ts`. The entrypoints `src/index.ts`, `src/core/scripts/kusto-db-cli.ts`, and `updater/{generate,compare,update}.ts` register it via `import 'module-alias/register'`.
+- **runtime** (`package.json` `_moduleAliases`, used by `module-alias`): the only hand-maintained copy — kept in lockstep by the guard test `tests/unit/config/alias-consistency.test.ts`. The entrypoints `src/index.ts`, `src/core/scripts/kusto-db-cli.ts`, `src/core/cli/kusto.ts`, and `src/core/updater/{generate,compare,update}.ts` register it via `import 'module-alias/register'`.
 
 **To add an alias:** add it to `tsconfig.json` paths **and** `package.json` `_moduleAliases` (jest/webpack pick it up automatically; the guard test enforces the pair). Use `@lib/...` (not `@core/lib/...`) — `@lib` is the canonical spelling for `src/core/lib`.
 
@@ -278,10 +314,10 @@ Applies to all `log.*` calls under `src/core/` and `src/app/`:
 - **No emoji in messages.** The logger (`@ext/winston`) auto-prepends a per-level emoji in dev (Error→❌, Warn→⚠️, Info→💡, …); a second emoji inside the message just duplicates it (and leaks into prod JSON). Don't restate the level in text either (no leading `Warning:`/`Error:`).
 - **No `console.*` in runtime code.** Use `log.*` (`import { log } from '@ext/winston'`). Map: `console.log/info`→`log.Info`, `warn`→`log.Warn`, `error`→`log.Error`, `debug`→`log.Debug`.
 - **Right level / right volume.** Reserve `Info` for concise lifecycle summaries; per-item loop traces and routine intermediate steps belong at `Debug`/`Silly`. Avoid duplicate logs for one event.
-- **Exempt:** standalone CLI/build tooling (`src/core/scripts/*`, `updater/*`) may keep `console.*`, emoji, and Korean — it is operator-facing terminal output, not application logging. Do not normalize it. The `LOG_SETTINGS` emoji/color map in `src/core/external/winston.ts` is logger config, not a message — leave it.
+- **Exempt:** standalone CLI/build tooling (`src/core/scripts/*`, `src/core/cli/*`, `src/core/updater/*`) may keep `console.*`, emoji, and Korean — it is operator-facing terminal output, not application logging. Do not normalize it. The `LOG_SETTINGS` emoji/color map in `src/core/external/winston.ts` is logger config, not a message — leave it.
 
 ## Build & Deployment
 
 Webpack bundles to `dist/server.js`. CopyWebpackPlugin copies `src/app/views/`, `public/`, Prisma clients and schemas to dist. Run with `npm run serve` after build.
 
-`updater/` folder contains framework self-update tooling (generate release archives, compare versions, apply updates). Uses `archiver` and `yauzl` packages.
+`src/core/updater/` contains framework self-update tooling (build release archives, compare versions, apply updates with backup/rollback, SHA-256 file maps, zip-slip-safe extraction). Uses `archiver` and `yauzl`. It is excluded from its own deployment map (no self-overwrite) and is not bundled into `dist` (not reachable from the `src/index.ts` entry). The unified `kusto` CLI (`src/core/cli/kusto.ts`, exposed as the `kusto` bin) wraps it as `kusto update <...>`. See `docs/07-update-system.md` and `src/core/updater/AGENTS.md`.

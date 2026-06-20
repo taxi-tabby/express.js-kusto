@@ -1,15 +1,15 @@
 # views/ - Server-Side Templates
 
-EJS 템플릿 엔진을 사용한 서버사이드 렌더링 뷰 파일 폴더.
+Folder for server-side rendered view files using the EJS template engine.
 
 ## Template Engine
 
-**EJS** (Embedded JavaScript) — `.ejs` 확장자
+**EJS** (Embedded JavaScript) — `.ejs` extension
 
 ## Usage in Routes
 
 ```typescript
-// route.ts에서 EJS 렌더링
+// EJS rendering in route.ts
 res.render('index', {
     FRAMEWORK_URL: 'https://example.com',
     NODE_ENV: process.env.NODE_ENV
@@ -18,6 +18,6 @@ res.render('index', {
 
 ## Conventions
 
-- 주로 개발 모드 대시보드, 랜딩 페이지 등에 사용
-- 프로덕션에서는 JSON API 응답이 일반적
-- 변수 전달: `<%= variableName %>`, 조건문: `<% if (...) { %>`
+- Primarily used for the development-mode dashboard, landing pages, and similar
+- In production, JSON API responses are the norm
+- Passing variables: `<%= variableName %>`, conditionals: `<% if (...) { %>`

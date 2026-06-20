@@ -12,6 +12,12 @@ import { prismaManager } from '@lib/data/database/prismaManager';
 import { DependencyInjector } from '@lib/data/di/dependencyInjector';
 import { repositoryManager } from '@lib/data/database/repositoryManager';
 import { SchemaApiSetup } from '@lib/devtools/schema-api/schemaApiSetup';
+import { registerMonitor } from '@lib/devtools/monitor/monitorSetup';
+import { kustoInitMiddleware, globalErrorMiddleware } from '@lib/http/routing/frameworkMiddleware';
+import { clientIpMiddleware } from '@lib/http/routing/clientIpMiddleware';
+import loadExtensions from '@lib/extensions/loadExtensions';
+import { extensionRegistry } from '@lib/extensions/extensionRegistry';
+import type { ExtensionInitContext } from '@lib/extensions/extensionTypes';
 
 export interface CoreConfig {
     basePath?: string;
@@ -107,10 +113,14 @@ export class Core {
 
 
         
+        await this.loadExtensions(); // 확장 발견 + 라우터 메서드 prototype 등록 — 라우트보다 먼저
         this.setupExpress();
+        this.setupCoreMiddleware(); // 프레임워크 필수(req.kusto 주입 + clientIp) — 라우트보다 먼저
+        await this.runExtensionInit(); // 확장 onInit(미들웨어/정적/서비스) — 라우트보다 먼저
+        this.setupMonitor();     // dev 모니터(메트릭 미들웨어 + /__kusto/metrics) — 라우트보다 먼저
         this.setupHealthCheck(); // /healthz readiness (글로벌 라우트보다 먼저)
         this.setupDocumentationRoutes(); // 문서화 라우트를 먼저 등록
-        this.loadRoutes();
+        await this.loadRoutes();          // await: 전역 에러 핸들러보다 라우트가 먼저 등록되도록 보장
         this.setupViews();
 
         // 스키마 API 등록 (개발 모드에서만)
@@ -122,6 +132,8 @@ export class Core {
             }
         }
 
+        // 전역 에러 핸들러(4-arg)를 가장 마지막에 마운트(모든 라우트/미들웨어 에러 포착).
+        this._app.use(globalErrorMiddleware);
 
         this._isInitialized = true;
         if (process.env.NODE_ENV === 'development') {
@@ -155,18 +167,49 @@ export class Core {
         }
     }
 
-    private loadRoutes(): void {
-        const startTime = process.hrtime();
-        
+    /**
+     * 확장 발견 + 적용. `src/app/extensions/` 의 활성화 파일을 로드해 라우터 메서드를
+     * ExpressRouter prototype 에 등록하고, onInit/onBuild 훅을 레지스트리에 모은다.
+     * 라우트 로드보다 먼저 호출되어야 한다(route.ts 가 확장 메서드를 쓸 수 있도록).
+     */
+    private async loadExtensions(): Promise<void> {
         try {
-            loadRoutes(this._app, this._config.routesPath);
+            const loaded = loadExtensions();
+            if (loaded.length > 0) {
+                log.Route(`Extensions registered: ${loaded.map((e) => e.name).join(', ')}`);
+            }
+        } catch (error) {
+            log.Error('Failed to load extensions', { error });
+            throw error;
+        }
+    }
+
+    /** 등록된 확장의 onInit 훅을 실행한다(Express 설정 후, 라우트 등록 전). */
+    private async runExtensionInit(): Promise<void> {
+        const ctx: ExtensionInitContext = {
+            app: this._app,
+            config: this._config,
+            registerMiddleware: (mw) => { this._app.use(mw); },
+            log,
+        };
+        await extensionRegistry.runInit(ctx);
+    }
+
+    private async loadRoutes(): Promise<void> {
+        const startTime = process.hrtime();
+
+        try {
+            // loadRoutes 는 async(동적 라우트맵 await) 다. await 하지 않으면 라우트/정책 미들웨어가
+            // 이후 microtask 에 등록되어, 동기 본문에서 마운트한 전역 에러 핸들러보다 *뒤*에 깔린다
+            // (에러 핸들러가 라우트 에러를 못 잡는 회귀). await 로 등록 순서를 보장한다.
+            await loadRoutes(this._app, this._config.routesPath);
             const elapsed = process.hrtime(startTime);
             log.Route(`Routes loaded successfully: ${getElapsedTimeInString(elapsed)}`);
         } catch (error) {
             log.Error('Failed to load routes', { error, routesPath: this._config.routesPath });
             throw error;
         }
-    }    
+    }
     
     private setupViews(): void {
         this._app.set('view engine', this._config.viewEngine);
@@ -453,6 +496,37 @@ export class Core {
                 prisma: readiness.prisma,
             });
         });
+    }
+
+    /**
+     * 프레임워크 필수 미들웨어를 라우트보다 먼저 등록한다(Core 소유).
+     * req.kusto 주입 → clientIp 해석 순서. 이후 app 의 글로벌 미들웨어/라우트가 이를 사용한다.
+     */
+    private setupCoreMiddleware(): void {
+        this._app.use(kustoInitMiddleware);
+        this._app.use(clientIpMiddleware);
+    }
+
+    /** dev 모니터 등록(메트릭 수집 미들웨어 + /__kusto/metrics). dev·localhost 전용. */
+    private setupMonitor(): void {
+        registerMonitor(this._app, {
+            host: this._config.host || '0.0.0.0',
+            port: this._config.port || 3000,
+            getReadiness: () => {
+                const r = this.getReadiness();
+                const degraded = r.prisma.error
+                    || (r.prisma.unconnected.length ? `unconnected: ${r.prisma.unconnected.join(', ')}` : undefined);
+                return { ready: r.ready, degraded };
+            },
+            getRouteCount: () => this.countRoutes(),
+        });
+    }
+
+    /** Express 라우터 스택에서 등록된 라우트 수(best-effort). */
+    private countRoutes(): number {
+        const stack = (this._app as unknown as { _router?: { stack?: Array<{ route?: unknown }> } })._router?.stack;
+        if (!Array.isArray(stack)) return 0;
+        return stack.filter((l) => l.route).length;
     }
 }
 

@@ -1,7 +1,7 @@
 import 'module-alias/register';
 import * as fs from 'fs';
-import * as path from 'path';
 import * as https from 'https';
+import { PACKAGE_JSON_PATH } from './paths';
 
 interface ReleaseInfo {
     tag_name: string;
@@ -36,8 +36,7 @@ interface PackageJson {
  */
 function getCurrentVersion(): string {
     try {
-        const packagePath = path.resolve(__dirname, '..', 'package.json');
-        const packageContent = fs.readFileSync(packagePath, 'utf8');
+        const packageContent = fs.readFileSync(PACKAGE_JSON_PATH, 'utf8');
         const packageJson: PackageJson = JSON.parse(packageContent);
         return packageJson.version;
     } catch (error) {
@@ -146,41 +145,28 @@ function compareVersions(version1: string, version2: string): number {
  * 릴리즈 에셋에서 다운로드 URL을 찾습니다.
  */
 function extractDownloadUrls(assets: ReleaseInfo['assets']): { package: string; fileMap: string } | null {
-    console.log('🔍 Searching for download assets...');
-    console.log(`📋 Found ${assets.length} assets in release:`);
-    console.log('📋 Full asset details:', JSON.stringify(assets, null, 2));
-    
+    console.log(`Searching ${assets.length} release assets...`);
+
     let packageUrl: string | undefined;
     let fileMapUrl: string | undefined;
 
     for (const asset of assets) {
-        console.log(`   📄 Asset: ${asset.name}`);
-        
         // 업데이트 패키지 파일 찾기 (update-package-*.zip 패턴)
         if (asset.name.startsWith('update-package-') && asset.name.endsWith('.zip')) {
             packageUrl = asset.download_url;
-            console.log(`   ✅ Found package: ${asset.name} -> ${packageUrl}`);
-        } 
+            console.log(`   Found package: ${asset.name}`);
+        }
         // 파일 맵 찾기 (v*.json 패턴)
         else if (asset.name.startsWith('v') && asset.name.endsWith('.json')) {
             fileMapUrl = asset.download_url;
-            console.log(`   ✅ Found file map: ${asset.name} -> ${fileMapUrl}`);
+            console.log(`   Found file map: ${asset.name}`);
         }
     }
 
-    console.log(`🔍 Final URLs: package=${packageUrl}, fileMap=${fileMapUrl}`);
+    if (!packageUrl) console.log('Package file not found in release assets');
+    if (!fileMapUrl) console.log('File map not found in release assets');
 
-    if (!packageUrl) {
-        console.log('❌ Package file not found in assets');
-    }
-    if (!fileMapUrl) {
-        console.log('❌ File map not found in assets');
-    }
-
-    const result = packageUrl && fileMapUrl ? { package: packageUrl, fileMap: fileMapUrl } : null;
-    console.log(`🎯 Returning result:`, result);
-    
-    return result;
+    return packageUrl && fileMapUrl ? { package: packageUrl, fileMap: fileMapUrl } : null;
 }
 
 /**

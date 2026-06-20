@@ -1,8 +1,11 @@
 {
   "name": "kusto-server",
-  "version": "0.1.47",
+  "version": "0.2.0",
   "description": "Express based custom server for simple backend service",
   "main": "index.js",
+  "bin": {
+    "kusto": "bin/kusto.js"
+  },
   "scripts": {
     "start": "ts-node ./src/index.ts",
     "dev": "npm run generate && nodemon",
@@ -13,10 +16,11 @@
     "typecheck": "tsc -p tsconfig.webpack.json --noEmit",
     "clean": "node src/core/scripts/clean-tmp.js",
     "generate": "node src/core/scripts/generate.js",
+    "kusto": "ts-node ./src/core/cli/kusto.ts",
     "db": "ts-node ./src/core/scripts/kusto-db-cli.ts",
-    "updater:generate": "ts-node ./updater/generate.ts",
-    "updater:check": "ts-node ./updater/compare.ts",
-    "updater:update": "ts-node ./updater/update.ts",
+    "updater:generate": "ts-node ./src/core/updater/generate.ts",
+    "updater:check": "ts-node ./src/core/updater/compare.ts",
+    "updater:update": "ts-node ./src/core/updater/update.ts",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",

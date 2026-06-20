@@ -17,14 +17,14 @@ db/
 
 ## Conventions
 
-- **One folder = One database**: 폴더명이 곧 데이터베이스 식별자 (`prismaManager.getWrap('default')`)
-- **`schema.prisma` 필수**: 각 폴더에 Prisma schema 파일이 있어야 인식됨
-- **`client/` 자동 생성**: `npm run db -- generate --all` 실행 시 각 폴더에 타입 안전한 Prisma client가 생성됨
-- **환경변수로 연결** (2가지 방식):
-  1. `schema.prisma`에 `url = env("VAR_NAME")` → 해당 환경변수 사용
-  2. `url` 생략 시 → `{FOLDER_NAME}__KUSTO_RDB_URL` 컨벤션 자동 적용 (camelCase → UPPER_SNAKE_CASE 변환)
-- **Provider 자동 감지**: `schema.prisma`의 `datasource.provider` 값에 따라 적절한 드라이버 어댑터가 동적 로드됨 (postgresql, mysql, sqlite)
+- **One folder = One database**: the folder name is the database identifier (`prismaManager.getWrap('default')`)
+- **`schema.prisma` required**: a folder is only recognized if it contains a Prisma schema file
+- **`client/` auto-generated**: running `npm run db -- generate --all` generates a type-safe Prisma client in each folder
+- **Connection via environment variable** (2 modes):
+  1. `url = env("VAR_NAME")` in `schema.prisma` → uses that environment variable
+  2. `url` omitted → the `{FOLDER_NAME}__KUSTO_RDB_URL` convention is applied automatically (camelCase → UPPER_SNAKE_CASE conversion)
+- **Provider auto-detection**: based on the `datasource.provider` value in `schema.prisma`, the appropriate driver adapter is loaded dynamically (postgresql, mysql, sqlite)
 
 ## Type Generation
 
-`npm run generate` 실행 시 `src/core/lib/types/generated-db-types.ts`에 모든 데이터베이스의 타입이 통합 생성되어 IDE 자동완성 지원.
+Running `npm run generate` generates the types for all databases, consolidated into `src/core/lib/types/generated-db-types.ts`, to support IDE autocompletion.

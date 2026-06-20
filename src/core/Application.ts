@@ -51,8 +51,6 @@ export class Application {
      * Stop the application gracefully
      */
     public async stop(): Promise<void> {
-        const stack = new Error().stack;
-        log.Debug('stop() method called', { stack });
         log.Info('Stopping application...');
         await this.core.stop();
         log.Info('Application stopped successfully');

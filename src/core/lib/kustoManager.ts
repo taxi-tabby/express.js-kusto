@@ -88,14 +88,14 @@ export class KustoManager {
         // Proxy 객체는 캐시하되, 내부 조회는 항상 live 상태를 확인
         const repoProxy = new Proxy({}, {
             get(target, prop) {
-                if (typeof prop === 'string' && repositoryManager.getLoadedRepositoryNames().includes(prop)) {
+                if (typeof prop === 'string' && repositoryManager.hasRepository(prop as RepositoryName)) {
                     return repositoryManager.getRepository(prop as RepositoryName);
                 }
                 return undefined;
             },
 
             has(target, prop) {
-                return typeof prop === 'string' && repositoryManager.getLoadedRepositoryNames().includes(prop);
+                return typeof prop === 'string' && repositoryManager.hasRepository(prop as RepositoryName);
             },
 
             ownKeys(target) {
@@ -103,7 +103,7 @@ export class KustoManager {
             },
 
             getOwnPropertyDescriptor(target, prop) {
-                if (typeof prop === 'string' && repositoryManager.getLoadedRepositoryNames().includes(prop)) {
+                if (typeof prop === 'string' && repositoryManager.hasRepository(prop as RepositoryName)) {
                     return {
                         enumerable: true,
                         configurable: true,
@@ -151,7 +151,7 @@ export class KustoManager {
                 }
 
                 // 데이터베이스 이름으로 직접 접근 — live 상태 확인
-                if (typeof prop === 'string' && prismaManager.getAvailableDatabases().includes(prop)) {
+                if (typeof prop === 'string' && prismaManager.isConnected(prop)) {
                     return prismaManager.getClientSync(prop);
                 }
 

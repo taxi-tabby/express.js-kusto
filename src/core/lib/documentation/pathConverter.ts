@@ -12,8 +12,8 @@ export interface PathConversionResult {
  * - `:foo` → `{foo}`
  * - 추출된 파라미터들의 메타데이터도 함께 반환.
  *
- * 본 phase (M1) 에서는 단순 :name 만 처리. regex param (:^name) 과
- * wildcard (..[^name]) 는 후속 phase 에서 확장.
+ * OpenAPI 경로 변환은 단순 `:name` 만 처리한다. regex param/wildcard 의
+ * 식별자 추출은 태그·operationId 파생(normalizePathForDerivation 등)에서 다룬다.
  */
 export function toOpenApiPath(expressPath: string): PathConversionResult {
     const parameters: PathConversionResult['parameters'] = [];

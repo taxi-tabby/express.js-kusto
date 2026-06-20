@@ -1551,36 +1551,6 @@ export class CrudResponseFormatter {
   }
 
   /**
-   * 에러 세부 정보 보안 처리
-   */
-  private static sanitizeErrorDetail(
-    message: string,
-    details: any,
-    options: {
-      isDevelopment: boolean;
-      sanitizeDetails: boolean;
-      maxDetailLength: number;
-    }
-  ): { message: string; details: any } {
-    // 개발 모드에서는 원본 정보 그대로 반환
-    if (options.isDevelopment && !options.sanitizeDetails) {
-      return {
-        message: CrudResponseFormatter.truncateMessage(message, options.maxDetailLength),
-        details: details || null
-      };
-    }
-
-    // 프로덕션 모드에서는 보안을 위해 정보 제한
-    const sanitizedMessage = CrudResponseFormatter.sanitizePrismaError(message);
-    const sanitizedDetails = CrudResponseFormatter.sanitizeDetails(details);
-
-    return {
-      message: CrudResponseFormatter.truncateMessage(sanitizedMessage, options.maxDetailLength),
-      details: sanitizedDetails
-    };
-  }
-
-  /**
    * 에러 메시지 보안 처리 (구조적 접근법)
    */
   static sanitizePrismaError(message: string): string {
@@ -1936,28 +1906,6 @@ export class CrudResponseFormatter {
   }
 
   /**
-   * 에러 코드를 일반적인 설명으로 매핑 (구조적 접근법)
-   */
-  static mapPrismaErrorCode(code: string): string {
-
-    // 라이브러리별 에러 코드 매핑
-    const errorCodeMappers = [
-      this.mapPrismaSpecificCodes,
-    ];
-
-    for (const mapper of errorCodeMappers) {
-      const mapped = mapper(code);
-      if (mapped !== code) {
-        return mapped; // 매핑이 성공한 경우
-      }
-    }
-
-    // 일반적인 HTTP 상태 코드 처리
-    return this.mapGenericErrorCodes(code);
-  }
-
-
-  /**
    * Prisma 특화 에러 코드 매핑
    */
   private static mapPrismaSpecificCodes(code: string): string {
@@ -2012,27 +1960,6 @@ export class CrudResponseFormatter {
     return prismaCodeMap.get(code) || code;
   }
 
-  
-  /**
-   * 일반적인 에러 코드 매핑
-   */
-  private static mapGenericErrorCodes(code: string): string {
-    const genericCodeMap = new Map<string, string>([
-      ['400', ERROR_CODES.BAD_REQUEST],
-      ['401', ERROR_CODES.UNAUTHORIZED],
-      ['403', ERROR_CODES.FORBIDDEN],
-      ['404', ERROR_CODES.NOT_FOUND],
-      ['409', ERROR_CODES.CONFLICT],
-      ['422', ERROR_CODES.UNPROCESSABLE_ENTITY],
-      ['500', ERROR_CODES.INTERNAL_SERVER_ERROR],
-      ['502', ERROR_CODES.BAD_GATEWAY],
-      ['503', ERROR_CODES.SERVICE_UNAVAILABLE],
-      ['504', ERROR_CODES.GATEWAY_TIMEOUT]
-    ]);
-
-    return genericCodeMap.get(code) || ERROR_CODES.UNKNOWN_ERROR;
-  }
-
   /**
    * 메시지 길이 제한 (public static으로 변경)
    */
@@ -2041,58 +1968,6 @@ export class CrudResponseFormatter {
       return message;
     }
     return message.substring(0, maxLength - 3) + '...';
-  }
-
-  /**
-   * CrudQueryParams에서 직접 메타데이터 생성 (편의 메서드)
-   */
-  static createMetaFromQuery(
-    items: any[],
-    total: number,
-    queryParams: CrudQueryParams,
-    operation: string = 'index'
-  ) {
-    return this.createPaginationMeta(
-      items,
-      total,
-      queryParams.page,
-      operation,
-      queryParams.include,
-      queryParams
-    );
-  }
-
-  /**
-   * CrudQueryParams를 사용한 완전한 응답 포맷 (편의 메서드)
-   */
-  static formatResponseFromQuery(
-    data: any,
-    queryParams: CrudQueryParams,
-    total?: number,
-    operation: string = 'index'
-  ) {
-    // operation에 따라 적절한 카운트 필드 결정
-    const isModifyOperation = ['create', 'update', 'delete', 'upsert'].includes(operation);
-    
-    const metadata = Array.isArray(data) 
-      ? this.createMetaFromQuery(data, total || data.length, queryParams, operation)
-      : {
-          operation,
-          timestamp: new Date().toISOString(),
-          ...(isModifyOperation 
-            ? { affectedCount: 1 }  // 생성/수정/삭제 작업
-            : { count: 1 }          // 조회 작업
-          ),
-          ...(queryParams.include && queryParams.include.length > 0 && {
-            includedRelations: queryParams.include
-          })
-        };
-
-    return {
-      data,
-      metadata,
-      success: true
-    };
   }
 }
 
@@ -2321,7 +2196,6 @@ export class JsonApiTransformer {
 
   /**
    * 관계 이름에서 리소스 타입 추론 (public 메서드로 변경)
-   * @deprecated inferResourceTypeFromData 사용 권장
    */
   static inferResourceTypeFromRelationship(relationshipName: string, isArray: boolean): string {
     let resourceType = relationshipName;

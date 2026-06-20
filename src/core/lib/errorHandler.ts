@@ -230,7 +230,7 @@ export class ErrorHandler {
   }
 
   /**
-   * Prisma 에러 코드 매핑
+   * 민감한 정보 제거 (연결 문자열, 자격 증명, 파일 경로, 스택 트레이스, 네트워크 정보 마스킹)
    */
   private static removeSensitiveInformation(message: string): string {
     const sensitivePatternCategories = {

@@ -1,4 +1,5 @@
 import { PrismaSchemaAnalyzer } from '@lib/prismaSchemaAnalyzer';
+import { PrismaModelInfo } from '@lib/crudSchemaTypes';
 import { DocumentationGenerator } from '@lib/documentationGenerator';
 import { jsonApiResource, jsonApiAttributes, jsonApiRelationships, jsonApiErrorObject } from './jsonApiSchemas';
 import { enumToOpenApi } from './dmmfToOpenApi';
@@ -47,14 +48,13 @@ function isEnabled(): boolean {
     return process.env.NODE_ENV !== 'production' && process.env.AUTO_DOCS === 'true';
 }
 
-function collectEnumValues(analyzer: PrismaSchemaAnalyzer, models: { fields: Array<{ type: string }> }[]): Map<string, string[]> {
+function collectEnumValues(analyzer: PrismaSchemaAnalyzer, models: PrismaModelInfo[]): Map<string, string[]> {
     const map = new Map<string, string[]>();
-    if (typeof (analyzer as any).isEnumType !== 'function') return map;
 
     for (const model of models) {
         for (const field of model.fields) {
-            if ((analyzer as any).isEnumType(field.type) && !map.has(field.type)) {
-                const values = (analyzer as any).getEnumValues?.(field.type);
+            if (analyzer.isEnumType(field.type) && !map.has(field.type)) {
+                const values = analyzer.getEnumValues(field.type);
                 if (Array.isArray(values) && values.length > 0) {
                     map.set(field.type, values);
                 }

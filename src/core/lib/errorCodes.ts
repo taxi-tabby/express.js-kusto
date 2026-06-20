@@ -290,27 +290,3 @@ export const ERROR_STATUS_MAP: Record<string, number> = {
 export function getHttpStatusForErrorCode(errorCode: string): number {
   return ERROR_STATUS_MAP[errorCode] || 500;
 }
-
-/**
- * 에러 코드별 사용자 친화적 메시지 매핑
- */
-export const ERROR_MESSAGES: Record<string, string> = {
-  [ERROR_CODES.PAGINATION_REQUIRED]: 'Pagination parameters are required. Please specify page[number] & page[size] or page[cursor] & page[size].',
-  [ERROR_CODES.INVALID_PAGINATION_PARAMS]: 'Invalid pagination parameters. Please check your page[number], page[cursor], and page[size] values.',
-  [ERROR_CODES.INVALID_PAGE_SIZE]: 'Page size must be a positive number greater than 0.',
-  [ERROR_CODES.RESOURCE_NOT_FOUND]: 'The requested resource could not be found.',
-  [ERROR_CODES.VALIDATION_ERROR]: 'The request contains invalid data. Please check your input.',
-  [ERROR_CODES.UNAUTHORIZED]: 'Authentication is required to access this resource.',
-  [ERROR_CODES.FORBIDDEN]: 'You do not have permission to access this resource.',
-  [ERROR_CODES.DUPLICATE_ENTRY]: 'A resource with this identifier already exists.',
-  [ERROR_CODES.INTERNAL_ERROR]: 'An internal server error occurred. Please try again later.'
-};
-
-/**
- * 사용자 친화적 에러 메시지 반환
- * @param errorCode 에러 코드
- * @returns 사용자 친화적 메시지
- */
-export function getErrorMessage(errorCode: string): string {
-  return ERROR_MESSAGES[errorCode] || 'An unexpected error occurred.';
-}

@@ -147,10 +147,6 @@ export class RepositoryManager {
                 throw new Error(`Repository ${name} not found in registry`);
             }
 
-            // Clear module cache to force reload
-            const modulePath = require.resolve(await (repositoryLoader as () => Promise<any>).toString());
-            delete require.cache[modulePath];
-
             const repositoryExports = await (repositoryLoader as () => Promise<any>)();
             const RepositoryClass = this.resolveRepositoryClass(repositoryExports, name);
               if (typeof RepositoryClass === 'function') {

@@ -776,7 +776,6 @@ export class CrudSchemaRegistry {
           if (convertedRelation) {
             convertedRelations.push(convertedRelation);
           }
-        } else {
         }
       }
     }

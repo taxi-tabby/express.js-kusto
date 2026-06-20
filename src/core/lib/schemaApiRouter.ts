@@ -50,8 +50,7 @@ export class SchemaApiRouter {
         error: {
           code: ERROR_CODES.FORBIDDEN,
           message: '스키마 API는 로컬호스트에서만 접근 가능합니다.',
-          hint: 'localhost에서 접근하거나 ENABLE_SCHEMA_API=true로 설정하세요.',
-          clientIP: clientIP
+          hint: 'localhost에서 접근하거나 ENABLE_SCHEMA_API=true로 설정하세요.'
         }
       });
       return;
@@ -305,13 +304,7 @@ export class SchemaApiRouter {
         schemaApiEnabled: this.registry.isSchemaApiEnabled(),
         registeredSchemas: this.registry.getSchemaCount(),
         environment: process.env.NODE_ENV || 'unknown',
-        timestamp: new Date(),
-        debug: {
-          nodeEnv: process.env.NODE_ENV,
-          enableSchemaApi: process.env.ENABLE_SCHEMA_API,
-          clientIP: req.ip || req.connection.remoteAddress,
-          userAgent: req.get('User-Agent')
-        }
+        timestamp: new Date()
       };
 
       log.Silly('Health check requested', healthData);

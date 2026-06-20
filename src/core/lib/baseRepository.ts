@@ -125,6 +125,7 @@ export abstract class BaseRepository<T extends DatabaseNamesUnion> {
             timeout?: number;
             rollbackOperation?: (prisma: DatabaseClientMap[TDatabase]) => Promise<void>;
             priority?: number;
+            requiredLocks?: string[];
         }
     ): DistributedTransactionOperation<TDatabase> {
         return {
@@ -132,7 +133,8 @@ export abstract class BaseRepository<T extends DatabaseNamesUnion> {
             operation,
             timeout: options?.timeout,
             rollbackOperation: options?.rollbackOperation,
-            priority: options?.priority
+            priority: options?.priority,
+            requiredLocks: options?.requiredLocks
         };
     }
 

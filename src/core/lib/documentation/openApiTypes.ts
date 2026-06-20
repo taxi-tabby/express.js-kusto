@@ -11,6 +11,7 @@ export interface OpenApiSchema {
     format?: string;
     description?: string;
     enum?: unknown[];
+    const?: unknown;
     example?: unknown;
     examples?: unknown[];
     pattern?: string;

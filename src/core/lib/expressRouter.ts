@@ -404,17 +404,6 @@ export class ExpressRouter {
         return path;
     }
 
-    /**
-     * # convertSlugsToExactPath - 정확한 경로 매칭 헬퍼
-     * 하위 경로 매칭을 방지하기 위한 정확한 경로 생성
-     */
-    // private convertSlugsToExactPath(slugs: string[]): string {
-    //     const pathSegments = slugs.map(slug => slug === "*" ? "*" : `/:${slug}`);
-    //     const path = pathSegments.join('');
-    //     // 뒤에 추가 경로가 있는 것을 방지하기 위해 '(?=/|$)' 사용
-    //     return path + '(?=/|$)';
-    // }
-
 
     /**
    * # GET
@@ -1965,50 +1954,7 @@ export class ExpressRouter {
         return this;
     }
 
-    // /**
-    //  * # GET_SLUG_VALIDATED (개선??버전)
-    //  * 검증된 DELETE 슬러그 요청 처리 (정확한 경로 매칭만)
-    //  */
-    // public GET_SLUG_VALIDATED_IMPROVED(
-    //     slug: string[],
-    //     requestConfig: RequestConfig,
-    //     responseConfig: ResponseConfig,
-    //     handler: ValidatedHandlerFunction,
-    //     options?: { exact?: boolean }
-    // ): ExpressRouter {
 
-    //     const middlewares = CustomRequestHandler.createHandler(
-    //         { request: requestConfig, response: responseConfig },
-    //         handler
-    //     );
-
-    //     if (options?.exact) {
-    //         // 정확한 매칭: 하위 경로 방지
-    //         const exactPath = this.convertSlugsToPath(slug);
-
-    //         // Express에서 정확한 매칭을 위해 미들웨어에서 경로 체크
-    //         const exactMiddleware = (req: any, res: any, next: any) => {
-    //             // URL이 정확히 일치하는지 확인
-    //             const pathPattern = exactPath.replace(/:\w+/g, '[^/]+');
-    //             const regex = new RegExp(`^${pathPattern}$`);
-    //             if (regex.test(req.path)) {
-    //                 next();
-    //             } else {
-    //                 next('route'); // 다른 라우트로 패스
-    //             }
-    //         };
-
-    //         this.router.get(exactPath, exactMiddleware, ...middlewares);
-
-    //     } else {
-    //         // 기본 동작: 하위 경로도 매칭
-    //         this.router.get(this.convertSlugsToPath(slug), ...middlewares);
-    //     }
-
-    //     return this;
-    // }
-
-    
     /**
      * CRUD 자동 생성 메서드
      * 완전한 REST API CRUD 엔드포인트를 자동으로 생성합니다
@@ -2250,22 +2196,17 @@ export class ExpressRouter {
      * Primary key 타입을 자동으로 감지하고 적절한 파서를 반환하는 헬퍼 메서드
      */
     private getSmartPrimaryKeyParser(databaseName: string, modelName: string, primaryKey: string): (value: string) => any {
-        try {
-            // 간단한 타입 추론 로직
-            // 실제로는 Prisma 스키마나 메타데이터를 통해 판단할 수 있음
-            // 여기서는 일반적인 패턴을 기반으로 추론
-            
-            // primaryKey 이름 기반 추론
-            if (primaryKey === 'uuid' || primaryKey.includes('uuid') || primaryKey.endsWith('_uuid')) {
-                return ExpressRouter.parseUuid;
-            }
-            
-            // 기본적으로 스마트 파서 사용 (숫자인지 UUID인지 자동 판단)
-            return this.parseIdSmart;
-        } catch (error) {
-            log.Warn(`Failed to determine primary key type for ${modelName}.${primaryKey}, using string parser`);
-            return ExpressRouter.parseString;
+        // 간단한 타입 추론 로직
+        // 실제로는 Prisma 스키마나 메타데이터를 통해 판단할 수 있음
+        // 여기서는 일반적인 패턴을 기반으로 추론
+
+        // primaryKey 이름 기반 추론
+        if (primaryKey === 'uuid' || primaryKey.includes('uuid') || primaryKey.endsWith('_uuid')) {
+            return ExpressRouter.parseUuid;
         }
+
+        // 기본적으로 스마트 파서 사용 (숫자인지 UUID인지 자동 판단)
+        return this.parseIdSmart;
     }
 
     /**
@@ -3014,7 +2955,7 @@ export class ExpressRouter {
         if (options?.validation?.create) {
             const validationMiddlewares = CustomRequestHandler.withValidation(
                 options.validation.create,
-                handler as any
+                handler
             );
             
             if (middlewares.length > 0) {
@@ -3617,14 +3558,6 @@ export class ExpressRouter {
     }
 
     /**
-     * 객체가 attributes를 가지고 있는지 확인하는 헬퍼 가드
-     */
-    private hasAttributes(obj: any): obj is JsonApiResource {
-        const result = obj && typeof obj === 'object' && 'attributes' in obj && obj.attributes != null;
-        return result;
-    }
-
-    /**
      * 리소스 타입에서 Prisma 모델명을 추론하는 헬퍼 메서드
      * - userRole, userrole, user-role, user_role -> UserRole
      * - users -> User
@@ -3878,7 +3811,7 @@ export class ExpressRouter {
             if (options?.validation?.update) {
                 const validationMiddlewares = CustomRequestHandler.withValidation(
                     options.validation.update,
-                    handler as any
+                    handler
                 );
                 
                 if (middlewares.length > 0) {
@@ -4202,7 +4135,7 @@ export class ExpressRouter {
         if (options?.validation?.recover) {
             const validationMiddlewares = CustomRequestHandler.withValidation(
                 options.validation.recover,
-                handler as any
+                handler
             );
             
             if (middlewares.length > 0) {
@@ -4343,39 +4276,6 @@ export class ExpressRouter {
     }
 
     /**
-     * 공통 JSON:API 기본 구조 생성 헬퍼
-     */
-    private createBaseJsonApiStructure(): any {
-        return {
-            jsonapi: {
-                version: "1.1",
-                // ext: ["https://jsonapi.org/ext/atomic"],
-                // profile: ["https://jsonapi.org/profiles/ethanresnick/cursor-pagination/"],
-                meta: {
-                    implementation: "express.js-kusto v2.0",
-                    // implementedFeatures: [
-                    //     "sparse-fieldsets",
-                    //     "compound-documents", 
-                    //     "resource-relationships",
-                    //     "pagination",
-                    //     "sorting",
-                    //     "filtering",
-                    //     "atomic-operations",
-                    //     "content-negotiation",
-                    //     "resource-identification"
-                    // ],
-                    // supportedExtensions: [
-                    //     "https://jsonapi.org/ext/atomic"
-                    // ],
-                    // supportedProfiles: [
-                    //     "https://jsonapi.org/profiles/ethanresnick/cursor-pagination/"
-                    // ]
-                }
-            }
-        };
-    }
-
-    /**
      * JSON:API 에러 형식으로 포맷하는 헬퍼 메서드 (통합 ErrorHandler 사용)
      */
     private formatJsonApiError(error: Error | unknown, code: string, status: number, path: string, method?: string): JsonApiErrorResponse {
@@ -4431,22 +4331,6 @@ export class ExpressRouter {
         });
 
         return cleanedData;
-    }
-
-    /**
-     * HTTP 상태 코드에 따른 에러 제목 반환
-     */
-    private getErrorTitle(status: number): string {
-        switch (status) {
-            case 400: return 'Bad Request';
-            case 401: return 'Unauthorized';
-            case 403: return 'Forbidden';
-            case 404: return 'Not Found';
-            case 409: return 'Conflict';
-            case 422: return 'Unprocessable Entity';
-            case 500: return 'Internal Server Error';
-            default: return 'Error';
-        }
     }
 
     /**
@@ -4507,21 +4391,6 @@ export class ExpressRouter {
     }
 
 
-
-
-
-
-    /**
-     * ID 파싱 헬퍼 (문자열을 숫자로 변환 시도)
-     */
-    private parseId = (id: string): any => {
-        // 숫자인 경우 정수로 변환
-        if (/^\d+$/.test(id)) {
-            return parseInt(id, 10);
-        }
-        // UUID 등의 경우 문자열 그대로 반환
-        return id;
-    };
 
 
 

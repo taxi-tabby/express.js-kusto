@@ -29,13 +29,9 @@ export interface TransactionParticipant<T extends DatabaseNamesUnion = DatabaseN
     committedAt?: Date;
     error?: Error;
     timeout?: number; // 개별 타임아웃 설정 가능
-    /** @deprecated P0-4 이후 미사용 — prepare 단계가 operation 을 실행하지 않으므로 채워지지 않는다. */
-    result?: any;
     requiredLocks?: string[]; // 특정 리소스에 대한 락 요구사항
     rollbackOperation?: (prisma: DatabaseClientMap[T]) => Promise<void>; // 보상 트랜잭션
     priority?: number; // 커밋 우선순위 (높을수록 먼저 커밋)
-    /** @deprecated P0-4 이후 미사용 — 검증 단계가 결과를 캐시하지 않는다(operation 은 commit 에서 1회 실행). */
-    validatedResult?: any;
 }
 
 /**

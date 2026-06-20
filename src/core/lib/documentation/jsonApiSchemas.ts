@@ -66,7 +66,7 @@ export function jsonApiResource(model: PrismaModelInfo, enumValuesByName: Map<st
 
     const properties: Record<string, OpenApiSchemaOrRef> = {
         id: { type: 'string' },
-        type: { type: 'string', const: model.name } as OpenApiSchema & { const?: string },
+        type: { type: 'string', const: model.name },
         attributes,
     };
     if (Object.keys(relationships.properties).length > 0) {

@@ -558,14 +558,6 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 				throw new Error(`Environment variable ${envVarName} not found for database ${folderName}`);
 			}
 
-			// 연결 풀 매개변수가 없으면 추가
-			// if (!url.includes('connection_limit') && !url.includes('pool_timeout')) {
-			// 	const hasParams = url.includes('?');
-			// 	const connector = hasParams ? '&' : '?';
-			// 	url += `${connector}connection_limit=5&pool_timeout=10000&connect_timeout=5000`;
-			// 	log.Info(`📊 Added connection pool settings to ${folderName} database URL`);
-			// }
-
 			return url;
 		} catch (error) {
 			log.Error(`Failed to get database URL for ${folderName}:`, error);

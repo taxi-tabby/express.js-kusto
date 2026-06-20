@@ -85,7 +85,7 @@ export class DocumentationGenerator {
         return this.routes.length;
     }
 
-    /** 스키마 등록 (M3 의 syncDocumentationSchemas 가 사용 예정) */
+    /** 스키마 등록 (syncSchemasFromAnalyzer 가 모델별 JSON:API 스키마를 등록할 때 사용) */
     static registerSchema(name: string, schema: OpenApiSchemaOrRef): void {
         if (!this.isDocumentationEnabled()) return;
         this.schemas[name] = schema;

@@ -22,7 +22,7 @@ export function jsonApiBody(modelName: string, op: 'create' | 'update'): OpenApi
                     attributes: { $ref: `#/components/schemas/${modelName}Attributes` },
                     relationships: { $ref: `#/components/schemas/${modelName}Relationships` },
                 },
-            } as any,
+            },
         },
     };
 }
@@ -65,10 +65,10 @@ export function jsonApiCollectionResponse(modelName: string): OpenApiObjectSchem
             data: {
                 type: 'array',
                 items: { $ref: `#/components/schemas/${modelName}` },
-            } as any,
+            },
             meta: {
                 type: 'object',
-            } as any,
+            },
         },
     };
 }

@@ -72,7 +72,7 @@ export function modelToOpenApi(model: PrismaModelInfo, enumValuesByName: Map<str
     }
 
     // non-optional 필드를 required 로 표시.
-    // (M3 에서 Attributes/Resource 변형 분리 시 generated 처리 분리 예정.)
+    // Attributes/Resource 변형 분리는 jsonApiSchemas 에서 처리한다.
     const allRequired: string[] = [];
     for (const field of model.fields) {
         if (field.relationName) continue;

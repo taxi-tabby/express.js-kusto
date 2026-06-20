@@ -357,36 +357,11 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 			}
 
 			// Create Prisma client instance with provider-specific driver adapter
-			const adapter = await this.createDriverAdapter(folderName, connectionUrl);
-			const clientOptions: any = {
-				log: process.env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error'],
-				errorFormat: 'minimal'
-			};
-			if (adapter) {
-				clientOptions.adapter = adapter;
-			}
+			const clientOptions = await this.buildClientOptions(folderName, connectionUrl);
 			const prismaClient = new DatabasePrismaClient(clientOptions);
 
-			// Test the connection with retry logic
-			let connectionAttempts = 0;
-			const maxAttempts = 3;
-			
-			while (connectionAttempts < maxAttempts) {
-				try {
-					await prismaClient.$connect();
-					break; // Connection successful
-				} catch (connectError) {
-					connectionAttempts++;
-					// 최종 실패 시에만 로그 출력 (성능 개선)
-					if (connectionAttempts >= maxAttempts) {
-						log.Error(`Connection failed for ${folderName} after ${maxAttempts} attempts:`, connectError);
-						throw connectError;
-					}
-					
-					// 짧은 대기 후 재시도 (로그 없음)
-					await new Promise(resolve => setTimeout(resolve, 1000));
-				}
-			}
+			// Test the connection with retry logic (maxAttempts=3, flat 1s delay)
+			await this.connectWithRetry(prismaClient, folderName, 3);
 
 			// Store the client instance with its original prototype and type information
 			this.databases.set(folderName, prismaClient);
@@ -708,9 +683,66 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 	}
 
 	/**
+	 * Build Prisma client constructor options for a database.
+	 *
+	 * Shared by both the initial connection path (`processDatabaseFolder`) and the
+	 * reconnection path (`recreateClient`) so the option shape stays in one place.
+	 * Produces `{ log, errorFormat: 'minimal' }` plus a conditional driver adapter
+	 * (omitted when the provider needs none, e.g. sqlite).
+	 */
+	private async buildClientOptions(databaseName: string, connectionUrl: string): Promise<any> {
+		const adapter = await this.createDriverAdapter(databaseName, connectionUrl);
+		const clientOptions: any = {
+			log: process.env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error'],
+			errorFormat: 'minimal'
+		};
+		if (adapter) {
+			clientOptions.adapter = adapter;
+		}
+		return clientOptions;
+	}
+
+	/**
+	 * Test a freshly-created Prisma client's connection with a bounded `$connect`
+	 * retry loop. Shared by the initial connection path and the reconnection path.
+	 *
+	 * Behavior (preserves the original `processDatabaseFolder` loop):
+	 *   - Up to `maxAttempts` `$connect` calls.
+	 *   - Flat 1s wait between attempts (no log on the interim waits).
+	 *   - On the final failure: logs an Error and rethrows the connect error.
+	 *
+	 * With `maxAttempts === 1` this performs a single `$connect` (no interim wait),
+	 * which is the single-attempt contract used by the reconnection path.
+	 */
+	private async connectWithRetry(prismaClient: any, databaseName: string, maxAttempts: number): Promise<void> {
+		let connectionAttempts = 0;
+
+		while (connectionAttempts < maxAttempts) {
+			try {
+				await prismaClient.$connect();
+				return; // Connection successful
+			} catch (connectError) {
+				connectionAttempts++;
+				// 최종 실패 시에만 로그 출력 (성능 개선)
+				if (connectionAttempts >= maxAttempts) {
+					log.Error(`Connection failed for ${databaseName} after ${maxAttempts} attempts:`, connectError);
+					throw connectError;
+				}
+
+				// 짧은 대기 후 재시도 (로그 없음). 기존 초기연결 경로의 점증 백오프(1s, 2s) 보존.
+				await new Promise(resolve => setTimeout(resolve, 1000 * connectionAttempts));
+			}
+		}
+	}
+
+	/**
 	 * Recreate a client for a specific database
 	 * Prisma 7: PrismaPg adapter를 사용하여 연결 재생성
-	 * 서버리스 DB 슬립 복구를 위해 충분한 재시도 시간 확보
+	 *
+	 * 재시도는 상위 레이어(getWrap의 createRetryWrapper)가 단일 소유한다.
+	 * 따라서 여기서는 단일 연결 시도만 수행한다 (내부 재시도 루프 제거).
+	 * 이전에는 내부 3회 재시도 루프가 있어 createRetryWrapper의 시도/백오프와
+	 * 곱셈적으로 누적되었다.
 	 */
 	private async recreateClient(databaseName: string): Promise<void> {
 		const config = this.configs.get(databaseName);
@@ -727,35 +759,11 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 		// Create new Prisma client instance with provider-specific adapter
 		const connectionUrl = this.getDatabaseUrl(databaseName);
 
-		const adapter = await this.createDriverAdapter(databaseName, connectionUrl);
-		const clientOptions: any = {
-			log: process.env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error'],
-			errorFormat: 'minimal'
-		};
-		if (adapter) {
-			clientOptions.adapter = adapter;
-		}
+		const clientOptions = await this.buildClientOptions(databaseName, connectionUrl);
 		const prismaClient = new DatabasePrismaClient(clientOptions);
 
-		// 연결 테스트 (재시도 3회, 지수 백오프)
-		// 상위 레이어(getWrap, reconnectDatabase)에서도 재시도하므로 여기서는 짧게
-		let connectionAttempts = 0;
-		const maxAttempts = 3;
-
-		while (connectionAttempts < maxAttempts) {
-			try {
-				await prismaClient.$connect();
-				break;
-			} catch (connectError: any) {
-				connectionAttempts++;
-				if (connectionAttempts >= maxAttempts) {
-					throw connectError;
-				}
-				const delay = 1000 * connectionAttempts; // 1초, 2초
-				log.Debug(`Waiting for DB connection (${connectError.message?.substring(0, 40)}...), retrying in ${delay/1000}s... (${connectionAttempts}/${maxAttempts})`);
-				await new Promise(resolve => setTimeout(resolve, delay));
-			}
-		}
+		// 단일 연결 시도 (재시도는 createRetryWrapper가 소유)
+		await this.connectWithRetry(prismaClient, databaseName, 1);
 
 		// Store the new client instance
 		this.databases.set(databaseName, prismaClient);

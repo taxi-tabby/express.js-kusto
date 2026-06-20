@@ -11,6 +11,53 @@ import {
 type PrismaClientAny = any;
 
 /**
+ * DMMF(Data Model Meta Format) 경계에서 실제로 접근하는 최소 형상.
+ * DMMF는 경계에서 본질적으로 느슨한 타입이므로, 단일 경계 캐스트
+ * (`x as DmmfFieldShape` 등) 이후 다운스트림에서 정밀하게 사용한다.
+ */
+interface DmmfFieldShape {
+  name: string;
+  kind?: string;
+  type: string;
+  isOptional?: boolean;
+  isList?: boolean;
+  isId?: boolean;
+  isUnique?: boolean;
+  isReadOnly?: boolean;
+  isGenerated?: boolean;
+  isUpdatedAt?: boolean;
+  hasDefaultValue?: boolean;
+  default?: any;
+  relationName?: string;
+  relationFromFields?: string[];
+  relationToFields?: string[];
+  relationOnDelete?: 'Cascade' | 'Restrict' | 'NoAction' | 'SetNull' | 'SetDefault';
+  relationOnUpdate?: 'Cascade' | 'Restrict' | 'NoAction' | 'SetNull' | 'SetDefault';
+  documentation?: string;
+  nativeType?: any;
+}
+
+interface DmmfPrimaryKeyShape {
+  name?: string;
+  fields: string[];
+}
+
+interface DmmfModelShape {
+  name: string;
+  dbName?: string;
+  fields: DmmfFieldShape[];
+  primaryKey?: DmmfPrimaryKeyShape | null;
+  uniqueFields?: string[][];
+  documentation?: string;
+}
+
+interface DmmfEnumShape {
+  name?: string;
+  values?: unknown;
+  [key: string]: unknown;
+}
+
+/**
  * Prisma 클라이언트를 분석하여 스키마 정보를 추출하는 서비스
  * 개발 모드에서만 사용됩니다.
  */
@@ -19,7 +66,7 @@ export class PrismaSchemaAnalyzer {
   private prismaClient: PrismaClientAny;
   private modelCache: Map<string, PrismaModelInfo> = new Map();
   private databaseName: string;
-  private loadedEnums: Record<string, any> = {};
+  private loadedEnums: Record<string, DmmfEnumShape> = {};
 
   constructor(prismaClient: PrismaClientAny, databaseName: string = 'unknown') {
     this.prismaClient = prismaClient;
@@ -116,8 +163,8 @@ export class PrismaSchemaAnalyzer {
           const enums = runtimeDataModel.enums || {};
           
           // RuntimeDataModel 형식을 DMMF 형식으로 변환
-          const models = Object.entries(runtimeDataModel.models).map(([name, model]: [string, any]) => {
-            let fields = [];
+          const models: DmmfModelShape[] = Object.entries(runtimeDataModel.models).map(([name, model]: [string, any]) => {
+            let fields: DmmfFieldShape[] = [];
             if (model.fields) {
               // fields가 객체인 경우
               if (typeof model.fields === 'object' && !Array.isArray(model.fields)) {
@@ -138,10 +185,10 @@ export class PrismaSchemaAnalyzer {
               }
               // fields가 배열인 경우 (기존 DMMF 형식)
               else if (Array.isArray(model.fields)) {
-                fields = model.fields;
+                fields = model.fields as DmmfFieldShape[];
               }
             }
-            
+
             return {
               name,
               fields,
@@ -152,7 +199,7 @@ export class PrismaSchemaAnalyzer {
           });
           
           // enum 정보를 클래스 변수에 저장
-          this.loadedEnums = enums;
+          this.loadedEnums = enums as Record<string, DmmfEnumShape>;
           
           // 분석 완료 - 간단한 로그만 출력
 
@@ -220,7 +267,7 @@ export class PrismaSchemaAnalyzer {
         return;
       }
 
-      const models = dmmf.datamodel.models;
+      const models = dmmf.datamodel.models as DmmfModelShape[];
 
       for (const model of models) {
         const modelInfo = this.parseModelFromDMMF(model);
@@ -236,14 +283,14 @@ export class PrismaSchemaAnalyzer {
   /**
    * DMMF 모델을 PrismaModelInfo로 변환합니다
    */
-  private parseModelFromDMMF(dmmfModel: any): PrismaModelInfo {
-    const fields: PrismaFieldMetadata[] = dmmfModel.fields.map((field: any) => 
+  private parseModelFromDMMF(dmmfModel: DmmfModelShape): PrismaModelInfo {
+    const fields: PrismaFieldMetadata[] = dmmfModel.fields.map((field) =>
       this.parseFieldFromDMMF(field)
     );
 
     const relations: PrismaRelationInfo[] = dmmfModel.fields
-      .filter((field: any) => field.kind === 'object')
-      .map((field: any) => this.parseRelationFromDMMF(field));
+      .filter((field) => field.kind === 'object')
+      .map((field) => this.parseRelationFromDMMF(field));
 
     const indexes: PrismaIndexInfo[] = [];
     
@@ -286,7 +333,7 @@ export class PrismaSchemaAnalyzer {
   /**
    * DMMF 필드를 PrismaFieldMetadata로 변환합니다
    */
-  private parseFieldFromDMMF(dmmfField: any): PrismaFieldMetadata {
+  private parseFieldFromDMMF(dmmfField: DmmfFieldShape): PrismaFieldMetadata {
     const fieldType = dmmfField.type;
     const jsType = PRISMA_TYPE_MAPPING[fieldType] || 'unknown';
 
@@ -313,7 +360,7 @@ export class PrismaSchemaAnalyzer {
   /**
    * DMMF 관계를 PrismaRelationInfo로 변환합니다
    */
-  private parseRelationFromDMMF(dmmfField: any): PrismaRelationInfo {
+  private parseRelationFromDMMF(dmmfField: DmmfFieldShape): PrismaRelationInfo {
     // 관계 타입 결정
     let relationType: 'one-to-one' | 'one-to-many' | 'many-to-one' | 'many-to-many';
     

@@ -3079,7 +3079,7 @@ export class ExpressRouter {
                 }
 
                 const created = await tx[modelName].create({ data: createData });
-                return JsonApiTransformer.transformToResource(created, modelName);
+                return JsonApiTransformer.transformToResource(created, { resourceType: modelName });
 
             case 'update':
                 if (!operation.ref || !operation.data) {
@@ -3101,7 +3101,7 @@ export class ExpressRouter {
                     where: { id: operation.ref.id },
                     data: updateData
                 });
-                return JsonApiTransformer.transformToResource(updated, modelName);
+                return JsonApiTransformer.transformToResource(updated, { resourceType: modelName });
 
             case 'remove':
                 if (!operation.ref) {

@@ -1960,15 +1960,26 @@ export class JsonApiTransformer {
    * @param jsonFields - Json 타입 필드 이름 목록 (관계 데이터로 간주하지 않음)
    */
   static transformToResource(
-    item: any, 
-    resourceType: string, 
-    primaryKey: string = 'id',
-    fields?: string[],
-    baseUrl?: string,
-    id?: string,
-    includeMerge: boolean = false,
-    jsonFields?: Set<string>
+    item: any,
+    options: {
+      resourceType: string;
+      primaryKey?: string;
+      fields?: string[];
+      baseUrl?: string;
+      id?: string;
+      includeMerge?: boolean;
+      jsonFields?: Set<string>;
+    }
   ): JsonApiResource {
+    const {
+      resourceType,
+      primaryKey = 'id',
+      fields,
+      baseUrl,
+      id,
+      includeMerge = false,
+      jsonFields
+    } = options;
     const resourceId = id || item[primaryKey] || item.id || item.uuid || item._id;
     
     if (!resourceId) {
@@ -2023,8 +2034,8 @@ export class JsonApiTransformer {
     includeMerge: boolean = false,
     jsonFields?: Set<string>
   ): JsonApiResource[] {
-    return items.map(item => 
-      this.transformToResource(item, resourceType, primaryKey, fields, baseUrl, undefined, includeMerge, jsonFields)
+    return items.map(item =>
+      this.transformToResource(item, { resourceType, primaryKey, fields, baseUrl, includeMerge, jsonFields })
     );
   }
 
@@ -2355,16 +2366,14 @@ export class JsonApiTransformer {
         jsonFields
       );
     } else {
-      jsonApiData = this.transformToResource(
-        data, 
-        resourceType, 
-        primaryKey, 
-        resourceFields, 
+      jsonApiData = this.transformToResource(data, {
+        resourceType,
+        primaryKey,
+        fields: resourceFields,
         baseUrl,
-        undefined, // id 파라미터
         includeMerge,
         jsonFields
-      );
+      });
     }
 
     const baseStructure = this.createBaseJsonApiStructure();
@@ -2488,13 +2497,12 @@ export class JsonApiTransformer {
         // 현재 레벨의 리소스를 included에 추가
         if (!processedResources.has(resourceKey)) {
           processedResources.add(resourceKey);
-          included.push(this.transformToResource(
-            relItem, 
-            resourceType, 
-            'id', 
-            resourceFields, 
+          included.push(this.transformToResource(relItem, {
+            resourceType,
+            primaryKey: 'id',
+            fields: resourceFields,
             baseUrl
-          ));
+          }));
         }
 
         // 마지막 부분이 아니면 재귀적으로 다음 레벨 처리
@@ -2519,13 +2527,12 @@ export class JsonApiTransformer {
       // 현재 레벨의 리소스를 included에 추가
       if (!processedResources.has(resourceKey)) {
         processedResources.add(resourceKey);
-        included.push(this.transformToResource(
-          relationData, 
-          resourceType, 
-          'id', 
-          resourceFields, 
+        included.push(this.transformToResource(relationData, {
+          resourceType,
+          primaryKey: 'id',
+          fields: resourceFields,
           baseUrl
-        ));
+        }));
       }
 
       // 마지막 부분이 아니면 재귀적으로 다음 레벨 처리

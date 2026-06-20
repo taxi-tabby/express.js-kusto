@@ -1992,10 +1992,14 @@ async function checkForceWait(operation: string): Promise<void> {
     }
 }
 
-// Parse arguments
-program.parse(process.argv);
+// 통합 CLI(kusto)가 이 program 을 'db' 서브커맨드로 마운트할 수 있도록 export 한다.
+export { program };
 
-// Show help if no arguments provided
-if (!process.argv.slice(2).length) {
-    program.outputHelp();
+// 단독 실행(npm run db / node kusto-db-cli)일 때만 인자를 파싱한다.
+// import(테스트·통합 CLI) 시에는 파싱하지 않는다(과거엔 import 만으로도 parse 가 돌았음).
+if (require.main === module) {
+    program.parse(process.argv);
+    if (!process.argv.slice(2).length) {
+        program.outputHelp();
+    }
 }

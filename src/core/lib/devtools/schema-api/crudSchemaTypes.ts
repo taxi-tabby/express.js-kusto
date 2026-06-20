@@ -4,10 +4,10 @@
  */
 
 /**
- * 기본 CRUD 액션 목록 (단일 진실 공급원)
- * recover 는 소프트 삭제가 활성화된 경우에만 추가되는 액션이므로 기본 목록에 포함하지 않는다.
+ * 기본 CRUD 액션 목록 — 단일 진실 공급원은 @lib/crud/crudConstants 이며 여기서 re-export 한다.
+ * (런타임 CRUD 엔진과 동일 어휘 공유. recover 는 소프트 삭제 활성 시에만 추가되는 액션.)
  */
-export const CRUD_ACTIONS: readonly string[] = ['index', 'show', 'create', 'update', 'destroy'];
+export { CRUD_ACTIONS } from '@lib/crud/crudConstants';
 
 /**
  * Prisma 필드 타입 매핑

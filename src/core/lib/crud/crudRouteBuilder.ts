@@ -19,6 +19,7 @@ import {
     getSmartPrimaryKeyParser as getSmartPrimaryKeyParserImpl,
     UUID_REGEX,
 } from '@lib/crud/primaryKeyParsers';
+import { DEFAULT_PRIMARY_KEY, DEFAULT_SOFT_DELETE_FIELD, DEFAULT_PAGE_SIZE, CRUD_ACTIONS_WITH_RECOVER } from '@lib/crud/crudConstants';
 import { ERROR_CODES } from '@lib/http/errors/errorCodes';
 import { PrismaSchemaAnalyzer } from '@lib/devtools/schema-api/prismaSchemaAnalyzer';
 import { CrudSchemaRegistry } from '@lib/devtools/schema-api/crudSchemaRegistry';
@@ -82,7 +83,7 @@ export class CrudRouteBuilder {
         const client = prismaManager.getWrap(databaseName as any);
 
         // Primary key 설정 및 자동 파서 선택
-        const primaryKey = options?.primaryKey || 'id';
+        const primaryKey = options?.primaryKey || DEFAULT_PRIMARY_KEY;
         const primaryKeyParser = options?.primaryKeyParser || this.getSmartPrimaryKeyParser(databaseName, modelName, primaryKey);
 
         // INDEX - GET / (목록 조회)
@@ -200,7 +201,7 @@ export class CrudRouteBuilder {
      * 4. 아무것도 없는 경우: 모든 액션 생성함
      */
     private getEnabledActions(options?: any): string[] {
-        const allActions = ['index', 'show', 'create', 'update', 'destroy', 'recover'];
+        const allActions = [...CRUD_ACTIONS_WITH_RECOVER];
 
         // only와 except가 모두 지정된 경우 경고
         if (options?.only && options?.except) {
@@ -228,10 +229,10 @@ export class CrudRouteBuilder {
     /**
      * INDEX 라우트 설정 (GET /) - JSON:API 준수
      */
-    private setupIndexRoute(client: any, modelName: string, options?: any, primaryKey: string = 'id'): void {
+    private setupIndexRoute(client: any, modelName: string, options?: any, primaryKey: string = DEFAULT_PRIMARY_KEY): void {
         const middlewares = options?.middleware?.index || [];
         const isSoftDelete = options?.softDelete?.enabled;
-        const softDeleteField = options?.softDelete?.field || 'deletedAt';
+        const softDeleteField = options?.softDelete?.field || DEFAULT_SOFT_DELETE_FIELD;
 
 
         const handler: HandlerFunction = async (req, res, injected, repo, db) => {
@@ -328,12 +329,12 @@ export class CrudRouteBuilder {
         client: any,
         modelName: string,
         options?: any,
-        primaryKey: string = 'id',
+        primaryKey: string = DEFAULT_PRIMARY_KEY,
         primaryKeyParser: (value: string) => any = parseStringImpl
     ): void {
         const middlewares = options?.middleware?.show || [];
         const isSoftDelete = options?.softDelete?.enabled;
-        const softDeleteField = options?.softDelete?.field || 'deletedAt';
+        const softDeleteField = options?.softDelete?.field || DEFAULT_SOFT_DELETE_FIELD;
 
         const handler: HandlerFunction = async (req, res, injected, repo, db) => {
             try {
@@ -526,7 +527,7 @@ export class CrudRouteBuilder {
     /**
      * CREATE 라우트 설정 (POST /) - JSON:API 준수
      */
-    private setupCreateRoute(client: any, modelName: string, options?: any, primaryKey: string = 'id'): void {
+    private setupCreateRoute(client: any, modelName: string, options?: any, primaryKey: string = DEFAULT_PRIMARY_KEY): void {
         const middlewares = options?.middleware?.create || [];
 
         const handler: HandlerFunction = async (req, res, injected, repo, db) => {
@@ -573,7 +574,7 @@ export class CrudRouteBuilder {
                 // 클라이언트 생성 ID 지원 (JSON:API 스펙)
                 if (requestData.id) {
                     // 클라이언트가 ID를 제공한 경우
-                    if (primaryKey === 'id') {
+                    if (primaryKey === DEFAULT_PRIMARY_KEY) {
                         data.id = requestData.id;
                     } else {
                         data[primaryKey] = requestData.id;
@@ -1002,13 +1003,13 @@ export class CrudRouteBuilder {
         isUpdate: boolean = false,
         options?: any,
         parentId?: any,
-        parentIdField: string = 'id'
+        parentIdField: string = DEFAULT_PRIMARY_KEY
     ): Promise<any> {
         const processedData = { ...data };
 
         // softDelete 옵션 확인
         const isSoftDelete = options?.softDelete?.enabled;
-        const softDeleteField = options?.softDelete?.field || 'deletedAt';
+        const softDeleteField = options?.softDelete?.field || DEFAULT_SOFT_DELETE_FIELD;
 
         for (const [relationName, relationshipData] of Object.entries(relationships)) {
             if (relationshipData.data !== undefined) {
@@ -1271,7 +1272,7 @@ export class CrudRouteBuilder {
         // parentIdField가 'uuid'면 'userUuid' 형태, 'id'면 'userId' 형태
         if (parentIdField === 'uuid') {
             return `${camelModelName}Uuid`;
-        } else if (parentIdField === 'id') {
+        } else if (parentIdField === DEFAULT_PRIMARY_KEY) {
             return `${camelModelName}Id`;
         }
 
@@ -1338,7 +1339,7 @@ export class CrudRouteBuilder {
         client: any,
         modelName: string,
         options?: any,
-        primaryKey: string = 'id',
+        primaryKey: string = DEFAULT_PRIMARY_KEY,
         primaryKeyParser: (value: string) => any = parseStringImpl
     ): void {
         const middlewares = options?.middleware?.update || [];
@@ -1519,12 +1520,12 @@ export class CrudRouteBuilder {
         client: any,
         modelName: string,
         options?: any,
-        primaryKey: string = 'id',
+        primaryKey: string = DEFAULT_PRIMARY_KEY,
         primaryKeyParser: (value: string) => any = parseStringImpl
     ): void {
         const middlewares = options?.middleware?.destroy || [];
         const isSoftDelete = options?.softDelete?.enabled;
-        const softDeleteField = options?.softDelete?.field || 'deletedAt';
+        const softDeleteField = options?.softDelete?.field || DEFAULT_SOFT_DELETE_FIELD;
 
         const handler: HandlerFunction = async (req, res, injected, repo, db) => {
             try {
@@ -1674,13 +1675,13 @@ export class CrudRouteBuilder {
         client: any,
         modelName: string,
         options?: any,
-        primaryKey: string = 'id',
+        primaryKey: string = DEFAULT_PRIMARY_KEY,
         primaryKeyParser: (value: string) => any = parseStringImpl
     ): void {
         const middlewares = options?.middleware?.recover || [];
         // P0-3: 형제 핸들러(index/destroy)와 동일하게 설정된 soft-delete 필드를 해석한다.
         // (과거 'deletedAt' 을 하드코딩하여 커스텀 softDelete.field 설정 시 복구가 깨졌다.)
-        const softDeleteField = options?.softDelete?.field || 'deletedAt';
+        const softDeleteField = options?.softDelete?.field || DEFAULT_SOFT_DELETE_FIELD;
 
         const handler: HandlerFunction = async (req, res, injected, repo, db) => {
             try {
@@ -1823,7 +1824,7 @@ export class CrudRouteBuilder {
     /**
      * JSON:API 리소스 객체로 변환하는 헬퍼 메서드
      */
-    private transformToJsonApiResource(item: any, modelName: string, req: any, primaryKey: string = 'id'): any {
+    private transformToJsonApiResource(item: any, modelName: string, req: any, primaryKey: string = DEFAULT_PRIMARY_KEY): any {
         const resourceType = modelName.toLowerCase();
         const baseUrl = this.buildBaseUrl(req);
 
@@ -2069,7 +2070,7 @@ export class CrudRouteBuilder {
         // 페이지네이션 링크 생성
         let links: any;
         if (queryParams.page) {
-            const pageSize = queryParams.page.size || 10;
+            const pageSize = queryParams.page.size || DEFAULT_PAGE_SIZE;
             const currentPage = queryParams.page.number || 1;
             const totalPages = Math.ceil(total / pageSize);
 
@@ -2096,7 +2097,7 @@ export class CrudRouteBuilder {
 
         // 페이지네이션이 설정된 경우에만 페이지 정보 추가
         if (queryParams.page) {
-            const pageSize = queryParams.page.size || 10;
+            const pageSize = queryParams.page.size || DEFAULT_PAGE_SIZE;
             const currentPage = queryParams.page.number || 1;
             const totalPages = Math.ceil(total / pageSize);
 
@@ -2377,7 +2378,7 @@ export class CrudRouteBuilder {
         // 파라미터 추출
         let identifier: string;
 
-        if (primaryKey !== 'id' && req.params[primaryKey]) {
+        if (primaryKey !== DEFAULT_PRIMARY_KEY && req.params[primaryKey]) {
             identifier = req.params[primaryKey];
         } else if (req.params.id) {
             identifier = req.params.id;
@@ -2429,7 +2430,7 @@ export class CrudRouteBuilder {
         client: any,
         modelName: string,
         options?: any,
-        primaryKey: string = 'id',
+        primaryKey: string = DEFAULT_PRIMARY_KEY,
         primaryKeyParser: (value: string) => any = parseStringImpl
     ): void {
         // 현재는 기본적인 관계 조회 라우트만 구현

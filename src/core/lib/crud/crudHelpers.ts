@@ -6,6 +6,7 @@ import { ERROR_CODES, PRISMA_CANONICAL_ERROR_MAP } from '@lib/http/errors/errorC
 import { JSON_API_VERSION } from '@lib/crud/jsonApiConstants';
 import { removeSensitiveInformation } from '@lib/http/errors/errorSanitizer';
 import { isUuid } from '@lib/crud/primaryKeyParsers';
+import { DEFAULT_PRIMARY_KEY, DEFAULT_PAGE_SIZE } from '@lib/crud/crudConstants';
 
 /**
  * CRUD 쿼리 파싱 및 필터링을 위한 헬퍼 유틸리티
@@ -430,12 +431,12 @@ export class CrudQueryParser {
     
     // number 방식: number만 있고 size가 없는 경우에만 기본 size 설정
     if (page.number !== undefined && page.size === undefined) {
-      page.size = 10;
+      page.size = DEFAULT_PAGE_SIZE;
     }
     
     // offset 방식: offset만 있고 limit이 없는 경우에만 기본 limit 설정
     if (page.offset !== undefined && page.limit === undefined) {
-      page.limit = 10;
+      page.limit = DEFAULT_PAGE_SIZE;
     }
     
     return page;
@@ -1921,7 +1922,7 @@ export class JsonApiTransformer {
   ): JsonApiResource {
     const {
       resourceType,
-      primaryKey = 'id',
+      primaryKey = DEFAULT_PRIMARY_KEY,
       fields,
       baseUrl,
       id,
@@ -1976,7 +1977,7 @@ export class JsonApiTransformer {
   static transformToCollection(
     items: any[], 
     resourceType: string, 
-    primaryKey: string = 'id',
+    primaryKey: string = DEFAULT_PRIMARY_KEY,
     fields?: string[],
     baseUrl?: string,
     includeMerge: boolean = false,
@@ -2036,7 +2037,7 @@ export class JsonApiTransformer {
     delete allFields[primaryKey];
     
     // primary key가 'id'가 아닌 경우 다른 기본 ID 필드들 제거
-    if (primaryKey !== 'id') delete allFields.id;
+    if (primaryKey !== DEFAULT_PRIMARY_KEY) delete allFields.id;
     if (primaryKey !== 'uuid') delete allFields.uuid;
     if (primaryKey !== '_id') delete allFields._id;
 
@@ -2285,7 +2286,7 @@ export class JsonApiTransformer {
     } = {}
   ): JsonApiResponse {
     const {
-      primaryKey = 'id',
+      primaryKey = DEFAULT_PRIMARY_KEY,
       fields,
       baseUrl,
       links,

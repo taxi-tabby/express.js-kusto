@@ -6,7 +6,7 @@ import * as readline from 'readline';
 import { checkForUpdates } from './compare';
 import { PROJECT_ROOT, PACKAGE_JSON_PATH, UPDATER_DIR } from './paths';
 import { FileMap, matchesEntry, checksumFile, entryAlgo } from './checksum';
-import { extractZipSafe } from './archive';
+import { extractZipSafe, isEntryInsideRoot } from './archive';
 
 /**
  * 프레임워크 자체 업데이트 적용기.
@@ -88,7 +88,17 @@ function downloadFile(url: string, outputPath: string): Promise<void> {
                 }
             });
             response.pipe(file);
-            file.on('finish', () => { file.close(); console.log('\n   Download completed'); resolve(); });
+            file.on('finish', () => {
+                file.close();
+                // 전송 절단 탐지: content-length 가 있으면 실제 수신량과 비교(절단 시 거부).
+                if (totalSize > 0 && downloaded !== totalSize) {
+                    fs.rmSync(outputPath, { force: true });
+                    reject(new Error(`Truncated download: got ${downloaded} of ${totalSize} bytes`));
+                    return;
+                }
+                console.log('\n   Download completed');
+                resolve();
+            });
             file.on('error', (err) => { file.close(); fs.rmSync(outputPath, { force: true }); reject(err); });
         });
 
@@ -118,6 +128,20 @@ function loadPackageFileMap(extractedPath: string): FileMap {
         throw new Error('No file map found in update package');
     }
     return JSON.parse(fs.readFileSync(path.join(fileMapDir, mapFiles[0]), 'utf8')) as FileMap;
+}
+
+/**
+ * 파일맵 키(상대경로)가 모두 프로젝트 루트 내부에 머무는지 검증한다(경로 탈출 방어).
+ * zip 추출은 엔트리 이름을 검사하지만, 적용 단계는 맵 *키* 로 대상 경로를 재구성하므로
+ * (path.join(PROJECT_ROOT, rel)) 키 자체도 동일하게 봉쇄해야 한다 — `../`/절대경로 키 하나라도
+ * 있으면 패키지 전체를 거부한다.
+ */
+function assertMapContained(fileMap: FileMap): void {
+    for (const rel of Object.keys(fileMap)) {
+        if (!isEntryInsideRoot(PROJECT_ROOT, rel)) {
+            throw new Error(`Rejected update: file-map key escapes project root: "${rel}"`);
+        }
+    }
 }
 
 /**
@@ -176,6 +200,7 @@ function computePlan(fileMap: FileMap, installedMap: FileMap | null): UpdatePlan
     if (installedMap) {
         for (const [rel, installedEntry] of Object.entries(installedMap)) {
             if (rel in fileMap) continue;
+            if (!isEntryInsideRoot(PROJECT_ROOT, rel)) continue; // 방어: 탈출 키는 삭제 대상에서 제외
             const target = path.join(PROJECT_ROOT, rel);
             const m = matchesEntry(target, installedEntry); // null=미존재, true=불변, false=수정됨
             if (m === null) continue; // 이미 없음
@@ -370,7 +395,8 @@ export async function performUpdate(options: UpdateOptions = {}): Promise<void> 
         // 권위 맵이 없으면(로컬 모드) 패키지 내부 맵 사용.
         const fileMap: FileMap = authoritativeMap ?? loadPackageFileMap(extractDir);
 
-        // 3) 무결성 검증(권위 맵 기준)
+        // 3) 경로 탈출 키 봉쇄 + 무결성 검증(권위 맵 기준)
+        assertMapContained(fileMap);
         verifyPackageIntegrity(filesDir, fileMap);
 
         // 4) 계획 수립 + 출력
@@ -384,10 +410,13 @@ export async function performUpdate(options: UpdateOptions = {}): Promise<void> 
             return;
         }
 
-        // 6) 적용할 것이 없으면 설치 맵만 동기화(삭제 감지 기준 최신화)하고 종료
+        // 6) 적용할 것이 없으면 설치 맵만 동기화(삭제 감지 기준 최신화)하고 종료.
+        //    파일은 이미 최신이지만 버전이 뒤처진 경우(GitHub 경로) 버전도 올려 'update available'
+        //    무한 반복을 끊는다(package.json 은 맵에서 제외되므로 파일 비교로는 수렴 안 됨).
         if (empty) {
             console.log('\nNothing to apply — already up to date.');
             writeInstalledMap(fileMap);
+            if (targetVersion) updatePackageVersion(targetVersion);
             return;
         }
 
@@ -433,7 +462,13 @@ function parseArgs(argv: string[]): UpdateOptions {
         if (a === '--dry-run') opts.dryRun = true;
         else if (a === '--yes' || a === '-y') opts.yes = true;
         else if (a === '--keep-backup') opts.keepBackup = true;
-        else if (a === '--package') opts.packagePath = argv[++i];
+        else if (a === '--package') {
+            const next = argv[++i];
+            if (!next || next.startsWith('--')) {
+                throw new Error('--package requires a file path argument');
+            }
+            opts.packagePath = next;
+        }
         else if (a.startsWith('--package=')) opts.packagePath = a.slice('--package='.length);
     }
     return opts;
@@ -443,8 +478,9 @@ export async function runUpdate(options?: UpdateOptions): Promise<void> {
     try {
         await performUpdate(options ?? parseArgs(process.argv.slice(2)));
     } catch (error) {
+        // 롤백 여부/적용 단계는 performUpdate 가 자체적으로 정확히 로깅한다.
+        // 여기서는 단정적으로 "롤백됨"이라고 말하지 않는다(적용 이후 단계 실패 시 오해 방지).
         console.error('\nUpdate process failed:', error instanceof Error ? error.message : error);
-        console.error('Any partial changes were rolled back from backup.');
         process.exit(1);
     }
 }

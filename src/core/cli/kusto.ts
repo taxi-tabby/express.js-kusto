@@ -71,8 +71,12 @@ kusto
     .action((opts) => {
         const scriptPath = path.resolve(__dirname, '..', 'scripts', 'generate.js');
         const args = opts.build ? ['--build'] : [];
-        const res = spawnSync('node', [scriptPath, ...args], { stdio: 'inherit' });
-        process.exit(res.status ?? 0);
+        const res = spawnSync(process.execPath, [scriptPath, ...args], { stdio: 'inherit' });
+        if (res.error) {
+            console.error(`Failed to run generate: ${res.error.message}`);
+            process.exit(1);
+        }
+        process.exit(res.status ?? 1);
     });
 
 kusto.parseAsync(process.argv).catch((err) => {

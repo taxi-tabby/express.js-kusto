@@ -73,4 +73,13 @@ describe('updater/archive — zip-slip 경로탈출 방어', () => {
         expect(isEntryInsideRoot(root, '.')).toBe(false);
         expect(isEntryInsideRoot(root, '')).toBe(false);
     });
+
+    it('파일맵 키(쓰기/삭제 대상)도 동일 가드로 봉쇄 가능 — 적용 단계 경로탈출 방어', () => {
+        // applyPlan 은 맵 키로 path.join(PROJECT_ROOT, rel) 대상을 만들므로 키 자체도 봉쇄해야 한다.
+        const projectRoot = path.resolve('/tmp/proj');
+        const safeKeys = ['src/core/lib/x.ts', 'CLAUDE.md', 'a/b/c.ts'];
+        const escapingKeys = ['../../../tmp/evil', '/etc/passwd', 'a/../../escape'];
+        expect(safeKeys.every((k) => isEntryInsideRoot(projectRoot, k))).toBe(true);
+        expect(escapingKeys.some((k) => isEntryInsideRoot(projectRoot, k))).toBe(false);
+    });
 });

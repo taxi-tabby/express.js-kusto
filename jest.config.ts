@@ -25,7 +25,7 @@ const config: Config = {
     '/src/core/scripts/generate.*\\.js$',
     '/src/core/scripts/clean-tmp\\.js$',
     '/src/app/',
-    '/updater/',
+    '/src/core/updater/',
     '/tests/_setup/',
     '/tests/_fixtures/',
     '/node_modules/.prisma/'

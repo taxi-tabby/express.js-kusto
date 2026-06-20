@@ -206,7 +206,7 @@ jobs:
       run: |
         # NOTE: the part after '#' is only the asset display label. The actual asset
         # filename stays the basename (update-package-*.zip / v*.json) which the updater
-        # client (updater/compare.ts) matches on — do not change those basenames.
+        # client (src/core/updater/compare.ts) matches on — do not change those basenames.
         gh release create "${{ steps.version.outputs.tag_name }}" \
           --title "Framework v${{ steps.version.outputs.package_version }} (${{ steps.version.outputs.timestamp }})" \
           --notes-file release_notes.md \

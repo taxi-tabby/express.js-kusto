@@ -27,7 +27,7 @@ import {
     jsonApiBody,
     jsonApiErrorResponse,
 } from '@lib/devtools/documentation';
-import { JSON_API_CONTENT_TYPE, JSON_API_ATOMIC_CONTENT_TYPE } from '@lib/crud/jsonApiConstants';
+import { JSON_API_CONTENT_TYPE, JSON_API_ATOMIC_CONTENT_TYPE, JSON_API_VERSION, JSON_API_ATOMIC_EXT } from '@lib/crud/jsonApiConstants';
 import { ErrorHandler, ErrorResponseFormat } from '@lib/http/errors/errorHandler';
 import { log } from '@ext/winston';
 import type { HandlerFunction, MiddlewareHandlerFunction } from '@lib/http/routing/expressRouter';
@@ -757,8 +757,8 @@ export class CrudRouteBuilder {
                 const response = {
                     'atomic:results': results,
                     jsonapi: {
-                        version: "1.1",
-                        ext: ["https://jsonapi.org/ext/atomic"]
+                        version: JSON_API_VERSION,
+                        ext: [JSON_API_ATOMIC_EXT]
                     }
                 };
 
@@ -1577,7 +1577,7 @@ export class CrudRouteBuilder {
                     // JSON:API 준수 - 성공적인 soft delete 응답 (200 OK with meta)
                     const response = {
                         jsonapi: {
-                            version: "1.1"
+                            version: JSON_API_VERSION
                         },
                         meta: {
                             operation: 'soft_delete',
@@ -1759,7 +1759,7 @@ export class CrudRouteBuilder {
                 const response = {
                     data: this.transformToJsonApiResource(result, modelName, req, primaryKey),
                     jsonapi: {
-                        version: "1.1"
+                        version: JSON_API_VERSION
                     },
                     meta: {
                         operation: 'recover',
@@ -2573,7 +2573,7 @@ export class CrudRouteBuilder {
                         related: `${baseUrl}/${modelName.toLowerCase()}/${parsedIdentifier}/${relationName}`
                     },
                     jsonapi: {
-                        version: "1.1"
+                        version: JSON_API_VERSION
                     }
                 };
 
@@ -2775,7 +2775,7 @@ export class CrudRouteBuilder {
                     const response = {
                         data: Array.isArray(relationData) ? [] : null,
                         jsonapi: {
-                            version: "1.1"
+                            version: JSON_API_VERSION
                         }
                     };
                     return res.json(response);

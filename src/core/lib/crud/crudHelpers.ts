@@ -3,6 +3,7 @@
 import { log } from '@ext/winston';
 import { ErrorHandler, ErrorResponseFormat } from '@lib/http/errors/errorHandler';
 import { ERROR_CODES, PRISMA_CANONICAL_ERROR_MAP } from '@lib/http/errors/errorCodes';
+import { JSON_API_VERSION } from '@lib/crud/jsonApiConstants';
 
 /**
  * CRUD 쿼리 파싱 및 필터링을 위한 헬퍼 유틸리티
@@ -2309,7 +2310,7 @@ export class JsonApiTransformer {
   private static createBaseJsonApiStructure(): any {
     return {
       jsonapi: {
-        version: "1.1",
+        version: JSON_API_VERSION,
         meta: {
           implementation: IMPLEMENTATION
         }

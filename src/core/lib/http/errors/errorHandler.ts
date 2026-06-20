@@ -5,6 +5,7 @@
 
 import { JsonApiError, JsonApiErrorResponse, ErrorSecurityOptions } from '@lib/crud/crudHelpers';
 import { ERROR_CODES, PRISMA_ERROR_CODES, HTTP_ERROR_CODES, PRISMA_CANONICAL_ERROR_MAP } from '@lib/http/errors/errorCodes';
+import { JSON_API_VERSION } from '@lib/crud/jsonApiConstants';
 
 /**
  * JSON:API meta.implementation 문자열을 package.json 의 name/version 에서 파생한다.
@@ -465,7 +466,7 @@ export class ErrorHandler {
 
     return {
       jsonapi: {
-        version: "1.1",
+        version: JSON_API_VERSION,
         meta: {
           implementation: IMPLEMENTATION
         }

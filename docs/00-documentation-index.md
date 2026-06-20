@@ -19,6 +19,7 @@
 | 6 | **[🔄 CRUD 라우터](./06-crud-router.md)** | 20분 | ⭐⭐⭐ | CRUD 자동화 생성 및 관계형 쿼리 최적화 |
 | 7 | **[🔄 업데이트 시스템](./07-update-system.md)** | 5분 | ⭐ | 최신 코드 베이스로 업데이트 |
 | 8 | **[📋 CRUD 스키마 API](./08-crud-schema-api.md)** | 10분 | ⭐⭐ | 개발 모드 전용 스키마 정보 조회 API |
+| 9 | **[📊 실시간 모니터(kusto monitor)](./09-dev-monitor.md)** | 5분 | ⭐ | 실행 중인 dev 서버를 htop 형 TUI 로 실시간 관찰 |
 
 
 

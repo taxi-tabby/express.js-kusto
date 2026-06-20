@@ -29,6 +29,7 @@ npm run kusto -- db list                  # = npm run db -- list
 npm run kusto -- update check             # check for framework updates
 npm run kusto -- update apply --dry-run   # preview an update (no writes)
 npm run kusto -- generate                 # generate framework types
+npx kusto monitor                         # live htop-style dev dashboard (separate terminal)
 
 # Database (kusto-db CLI, via ts-node) — also `kusto db <...>`
 npm run db -- generate --all              # Generate all Prisma clients
@@ -75,9 +76,10 @@ src/core/
     │   ├── database/     # prismaManager, baseRepository, repositoryManager, transactionCommitManager, dbNaming
     │   └── di/           # dependencyInjector, kustoManager (req.kusto facade)
     ├── crud/             # JSON:API CRUD engine: crudRouteBuilder, crudHelpers, primaryKeyParsers, jsonApiConstants
-    ├── devtools/         # DEV-ONLY (AUTO_DOCS / ENABLE_SCHEMA_API)
+    ├── devtools/         # DEV-ONLY (AUTO_DOCS / ENABLE_SCHEMA_API / dev monitor)
     │   ├── documentation/# OpenAPI 3.1 generation + Swagger UI + dev static assets
-    │   └── schema-api/   # /api/schema introspection: crudSchema*, relationshipConfig, prismaSchemaAnalyzer
+    │   ├── schema-api/   # /api/schema introspection: crudSchema*, relationshipConfig, prismaSchemaAnalyzer
+    │   └── monitor/      # `kusto monitor` metrics source: GET /__kusto/metrics (dev+localhost)
     ├── config/           # environmentLoader
     └── types/            # express-extensions + generated-*.ts (do-not-edit codegen)
 ```
@@ -229,6 +231,10 @@ When `AUTO_DOCS=true` and `NODE_ENV=development`, Core.ts registers:
 
 When `ENABLE_SCHEMA_API=true`, provides CRUD schema introspection at `/api/schema`.
 Related modules: `CrudSchemaRegistry`, `PrismaSchemaAnalyzer`, `SchemaApiRouter`, `SchemaApiSetup`.
+
+### Dev Monitor (`kusto monitor`)
+
+When `NODE_ENV !== production`, `Core.setupMonitor()` registers a request-metrics middleware (before routes) and a **localhost-only** `GET /__kusto/metrics` endpoint (`src/core/lib/devtools/monitor/`). `npx kusto monitor` (alias `top`) is a separate-terminal htop-style TUI (`src/core/cli/monitor/`, zero deps) that polls the endpoint and renders process/requests/DB/routing live, adapting to terminal size. Server and CLI share the `MonitorSnapshot` contract. See `docs/09-dev-monitor.md`.
 
 ## Path Aliases
 

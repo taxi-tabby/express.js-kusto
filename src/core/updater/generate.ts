@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import archiver = require('archiver');
 import { generateFileMap } from './analy';
+import { PROJECT_ROOT, PACKAGES_DIR, MAP_DIR } from './paths';
 
 interface FileMapEntry {
     checksum: string;
@@ -43,10 +44,10 @@ export function compressFilesFromMap(fileMapPath: string, outputPath?: string, i
 
             console.log(`Found ${fileList.length} files to compress`);
 
-            // 출력 경로 설정
-            const baseDir = path.resolve(__dirname, '..');
+            // 출력 경로 설정 (zip 에 담을 파일은 프로젝트 루트 기준 상대경로로 해석)
+            const baseDir = PROJECT_ROOT;
             const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-            const defaultOutputPath = path.join(__dirname, 'packages', `update-package-${timestamp}.zip`);
+            const defaultOutputPath = path.join(PACKAGES_DIR, `update-package-${timestamp}.zip`);
             const finalOutputPath = outputPath || defaultOutputPath;
 
             // 출력 디렉토리 생성
@@ -179,7 +180,7 @@ export async function generateAndCompress(outputDir?: string): Promise<string> {
  */
 export async function compressFromExistingMap(mapFileName: string, outputDir?: string): Promise<string> {
     try {
-        const mapPath = path.join(__dirname, 'map', mapFileName);
+        const mapPath = path.join(MAP_DIR, mapFileName);
 
         if (!fs.existsSync(mapPath)) {
             throw new Error(`Map file not found: ${mapPath}`);

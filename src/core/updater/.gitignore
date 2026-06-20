@@ -1,0 +1,5 @@
+# src/core/updater/.gitignore
+# Ignore updater-generated artifacts (file maps, packages, temp extraction)
+map/
+packages/
+temp-update/

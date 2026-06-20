@@ -1,7 +1,7 @@
 import 'module-alias/register';
 import * as fs from 'fs';
-import * as path from 'path';
 import * as https from 'https';
+import { PACKAGE_JSON_PATH } from './paths';
 
 interface ReleaseInfo {
     tag_name: string;
@@ -36,8 +36,7 @@ interface PackageJson {
  */
 function getCurrentVersion(): string {
     try {
-        const packagePath = path.resolve(__dirname, '..', 'package.json');
-        const packageContent = fs.readFileSync(packagePath, 'utf8');
+        const packageContent = fs.readFileSync(PACKAGE_JSON_PATH, 'utf8');
         const packageJson: PackageJson = JSON.parse(packageContent);
         return packageJson.version;
     } catch (error) {

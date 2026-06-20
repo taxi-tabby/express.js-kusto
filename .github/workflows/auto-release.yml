@@ -68,7 +68,7 @@ jobs:
       id: package
       if: steps.guard.outputs.should_release == 'true'
       run: |
-        PACKAGE_FILE=$(ls -t updater/packages/update-package-*.zip | head -1)
+        PACKAGE_FILE=$(ls -t src/core/updater/packages/update-package-*.zip | head -1)
         if [ -z "$PACKAGE_FILE" ] || [ ! -f "$PACKAGE_FILE" ]; then
           echo "::error::No update package (.zip) was produced by updater:generate"
           exit 1
@@ -83,7 +83,7 @@ jobs:
       id: mapfile
       if: steps.guard.outputs.should_release == 'true'
       run: |
-        MAP_FILE=$(ls -t updater/map/v*.json | head -1)
+        MAP_FILE=$(ls -t src/core/updater/map/v*.json | head -1)
         if [ -z "$MAP_FILE" ] || [ ! -f "$MAP_FILE" ]; then
           echo "::error::No file map (v*.json) was produced by updater:generate"
           exit 1

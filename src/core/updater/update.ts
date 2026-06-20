@@ -5,6 +5,7 @@ import * as https from 'https';
 import * as readline from 'readline';
 import * as crypto from 'crypto';
 import { checkForUpdates, ComparisonResult } from './compare';
+import { PROJECT_ROOT, PACKAGE_JSON_PATH, UPDATER_DIR } from './paths';
 
 interface DownloadProgress {
     downloaded: number;
@@ -205,7 +206,8 @@ async function extractZipFile(zipPath: string, extractPath: string): Promise<voi
 async function applyUpdate(extractedPath: string): Promise<UpdateStats> {
     const filesDir = path.join(extractedPath, 'files');
     const fileMapDir = path.join(extractedPath, 'file-map');
-    const projectRoot = path.resolve(__dirname, '..');
+    // 업데이트 적용 기준은 프로젝트 루트 (SSOT). updater 이동 시 가장 위험했던 경로.
+    const projectRoot = PROJECT_ROOT;
 
     if (!fs.existsSync(filesDir)) {
         throw new Error('Invalid update package: files directory not found');
@@ -285,7 +287,7 @@ async function applyUpdate(extractedPath: string): Promise<UpdateStats> {
  * package.json 버전을 업데이트합니다.
  */
 function updatePackageVersion(newVersion: string): void {
-    const packagePath = path.resolve(__dirname, '..', 'package.json');
+    const packagePath = PACKAGE_JSON_PATH;
     const packageContent = fs.readFileSync(packagePath, 'utf8');
     const packageJson = JSON.parse(packageContent);
 
@@ -358,8 +360,8 @@ export async function performUpdate(): Promise<void> {
 
         console.log('\n🚀 Starting update process...\n');
 
-        // 임시 디렉토리 생성
-        const tempDir = path.join(__dirname, 'temp-update');
+        // 임시 디렉토리 생성 (updater 모듈 디렉토리 하위 — gitignore 대상, finally 에서 정리)
+        const tempDir = path.join(UPDATER_DIR, 'temp-update');
         const extractDir = path.join(tempDir, 'extracted');
 
         if (fs.existsSync(tempDir)) {

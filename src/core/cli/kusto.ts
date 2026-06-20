@@ -93,6 +93,31 @@ kusto
         process.exit(res.status ?? 1);
     });
 
+// ── extensions: 설치된 확장의 빌드 훅 실행 ───────────────────────────────────
+const extensions = new Command('extensions').description('Kusto extension tooling');
+extensions
+    .command('build')
+    .description("Run installed extensions' onBuild hooks (e.g. bundle client assets)")
+    .option('--production', 'Build in production mode')
+    .action(async (opts) => {
+        // 무거운 라우팅 그래프를 모든 CLI 호출에서 끌어오지 않도록 지연 로드.
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const { loadExtensions } = require('@lib/extensions/loadExtensions');
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const { extensionRegistry } = require('@lib/extensions/extensionRegistry');
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const { log } = require('@ext/winston');
+        const loaded = loadExtensions();
+        await extensionRegistry.runBuild({
+            rootDir: process.cwd(),
+            appDir: path.resolve(process.cwd(), 'src', 'app'),
+            isProduction: !!opts.production || process.env.NODE_ENV === 'production',
+            log,
+        });
+        console.log(`Extension build complete (${loaded.length} extension(s)).`);
+    });
+kusto.addCommand(extensions);
+
 kusto.parseAsync(process.argv).catch((err) => {
     console.error(err instanceof Error ? err.message : err);
     process.exit(1);

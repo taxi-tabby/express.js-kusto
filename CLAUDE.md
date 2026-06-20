@@ -84,6 +84,7 @@ src/core/
     │   ├── database/     # prismaManager, baseRepository, repositoryManager, transactionCommitManager, dbNaming
     │   └── di/           # dependencyInjector, kustoManager (req.kusto facade)
     ├── crud/             # JSON:API CRUD engine: crudRouteBuilder, crudHelpers, primaryKeyParsers, jsonApiConstants
+    ├── extensions/       # CoC extension system: extensionTypes, extensionRegistry, loadExtensions (router methods / lifecycle / build hooks)
     ├── devtools/         # DEV-ONLY (AUTO_DOCS / ENABLE_SCHEMA_API / dev monitor)
     │   ├── documentation/# OpenAPI 3.1 generation + Swagger UI + dev static assets
     │   ├── schema-api/   # /api/schema introspection: crudSchema*, relationshipConfig, prismaSchemaAnalyzer
@@ -92,7 +93,7 @@ src/core/
     └── types/            # express-extensions + generated-*.ts (do-not-edit codegen)
 ```
 
-**Dependency direction (one-way):** `bootstrap` → tiers; within `lib`, higher tiers depend inward on lower ones; `external` and `config` are leaves. Do not introduce a back-edge (e.g. `data` importing `http`). `devtools` is dev-only and may depend on runtime tiers, never the reverse.
+**Dependency direction (one-way):** `bootstrap` → tiers; within `lib`, higher tiers depend inward on lower ones; `external` and `config` are leaves. Do not introduce a back-edge (e.g. `data` importing `http`). `devtools` is dev-only and may depend on runtime tiers, never the reverse. `extensions` depends inward on `http/routing` (for `RouterContext` / `ExpressRouter.registerMethod`) and must not depend on `bootstrap`.
 
 ### Initialization Flow
 
@@ -100,11 +101,21 @@ src/core/
 1. PrismaManager (DB clients from `src/app/db/`)
 2. RepositoryManager (repos from `src/app/repos/`)
 3. DependencyInjector (modules from `src/app/injectable/`)
-4. Express middleware setup (from `src/app/routes/middleware.ts`)
-5. Route auto-discovery (from `src/app/routes/**/route.ts`)
-6. Documentation routes setup (when `AUTO_DOCS=true`, dev only)
+4. Extension loading (from `src/app/extensions/**`) — registers extension router methods before routes
+5. Express middleware setup (from `src/app/routes/middleware.ts`) + extension `onInit` hooks
+6. Route auto-discovery (from `src/app/routes/**/route.ts`)
+7. Documentation routes setup (when `AUTO_DOCS=true`, dev only)
 
 All managers are singletons.
+
+### Extension System (CoC, optional)
+
+The framework is extensible **without modifying `src/core`**. An **extension** is a `KustoExtension` object shipped by a separate npm package and activated by a thin file under `src/app/extensions/` that `export default`s it. Extensions can:
+- **register `ExpressRouter` methods** (e.g. a `GET_REACT`) via `routerMethods` — applied to the prototype at boot, before routes load;
+- hook **`onInit`** (Core init, after Express setup / before routes — register middleware, static assets, services);
+- hook **`onBuild`** (run by `kusto extensions build` — participate in the build, e.g. bundling).
+
+IDE type visibility comes from the extension package's own `.d.ts` (TypeScript **declaration merging** into the `ExpressRouter` interface): methods appear in IntelliSense only when the package is installed, so an **unused extension adds zero dependencies and zero types**. Discovery is a runtime scan of `src/app/extensions/*.ts` (no codegen); an absent folder is a no-op. Both `CRUD()` and extension methods are driven through the shared `RouterContext` (single source of truth in `@lib/http/routing/expressRouter`). Author with `defineExtension(...)` from `@core`. Tier: `@lib/extensions/` (`extensionTypes`/`extensionRegistry`/`loadExtensions`). See `docs/10-extension-system.md`.
 
 ### Auto-Generated Type Files
 

@@ -27,7 +27,8 @@ The framework's core public routing API. Defines routes via method chaining and 
     - Proxy/static: `MIDDLE_PROXY_ROUTE(options)` / `STATIC(path, options?)`
     - CRUD: `CRUD(dbName, modelName, options?)` — generates JSON:API v1.1 endpoints
     - `build(): Router`
-  - Types: `HandlerFunction`, `ValidatedHandlerFunction`, `MiddlewareHandlerFunction`, `ValidatedMiddlewareHandlerFunction`, `RouteDocOptions`
+    - Extension support: `static registerMethod(name, impl)` — attach a fluent router method at runtime (used by the extension system; collision/idempotency guarded); `static clearExtensionMethods()` (test-only)
+  - Types: `HandlerFunction`, `ValidatedHandlerFunction`, `MiddlewareHandlerFunction`, `ValidatedMiddlewareHandlerFunction`, `RouteDocOptions`, `RouterContext` (shared router-context surface — single source of truth, also aliased by CRUD as `CrudBuilderContext`), `RouterMethodImpl`
   - re-export: `middlewareHelpers`'s `MiddlewareHandler` / `ValidatedMiddlewareHandler` / `wrapMiddleware` / `wrapValidatedMiddleware` / `wrapMiddlewares` / `wrapValidatedMiddlewares` / `injectedMiddleware`
 - **Dependencies**: `@lib/http/routing/proxyMiddleware` (proxy), `@lib/http/routing/middlewareHelpers` (wrapping/internal delegation), `@lib/http/validation/requestHandler` (`_VALIDATED` engine), `@lib/http/serialization/serializer` (`serialize`/`applyResponseSerializer`/`ResponseSerializer`), `@lib/http/errors/errorCodes` · `errorFormatter` · `errorHandler`, `@lib/crud/*` (CRUD builder/helpers/PK parsers/JSON:API constants), `@lib/data/di/*` · `@lib/data/database/*` (DI/prisma/repo), `@lib/devtools/documentation` · `@lib/devtools/schema-api/*` (dev-only documentation/schema registration), `@lib/types/generated-*` · `@lib/types/express-extensions`, `@ext/winston`, `multer`.
 

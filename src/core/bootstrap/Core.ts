@@ -15,6 +15,9 @@ import { SchemaApiSetup } from '@lib/devtools/schema-api/schemaApiSetup';
 import { registerMonitor } from '@lib/devtools/monitor/monitorSetup';
 import { kustoInitMiddleware, globalErrorMiddleware } from '@lib/http/routing/frameworkMiddleware';
 import { clientIpMiddleware } from '@lib/http/routing/clientIpMiddleware';
+import loadExtensions from '@lib/extensions/loadExtensions';
+import { extensionRegistry } from '@lib/extensions/extensionRegistry';
+import type { ExtensionInitContext } from '@lib/extensions/extensionTypes';
 
 export interface CoreConfig {
     basePath?: string;
@@ -110,8 +113,10 @@ export class Core {
 
 
         
+        await this.loadExtensions(); // 확장 발견 + 라우터 메서드 prototype 등록 — 라우트보다 먼저
         this.setupExpress();
         this.setupCoreMiddleware(); // 프레임워크 필수(req.kusto 주입 + clientIp) — 라우트보다 먼저
+        await this.runExtensionInit(); // 확장 onInit(미들웨어/정적/서비스) — 라우트보다 먼저
         this.setupMonitor();     // dev 모니터(메트릭 미들웨어 + /__kusto/metrics) — 라우트보다 먼저
         this.setupHealthCheck(); // /healthz readiness (글로벌 라우트보다 먼저)
         this.setupDocumentationRoutes(); // 문서화 라우트를 먼저 등록
@@ -160,6 +165,34 @@ export class Core {
                 staticPath: publicPath
             });
         }
+    }
+
+    /**
+     * 확장 발견 + 적용. `src/app/extensions/` 의 활성화 파일을 로드해 라우터 메서드를
+     * ExpressRouter prototype 에 등록하고, onInit/onBuild 훅을 레지스트리에 모은다.
+     * 라우트 로드보다 먼저 호출되어야 한다(route.ts 가 확장 메서드를 쓸 수 있도록).
+     */
+    private async loadExtensions(): Promise<void> {
+        try {
+            const loaded = loadExtensions();
+            if (loaded.length > 0) {
+                log.Route(`Extensions registered: ${loaded.map((e) => e.name).join(', ')}`);
+            }
+        } catch (error) {
+            log.Error('Failed to load extensions', { error });
+            throw error;
+        }
+    }
+
+    /** 등록된 확장의 onInit 훅을 실행한다(Express 설정 후, 라우트 등록 전). */
+    private async runExtensionInit(): Promise<void> {
+        const ctx: ExtensionInitContext = {
+            app: this._app,
+            config: this._config,
+            registerMiddleware: (mw) => { this._app.use(mw); },
+            log,
+        };
+        await extensionRegistry.runInit(ctx);
     }
 
     private async loadRoutes(): Promise<void> {

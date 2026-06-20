@@ -1,4 +1,3 @@
-import { Router, RequestHandler } from 'express';
 import { RequestHandler as CustomRequestHandler } from '@lib/http/validation/requestHandler';
 import { prismaManager } from '@lib/data/database/prismaManager';
 import {
@@ -22,7 +21,6 @@ import {
 import { DEFAULT_PRIMARY_KEY, DEFAULT_SOFT_DELETE_FIELD, DEFAULT_PAGE_SIZE, CRUD_ACTIONS_WITH_RECOVER } from '@lib/crud/crudConstants';
 import { ERROR_CODES } from '@lib/http/errors/errorCodes';
 import { PrismaSchemaAnalyzer } from '@lib/devtools/schema-api/prismaSchemaAnalyzer';
-import { CrudSchemaRegistry } from '@lib/devtools/schema-api/crudSchemaRegistry';
 import {
     jsonApiCollectionResponse,
     jsonApiResponse,
@@ -32,31 +30,14 @@ import {
 import { JSON_API_CONTENT_TYPE, JSON_API_ATOMIC_CONTENT_TYPE, JSON_API_VERSION, JSON_API_ATOMIC_EXT } from '@lib/crud/jsonApiConstants';
 import { ErrorHandler, ErrorResponseFormat } from '@lib/http/errors/errorHandler';
 import { log } from '@ext/winston';
-import type { HandlerFunction, MiddlewareHandlerFunction } from '@lib/http/routing/expressRouter';
+import type { HandlerFunction, MiddlewareHandlerFunction, RouterContext } from '@lib/http/routing/expressRouter';
 
 /**
- * CrudRouteBuilder 가 ExpressRouter 로부터 필요로 하는 공유 능력(capabilities) 집합.
- * ExpressRouter 인스턴스가 이 인터페이스를 만족하며, CRUD() 위임 시 `this` 가 그대로 전달된다.
+ * Capabilities the CrudRouteBuilder needs from the ExpressRouter that drives it.
+ * Aliased to the shared {@link RouterContext} (single source of truth); on `CRUD()`
+ * delegation `this` (an ExpressRouter instance) is passed through as the context.
  */
-export interface CrudBuilderContext {
-    /** 라우트 등록 대상 Express Router */
-    router: Router;
-    /** 현재 라우터의 base path (문서/스키마 등록에 사용) */
-    basePath: string;
-    /** CRUD 스키마 레지스트리 (개발 모드 스키마 등록) */
-    schemaRegistry: CrudSchemaRegistry;
-    /** Prisma 스키마 분석기 (Json 필드/include 정책 등) */
-    schemaAnalyzer: PrismaSchemaAnalyzer | null;
-    /** HandlerFunction 을 Express 호환 핸들러로 래핑 */
-    wrapHandler(
-        handler: HandlerFunction,
-        serialize?: any
-    ): RequestHandler;
-    /** MiddlewareHandlerFunction 을 Express 호환 미들웨어로 래핑 */
-    wrapMiddleware(handler: MiddlewareHandlerFunction): RequestHandler;
-    /** OpenAPI 문서 등록 헬퍼 */
-    registerDocumentation(method: string, path: string, config: any): void;
-}
+export type CrudBuilderContext = RouterContext;
 
 /**
  * CRUD 엔진 (JSON:API v1.1).

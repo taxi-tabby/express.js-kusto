@@ -29,6 +29,7 @@ core/
     ├── http/       # request-handling tier (routing/validation/serialization/errors) — AGENTS.md
     ├── data/       # persistence tier (database/di) — AGENTS.md
     ├── crud/       # JSON:API CRUD engine — AGENTS.md
+    ├── extensions/ # CoC extension system (router methods / lifecycle / build hooks) — AGENTS.md
     ├── devtools/   # DEV-only (documentation/schema-api/monitor) — AGENTS.md
     ├── config/     # environmentLoader — AGENTS.md
     └── types/      # express-extensions + generated-*.ts (codegen output, do-not-edit) — AGENTS.md
@@ -36,7 +37,7 @@ core/
 
 ## Tier Dependency Direction (one-way)
 
-`bootstrap` → tiers. Within `lib`, higher tiers depend inward on lower tiers. `external` and `config` are leaves. Reverse edges (e.g. `data` importing `http`) are prohibited. `devtools` is dev-only and may depend on runtime tiers, but never the reverse.
+`bootstrap` → tiers. Within `lib`, higher tiers depend inward on lower tiers. `external` and `config` are leaves. Reverse edges (e.g. `data` importing `http`) are prohibited. `devtools` is dev-only and may depend on runtime tiers, but never the reverse. `extensions` depends inward on `http/routing` (for `RouterContext` / `ExpressRouter.registerMethod`) and must not depend on `bootstrap`.
 
 ## AGENTS.md Convention (required: reference + sync)
 

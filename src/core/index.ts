@@ -18,6 +18,19 @@ export { defaultGlobalMiddleware, resolveCorsWhitelist } from '@lib/http/routing
 export type { GlobalMiddlewareOptions } from '@lib/http/routing/globalMiddleware';
 export { clientIpMiddleware } from '@lib/http/routing/clientIpMiddleware';
 
+// Extension system (CoC 확장 — src/app/extensions/ 에서 활성화)
+export { defineExtension, isKustoExtension } from '@lib/extensions/extensionTypes';
+export type {
+    KustoExtension,
+    RouterContext,
+    RouterMethodImpl,
+    ExtensionInitContext,
+    ExtensionBuildContext,
+    ExtensionRuntimeConfig,
+} from '@lib/extensions/extensionTypes';
+export { extensionRegistry } from '@lib/extensions/extensionRegistry';
+export { default as loadExtensions } from '@lib/extensions/loadExtensions';
+
 // Schema API (개발 모드 전용)
 export { CrudSchemaRegistry } from '@lib/devtools/schema-api/crudSchemaRegistry';
 export { PrismaSchemaAnalyzer } from '@lib/devtools/schema-api/prismaSchemaAnalyzer';

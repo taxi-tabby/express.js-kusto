@@ -1,5 +1,6 @@
 ﻿import { Application } from 'express';
 import { SchemaApiRouter } from './schemaApiRouter';
+import { CrudSchemaRegistry } from './crudSchemaRegistry';
 import { log } from '@ext/winston';
 
 /**
@@ -25,11 +26,8 @@ export class SchemaApiSetup {
 
     log.Silly(`Environment variable check: NODE_ENV=${nodeEnv || 'undefined'}, ENABLE_SCHEMA_API=${enableSchemaApi || 'undefined'}`);
 
-    const isEnabled =
-      nodeEnv === 'development' ||
-      nodeEnv === 'dev' ||
-      enableSchemaApi === 'true' ||
-      enableSchemaApi === '1';
+    // 스키마 API 활성화 판정은 CrudSchemaRegistry 의 단일 캐논 헬퍼로 위임 (중복 제거)
+    const isEnabled = CrudSchemaRegistry.getInstance().isSchemaApiEnabled();
 
     if (!isEnabled) {
       log.Debug('Schema API is enabled only in development mode. Set NODE_ENV=development or ENABLE_SCHEMA_API=true.');

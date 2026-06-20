@@ -290,3 +290,62 @@ export const ERROR_STATUS_MAP: Record<string, number> = {
 export function getHttpStatusForErrorCode(errorCode: string): number {
   return ERROR_STATUS_MAP[errorCode] || 500;
 }
+
+/**
+ * Prisma 에러 코드 → { errorCode, httpStatus } 정규(canonical) 매핑.
+ *
+ * 단일 진실 공급원(single source of truth). 과거 ErrorHandler.mapPrismaErrorCodes 와
+ * CrudResponseFormatter.mapPrismaSpecificCodes 에 중복으로 존재하던 두 맵을 통합한다.
+ *
+ * - `errorCode`: 두 소비자가 (P2030/P2031 을 제외하고) 동일하게 산출하던 내부 에러 코드.
+ *   httpStatus 는 `getHttpStatusForErrorCode(errorCode)` 로 파생된 참고 값이며,
+ *   현재 이 맵을 읽는 소비자(errorHandler/crudHelpers)는 errorCode 만 사용한다.
+ * - P2030/P2031 은 두 소비자가 서로 다른 결과를 내던 코드라 여기에 포함하지 않고,
+ *   각 소비자에서 per-consumer override 로 기존 동작을 그대로 보존한다.
+ */
+export const PRISMA_CANONICAL_ERROR_MAP: Record<string, { errorCode: string; httpStatus: number }> = (() => {
+  const codeToErrorCode: Record<string, string> = {
+    // 데이터 관련 에러
+    P2001: PRISMA_ERROR_CODES.RECORD_NOT_FOUND,
+    P2002: PRISMA_ERROR_CODES.UNIQUE_CONSTRAINT_VIOLATION,
+    P2003: PRISMA_ERROR_CODES.FOREIGN_KEY_CONSTRAINT_VIOLATION,
+    P2004: PRISMA_ERROR_CODES.CONSTRAINT_VIOLATION,
+    P2005: PRISMA_ERROR_CODES.INVALID_VALUE,
+    P2006: PRISMA_ERROR_CODES.INVALID_VALUE,
+    P2007: PRISMA_ERROR_CODES.DATA_VALIDATION_ERROR,
+    // 쿼리 관련 에러
+    P2008: PRISMA_ERROR_CODES.QUERY_PARSING_ERROR,
+    P2009: PRISMA_ERROR_CODES.QUERY_VALIDATION_ERROR,
+    P2010: PRISMA_ERROR_CODES.RAW_QUERY_ERROR,
+    P2016: PRISMA_ERROR_CODES.QUERY_INTERPRETATION_ERROR,
+    // 제약 조건 에러
+    P2011: PRISMA_ERROR_CODES.NULL_CONSTRAINT_VIOLATION,
+    P2012: JSON_API_ERROR_CODES.MISSING_REQUIRED_FIELD,
+    P2013: JSON_API_ERROR_CODES.MISSING_REQUIRED_FIELD,
+    P2014: PRISMA_ERROR_CODES.RELATIONSHIP_VIOLATION,
+    P2015: JSON_API_ERROR_CODES.RELATIONSHIP_NOT_FOUND,
+    P2017: PRISMA_ERROR_CODES.RELATIONSHIP_VIOLATION,
+    P2018: JSON_API_ERROR_CODES.RELATIONSHIP_NOT_FOUND,
+    // 입력 관련 에러
+    P2019: JSON_API_ERROR_CODES.VALIDATION_ERROR,
+    P2020: PRISMA_ERROR_CODES.VALUE_OUT_OF_RANGE,
+    P2033: PRISMA_ERROR_CODES.VALUE_OUT_OF_RANGE,
+    // 스키마 관련 에러
+    P2021: PRISMA_ERROR_CODES.TABLE_NOT_FOUND,
+    P2022: PRISMA_ERROR_CODES.COLUMN_NOT_FOUND,
+    P2023: PRISMA_ERROR_CODES.INCONSISTENT_COLUMN_DATA,
+    // 연결 및 성능/트랜잭션 에러
+    P2024: PRISMA_ERROR_CODES.CONNECTION_TIMEOUT,
+    P2025: JSON_API_ERROR_CODES.OPERATION_FAILED,
+    P2026: BUSINESS_ERROR_CODES.OPERATION_NOT_ALLOWED,
+    P2027: JSON_API_ERROR_CODES.OPERATION_FAILED,
+    P2028: PRISMA_ERROR_CODES.TRANSACTION_API_ERROR,
+    P2034: PRISMA_ERROR_CODES.TRANSACTION_CONFLICT
+  };
+
+  const map: Record<string, { errorCode: string; httpStatus: number }> = {};
+  for (const [prismaCode, errorCode] of Object.entries(codeToErrorCode)) {
+    map[prismaCode] = { errorCode, httpStatus: getHttpStatusForErrorCode(errorCode) };
+  }
+  return map;
+})();

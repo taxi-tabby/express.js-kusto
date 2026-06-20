@@ -1,6 +1,6 @@
 import { PrismaSchemaAnalyzer } from '@lib/prismaSchemaAnalyzer';
 import { PrismaModelInfo } from '@lib/crudSchemaTypes';
-import { DocumentationGenerator } from '@lib/documentationGenerator';
+import { DocumentationGenerator, isDocumentationEnabled } from '@lib/documentationGenerator';
 import { jsonApiResource, jsonApiAttributes, jsonApiRelationships, jsonApiErrorObject } from './jsonApiSchemas';
 import { enumToOpenApi } from './dmmfToOpenApi';
 import { log } from '@ext/winston';
@@ -45,7 +45,8 @@ export function registerJsonApiErrorSchema(): void {
 }
 
 function isEnabled(): boolean {
-    return process.env.NODE_ENV !== 'production' && process.env.AUTO_DOCS === 'true';
+    // 문서 활성화 판정은 DocumentationGenerator 의 단일 캐논 헬퍼로 위임 (중복 제거)
+    return isDocumentationEnabled();
 }
 
 function collectEnumValues(analyzer: PrismaSchemaAnalyzer, models: PrismaModelInfo[]): Map<string, string[]> {

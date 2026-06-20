@@ -2,7 +2,7 @@
 
 import { log } from '@ext/winston';
 import { ErrorHandler, ErrorResponseFormat } from './errorHandler';
-import { ERROR_CODES, PRISMA_ERROR_CODES } from './errorCodes';
+import { ERROR_CODES, PRISMA_CANONICAL_ERROR_MAP } from './errorCodes';
 
 /**
  * CRUD 쿼리 파싱 및 필터링을 위한 헬퍼 유틸리티
@@ -1907,57 +1907,18 @@ export class CrudResponseFormatter {
 
   /**
    * Prisma 특화 에러 코드 매핑
+   *
+   * 정규 맵(PRISMA_CANONICAL_ERROR_MAP, errorCodes.ts)을 단일 진실 공급원으로 사용한다.
+   * 단, 정규 맵에서 의도적으로 제외된 P2030/P2031 은 이 소비자만의 고유 결과
+   * (FULLTEXT_INDEX_NOT_FOUND / MONGODB_REPLICA_SET_REQUIRED)를 보존하기 위해
+   * override 로 처리한다.
    */
   private static mapPrismaSpecificCodes(code: string): string {
-    const prismaCodeMap = new Map([
-      // 데이터 관련 에러
-      ['P2001', PRISMA_ERROR_CODES.RECORD_NOT_FOUND],
-      ['P2002', PRISMA_ERROR_CODES.UNIQUE_CONSTRAINT_VIOLATION],
-      ['P2003', PRISMA_ERROR_CODES.FOREIGN_KEY_CONSTRAINT_VIOLATION],
-      ['P2004', PRISMA_ERROR_CODES.CONSTRAINT_VIOLATION],
-      ['P2005', PRISMA_ERROR_CODES.INVALID_VALUE],
-      ['P2006', PRISMA_ERROR_CODES.INVALID_VALUE],
-      ['P2007', PRISMA_ERROR_CODES.DATA_VALIDATION_ERROR],
-      
-      // 쿼리 관련 에러
-      ['P2008', PRISMA_ERROR_CODES.QUERY_PARSING_ERROR],
-      ['P2009', PRISMA_ERROR_CODES.QUERY_VALIDATION_ERROR],
-      ['P2010', PRISMA_ERROR_CODES.RAW_QUERY_ERROR],
-      ['P2016', PRISMA_ERROR_CODES.QUERY_INTERPRETATION_ERROR],
-      
-      // 제약 조건 에러
-      ['P2011', PRISMA_ERROR_CODES.NULL_CONSTRAINT_VIOLATION],
-      ['P2012', ERROR_CODES.MISSING_REQUIRED_FIELD],
-      ['P2013', ERROR_CODES.MISSING_REQUIRED_FIELD],
-      ['P2014', PRISMA_ERROR_CODES.RELATIONSHIP_VIOLATION],
-      ['P2015', ERROR_CODES.RELATIONSHIP_NOT_FOUND],
-      ['P2017', PRISMA_ERROR_CODES.RELATIONSHIP_VIOLATION],
-      ['P2018', ERROR_CODES.RELATIONSHIP_NOT_FOUND],
-      
-      // 입력 관련 에러
-      ['P2019', ERROR_CODES.VALIDATION_ERROR],
-      ['P2020', PRISMA_ERROR_CODES.VALUE_OUT_OF_RANGE],
-      ['P2033', PRISMA_ERROR_CODES.VALUE_OUT_OF_RANGE],
-      
-      // 스키마 관련 에러
-      ['P2021', PRISMA_ERROR_CODES.TABLE_NOT_FOUND],
-      ['P2022', PRISMA_ERROR_CODES.COLUMN_NOT_FOUND],
-      ['P2023', PRISMA_ERROR_CODES.INCONSISTENT_COLUMN_DATA],
-      
-      // 연결 및 성능 에러
-      ['P2024', PRISMA_ERROR_CODES.CONNECTION_TIMEOUT],
-      ['P2025', ERROR_CODES.OPERATION_FAILED],
-      ['P2026', ERROR_CODES.OPERATION_NOT_ALLOWED],
-      ['P2027', ERROR_CODES.OPERATION_FAILED],
-      ['P2028', PRISMA_ERROR_CODES.TRANSACTION_API_ERROR],
-      ['P2034', 'TRANSACTION_CONFLICT'],
-      
-      // 특수 기능 에러
-      ['P2030', 'FULLTEXT_INDEX_NOT_FOUND'],
-      ['P2031', 'MONGODB_REPLICA_SET_REQUIRED']
-    ]);
+    // per-consumer override: 정규 맵과 결과가 갈리는 코드 (behavior-preserving)
+    if (code === 'P2030') return 'FULLTEXT_INDEX_NOT_FOUND';
+    if (code === 'P2031') return 'MONGODB_REPLICA_SET_REQUIRED';
 
-    return prismaCodeMap.get(code) || code;
+    return PRISMA_CANONICAL_ERROR_MAP[code]?.errorCode ?? code;
   }
 
   /**

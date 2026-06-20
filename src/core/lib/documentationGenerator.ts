@@ -30,6 +30,14 @@ export type ApiDocumentation = OpenApiDocument;
 
 const FALLBACK_PACKAGE_JSON = { name: 'kusto-api', version: '0.0.0' };
 
+/**
+ * 문서 자동화(AUTO_DOCS) 활성화 판정 — 단일 캐논 헬퍼.
+ * production 이 아니고 AUTO_DOCS === 'true' 일 때만 활성화.
+ */
+export function isDocumentationEnabled(): boolean {
+    return process.env.NODE_ENV !== 'production' && process.env.AUTO_DOCS === 'true';
+}
+
 function loadPackageJson(): { name?: string; version?: string; description?: string } {
     try {
         // webpack bundling 시 inline. dev 모드에서는 ts-node 가 require 해석.
@@ -92,7 +100,7 @@ export class DocumentationGenerator {
     }
 
     private static isDocumentationEnabled(): boolean {
-        return process.env.NODE_ENV !== 'production' && process.env.AUTO_DOCS === 'true';
+        return isDocumentationEnabled();
     }
 
     /** OpenAPI 문서 생성 */

@@ -5,7 +5,7 @@ import {
     serializePrismaDate,
     safeJsonResponse,
     jsonReplacer
-} from '@lib/serializer';
+} from '@lib/http/serialization/serializer';
 
 describe('serializeBigInt', () => {
     it('BigInt 값이 들어올 때 문자열로 변환한다', () => {

@@ -1,4 +1,4 @@
-import { PrismaQueryBuilder } from '@lib/crudHelpers';
+import { PrismaQueryBuilder } from '@lib/crud/crudHelpers';
 
 describe('PrismaQueryBuilder.buildIncludeOptions', () => {
     it('빈 배열일 때 빈 객체를 반환한다', () => {

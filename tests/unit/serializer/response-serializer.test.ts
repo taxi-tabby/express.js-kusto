@@ -1,4 +1,4 @@
-import { applyResponseSerializer } from '@lib/serializer';
+import { applyResponseSerializer } from '@lib/http/serialization/serializer';
 
 const fakeReq = {} as any; // serializer 함수는 req 를 사용하지 않는 케이스만 검증
 

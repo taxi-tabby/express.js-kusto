@@ -1,4 +1,4 @@
-import { PrismaManager } from '@lib/prismaManager';
+import { PrismaManager } from '@lib/data/database/prismaManager';
 
 /**
  * connection 에러 mock client 팩토리. failures 회만큼 connection 에러를 throw 후 정상 응답.

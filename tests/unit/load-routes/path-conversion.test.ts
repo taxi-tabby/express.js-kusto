@@ -1,4 +1,4 @@
-import { convertFolderToUrlSegment } from '@lib/loadRoutes_V6_Clean';
+import { convertFolderToUrlSegment } from '@lib/http/routing/loadRoutes_V6_Clean';
 
 describe('convertFolderToUrlSegment', () => {
     it('일반 폴더명일 때 그대로 반환한다', () => {

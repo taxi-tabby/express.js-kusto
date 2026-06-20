@@ -1,4 +1,4 @@
-import { TransactionCommitManager } from '@lib/transactionCommitManager';
+import { TransactionCommitManager } from '@lib/data/database/transactionCommitManager';
 
 /**
  * P0-4 회귀 테스트: Saga 분산 트랜잭션은 각 참여자 operation 을 단 한 번만 실행해야 한다.

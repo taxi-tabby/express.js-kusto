@@ -1,4 +1,4 @@
-import { buildServers } from '@lib/documentation/serversSource';
+import { buildServers } from '@lib/devtools/documentation/serversSource';
 import { snapshotEnv } from '@tests/_setup/env-fixture';
 
 describe('serversSource', () => {

@@ -1,4 +1,4 @@
-import { injectedMiddleware } from '@lib/middlewareHelpers';
+import { injectedMiddleware } from '@lib/http/routing/middlewareHelpers';
 
 /**
  * P2-13 회귀 테스트: WITH() 의 arity 휴리스틱(fn.length >= 6)은 기본값/rest 파라미터에

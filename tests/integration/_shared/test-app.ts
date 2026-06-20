@@ -10,7 +10,7 @@ import { DbFixture } from '@tests/_setup/db-fixture';
  *
  * 사용 패턴 (caller 가 jest.resetModules() 후 호출):
  *   jest.resetModules();
- *   jest.doMock('@lib/prismaManager', ...);
+ *   jest.doMock('@lib/data/database/prismaManager', ...);
  *   const { buildTestApp } = require('../_shared/test-app');
  *   const app = buildTestApp(fixture, options, 'Post', '/posts');
  */
@@ -22,7 +22,7 @@ export function buildTestApp(
 ) {
     // Late require so the doMock applied before this call takes effect.
     // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { ExpressRouter } = require('@lib/expressRouter');
+    const { ExpressRouter } = require('@lib/http/routing/expressRouter');
 
     const app = express();
     app.use(express.json());
@@ -58,7 +58,7 @@ export function applyPrismaManagerMock(fixture: DbFixture) {
         getProviderForDatabase: (_name: string) => 'sqlite',
         healthCheck: async () => ({ databases: [{ name: 'default', status: 'healthy' }] })
     };
-    jest.doMock('@lib/prismaManager', () => ({
+    jest.doMock('@lib/data/database/prismaManager', () => ({
         prismaManager: mockManager,
         PrismaManager: { getInstance: () => mockManager }
     }));
@@ -69,12 +69,12 @@ export function applyPrismaManagerMock(fixture: DbFixture) {
         getInjectedMiddlewares: () => ({}),
         getInjectedMiddleware: (_name: string) => undefined
     };
-    jest.doMock('@lib/dependencyInjector', () => ({
+    jest.doMock('@lib/data/di/dependencyInjector', () => ({
         DependencyInjector: { getInstance: () => mockInjector }
     }));
 
     // repositoryManager — 빈 stub 으로 충분 (CRUD 라우트는 직접 사용 안 함)
-    jest.doMock('@lib/repositoryManager', () => ({
+    jest.doMock('@lib/data/database/repositoryManager', () => ({
         repositoryManager: {
             getRepository: (_name: string) => undefined,
             getAllRepositories: () => ({})
@@ -82,7 +82,7 @@ export function applyPrismaManagerMock(fixture: DbFixture) {
     }));
 
     // kustoManager — req.kusto 에 할당. 단순 객체로 충분
-    jest.doMock('@lib/kustoManager', () => ({
+    jest.doMock('@lib/data/di/kustoManager', () => ({
         kustoManager: {}
     }));
 }

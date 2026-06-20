@@ -1,4 +1,4 @@
-import { Validator } from '@lib/validator';
+import { Validator } from '@lib/http/validation/validator';
 
 describe('Validator.validate — string 타입', () => {
     it('필수 필드가 누락됐을 때 isValid 가 false 이고 errors 에 해당 필드가 포함된다', () => {

@@ -1,4 +1,4 @@
-import { toOpenApiPath } from '@lib/documentation/pathConverter';
+import { toOpenApiPath } from '@lib/devtools/documentation/pathConverter';
 
 describe('pathConverter', () => {
     describe('toOpenApiPath', () => {

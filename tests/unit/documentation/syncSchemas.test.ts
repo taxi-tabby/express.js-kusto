@@ -1,6 +1,6 @@
-import { syncSchemasFromAnalyzer, registerJsonApiErrorSchema } from '@lib/documentation/syncSchemas';
-import { DocumentationGenerator } from '@lib/documentationGenerator';
-import { PrismaModelInfo } from '@lib/crudSchemaTypes';
+import { syncSchemasFromAnalyzer, registerJsonApiErrorSchema } from '@lib/devtools/documentation/syncSchemas';
+import { DocumentationGenerator } from '@lib/devtools/documentation/documentationGenerator';
+import { PrismaModelInfo } from '@lib/devtools/schema-api/crudSchemaTypes';
 import { snapshotEnv } from '@tests/_setup/env-fixture';
 
 const sampleModel: PrismaModelInfo = {

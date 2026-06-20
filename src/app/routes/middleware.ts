@@ -1,8 +1,8 @@
 ﻿import '@lib/types/express-extensions';
 import { log } from '@ext/winston';
 import { Request, Response, NextFunction } from 'express';
-import { kustoManager } from '@lib/kustoManager';
-import { ErrorHandler, ErrorResponseFormat } from '@lib/errorHandler';
+import { kustoManager } from '@lib/data/di/kustoManager';
+import { ErrorHandler, ErrorResponseFormat } from '@lib/http/errors/errorHandler';
 
 import cors from 'cors';
 import cookieParser from 'cookie-parser';

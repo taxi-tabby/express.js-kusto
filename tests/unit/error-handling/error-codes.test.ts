@@ -8,7 +8,7 @@ import {
     HTTP_ERROR_CODES,
     MIDDLEWARE_ERROR_CODES,
     BUSINESS_ERROR_CODES
-} from '@lib/errorCodes';
+} from '@lib/http/errors/errorCodes';
 
 describe('ERROR_CODES 무결성', () => {
     it('ERROR_CODES 가 모든 카테고리의 키를 포함할 때 누락이 없다', () => {

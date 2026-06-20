@@ -13,7 +13,7 @@ console.log = () => {};
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { buildExecuteArgs, getDatabaseEnvVarName } = require('@/src/core/scripts/kusto-db-cli');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const { folderNameToEnvVarName } = require('@lib/dbNaming');
+const { folderNameToEnvVarName } = require('@lib/data/database/dbNaming');
 
 process.argv = originalArgv;
 process.exit = originalExit;

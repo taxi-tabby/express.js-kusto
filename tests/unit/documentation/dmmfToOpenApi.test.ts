@@ -1,4 +1,4 @@
-import { enumToOpenApi } from '@lib/documentation/dmmfToOpenApi';
+import { enumToOpenApi } from '@lib/devtools/documentation/dmmfToOpenApi';
 
 describe('dmmfToOpenApi', () => {
     describe('enumToOpenApi', () => {

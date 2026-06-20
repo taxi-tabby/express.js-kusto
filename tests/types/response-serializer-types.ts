@@ -1,5 +1,5 @@
-import { ExpressRouter } from '@lib/expressRouter';
-import type { SerializedResult } from '@lib/serializer';
+import { ExpressRouter } from '@lib/http/routing/expressRouter';
+import type { SerializedResult } from '@lib/http/serialization/serializer';
 
 // 타입 동등성 헬퍼
 type Equal<X, Y> =

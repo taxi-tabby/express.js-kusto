@@ -3,8 +3,8 @@ import {
     jsonApiAttributes,
     jsonApiRelationships,
     jsonApiErrorObject,
-} from '@lib/documentation/jsonApiSchemas';
-import { PrismaModelInfo } from '@lib/crudSchemaTypes';
+} from '@lib/devtools/documentation/jsonApiSchemas';
+import { PrismaModelInfo } from '@lib/devtools/schema-api/crudSchemaTypes';
 
 const sampleModel: PrismaModelInfo = {
     name: 'Post',

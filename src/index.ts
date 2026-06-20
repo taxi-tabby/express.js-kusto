@@ -1,9 +1,9 @@
 ﻿// Module alias 등록 (다른 import보다 먼저 실행되어야 함)
 import 'module-alias/register';
 
-import { EnvironmentLoader } from './core/lib/environmentLoader';
+import { EnvironmentLoader } from './core/lib/config/environmentLoader';
 import { Application, log } from './core';
-import { resolveServerDefaults } from './core/Core';
+import { resolveServerDefaults } from './core/bootstrap/Core';
 
 // 환경변수 로드 (가장 먼저 실행)
 EnvironmentLoader.load();

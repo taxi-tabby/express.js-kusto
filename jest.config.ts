@@ -36,10 +36,10 @@ const config: Config = {
   // 회귀 보호용 하한선으로 설정함. coverage 자체를 추격하지 않는다.
   coverageThreshold: {
     global: { statements: 15, branches: 15, functions: 15, lines: 15 },
-    './src/core/lib/crudHelpers.ts': { statements: 35, branches: 25, functions: 45, lines: 35 },
-    './src/core/lib/errorHandler.ts': { statements: 50, branches: 40, functions: 65, lines: 50 },
-    './src/core/lib/errorCodes.ts': { statements: 90, branches: 50, functions: 50, lines: 90 },
-    './src/core/lib/serializer.ts': { statements: 70, branches: 65, functions: 95, lines: 70 }
+    './src/core/lib/crud/crudHelpers.ts': { statements: 35, branches: 25, functions: 45, lines: 35 },
+    './src/core/lib/http/errors/errorHandler.ts': { statements: 50, branches: 40, functions: 65, lines: 50 },
+    './src/core/lib/http/errors/errorCodes.ts': { statements: 90, branches: 50, functions: 50, lines: 90 },
+    './src/core/lib/http/serialization/serializer.ts': { statements: 70, branches: 65, functions: 95, lines: 70 }
   },
   testTimeout: 30000
 };

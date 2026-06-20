@@ -1,4 +1,4 @@
-import { buildOpenApiDocument } from '@lib/documentation/openApiBuilder';
+import { buildOpenApiDocument } from '@lib/devtools/documentation/openApiBuilder';
 import { snapshotEnv } from '@tests/_setup/env-fixture';
 
 describe('openApiBuilder', () => {

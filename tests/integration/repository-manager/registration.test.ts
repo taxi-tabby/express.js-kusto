@@ -1,4 +1,4 @@
-import { RepositoryManager } from '@lib/repositoryManager';
+import { RepositoryManager } from '@lib/data/database/repositoryManager';
 
 describe('RepositoryManager', () => {
     it('getInstance 를 두 번 호출할 때 같은 인스턴스를 반환한다 (singleton)', () => {

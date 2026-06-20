@@ -1,4 +1,4 @@
-import { mediaTypeFor } from '@lib/documentation/contentTypeRule';
+import { mediaTypeFor } from '@lib/devtools/documentation/contentTypeRule';
 
 describe('contentTypeRule', () => {
     describe('mediaTypeFor', () => {

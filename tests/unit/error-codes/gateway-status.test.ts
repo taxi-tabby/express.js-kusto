@@ -1,4 +1,4 @@
-import { ERROR_CODES, getHttpStatusForErrorCode } from '@lib/errorCodes';
+import { ERROR_CODES, getHttpStatusForErrorCode } from '@lib/http/errors/errorCodes';
 
 describe('getHttpStatusForErrorCode — 게이트웨이 코드', () => {
   it('BAD_GATEWAY → 502', () => {

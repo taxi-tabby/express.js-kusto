@@ -1,4 +1,4 @@
-import { pathToCamelCaseIdentifier } from '@lib/dependencyInjector';
+import { pathToCamelCaseIdentifier } from '@lib/data/di/dependencyInjector';
 
 describe('pathToCamelCaseIdentifier', () => {
     it('단일 세그먼트 파일이 들어올 때 그대로 반환한다', () => {

@@ -1,6 +1,6 @@
-import { DocumentationGenerator } from '@lib/documentationGenerator';
-import { PrismaSchemaAnalyzer } from '@lib/prismaSchemaAnalyzer';
-import { syncSchemasFromAnalyzer, registerJsonApiErrorSchema } from '@lib/documentation';
+import { DocumentationGenerator } from '@lib/devtools/documentation/documentationGenerator';
+import { PrismaSchemaAnalyzer } from '@lib/devtools/schema-api/prismaSchemaAnalyzer';
+import { syncSchemasFromAnalyzer, registerJsonApiErrorSchema } from '@lib/devtools/documentation';
 import { snapshotEnv } from '@tests/_setup/env-fixture';
 import { bootDbFixture, DbFixture } from '@tests/_setup/db-fixture';
 

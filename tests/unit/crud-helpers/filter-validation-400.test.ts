@@ -1,4 +1,4 @@
-import { CrudQueryParser } from '@lib/crudHelpers';
+import { CrudQueryParser } from '@lib/crud/crudHelpers';
 import { Request } from 'express';
 
 function makeReq(query: Record<string, any>): Request {

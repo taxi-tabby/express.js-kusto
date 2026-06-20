@@ -1,5 +1,5 @@
 import { bootDbFixture, truncateAll, DbFixture } from '@tests/_setup/db-fixture';
-import { BaseRepository } from '@lib/baseRepository';
+import { BaseRepository } from '@lib/data/database/baseRepository';
 
 /**
  * BaseRepository 의 컨스트럭터는 PrismaManager 인스턴스를 받음.

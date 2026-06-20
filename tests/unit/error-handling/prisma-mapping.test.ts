@@ -1,5 +1,5 @@
-import { ErrorFormatter } from '@lib/errorFormatter';
-import { ERROR_CODES } from '@lib/errorCodes';
+import { ErrorFormatter } from '@lib/http/errors/errorFormatter';
+import { ERROR_CODES } from '@lib/http/errors/errorCodes';
 
 class FakeValidationErr extends Error {
     constructor() { super('Invalid prisma input'); this.name = 'PrismaClientValidationError'; }

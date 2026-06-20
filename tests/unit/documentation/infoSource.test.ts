@@ -1,4 +1,4 @@
-import { buildInfo } from '@lib/documentation/infoSource';
+import { buildInfo } from '@lib/devtools/documentation/infoSource';
 import { snapshotEnv } from '@tests/_setup/env-fixture';
 
 describe('infoSource', () => {

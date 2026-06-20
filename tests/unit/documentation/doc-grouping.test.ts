@@ -1,4 +1,4 @@
-import { buildOpenApiDocument, deriveResourceTag, deriveOperationId } from '@lib/documentation';
+import { buildOpenApiDocument, deriveResourceTag, deriveOperationId } from '@lib/devtools/documentation';
 
 const baseInput = (routes: any[], tagDescriptions?: Record<string, string>) => ({
   routes,

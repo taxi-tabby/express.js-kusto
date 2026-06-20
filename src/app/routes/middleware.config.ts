@@ -7,7 +7,7 @@
 
 import helmet from 'helmet';
 import cors from 'cors';
-import { JSON_API_CONTENT_TYPE } from '@lib/jsonApiConstants';
+import { JSON_API_CONTENT_TYPE } from '@lib/crud/jsonApiConstants';
 import { log } from '@ext/winston';
 
 // ─────────────────────────────────────────────────────────────

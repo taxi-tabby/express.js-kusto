@@ -1,5 +1,5 @@
-import { ErrorHandler, ErrorResponseFormat } from '@lib/errorHandler';
-import { ERROR_CODES } from '@lib/errorCodes';
+import { ErrorHandler, ErrorResponseFormat } from '@lib/http/errors/errorHandler';
+import { ERROR_CODES } from '@lib/http/errors/errorCodes';
 
 function makeError(message = 'test error') {
     return new Error(message);

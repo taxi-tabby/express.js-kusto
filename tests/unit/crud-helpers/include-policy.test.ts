@@ -1,4 +1,4 @@
-import { CrudQueryParser } from '@lib/crudHelpers';
+import { CrudQueryParser } from '@lib/crud/crudHelpers';
 
 describe('CrudQueryParser.validateIncludes', () => {
     it('policy 가 undefined 일 때 어떤 검증도 하지 않는다', () => {

@@ -23,8 +23,8 @@ describe('Core readiness / fail-fast boot (P0-1)', () => {
         databases?: { name: string; connected: boolean; generated: boolean }[];
     }) {
         const databases = opts.databases ?? [{ name: 'default', connected: true, generated: true }];
-        jest.doMock('@lib/loadRoutes_V6_Clean', () => ({ __esModule: true, default: jest.fn() }));
-        jest.doMock('@lib/prismaManager', () => ({
+        jest.doMock('@lib/http/routing/loadRoutes_V6_Clean', () => ({ __esModule: true, default: jest.fn() }));
+        jest.doMock('@lib/data/database/prismaManager', () => ({
             __esModule: true,
             prismaManager: {
                 initialize: jest.fn(async () => { if (opts.prismaThrows) throw new Error('db down'); }),
@@ -37,14 +37,14 @@ describe('Core readiness / fail-fast boot (P0-1)', () => {
                 isConnected: jest.fn(() => true),
             },
         }));
-        jest.doMock('@lib/repositoryManager', () => ({
+        jest.doMock('@lib/data/database/repositoryManager', () => ({
             __esModule: true,
             repositoryManager: {
                 initialize: jest.fn(async () => { if (opts.repoThrows) throw new Error('repo registry broken'); }),
                 getStatus: jest.fn(() => ({ initialized: true, repositoryCount: 0, repositories: [] })),
             },
         }));
-        jest.doMock('@lib/dependencyInjector', () => ({
+        jest.doMock('@lib/data/di/dependencyInjector', () => ({
             __esModule: true,
             DependencyInjector: {
                 getInstance: () => ({
@@ -54,7 +54,7 @@ describe('Core readiness / fail-fast boot (P0-1)', () => {
         }));
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const { Core } = require('@core/Core');
+        const { Core } = require('@core/bootstrap/Core');
         return Core.getInstance();
     }
 

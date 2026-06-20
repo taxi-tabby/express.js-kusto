@@ -1,5 +1,5 @@
-import { ExpressRouter } from '@lib/expressRouter';
-import { DocumentationGenerator } from '@lib/documentationGenerator';
+import { ExpressRouter } from '@lib/http/routing/expressRouter';
+import { DocumentationGenerator } from '@lib/devtools/documentation/documentationGenerator';
 
 /**
  * 라우트 문서 저작 surface 통합 테스트.

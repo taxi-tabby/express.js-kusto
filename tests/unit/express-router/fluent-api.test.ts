@@ -1,4 +1,4 @@
-import { ExpressRouter } from '@lib/expressRouter';
+import { ExpressRouter } from '@lib/http/routing/expressRouter';
 
 // 본 프로젝트의 ExpressRouter 는 GET/POST/PUT/PATCH/DELETE 가 (handler, options?) 시그니처이며
 // 내부적으로 '/' 경로에 라우트를 등록한다. NOTFOUND 는 router.all('*', ...) 으로 등록된다.

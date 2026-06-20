@@ -1,4 +1,4 @@
-import { folderNameToEnvVarName } from '@lib/prismaManager';
+import { folderNameToEnvVarName } from '@lib/data/database/prismaManager';
 
 describe('folderNameToEnvVarName', () => {
     it('단순 폴더명 default 일 때 DEFAULT__KUSTO_RDB_URL 을 반환한다', () => {

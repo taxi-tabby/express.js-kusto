@@ -3,7 +3,7 @@ import {
     jsonApiResponse,
     jsonApiErrorResponse,
     jsonApiCollectionResponse,
-} from '@lib/documentation/jsonApiHelpers';
+} from '@lib/devtools/documentation/jsonApiHelpers';
 
 describe('jsonApiHelpers', () => {
     describe('jsonApiBody', () => {

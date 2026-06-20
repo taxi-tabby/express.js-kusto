@@ -1,7 +1,7 @@
 import express from 'express';
 import request from 'supertest';
-import { ExpressRouter } from '@lib/expressRouter';
-import { DependencyInjector } from '@lib/dependencyInjector';
+import { ExpressRouter } from '@lib/http/routing/expressRouter';
+import { DependencyInjector } from '@lib/data/di/dependencyInjector';
 
 beforeAll(() => {
     const di = DependencyInjector.getInstance() as any;

@@ -1,5 +1,5 @@
-import { fieldToOpenApi, schemaToOpenApi } from '@lib/documentation/schemaConverter';
-import { FieldSchema } from '@lib/validator';
+import { fieldToOpenApi, schemaToOpenApi } from '@lib/devtools/documentation/schemaConverter';
+import { FieldSchema } from '@lib/http/validation/validator';
 
 describe('schemaConverter', () => {
     describe('fieldToOpenApi', () => {

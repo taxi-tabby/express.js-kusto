@@ -1,5 +1,5 @@
-import { RequestHandler as CustomRequestHandler } from '@lib/requestHandler';
-import { DependencyInjector } from '@lib/dependencyInjector';
+import { RequestHandler as CustomRequestHandler } from '@lib/http/validation/requestHandler';
+import { DependencyInjector } from '@lib/data/di/dependencyInjector';
 
 beforeAll(() => {
     // 핸들러 실행 시 getInjectedModules() 가 throw 하지 않도록 DI 선초기화

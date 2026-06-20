@@ -3,7 +3,7 @@ import type { AddressInfo } from 'net';
 import express from 'express';
 import request from 'supertest';
 import qs from 'qs';
-import { createProxyMiddleware } from '@lib/proxyMiddleware';
+import { createProxyMiddleware } from '@lib/http/routing/proxyMiddleware';
 
 interface Upstream { server: http.Server; url: string; }
 

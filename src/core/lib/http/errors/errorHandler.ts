@@ -6,6 +6,7 @@
 import { JsonApiError, JsonApiErrorResponse, ErrorSecurityOptions } from '@lib/crud/crudHelpers';
 import { ERROR_CODES, PRISMA_ERROR_CODES, HTTP_ERROR_CODES, PRISMA_CANONICAL_ERROR_MAP } from '@lib/http/errors/errorCodes';
 import { JSON_API_VERSION } from '@lib/crud/jsonApiConstants';
+import { removeSensitiveInformation } from '@lib/http/errors/errorSanitizer';
 
 /**
  * JSON:API meta.implementation 문자열을 package.json 의 name/version 에서 파생한다.
@@ -245,53 +246,8 @@ export class ErrorHandler {
    * 민감한 정보 제거 (연결 문자열, 자격 증명, 파일 경로, 스택 트레이스, 네트워크 정보 마스킹)
    */
   private static removeSensitiveInformation(message: string): string {
-    const sensitivePatternCategories = {
-      connectionStrings: [
-        /postgres:\/\/[^\s]+/gi,
-        /mysql:\/\/[^\s]+/gi,
-        /mongodb:\/\/[^\s]+/gi,
-        /sqlite:[^\s]+/gi,
-        /mssql:\/\/[^\s]+/gi,
-        /oracle:\/\/[^\s]+/gi
-      ],
-      credentials: [
-        /password=[^\s&]+/gi,
-        /pwd=[^\s&]+/gi,
-        /token=[^\s&]+/gi,
-        /api[_-]?key=[^\s&]+/gi,
-        /secret=[^\s&]+/gi,
-        /bearer\s+[^\s]+/gi,
-        /authorization:\s*[^\s]+/gi
-      ],
-      filePaths: [
-        /\/[a-zA-Z]:[^\s]*\.(db|sqlite|mdb)/gi,
-        /\/home\/[^\s]*/gi,
-        /\/Users\/[^\s]*/gi,
-        /C:\\Users\\[^\s]*/gi,
-        /\/var\/lib\/[^\s]*/gi,
-        /\/opt\/[^\s]*/gi
-      ],
-      stackTrace: process.env.NODE_ENV === 'production' ? [
-        /at .+:\d+:\d+/gi,
-        /\s+at\s+[^\n]+/gi,
-        /\(\/.+:\d+:\d+\)/gi
-      ] : [],
-      networkInfo: [
-        /\b(?:\d{1,3}\.){3}\d{1,3}:\d+\b/gi,
-        /localhost:\d+/gi,
-        /127\.0\.0\.1:\d+/gi
-      ]
-    };
-
-    let sanitized = message;
-    
-    Object.entries(sensitivePatternCategories).forEach(([category, patterns]) => {
-      patterns.forEach(pattern => {
-        sanitized = sanitized.replace(pattern, `[${category.toUpperCase()}_REDACTED]`);
-      });
-    });
-
-    return sanitized;
+    // 단일 출처(@lib/http/errors/errorSanitizer)로 위임 — crudHelpers 와 동일 규칙 공유.
+    return removeSensitiveInformation(message);
   }
 
   /**

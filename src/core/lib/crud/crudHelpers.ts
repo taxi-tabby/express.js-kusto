@@ -4,6 +4,7 @@ import { log } from '@ext/winston';
 import { ErrorHandler, ErrorResponseFormat } from '@lib/http/errors/errorHandler';
 import { ERROR_CODES, PRISMA_CANONICAL_ERROR_MAP } from '@lib/http/errors/errorCodes';
 import { JSON_API_VERSION } from '@lib/crud/jsonApiConstants';
+import { removeSensitiveInformation } from '@lib/http/errors/errorSanitizer';
 
 /**
  * CRUD 쿼리 파싱 및 필터링을 위한 헬퍼 유틸리티
@@ -1636,63 +1637,8 @@ export class CrudResponseFormatter {
    * 일반적인 민감한 정보 제거
    */
   private static removeSensitiveInformation(message: string): string {
-    const sensitivePatternCategories = {
-      // 데이터베이스 연결 문자열
-      connectionStrings: [
-        /postgres:\/\/[^\s]+/gi,
-        /mysql:\/\/[^\s]+/gi,
-        /mongodb:\/\/[^\s]+/gi,
-        /sqlite:[^\s]+/gi,
-        /mssql:\/\/[^\s]+/gi,
-        /oracle:\/\/[^\s]+/gi
-      ],
-      
-      // 인증 정보
-      credentials: [
-        /password=[^\s&]+/gi,
-        /pwd=[^\s&]+/gi,
-        /token=[^\s&]+/gi,
-        /api[_-]?key=[^\s&]+/gi,
-        /secret=[^\s&]+/gi,
-        /bearer\s+[^\s]+/gi,
-        /authorization:\s*[^\s]+/gi
-      ],
-      
-      // 파일 경로
-      filePaths: [
-        /\/[a-zA-Z]:[^\s]*\.(db|sqlite|mdb)/gi,  // 윈도우 DB 파일
-        /\/home\/[^\s]*/gi,                       // 리눅스 홈 디렉토리
-        /\/Users\/[^\s]*/gi,                      // macOS 사용자 디렉토리
-        /C:\\Users\\[^\s]*/gi,                    // 윈도우 사용자 디렉토리
-        /\/var\/lib\/[^\s]*/gi,                   // 시스템 라이브러리 경로
-        /\/opt\/[^\s]*/gi                         // 옵셔널 소프트웨어 경로
-      ],
-      
-      // 스택 트레이스 (프로덕션에서만)
-      stackTrace: process.env.NODE_ENV === 'production' ? [
-        /at .+:\d+:\d+/gi,
-        /\s+at\s+[^\n]+/gi,
-        /\(\/.+:\d+:\d+\)/gi
-      ] : [],
-      
-      // IP 주소 및 포트
-      networkInfo: [
-        /\b(?:\d{1,3}\.){3}\d{1,3}:\d+\b/gi,     // IP:Port
-        /localhost:\d+/gi,                        // localhost:port
-        /127\.0\.0\.1:\d+/gi                      // 127.0.0.1:port
-      ]
-    };
-
-    let sanitized = message;
-    
-    // 각 카테고리별로 민감한 정보 제거
-    Object.entries(sensitivePatternCategories).forEach(([category, patterns]) => {
-      patterns.forEach(pattern => {
-        sanitized = sanitized.replace(pattern, `[${category.toUpperCase()}_REDACTED]`);
-      });
-    });
-
-    return sanitized;
+    // 단일 출처(@lib/http/errors/errorSanitizer)로 위임 — errorHandler 와 동일 규칙 공유.
+    return removeSensitiveInformation(message);
   }
 
   /**

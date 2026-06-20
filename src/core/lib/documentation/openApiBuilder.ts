@@ -9,20 +9,35 @@ import {
     OpenApiSchemaOrRef,
     ContentTypeMode,
 } from './openApiTypes';
+import { OpenApiTag } from './openApiTypes';
 import { schemaToOpenApi, fieldToOpenApi } from './schemaConverter';
 import { buildInfo } from './infoSource';
 import { buildServers } from './serversSource';
-import { toOpenApiPath } from './pathConverter';
+import { toOpenApiPath, deriveResourceTag, deriveOperationId } from './pathConverter';
 import { mediaTypeFor } from './contentTypeRule';
 
 const OPENAPI_VERSION = '3.1.0';
 const DEFAULT_CONTENT_TYPE_MODE: ContentTypeMode = 'json';
+
+/** HTTP 상태코드 → 표준 reason phrase (응답 설명 기본값). */
+const STATUS_TEXT: Record<string, string> = {
+    '200': 'OK', '201': 'Created', '202': 'Accepted', '204': 'No Content',
+    '301': 'Moved Permanently', '302': 'Found', '304': 'Not Modified',
+    '400': 'Bad Request', '401': 'Unauthorized', '403': 'Forbidden',
+    '404': 'Not Found', '405': 'Method Not Allowed', '406': 'Not Acceptable',
+    '409': 'Conflict', '410': 'Gone', '415': 'Unsupported Media Type',
+    '422': 'Unprocessable Entity', '429': 'Too Many Requests',
+    '500': 'Internal Server Error', '502': 'Bad Gateway',
+    '503': 'Service Unavailable', '504': 'Gateway Timeout',
+};
 
 export interface RouteDocumentationLike {
     method: string;
     path: string;
     summary?: string;
     description?: string;
+    operationId?: string;
+    deprecated?: boolean;
     parameters?: {
         query?: Schema;
         params?: Schema;
@@ -38,6 +53,13 @@ export interface BuildOpenApiInput {
     schemas: Record<string, OpenApiSchemaOrRef>;
     env: NodeJS.ProcessEnv;
     packageJson: { name?: string; version?: string; description?: string };
+    /** 태그명 → 설명. 문서 레벨 tags[] 의 description 으로 사용. */
+    tagDescriptions?: Record<string, string>;
+}
+
+/** 라우트의 유효 태그를 결정한다: 명시 태그 우선, 없으면 경로에서 파생. */
+function effectiveTags(route: RouteDocumentationLike): string[] {
+    return route.tags && route.tags.length > 0 ? route.tags : [deriveResourceTag(route.path)];
 }
 
 /**
@@ -110,7 +132,7 @@ function buildResponses(route: RouteDocumentationLike, mediaType: string): Recor
                 ? (schema as OpenApiSchemaOrRef)
                 : schemaToOpenApi(schema as Schema);
             out[code] = {
-                description: `Response ${code}`,
+                description: STATUS_TEXT[code] ?? `Response ${code}`,
                 content: {
                     [mediaType]: { schema: resolved },
                 },
@@ -140,11 +162,13 @@ function buildResponses(route: RouteDocumentationLike, mediaType: string): Recor
 function buildOperation(route: RouteDocumentationLike): OpenApiOperation {
     const mediaType = mediaTypeFor(route.contentType ?? DEFAULT_CONTENT_TYPE_MODE);
     const op: OpenApiOperation = {
+        operationId: route.operationId ?? deriveOperationId(route.method, route.path),
         summary: route.summary ?? `${route.method.toUpperCase()} ${route.path}`,
-        tags: route.tags ?? ['API'],
+        tags: effectiveTags(route),
         responses: buildResponses(route, mediaType),
     };
     if (route.description !== undefined) op.description = route.description;
+    if (route.deprecated) op.deprecated = true;
     const parameters = buildParameters(route);
     if (parameters.length > 0) op.parameters = parameters;
     const requestBody = buildRequestBody(route, mediaType);
@@ -152,8 +176,22 @@ function buildOperation(route: RouteDocumentationLike): OpenApiOperation {
     return op;
 }
 
+/** 라우트들이 실제로 쓰는 태그를 모아 문서 레벨 tags[] 를 만든다(설명은 tagDescriptions 에서). */
+function buildDocumentTags(
+    routes: RouteDocumentationLike[],
+    tagDescriptions: Record<string, string>,
+): OpenApiTag[] {
+    const names = new Set<string>();
+    for (const route of routes) {
+        for (const tag of effectiveTags(route)) names.add(tag);
+    }
+    return [...names].sort().map((name) => (
+        tagDescriptions[name] ? { name, description: tagDescriptions[name] } : { name }
+    ));
+}
+
 export function buildOpenApiDocument(input: BuildOpenApiInput): OpenApiDocument {
-    const { routes, schemas, env, packageJson } = input;
+    const { routes, schemas, env, packageJson, tagDescriptions = {} } = input;
 
     const paths: Record<string, Record<string, OpenApiOperation>> = {};
     for (const route of routes) {
@@ -162,10 +200,28 @@ export function buildOpenApiDocument(input: BuildOpenApiInput): OpenApiDocument 
         paths[openApiPath][route.method.toLowerCase()] = buildOperation(route);
     }
 
+    // operationId 는 문서 내에서 유일해야 한다(OpenAPI 요구). 중복 시 _2, _3 … 을 붙인다.
+    const seenOperationIds = new Set<string>();
+    for (const pathItem of Object.values(paths)) {
+        for (const op of Object.values(pathItem)) {
+            let id = op.operationId ?? '';
+            if (seenOperationIds.has(id)) {
+                let n = 2;
+                while (seenOperationIds.has(`${id}_${n}`)) n++;
+                id = `${id}_${n}`;
+                op.operationId = id;
+            }
+            seenOperationIds.add(id);
+        }
+    }
+
+    const documentTags = buildDocumentTags(routes, tagDescriptions);
+
     return {
         openapi: OPENAPI_VERSION,
         info: buildInfo(packageJson, env),
         servers: buildServers(env),
+        ...(documentTags.length > 0 ? { tags: documentTags } : {}),
         paths: paths as OpenApiDocument['paths'],
         components: { schemas },
     };

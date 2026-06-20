@@ -106,10 +106,23 @@ export interface OpenApiComponents {
     requestBodies?: Record<string, OpenApiRequestBody>;
 }
 
+export interface OpenApiExternalDocs {
+    url: string;
+    description?: string;
+}
+
+/** 문서 레벨 태그 정의(Swagger 그룹 헤더 + 설명). */
+export interface OpenApiTag {
+    name: string;
+    description?: string;
+    externalDocs?: OpenApiExternalDocs;
+}
+
 export interface OpenApiDocument {
     openapi: string;
     info: OpenApiInfo;
     servers?: OpenApiServer[];
+    tags?: OpenApiTag[];
     paths: Record<string, OpenApiPathItem>;
     components?: OpenApiComponents;
 }

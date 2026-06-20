@@ -13,6 +13,8 @@ export interface RouteDocumentation {
     path: string;
     summary?: string;
     description?: string;
+    operationId?: string;
+    deprecated?: boolean;
     parameters?: {
         query?: Schema;
         params?: Schema;
@@ -42,12 +44,19 @@ function loadPackageJson(): { name?: string; version?: string; description?: str
 export class DocumentationGenerator {
     private static routes: RouteDocumentation[] = [];
     private static schemas: Record<string, OpenApiSchemaOrRef> = {};
+    private static tagDescriptions: Record<string, string> = {};
 
     /** 라우트 문서 등록 */
     static registerRoute(route: RouteDocumentation): void {
         if (!this.isDocumentationEnabled()) return;
         this.routes.push(route);
         log.Silly(`Documentation registered for ${route.method} ${route.path}`);
+    }
+
+    /** 태그 설명 등록(문서 레벨 tags[] 의 description 으로 사용). ExpressRouter 생성자 기본 태그가 사용. */
+    static registerTag(name: string, description?: string): void {
+        if (!this.isDocumentationEnabled()) return;
+        if (description) this.tagDescriptions[name] = description;
     }
 
     /** 등록된 라우트의 경로를 업데이트 (마운트 시 사용) */
@@ -96,6 +105,7 @@ export class DocumentationGenerator {
             schemas: this.schemas,
             env: process.env,
             packageJson: loadPackageJson(),
+            tagDescriptions: this.tagDescriptions,
         });
     }
 
@@ -145,6 +155,7 @@ export class DocumentationGenerator {
     static reset(): void {
         this.routes = [];
         this.schemas = {};
+        this.tagDescriptions = {};
     }
 
     /** 개발 모드 정보 페이지 생성 (기존 동작 보존) */

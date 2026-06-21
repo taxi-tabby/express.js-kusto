@@ -6,6 +6,9 @@ on:
       - closed
     branches:
       - main
+  # Manual trigger — for when commits reach main outside a PR merge (e.g. a direct push / fast-forward),
+  # so a release can still be cut. The version+tag guard below prevents accidental re-releases.
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -14,8 +17,8 @@ permissions:
 
 jobs:
   auto-release:
-    # Only when a PR is actually merged into main (not just closed) on the canonical repo.
-    if: github.event.pull_request.merged == true && github.repository == 'taxi-tabby/express.js-kusto'
+    # A merged PR into main, or a manual dispatch — on the canonical repo only.
+    if: (github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true) && github.repository == 'taxi-tabby/express.js-kusto'
     runs-on: ubuntu-latest
 
     steps:

@@ -16,8 +16,16 @@ function loadExtensionModule(filePath: string): unknown {
     return mod && mod.default !== undefined ? mod.default : mod;
 }
 
-/** Only `*.ts`/`*.js` activation files are loaded; `.d.ts`, barrels, and AGENTS.md are skipped. */
-function isExtensionFile(fileName: string): boolean {
+/**
+ * Only `*.ts`/`*.js` activation files are loaded; `.d.ts`, barrels, and AGENTS.md are skipped.
+ *
+ * SSOT pair: this rule MUST stay identical to `isExtensionFile` in
+ * `src/core/scripts/generate-extensions-map.js` — dev (runtime fs scan, here) and the build
+ * (that codegen) must select the same file set or the bundle registers a different extension
+ * set than dev. Their equivalence is pinned by
+ * `tests/unit/extensions/extension-file-filter-parity.test.ts`.
+ */
+export function isExtensionFile(fileName: string): boolean {
     if (fileName.endsWith('.d.ts')) return false;
     if (!fileName.endsWith('.ts') && !fileName.endsWith('.js')) return false;
     const base = fileName.replace(/\.(ts|js)$/, '');
@@ -28,6 +36,24 @@ function isExtensionFile(fileName: string): boolean {
 interface DiscoveredExtension {
     source: string;
     exported: unknown;
+}
+
+/**
+ * Map a bundled extensions-map module (`{ extensions, extensionSources }`) to the discovered list.
+ *
+ * Pure — this is the build-branch logic, extracted so it is unit-testable without mutating
+ * global `process.env`/the filesystem. A missing or non-array `extensions` yields `[]`;
+ * `extensionSources[i]` (emitted by the codegen) labels each entry for diagnostics, falling back
+ * to the array index when absent.
+ */
+export function bundledExtensionsToDiscovered(mod: unknown): DiscoveredExtension[] {
+    const m = (mod ?? {}) as { extensions?: unknown; extensionSources?: unknown };
+    const list: unknown[] = Array.isArray(m.extensions) ? m.extensions : [];
+    const sources: unknown[] = Array.isArray(m.extensionSources) ? m.extensionSources : [];
+    return list.map((exported, i) => ({
+        source: typeof sources[i] === 'string' ? (sources[i] as string) : `extensions-map[${i}]`,
+        exported,
+    }));
 }
 
 /**
@@ -46,9 +72,8 @@ function discoverExtensions(dir: string): DiscoveredExtension[] {
     if (process.env.WEBPACK_BUILD === 'true') {
         // 정적 require(리터럴) — webpack 이 extensions-map(과 그것이 import 하는 확장 모듈)을 번들한다.
         // dev/test 에서는 이 분기에 진입하지 않으므로(파일도 없음) 실행되지 않는다.
-        const mod = require('@core/tmp/extensions-map');
-        const list: unknown[] = (mod && mod.extensions) || [];
-        return list.map((exported, i) => ({ source: `extensions-map[${i}]`, exported }));
+        // 매핑 로직은 bundledExtensionsToDiscovered(순수, 단위 테스트됨)에 위임한다.
+        return bundledExtensionsToDiscovered(require('@core/tmp/extensions-map'));
     }
 
     const resolvedDir = path.resolve(dir);

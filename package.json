@@ -28,7 +28,9 @@
     "test:ci:serial": "jest --ci --coverage --maxWorkers=1",
     "test:unit": "jest tests/unit",
     "test:integration": "jest tests/integration",
-    "test:cli": "jest tests/cli"
+    "test:cli": "jest tests/cli",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "author": "rkdmf0000@gmail.com",
   "license": "ISC",
@@ -75,6 +77,7 @@
     "jest": "^29.7.0",
     "jest-mock-extended": "^4.0.1",
     "nodemon": "^3.1.0",
+    "prettier": "3.8.4",
     "prisma": "^7.4.2",
     "supertest": "^7.2.2",
     "ts-jest": "^29.4.9",

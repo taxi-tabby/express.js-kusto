@@ -1,0 +1,8 @@
+dist/
+coverage/
+node_modules/
+src/core/tmp/
+src/core/lib/types/generated-*.ts
+src/app/db/*/client/
+package-lock.json
+*.md

@@ -109,6 +109,22 @@ describe('Core readiness / fail-fast boot (P0-1)', () => {
         expect(readiness.prisma.total).toBe(1); // generated 만 분모에 포함
     });
 
+    it('DB 가 0개면(DB 안 쓰는 서비스) healthy + /healthz 200', async () => {
+        const core = mockManagersAndGetCore({ databases: [] });
+        await core.initialize({ routesPath: './src/app/routes' });
+
+        const readiness = core.getReadiness();
+        expect(readiness.ready).toBe(true);
+        expect(readiness.status).toBe('healthy');
+        expect(readiness.prisma.total).toBe(0);
+
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const request = require('supertest');
+        const res = await request(core.app).get('/healthz');
+        expect(res.status).toBe(200);
+        expect(res.body.status).toBe('ok');
+    });
+
     it('정상 부팅 시 /healthz 200 (ok)', async () => {
         const core = mockManagersAndGetCore({
             databases: [{ name: 'default', connected: true, generated: true }],

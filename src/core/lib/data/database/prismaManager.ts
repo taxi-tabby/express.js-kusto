@@ -44,6 +44,23 @@ export interface DatabaseConfig {
 }
 
 /**
+ * List database folder names under `dbPath` (each `src/app/db/<name>/`).
+ *
+ * A missing directory is NOT an error — a service may legitimately use no database.
+ * In that case this returns `[]`, so `PrismaManager.initialize()` boots without a DB
+ * (and `/healthz` stays healthy) instead of failing. Single source of truth for
+ * "which databases exist", used by the init scan.
+ */
+export function listDatabaseFolders(dbPath: string): string[] {
+	if (!fs.existsSync(dbPath)) {
+		return [];
+	}
+	return fs.readdirSync(dbPath, { withFileTypes: true })
+		.filter(dirent => dirent.isDirectory())
+		.map(dirent => dirent.name);
+}
+
+/**
  * Prisma Manager Singleton Class
  * Manages multiple Prisma clients for different databases
  */
@@ -125,14 +142,16 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 
 		const dbPath = path.join(process.cwd(), 'src', 'app', 'db');
 
-		if (!fs.existsSync(dbPath)) {
-			throw new Error(`Database directory not found: ${dbPath}`);
-		}
+		// DB 를 쓰지 않는 서비스는 src/app/db 가 아예 없을 수 있다 — 디렉터리 부재(또는 빈 폴더)는
+		// 오류가 아니라 "DB 없음"으로 취급한다. 그래야 DB-less 앱이 degraded 가 아니라 healthy 로
+		// 부팅한다(getReadiness 의 total=0 → healthy 와 일치).
+		const folders = listDatabaseFolders(dbPath);
 
-		// Read all folders in src/app/db
-		const folders = fs.readdirSync(dbPath, { withFileTypes: true })
-			.filter(dirent => dirent.isDirectory())
-			.map(dirent => dirent.name);
+		if (folders.length === 0) {
+			this.initialized = true;
+			log.Info('No databases configured (src/app/db absent or empty) — running without a database.');
+			return;
+		}
 
 		// 개발 환경에서만 상세 로그 출력
 		if (process.env.NODE_ENV === 'development') {

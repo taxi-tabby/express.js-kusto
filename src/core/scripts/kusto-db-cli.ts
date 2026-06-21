@@ -136,18 +136,18 @@ function loadEnvironmentConfig() {
     // 기본 .env 파일 경로
     const defaultEnvPath = path.resolve(process.cwd(), '.env');
 
-    // 기본 .env 파일이 존재하는지 확인
-    if (!fs.existsSync(defaultEnvPath)) {
-        console.error('❌ .env file not found! Application requires environment configuration.');
-        console.error('   Please create .env file in the project root.');
-        return;
+    // 1. 기본 .env 파일이 있으면 로드. 없으면 정상 시나리오로 취급한다 —
+    //    Docker/클라우드 배포에서는 설정이 OS 단 환경변수(process.env)로 주입되므로
+    //    .env 파일이 없는 것이 정상이다. 이 경우 이미 채워진 process.env 를 그대로 쓴다.
+    const hasBaseEnv = fs.existsSync(defaultEnvPath);
+    if (hasBaseEnv) {
+        console.log(`🔧 Loading base environment config from: ${defaultEnvPath}`);
+        dotenv.config({ path: defaultEnvPath });
+    } else {
+        console.log('ℹ️ No .env file found — using OS environment variables (process.env).');
     }
 
-    // 1. 기본 .env 파일 먼저 로드
-    console.log(`🔧 Loading base environment config from: ${defaultEnvPath}`);
-    dotenv.config({ path: defaultEnvPath });
-
-    // 2. NODE_ENV 기반 환경별 파일로 덮어쓰기
+    // 2. NODE_ENV 기반 환경별 파일로 덮어쓰기 (.env 유무와 무관하게 적용)
     const nodeEnv = process.env.NODE_ENV;
     let envSpecificPath: string | null = null;
 
@@ -161,7 +161,7 @@ function loadEnvironmentConfig() {
     if (envSpecificPath && fs.existsSync(envSpecificPath)) {
         console.log(`🔧 Overriding with environment-specific config from: ${envSpecificPath}`);
         dotenv.config({ path: envSpecificPath, override: true });
-    } else if (nodeEnv) {
+    } else if (nodeEnv && hasBaseEnv) {
         console.log(`⚠️ Environment-specific file (.env.${nodeEnv}) not found, using base .env only`);
     }
 
@@ -459,6 +459,22 @@ export function getDatabaseUrl(dbName: string): string | undefined {
 }
 
 /**
+ * Whether a Prisma CLI command needs a live database URL (and thus a temp
+ * prisma.config.ts injecting it).
+ *
+ * Schema-only commands — `generate` / `format` / `validate` — operate on the
+ * schema and never connect to the database, so they run WITHOUT a URL. This is
+ * the single source of truth for that decision: it lets `kusto db generate`
+ * (and hence `npm run build`) succeed at build time in Docker/CI where no DB
+ * URL is set yet. Connecting commands (`migrate`, `db push/pull`, ...) require it.
+ */
+export function commandNeedsDatabaseUrl(command: string): boolean {
+    return !command.startsWith('generate')
+        && !command.startsWith('format')
+        && !command.startsWith('validate');
+}
+
+/**
  * Create a temporary prisma.config.ts for a specific database
  * Prisma 7 requires prisma.config.ts for CLI commands
  */
@@ -510,21 +526,21 @@ async function executePrismaCommand(dbName: string, command: string): Promise<vo
         throw new Error(`Schema file not found: ${schemaPath}`);
     }
 
-    // Get database URL from environment (Prisma 7 compatibility)
-    const databaseUrl = getDatabaseUrl(dbName);
-    if (!databaseUrl) {
-        const envVarName = getDatabaseEnvVarName(dbName);
-        throw new Error(`Database URL not found. Please set ${envVarName} environment variable.`);
-    }
+    // Commands that need prisma.config.ts (migrate, db push/pull, etc.) require a
+    // live DB URL. Schema-only commands (generate/format/validate) never connect,
+    // so they run without a URL — letting `generate` work at build time (Docker/CI)
+    // before any DB URL exists. The URL is only resolved/required when needed.
+    const needsConfig = commandNeedsDatabaseUrl(command);
 
-    // Commands that need prisma.config.ts (migrate, db push/pull, etc.)
-    // Generate command doesn't need config
-    const needsConfig = !command.startsWith('generate') && !command.startsWith('format') && !command.startsWith('validate');
-    
     let tempConfigPath: string | null = null;
     let configOption = '';
-    
+
     if (needsConfig) {
+        const databaseUrl = getDatabaseUrl(dbName);
+        if (!databaseUrl) {
+            const envVarName = getDatabaseEnvVarName(dbName);
+            throw new Error(`Database URL not found. Please set ${envVarName} environment variable.`);
+        }
         tempConfigPath = createTempPrismaConfig(dbName, databaseUrl);
         configOption = ` --config "${tempConfigPath}"`;
     }

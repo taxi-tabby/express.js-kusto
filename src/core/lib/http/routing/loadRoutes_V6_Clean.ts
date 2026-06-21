@@ -21,7 +21,8 @@ async function loadDynamicRouteMap(): Promise<void> {
 
     try {
         log.Silly(`Loading dynamic route map in webpack build...`);
-        // @ts-expect-error - 런타임에 생성되는 파일이므로 TypeScript가 찾을 수 없음
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        // @ts-ignore - 런타임에 생성되는 파일이므로 TypeScript가 찾을 수 없음
         const routeMapModule = await import('@core/tmp/routes-map');
         routesMap = routeMapModule.routesMap;
         middlewaresMap = routeMapModule.middlewaresMap;

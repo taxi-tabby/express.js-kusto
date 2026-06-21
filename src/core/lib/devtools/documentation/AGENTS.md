@@ -9,7 +9,7 @@ documentation/
 ├── index.ts                  # barrel — re-exports sub-modules (excludes documentationGenerator/staticFileMiddleware)
 ├── openApiTypes.ts           # OpenAPI 3.1 partial type definitions (the type source for the whole tier)
 ├── pathConverter.ts          # Express path → OpenAPI path + tag/operationId derivation
-├── contentTypeRule.ts        # contentType mode → media type key (json / jsonapi)
+├── contentTypeRule.ts        # contentType mode → media type key (json / jsonapi / html)
 ├── infoSource.ts             # env + package.json → OpenAPI info object
 ├── serversSource.ts          # env(OPENAPI_SERVERS / HOST·PORT) → OpenAPI servers[]
 ├── schemaConverter.ts        # validator Schema/FieldSchema → OpenAPI schema
@@ -40,8 +40,8 @@ documentation/
 - **Depends on**: none (pure functions).
 
 ### contentTypeRule.ts
-- **Role**: resolves a `ContentTypeMode` ('json' | 'jsonapi') to the actual media type string.
-- **Main exports**: `mediaTypeFor(mode)` → `'application/json'` or `'application/vnd.api+json'`.
+- **Role**: resolves a `ContentTypeMode` ('json' | 'jsonapi' | 'html') to the actual media type string. `'html'` is for extension-registered HTML page routes (e.g. GET_REACT) — not an API.
+- **Main exports**: `mediaTypeFor(mode)` → `'application/json'`, `'application/vnd.api+json'`, or `'text/html'`.
 - **Depends on**: `@lib/devtools/documentation/openApiTypes` (`ContentTypeMode`), `@lib/crud/jsonApiConstants` (`JSON_API_CONTENT_TYPE`).
 
 ### infoSource.ts
@@ -75,9 +75,9 @@ documentation/
 - **Depends on**: `@lib/devtools/documentation/openApiTypes` (`OpenApiObjectSchema`).
 
 ### openApiBuilder.ts
-- **Role**: assembles a completed `OpenApiDocument` from the registered routes array + components schemas. Builds paths/operations, converts parameters/requestBody/responses, detects whether the input is already in OpenAPI form or is a validator Schema, ensures operationId uniqueness (appends `_2`/`_3` suffix on duplicates), and composes document-level tags[].
+- **Role**: assembles a completed `OpenApiDocument` from the registered routes array + components schemas. Builds paths/operations, converts parameters/requestBody/responses, detects whether the input is already in OpenAPI form or is a validator Schema, ensures operationId uniqueness (appends `_2`/`_3` suffix on duplicates), and composes document-level tags[]. **Resilient per route**: a single route whose doc fails to convert is skipped with a `log.Warn` rather than crashing the whole spec (field-level conversion stays fail-fast). For `text/html` routes with no explicit responses, the default 200 is an HTML string (not the JSON success envelope).
 - **Main exports**: `RouteDocumentationLike` (interface), `BuildOpenApiInput` (interface), `buildOpenApiDocument(input)`.
-- **Depends on**: `@lib/http/validation/validator` (`Schema`), `@lib/devtools/documentation/openApiTypes`, `schemaConverter`, `infoSource` (`buildInfo`), `serversSource` (`buildServers`), `pathConverter` (`toOpenApiPath`/`deriveResourceTag`/`deriveOperationId`), `contentTypeRule` (`mediaTypeFor`).
+- **Depends on**: `@lib/http/validation/validator` (`Schema`), `@lib/devtools/documentation/openApiTypes`, `schemaConverter`, `infoSource` (`buildInfo`), `serversSource` (`buildServers`), `pathConverter` (`toOpenApiPath`/`deriveResourceTag`/`deriveOperationId`), `contentTypeRule` (`mediaTypeFor`), `@ext/winston` (`log`).
 
 ### syncSchemas.ts
 - **Role**: takes all models from a single `PrismaSchemaAnalyzer` → registers each model's 3 JSON:API variants (resource/attributes/relationships) + enum schemas into components.schemas via `DocumentationGenerator.registerSchema`. Registers the shared `JsonApiError` schema. Returns immediately when the gate is off.

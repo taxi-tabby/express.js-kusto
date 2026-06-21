@@ -42,6 +42,36 @@ describe('openApiBuilder', () => {
             expect(doc.paths['/users'].get?.summary).toBe('List users');
         });
 
+        it('한 라우트의 잘못된 응답 스키마가 전체 스펙을 죽이지 않고 해당 라우트만 건너뛴다', () => {
+            const doc = buildOpenApiDocument({
+                routes: [
+                    { method: 'GET', path: '/ok', summary: 'OK', responses: { 200: { data: { type: 'string', required: true } } } },
+                    // 잘못된 응답: { description } 은 FieldSchema 도 OpenAPI 스키마도 아님 → 변환 시 throw 한다.
+                    { method: 'GET', path: '/bad', summary: 'Bad', responses: { 200: { description: 'not a schema' } } as any },
+                ],
+                schemas: {},
+                env: process.env,
+                packageJson: { name: 'test-api', version: '1.0.0' },
+            });
+            // 정상 라우트는 살아 있고, 잘못된 라우트만 빠진다(전체 스펙은 정상 생성).
+            expect(doc.paths['/ok']).toBeDefined();
+            expect(doc.paths['/bad']).toBeUndefined();
+        });
+
+        it("contentType 'html' 라우트(확장 페이지)는 text/html 페이지로 문서화된다(응답 스키마 불필요)", () => {
+            const doc = buildOpenApiDocument({
+                routes: [{ method: 'GET', path: '/page', summary: 'A page', contentType: 'html' } as any],
+                schemas: {},
+                env: process.env,
+                packageJson: { name: 'test-api', version: '1.0.0' },
+            });
+            const op = doc.paths['/page'].get!;
+            expect(op.summary).toBe('A page');
+            const resp200 = (op.responses as Record<string, any>)['200'];
+            expect(resp200.content['text/html']).toBeDefined();
+            expect(resp200.content['text/html'].schema).toEqual({ type: 'string' });
+        });
+
         it('schemas 가 주어지면 components.schemas 로 그대로 옮겨진다', () => {
             const userSchema = { type: 'object' as const, properties: { id: { type: 'string' as const } } };
             const doc = buildOpenApiDocument({

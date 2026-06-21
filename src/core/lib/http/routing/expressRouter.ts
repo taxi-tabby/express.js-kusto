@@ -183,7 +183,7 @@ export class ExpressRouter {
         path: string;
         requestConfig?: RequestConfig;
         responseConfig?: ResponseConfig;
-        contentType?: 'json' | 'jsonapi';
+        contentType?: 'json' | 'jsonapi' | 'html';
         summary?: string;
         description?: string;
         tags?: string[];
@@ -2136,7 +2136,8 @@ export class ExpressRouter {
                     body: config.parameters.body
                 } : undefined,
                 responseConfig: config.responses,
-                contentType: 'jsonapi',
+                // 확장(예: GET_REACT)이 contentType: 'html' 를 주면 그대로 보존(미지정 시 jsonapi 기본).
+                contentType: config.contentType ?? 'jsonapi',
                 // 지연 경로에서도 summary/tags 등 doc 메타를 보존(이전엔 유실됨).
                 ...(config.summary !== undefined ? { summary: config.summary } : {}),
                 ...(config.description !== undefined ? { description: config.description } : {}),

@@ -16,6 +16,7 @@ import { buildServers } from '@lib/devtools/documentation/serversSource';
 import { toOpenApiPath, deriveResourceTag, deriveOperationId } from '@lib/devtools/documentation/pathConverter';
 import { mediaTypeFor } from '@lib/devtools/documentation/contentTypeRule';
 import { getStatusText } from '@lib/http/errors/errorCodes';
+import { log } from '@ext/winston';
 
 const OPENAPI_VERSION = '3.1.0';
 const DEFAULT_CONTENT_TYPE_MODE: ContentTypeMode = 'json';
@@ -129,20 +130,20 @@ function buildResponses(route: RouteDocumentationLike, mediaType: string): Recor
         }
     }
     if (Object.keys(out).length === 0) {
-        out['200'] = {
-            description: 'Success',
-            content: {
-                [mediaType]: {
-                    schema: {
-                        type: 'object',
-                        properties: {
-                            success: { type: 'boolean' },
-                            data: { type: 'object' },
-                            timestamp: { type: 'string', format: 'date-time' },
-                        },
-                    } as OpenApiSchema,
+        // HTML page routes (e.g. extension-registered GET_REACT) return a document, not a JSON envelope.
+        const defaultSchema: OpenApiSchema = mediaType === 'text/html'
+            ? { type: 'string' }
+            : {
+                type: 'object',
+                properties: {
+                    success: { type: 'boolean' },
+                    data: { type: 'object' },
+                    timestamp: { type: 'string', format: 'date-time' },
                 },
-            },
+            };
+        out['200'] = {
+            description: mediaType === 'text/html' ? 'HTML page' : 'Success',
+            content: { [mediaType]: { schema: defaultSchema } },
         };
     }
     return out;
@@ -184,9 +185,17 @@ export function buildOpenApiDocument(input: BuildOpenApiInput): OpenApiDocument 
 
     const paths: Record<string, Record<string, OpenApiOperation>> = {};
     for (const route of routes) {
-        const { path: openApiPath } = toOpenApiPath(route.path);
-        if (!paths[openApiPath]) paths[openApiPath] = {};
-        paths[openApiPath][route.method.toLowerCase()] = buildOperation(route);
+        // Resilient per route: a single malformed route doc (e.g. a response schema with a
+        // typeless field) must not crash the whole spec — skip it with a warning and continue.
+        try {
+            // Build first (the throwable step) so a failure never leaves an empty path entry behind.
+            const operation = buildOperation(route);
+            const { path: openApiPath } = toOpenApiPath(route.path);
+            if (!paths[openApiPath]) paths[openApiPath] = {};
+            paths[openApiPath][route.method.toLowerCase()] = operation;
+        } catch (error) {
+            log.Warn(`Skipping route in OpenAPI spec — documentation conversion failed: ${route.method} ${route.path}`, { error });
+        }
     }
 
     // operationId 는 문서 내에서 유일해야 한다(OpenAPI 요구). 중복 시 _2, _3 … 을 붙인다.

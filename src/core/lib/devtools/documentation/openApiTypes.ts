@@ -128,5 +128,5 @@ export interface OpenApiDocument {
     components?: OpenApiComponents;
 }
 
-/** 등록되는 path/method/스키마의 contentType 결정에 사용 */
-export type ContentTypeMode = 'json' | 'jsonapi';
+/** 등록되는 path/method/스키마의 contentType 결정에 사용. 'html' 은 확장이 등록한 HTML 페이지 라우트(예: GET_REACT) — API 가 아님. */
+export type ContentTypeMode = 'json' | 'jsonapi' | 'html';

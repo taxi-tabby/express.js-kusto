@@ -1,19 +1,12 @@
 {
-  "extends": "./tsconfig.json",
-  "compilerOptions": {
-    "outDir": "./dist",
-    "noEmit": false,
-    "declaration": false,
-    "sourceMap": false,
-    "removeComments": true
-  },
-  "include": [
-    "app/routes/**/*.ts"
-  ],
-  "exclude": [
-    "node_modules",
-    "dist",
-    "**/*.test.ts",
-    "**/*.spec.ts"
-  ]
+    "extends": "./tsconfig.json",
+    "compilerOptions": {
+        "outDir": "./dist",
+        "noEmit": false,
+        "declaration": false,
+        "sourceMap": false,
+        "removeComments": true
+    },
+    "include": ["app/routes/**/*.ts"],
+    "exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.spec.ts"]
 }

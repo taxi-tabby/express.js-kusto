@@ -12,7 +12,17 @@ export interface ValidationResult {
     data?: any;
 }
 
-export type ValidatorType = 'string' | 'number' | 'boolean' | 'array' | 'object' | 'email' | 'url' | 'file' | 'binary' | 'buffer';
+export type ValidatorType =
+    | 'string'
+    | 'number'
+    | 'boolean'
+    | 'array'
+    | 'object'
+    | 'email'
+    | 'url'
+    | 'file'
+    | 'binary'
+    | 'buffer';
 
 export interface FieldSchema {
     type: ValidatorType;
@@ -23,139 +33,145 @@ export interface FieldSchema {
     enum?: any[];
     custom?: (value: any) => boolean | string;
     // File upload detection properties
-    format?: string;              // Format specification (e.g., 'binary', 'base64')
-    contentType?: string;         // Content-Type header for file uploads
-    mediaType?: string;           // MIME type specification
+    format?: string; // Format specification (e.g., 'binary', 'base64')
+    contentType?: string; // Content-Type header for file uploads
+    mediaType?: string; // MIME type specification
     properties?: { [key: string]: FieldSchema }; // Nested properties for object types
-    example?: any;                // Example value for documentation and validation
-    description?: string;         // Human-readable description for documentation
+    example?: any; // Example value for documentation and validation
+    description?: string; // Human-readable description for documentation
     // Security and sensitivity markers
-    sensitive?: boolean;          // Marks field as containing sensitive data
-    confidential?: boolean;       // Marks field as confidential
+    sensitive?: boolean; // Marks field as containing sensitive data
+    confidential?: boolean; // Marks field as confidential
 }
 
 export interface Schema {
     [key: string]: FieldSchema;
 }
 
-export class Validator {    // Security patterns to detect malicious input
+export class Validator {
+    // Security patterns to detect malicious input
     private static securityPatterns = {
         sqlInjection: [
             // SQL injection with quotes and keywords
             /('[\s]*(or|and|union)[\s]+)/i,
-            /(\bor\b|\band\b)[\s]+(1[\s]*=[\s]*1|true|false)[\s]*(--|\#|\/\*)/i,
-            
+            /(\bor\b|\band\b)[\s]+(1[\s]*=[\s]*1|true|false)[\s]*(--|#|\/\*)/i,
+
             // Union-based SQL injection
             /(union[\s]+(all[\s]+)?select)/i,
-            /((\%27)|(\'))[\s]*(union|select|insert|update|delete|drop|create|alter)/i,
-            
+            /((%27)|('))[\s]*(union|select|insert|update|delete|drop|create|alter)/i,
+
             // SQL keywords with potential injection context
             /(;[\s]*(drop|delete|insert|update|create|alter|truncate)[\s]+(table|database|schema|index|view))/i,
             /(exec[\s]*\(|execute[\s]*\(|sp_executesql)/i,
-            
+
             // Comment-based injection
             /(\/\*[\s\S]*\*\/|--[\s]*(drop|delete|insert|update|select))/i,
-            
+
             // Encoded SQL injection attempts
             /(%27|%22).*(%20)*(union|select|insert|update|delete|drop)/i,
-            
+
             // Boolean-based blind SQL injection
-            /('[\s]*(and|or)[\s]+['"]*\w+['"]*[\s]*=[\s]*['"]*\w+['"]*[\s]*(--|\#))/i,
-            
+            /('[\s]*(and|or)[\s]+['"]*\w+['"]*[\s]*=[\s]*['"]*\w+['"]*[\s]*(--|#))/i,
+
             // Time-based SQL injection
-            /(waitfor[\s]+delay|pg_sleep|benchmark[\s]*\(|sleep[\s]*\()/i        ],
+            /(waitfor[\s]+delay|pg_sleep|benchmark[\s]*\(|sleep[\s]*\()/i,
+        ],
         xss: [
             // Script tags with potential XSS
             /<script[\s\S]*?>[\s\S]*?<\/script>/gi,
             /<script[\s\S]*?>/gi,
-            
+
             // Iframe with suspicious sources
             /<iframe[\s\S]*?(src[\s]*=[\s]*['"](javascript:|data:|vbscript:))/gi,
-            
+
             // Object/embed with suspicious content
             /<(object|embed)[\s\S]*?(data[\s]*=[\s]*['"](javascript:|data:|vbscript:))/gi,
-            
+
             // Link tags with javascript
             /<link[\s\S]*?(href[\s]*=[\s]*['"](javascript:|vbscript:))/gi,
-            
+
             // Meta refresh with javascript
             /<meta[\s\S]*?(content[\s]*=[\s]*['"]\d+[\s]*;[\s]*url[\s]*=[\s]*(javascript:|vbscript:))/gi,
-            
+
             // Event handlers with suspicious content
             /on(load|error|click|focus|blur|change|submit|mouseover|mouseout)[\s]*=[\s]*['"]*[\s]*(javascript:|vbscript:|alert[\s]*\(|confirm[\s]*\(|prompt[\s]*\()/gi,
-            
+
             // Expression in style
             /style[\s]*=[\s]*['"]*[^'"]*expression[\s]*\(/gi,
-            
+
             // Direct javascript/vbscript protocols
-            /^[\s]*(javascript|vbscript)[\s]*:/i
+            /^[\s]*(javascript|vbscript)[\s]*:/i,
         ],
         commandInjection: [
             // Command chaining with suspicious patterns
             /(;[\s]*(rm|del|delete|format|fdisk|dd)[\s]+)/i,
             /(\|[\s]*(rm|del|delete|format|fdisk|dd)[\s]+)/i,
             /(&&[\s]*(rm|del|delete|format|fdisk|dd)[\s]+)/i,
-            
+
             // Command substitution
             /(\$\([^)]*\)|`[^`]*`)/,
-            
+
             // File operations with suspicious paths
             /(cat|type|more|less)[\s]+\/?(etc\/passwd|windows\/system32|boot\.ini)/i,
-            
+
             // Network operations
             /(wget|curl|nc|netcat|telnet)[\s]+\w+/i,
-            
+
             // System information gathering (only in suspicious contexts)
-            /(;|&&|\|)[\s]*(whoami|id|uname|ps|netstat|ifconfig)[\s]*($|;|&&|\|)/i
-        ]
+            /(;|&&|\|)[\s]*(whoami|id|uname|ps|netstat|ifconfig)[\s]*($|;|&&|\|)/i,
+        ],
     };
 
     // Check if value contains malicious patterns
     private static detectSecurityThreats(value: any, fieldName: string): ValidationError[] {
         const errors: ValidationError[] = [];
-        
+
         if (typeof value !== 'string') return errors;
-        
+
         // Check for SQL injection
         for (const pattern of this.securityPatterns.sqlInjection) {
             if (pattern.test(value)) {
                 errors.push({
                     field: fieldName,
                     message: `${fieldName} contains potentially malicious SQL injection patterns`,
-                    value
+                    value,
                 });
                 break;
             }
         }
-        
+
         // Check for XSS
         for (const pattern of this.securityPatterns.xss) {
             if (pattern.test(value)) {
                 errors.push({
                     field: fieldName,
                     message: `${fieldName} contains potentially malicious XSS patterns`,
-                    value
+                    value,
                 });
                 break;
             }
         }
-        
+
         // Check for command injection
         for (const pattern of this.securityPatterns.commandInjection) {
             if (pattern.test(value)) {
                 errors.push({
                     field: fieldName,
                     message: `${fieldName} contains potentially malicious command injection patterns`,
-                    value
+                    value,
                 });
                 break;
             }
         }
-        
+
         return errors;
     }
 
-    private static validateField(value: any, fieldName: string, schema: FieldSchema): ValidationError[] {
+    private static validateField(
+        value: any,
+        fieldName: string,
+        schema: FieldSchema,
+    ): ValidationError[] {
         const errors: ValidationError[] = [];
 
         // Required 체크
@@ -163,7 +179,7 @@ export class Validator {    // Security patterns to detect malicious input
             errors.push({
                 field: fieldName,
                 message: `${fieldName} is required`,
-                value
+                value,
             });
             return errors;
         }
@@ -180,23 +196,24 @@ export class Validator {    // Security patterns to detect malicious input
                     errors.push({
                         field: fieldName,
                         message: `${fieldName} must be a string`,
-                        value
+                        value,
                     });
                 }
                 break;
 
-            case 'number':
+            case 'number': {
                 const numValue = typeof value === 'string' ? parseFloat(value) : value;
                 if (isNaN(numValue) || typeof numValue !== 'number') {
                     errors.push({
                         field: fieldName,
                         message: `${fieldName} must be a number`,
-                        value
+                        value,
                     });
                 } else {
                     value = numValue; // 변환된 값으로 업데이트
                 }
                 break;
+            }
 
             case 'boolean':
                 if (typeof value === 'string') {
@@ -206,14 +223,14 @@ export class Validator {    // Security patterns to detect malicious input
                         errors.push({
                             field: fieldName,
                             message: `${fieldName} must be a boolean`,
-                            value
+                            value,
                         });
                     }
                 } else if (typeof value !== 'boolean') {
                     errors.push({
                         field: fieldName,
                         message: `${fieldName} must be a boolean`,
-                        value
+                        value,
                     });
                 }
                 break;
@@ -223,7 +240,7 @@ export class Validator {    // Security patterns to detect malicious input
                     errors.push({
                         field: fieldName,
                         message: `${fieldName} must be an array`,
-                        value
+                        value,
                     });
                 }
                 break;
@@ -233,7 +250,7 @@ export class Validator {    // Security patterns to detect malicious input
                     errors.push({
                         field: fieldName,
                         message: `${fieldName} must be an object`,
-                        value
+                        value,
                     });
                 }
                 break;
@@ -243,15 +260,16 @@ export class Validator {    // Security patterns to detect malicious input
                     errors.push({
                         field: fieldName,
                         message: `${fieldName} must be a valid email`,
-                        value
+                        value,
                     });
                 }
-                break;            case 'url':
+                break;
+            case 'url':
                 if (typeof value !== 'string' || !this.isValidUrl(value)) {
                     errors.push({
                         field: fieldName,
                         message: `${fieldName} must be a valid URL`,
-                        value
+                        value,
                     });
                 }
                 break;
@@ -260,19 +278,22 @@ export class Validator {    // Security patterns to detect malicious input
             case 'binary':
             case 'buffer':
                 // File types are typically handled at the middleware level (e.g., multer)
-                // Here we just ensure the value exists and is either a string (file path) 
+                // Here we just ensure the value exists and is either a string (file path)
                 // or Buffer/File object
                 if (value !== undefined && value !== null) {
-                    const isValidFileType = typeof value === 'string' || 
-                                          Buffer.isBuffer(value) ||
-                                          (typeof value === 'object' && value.constructor && 
-                                           (value.constructor.name === 'File' || value.constructor.name === 'Blob'));
-                    
+                    const isValidFileType =
+                        typeof value === 'string' ||
+                        Buffer.isBuffer(value) ||
+                        (typeof value === 'object' &&
+                            value.constructor &&
+                            (value.constructor.name === 'File' ||
+                                value.constructor.name === 'Blob'));
+
                     if (!isValidFileType) {
                         errors.push({
                             field: fieldName,
                             message: `${fieldName} must be a valid file, buffer, or file path`,
-                            value
+                            value,
                         });
                     }
                 }
@@ -285,14 +306,14 @@ export class Validator {    // Security patterns to detect malicious input
                 errors.push({
                     field: fieldName,
                     message: `${fieldName} must be at least ${schema.min} characters/items`,
-                    value
+                    value,
                 });
             }
             if (schema.max !== undefined && value.length > schema.max) {
                 errors.push({
                     field: fieldName,
                     message: `${fieldName} must be at most ${schema.max} characters/items`,
-                    value
+                    value,
                 });
             }
         }
@@ -303,14 +324,14 @@ export class Validator {    // Security patterns to detect malicious input
                 errors.push({
                     field: fieldName,
                     message: `${fieldName} must be at least ${schema.min}`,
-                    value
+                    value,
                 });
             }
             if (schema.max !== undefined && value > schema.max) {
                 errors.push({
                     field: fieldName,
                     message: `${fieldName} must be at most ${schema.max}`,
-                    value
+                    value,
                 });
             }
         }
@@ -321,7 +342,7 @@ export class Validator {    // Security patterns to detect malicious input
                 errors.push({
                     field: fieldName,
                     message: `${fieldName} does not match required pattern`,
-                    value
+                    value,
                 });
             }
         }
@@ -332,7 +353,7 @@ export class Validator {    // Security patterns to detect malicious input
                 errors.push({
                     field: fieldName,
                     message: `${fieldName} must be one of: ${schema.enum.join(', ')}`,
-                    value
+                    value,
                 });
             }
         }
@@ -344,13 +365,13 @@ export class Validator {    // Security patterns to detect malicious input
                 errors.push({
                     field: fieldName,
                     message: customResult,
-                    value
+                    value,
                 });
             } else if (customResult === false) {
                 errors.push({
                     field: fieldName,
                     message: `${fieldName} failed custom validation`,
-                    value
+                    value,
                 });
             }
         }
@@ -391,12 +412,12 @@ export class Validator {    // Security patterns to detect malicious input
                     validatedData[fieldName] = data[fieldName];
                 }
             }
-        }        
-        
+        }
+
         // 스키마에 없는 추가 필드들 체크 (필터링)
         const allowedFields = Object.keys(schema);
-        const extraFields = Object.keys(data || {}).filter(key => !allowedFields.includes(key));
-        
+        const extraFields = Object.keys(data || {}).filter((key) => !allowedFields.includes(key));
+
         if (extraFields.length > 0) {
             // 개발 환경에서만 로그 출력
             if (process.env.NODE_ENV !== 'production') {
@@ -407,7 +428,7 @@ export class Validator {    // Security patterns to detect malicious input
         return {
             isValid: errors.length === 0,
             errors,
-            data: errors.length === 0 ? validatedData : undefined
+            data: errors.length === 0 ? validatedData : undefined,
         };
     }
 

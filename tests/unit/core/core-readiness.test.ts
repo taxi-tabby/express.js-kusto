@@ -8,7 +8,12 @@ describe('Core readiness / fail-fast boot (P0-1)', () => {
 
     beforeEach(() => {
         jest.resetModules();
-        process.env = { ...OLD_ENV, NODE_ENV: 'test', AUTO_DOCS: 'false', ENABLE_SCHEMA_API: 'false' };
+        process.env = {
+            ...OLD_ENV,
+            NODE_ENV: 'test',
+            AUTO_DOCS: 'false',
+            ENABLE_SCHEMA_API: 'false',
+        };
     });
 
     afterEach(() => {
@@ -23,14 +28,19 @@ describe('Core readiness / fail-fast boot (P0-1)', () => {
         databases?: { name: string; connected: boolean; generated: boolean }[];
     }) {
         const databases = opts.databases ?? [{ name: 'default', connected: true, generated: true }];
-        jest.doMock('@lib/http/routing/loadRoutes_V6_Clean', () => ({ __esModule: true, default: jest.fn() }));
+        jest.doMock('@lib/http/routing/loadRoutes_V6_Clean', () => ({
+            __esModule: true,
+            default: jest.fn(),
+        }));
         jest.doMock('@lib/data/database/prismaManager', () => ({
             __esModule: true,
             prismaManager: {
-                initialize: jest.fn(async () => { if (opts.prismaThrows) throw new Error('db down'); }),
+                initialize: jest.fn(async () => {
+                    if (opts.prismaThrows) throw new Error('db down');
+                }),
                 getStatus: jest.fn(() => ({
                     initialized: true,
-                    connectedDatabases: databases.filter(d => d.connected).length,
+                    connectedDatabases: databases.filter((d) => d.connected).length,
                     totalDatabases: databases.length,
                     databases,
                 })),
@@ -40,20 +50,27 @@ describe('Core readiness / fail-fast boot (P0-1)', () => {
         jest.doMock('@lib/data/database/repositoryManager', () => ({
             __esModule: true,
             repositoryManager: {
-                initialize: jest.fn(async () => { if (opts.repoThrows) throw new Error('repo registry broken'); }),
-                getStatus: jest.fn(() => ({ initialized: true, repositoryCount: 0, repositories: [] })),
+                initialize: jest.fn(async () => {
+                    if (opts.repoThrows) throw new Error('repo registry broken');
+                }),
+                getStatus: jest.fn(() => ({
+                    initialized: true,
+                    repositoryCount: 0,
+                    repositories: [],
+                })),
             },
         }));
         jest.doMock('@lib/data/di/dependencyInjector', () => ({
             __esModule: true,
             DependencyInjector: {
                 getInstance: () => ({
-                    initialize: jest.fn(async () => { if (opts.diThrows) throw new Error('di broken'); }),
+                    initialize: jest.fn(async () => {
+                        if (opts.diThrows) throw new Error('di broken');
+                    }),
                 }),
             },
         }));
 
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { Core } = require('@core/bootstrap/Core');
         return Core.getInstance();
     }
@@ -76,7 +93,6 @@ describe('Core readiness / fail-fast boot (P0-1)', () => {
         expect(readiness.ready).toBe(false);
         expect(readiness.status).toBe('degraded');
 
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
         const request = require('supertest');
         const res = await request(core.app).get('/healthz');
         expect(res.status).toBe(503);
@@ -109,13 +125,27 @@ describe('Core readiness / fail-fast boot (P0-1)', () => {
         expect(readiness.prisma.total).toBe(1); // generated 만 분모에 포함
     });
 
+    it('DB 가 0개면(DB 안 쓰는 서비스) healthy + /healthz 200', async () => {
+        const core = mockManagersAndGetCore({ databases: [] });
+        await core.initialize({ routesPath: './src/app/routes' });
+
+        const readiness = core.getReadiness();
+        expect(readiness.ready).toBe(true);
+        expect(readiness.status).toBe('healthy');
+        expect(readiness.prisma.total).toBe(0);
+
+        const request = require('supertest');
+        const res = await request(core.app).get('/healthz');
+        expect(res.status).toBe(200);
+        expect(res.body.status).toBe('ok');
+    });
+
     it('정상 부팅 시 /healthz 200 (ok)', async () => {
         const core = mockManagersAndGetCore({
             databases: [{ name: 'default', connected: true, generated: true }],
         });
         await core.initialize({ routesPath: './src/app/routes' });
 
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
         const request = require('supertest');
         const res = await request(core.app).get('/healthz');
         expect(res.status).toBe(200);

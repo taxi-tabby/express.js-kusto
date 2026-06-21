@@ -7,21 +7,21 @@ import { Injectable } from '@lib/types/generated-injectable-types';
 import { ValidatedRequest } from '@lib/http/validation/requestHandler';
 
 export type MiddlewareHandlerFunction = (
-    req: Request, 
-    res: Response, 
-    next: NextFunction, 
-    injected: Injectable, 
-    repo: typeof repositoryManager, 
-    db: typeof prismaManager
+    req: Request,
+    res: Response,
+    next: NextFunction,
+    injected: Injectable,
+    repo: typeof repositoryManager,
+    db: typeof prismaManager,
 ) => void;
 
 export type ValidatedMiddlewareHandlerFunction = (
-    req: ValidatedRequest, 
-    res: Response, 
-    next: NextFunction, 
-    injected: Injectable, 
-    repo: typeof repositoryManager, 
-    db: typeof prismaManager
+    req: ValidatedRequest,
+    res: Response,
+    next: NextFunction,
+    injected: Injectable,
+    repo: typeof repositoryManager,
+    db: typeof prismaManager,
 ) => Promise<any> | any;
 
 /**
@@ -63,7 +63,9 @@ export function wrapMiddleware(handler: MiddlewareHandlerFunction): RequestHandl
 /**
  * ValidatedMiddlewareHandlerFunction을 Express 호환 미들웨어로 래핑하는 헬퍼 함수
  */
-export function wrapValidatedMiddleware(handler: ValidatedMiddlewareHandlerFunction): RequestHandler {
+export function wrapValidatedMiddleware(
+    handler: ValidatedMiddlewareHandlerFunction,
+): RequestHandler {
     return async (req: Request, res: Response, next: NextFunction) => {
         const safeNext = onceNext(next);
         try {
@@ -72,7 +74,14 @@ export function wrapValidatedMiddleware(handler: ValidatedMiddlewareHandlerFunct
 
             // Dependency injector에서 모든 injectable 모듈 가져오기
             const injected = DependencyInjector.getInstance().getInjectedModules();
-            const result = await handler(req as ValidatedRequest, res, safeNext, injected, repositoryManager, prismaManager);
+            const result = await handler(
+                req as ValidatedRequest,
+                res,
+                safeNext,
+                injected,
+                repositoryManager,
+                prismaManager,
+            );
             return result;
         } catch (error) {
             safeNext(error);
@@ -99,12 +108,14 @@ export function injectedMiddleware(fn: MiddlewareHandlerFunction): MiddlewareHan
  * 미들웨어 배열을 래핑하는 헬퍼 함수
  */
 export function wrapMiddlewares(handlers: MiddlewareHandlerFunction[]): RequestHandler[] {
-    return handlers.map(handler => wrapMiddleware(handler));
+    return handlers.map((handler) => wrapMiddleware(handler));
 }
 
 /**
  * 검증된 미들웨어 배열을 래핑하는 헬퍼 함수
  */
-export function wrapValidatedMiddlewares(handlers: ValidatedMiddlewareHandlerFunction[]): RequestHandler[] {
-    return handlers.map(handler => wrapValidatedMiddleware(handler));
+export function wrapValidatedMiddlewares(
+    handlers: ValidatedMiddlewareHandlerFunction[],
+): RequestHandler[] {
+    return handlers.map((handler) => wrapValidatedMiddleware(handler));
 }

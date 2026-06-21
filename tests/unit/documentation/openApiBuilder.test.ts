@@ -28,12 +28,14 @@ describe('openApiBuilder', () => {
 
         it('GET /users 라우트 1개일 때 paths 에 등록된다', () => {
             const doc = buildOpenApiDocument({
-                routes: [{
-                    method: 'GET',
-                    path: '/users',
-                    summary: 'List users',
-                    responses: { 200: { data: { type: 'array', required: true } } },
-                }],
+                routes: [
+                    {
+                        method: 'GET',
+                        path: '/users',
+                        summary: 'List users',
+                        responses: { 200: { data: { type: 'array', required: true } } },
+                    },
+                ],
                 schemas: {},
                 env: process.env,
                 packageJson: { name: 'test-api', version: '1.0.0' },
@@ -45,9 +47,19 @@ describe('openApiBuilder', () => {
         it('한 라우트의 잘못된 응답 스키마가 전체 스펙을 죽이지 않고 해당 라우트만 건너뛴다', () => {
             const doc = buildOpenApiDocument({
                 routes: [
-                    { method: 'GET', path: '/ok', summary: 'OK', responses: { 200: { data: { type: 'string', required: true } } } },
+                    {
+                        method: 'GET',
+                        path: '/ok',
+                        summary: 'OK',
+                        responses: { 200: { data: { type: 'string', required: true } } },
+                    },
                     // 잘못된 응답: { description } 은 FieldSchema 도 OpenAPI 스키마도 아님 → 변환 시 throw 한다.
-                    { method: 'GET', path: '/bad', summary: 'Bad', responses: { 200: { description: 'not a schema' } } as any },
+                    {
+                        method: 'GET',
+                        path: '/bad',
+                        summary: 'Bad',
+                        responses: { 200: { description: 'not a schema' } } as any,
+                    },
                 ],
                 schemas: {},
                 env: process.env,
@@ -60,7 +72,9 @@ describe('openApiBuilder', () => {
 
         it("contentType 'html' 라우트(확장 페이지)는 text/html 페이지로 문서화된다(응답 스키마 불필요)", () => {
             const doc = buildOpenApiDocument({
-                routes: [{ method: 'GET', path: '/page', summary: 'A page', contentType: 'html' } as any],
+                routes: [
+                    { method: 'GET', path: '/page', summary: 'A page', contentType: 'html' } as any,
+                ],
                 schemas: {},
                 env: process.env,
                 packageJson: { name: 'test-api', version: '1.0.0' },
@@ -73,7 +87,10 @@ describe('openApiBuilder', () => {
         });
 
         it('schemas 가 주어지면 components.schemas 로 그대로 옮겨진다', () => {
-            const userSchema = { type: 'object' as const, properties: { id: { type: 'string' as const } } };
+            const userSchema = {
+                type: 'object' as const,
+                properties: { id: { type: 'string' as const } },
+            };
             const doc = buildOpenApiDocument({
                 routes: [],
                 schemas: { User: userSchema },
@@ -85,26 +102,34 @@ describe('openApiBuilder', () => {
 
         it('routes 의 query 파라미터가 OpenAPI parameters 로 변환된다', () => {
             const doc = buildOpenApiDocument({
-                routes: [{
-                    method: 'GET',
-                    path: '/users',
-                    parameters: { query: { page: { type: 'number', required: false, description: 'Page' } } },
-                }],
+                routes: [
+                    {
+                        method: 'GET',
+                        path: '/users',
+                        parameters: {
+                            query: {
+                                page: { type: 'number', required: false, description: 'Page' },
+                            },
+                        },
+                    },
+                ],
                 schemas: {},
                 env: process.env,
                 packageJson: { name: 'test-api', version: '1.0.0' },
             });
             const op = doc.paths['/users'].get!;
-            expect(op.parameters!.find(p => p.name === 'page' && p.in === 'query')).toBeDefined();
+            expect(op.parameters!.find((p) => p.name === 'page' && p.in === 'query')).toBeDefined();
         });
 
         it(':id 형식의 path 가 OpenAPI 표준 {id} 로 변환된다', () => {
             const doc = buildOpenApiDocument({
-                routes: [{
-                    method: 'GET',
-                    path: '/users/:id',
-                    parameters: { params: { id: { type: 'string', required: true } } },
-                }],
+                routes: [
+                    {
+                        method: 'GET',
+                        path: '/users/:id',
+                        parameters: { params: { id: { type: 'string', required: true } } },
+                    },
+                ],
                 schemas: {},
                 env: process.env,
                 packageJson: { name: 'a', version: '1' },
@@ -112,17 +137,19 @@ describe('openApiBuilder', () => {
             expect(doc.paths['/users/{id}']).toBeDefined();
             expect(doc.paths['/users/:id']).toBeUndefined();
             const op = doc.paths['/users/{id}'].get;
-            expect(op?.parameters?.find(p => p.name === 'id' && p.in === 'path')).toBeDefined();
+            expect(op?.parameters?.find((p) => p.name === 'id' && p.in === 'path')).toBeDefined();
         });
 
         it("contentType 'json' 일 때 응답 content key 가 application/json 이다", () => {
             const doc = buildOpenApiDocument({
-                routes: [{
-                    method: 'GET',
-                    path: '/x',
-                    contentType: 'json',
-                    responses: { 200: { data: { type: 'object', required: true } } },
-                }],
+                routes: [
+                    {
+                        method: 'GET',
+                        path: '/x',
+                        contentType: 'json',
+                        responses: { 200: { data: { type: 'object', required: true } } },
+                    },
+                ],
                 schemas: {},
                 env: process.env,
                 packageJson: { name: 'a', version: '1' },
@@ -134,12 +161,14 @@ describe('openApiBuilder', () => {
 
         it("contentType 'jsonapi' 일 때 응답 content key 가 application/vnd.api+json 이다", () => {
             const doc = buildOpenApiDocument({
-                routes: [{
-                    method: 'GET',
-                    path: '/x',
-                    contentType: 'jsonapi',
-                    responses: { 200: { data: { type: 'object', required: true } } },
-                }],
+                routes: [
+                    {
+                        method: 'GET',
+                        path: '/x',
+                        contentType: 'jsonapi',
+                        responses: { 200: { data: { type: 'object', required: true } } },
+                    },
+                ],
                 schemas: {},
                 env: process.env,
                 packageJson: { name: 'a', version: '1' },
@@ -151,12 +180,14 @@ describe('openApiBuilder', () => {
 
         it("contentType 'jsonapi' 일 때 requestBody content key 도 application/vnd.api+json 이다", () => {
             const doc = buildOpenApiDocument({
-                routes: [{
-                    method: 'POST',
-                    path: '/x',
-                    contentType: 'jsonapi',
-                    parameters: { body: { name: { type: 'string', required: true } } },
-                }],
+                routes: [
+                    {
+                        method: 'POST',
+                        path: '/x',
+                        contentType: 'jsonapi',
+                        parameters: { body: { name: { type: 'string', required: true } } },
+                    },
+                ],
                 schemas: {},
                 env: process.env,
                 packageJson: { name: 'a', version: '1' },
@@ -167,16 +198,20 @@ describe('openApiBuilder', () => {
 
         it('contentType 미지정일 때 application/json 이 기본값이다', () => {
             const doc = buildOpenApiDocument({
-                routes: [{
-                    method: 'GET',
-                    path: '/y',
-                    responses: { 200: { ok: { type: 'boolean', required: true } } },
-                }],
+                routes: [
+                    {
+                        method: 'GET',
+                        path: '/y',
+                        responses: { 200: { ok: { type: 'boolean', required: true } } },
+                    },
+                ],
                 schemas: {},
                 env: process.env,
                 packageJson: { name: 'a', version: '1' },
             });
-            expect(doc.paths['/y'].get?.responses['200']?.content).toHaveProperty('application/json');
+            expect(doc.paths['/y'].get?.responses['200']?.content).toHaveProperty(
+                'application/json',
+            );
         });
 
         it('responses 가 없을 때 기본 200 응답이 채워진다', () => {
@@ -211,19 +246,25 @@ describe('openApiBuilder', () => {
                 },
             };
             const doc = buildOpenApiDocument({
-                routes: [{
-                    method: 'POST',
-                    path: '/x',
-                    contentType: 'jsonapi',
-                    parameters: { body: body as any },
-                }],
+                routes: [
+                    {
+                        method: 'POST',
+                        path: '/x',
+                        contentType: 'jsonapi',
+                        parameters: { body: body as any },
+                    },
+                ],
                 schemas: {},
                 env: process.env,
                 packageJson: { name: 'a', version: '1' },
             });
-            const reqSchema = doc.paths['/x']?.post?.requestBody?.content?.['application/vnd.api+json']?.schema as any;
+            const reqSchema = doc.paths['/x']?.post?.requestBody?.content?.[
+                'application/vnd.api+json'
+            ]?.schema as any;
             expect(reqSchema.required).toEqual(['data']);
-            expect(reqSchema.properties.data).toEqual({ $ref: '#/components/schemas/UserAttributes' });
+            expect(reqSchema.properties.data).toEqual({
+                $ref: '#/components/schemas/UserAttributes',
+            });
         });
 
         it('responses[code] 가 이미 OpenAPI 객체 schema 일 때 그대로 사용된다 ($ref 보존)', () => {
@@ -235,34 +276,42 @@ describe('openApiBuilder', () => {
                 },
             };
             const doc = buildOpenApiDocument({
-                routes: [{
-                    method: 'GET',
-                    path: '/x',
-                    contentType: 'jsonapi',
-                    responses: { 200: responseSchema as any },
-                }],
+                routes: [
+                    {
+                        method: 'GET',
+                        path: '/x',
+                        contentType: 'jsonapi',
+                        responses: { 200: responseSchema as any },
+                    },
+                ],
                 schemas: {},
                 env: process.env,
                 packageJson: { name: 'a', version: '1' },
             });
-            const resSchema = doc.paths['/x']?.get?.responses['200']?.content?.['application/vnd.api+json']?.schema as any;
+            const resSchema = doc.paths['/x']?.get?.responses['200']?.content?.[
+                'application/vnd.api+json'
+            ]?.schema as any;
             expect(resSchema.required).toEqual(['data']);
             expect(resSchema.properties.data).toEqual({ $ref: '#/components/schemas/User' });
         });
 
         it('직접 $ref 만 있는 schema 도 그대로 통과한다', () => {
             const doc = buildOpenApiDocument({
-                routes: [{
-                    method: 'GET',
-                    path: '/x',
-                    contentType: 'jsonapi',
-                    responses: { 200: { $ref: '#/components/schemas/User' } as any },
-                }],
+                routes: [
+                    {
+                        method: 'GET',
+                        path: '/x',
+                        contentType: 'jsonapi',
+                        responses: { 200: { $ref: '#/components/schemas/User' } as any },
+                    },
+                ],
                 schemas: {},
                 env: process.env,
                 packageJson: { name: 'a', version: '1' },
             });
-            const resSchema = doc.paths['/x']?.get?.responses['200']?.content?.['application/vnd.api+json']?.schema;
+            const resSchema =
+                doc.paths['/x']?.get?.responses['200']?.content?.['application/vnd.api+json']
+                    ?.schema;
             expect(resSchema).toEqual({ $ref: '#/components/schemas/User' });
         });
     });

@@ -8,10 +8,13 @@ import { globalErrorMiddleware } from '@lib/http/routing/frameworkMiddleware';
  */
 describe('전역 에러 핸들러 (P1-7)', () => {
     const OLD_ENV = process.env;
-    afterEach(() => { process.env = OLD_ENV; });
+    afterEach(() => {
+        process.env = OLD_ENV;
+    });
 
     it('arity 4(err,req,res,next) 핸들러다', () => {
         expect(typeof globalErrorMiddleware).toBe('function');
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
         expect((globalErrorMiddleware as Function).length).toBe(4);
     });
 
@@ -24,8 +27,14 @@ describe('전역 에러 핸들러 (P1-7)', () => {
         let body: any;
         const res: any = {
             headersSent: false,
-            status(c: number) { statusCode = c; return this; },
-            json(b: any) { body = b; return this; },
+            status(c: number) {
+                statusCode = c;
+                return this;
+            },
+            json(b: any) {
+                body = b;
+                return this;
+            },
         };
 
         handler(err, { originalUrl: '/x', method: 'GET' } as any, res, (() => {}) as any);
@@ -41,8 +50,18 @@ describe('전역 에러 핸들러 (P1-7)', () => {
     it('headersSent 이면 next 로 위임한다 (이중 응답 방지)', () => {
         const handler = globalErrorMiddleware;
         let nexted = false;
-        const res: any = { headersSent: true, status() { return this; }, json() { return this; } };
-        handler(new Error('boom'), {} as any, res, (() => { nexted = true; }) as any);
+        const res: any = {
+            headersSent: true,
+            status() {
+                return this;
+            },
+            json() {
+                return this;
+            },
+        };
+        handler(new Error('boom'), {} as any, res, (() => {
+            nexted = true;
+        }) as any);
         expect(nexted).toBe(true);
     });
 });

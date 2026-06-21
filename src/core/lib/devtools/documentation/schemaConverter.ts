@@ -2,8 +2,16 @@ import { FieldSchema, Schema, ValidatorType } from '@lib/http/validation/validat
 import { OpenApiSchema, OpenApiObjectSchema } from '@lib/devtools/documentation/openApiTypes';
 
 const KNOWN_TYPES: ReadonlySet<ValidatorType> = new Set([
-    'string', 'number', 'boolean', 'array', 'object',
-    'email', 'url', 'file', 'binary', 'buffer',
+    'string',
+    'number',
+    'boolean',
+    'array',
+    'object',
+    'email',
+    'url',
+    'file',
+    'binary',
+    'buffer',
 ]);
 
 /**

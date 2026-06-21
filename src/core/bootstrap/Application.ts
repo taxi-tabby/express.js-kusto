@@ -5,16 +5,16 @@ import { log } from '@ext/winston';
 
 /**
  * Application class - Simple and intuitive interface for the core functionality
- * 
+ *
  * @example
  * ```typescript
  * import { Application } from '@core/core';
- * 
+ *
  * const app = new Application({
  *   port: 3000,
  *   routesPath: './app/routes'
  * });
- * 
+ *
  * app.start();
  * ```
  */
@@ -33,13 +33,13 @@ export class Application {
     public async start(): Promise<Server> {
         try {
             log.Info('Starting application...');
-            
+
             // Initialize core with configuration (now async)
             await this.core.initialize(this.config);
-            
+
             // Start server
             const server = await this.core.start(this.config.port, this.config.host);
-            
+
             return server;
         } catch (error) {
             log.Error('Failed to start application', { error });
@@ -124,7 +124,7 @@ export class Application {
             uptime: process.uptime(),
             memory: process.memoryUsage(),
             version: process.version,
-            config: this.configuration
+            config: this.configuration,
         };
     }
 }

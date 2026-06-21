@@ -71,10 +71,13 @@ const SWAGGER_HTML = `
  */
 function renderDevInfoPage(routes: RouteDocumentation[]): string {
     const totalRoutes = routes.length;
-    const routesByMethod = routes.reduce((acc, route) => {
-        acc[route.method] = (acc[route.method] || 0) + 1;
-        return acc;
-    }, {} as Record<string, number>);
+    const routesByMethod = routes.reduce(
+        (acc, route) => {
+            acc[route.method] = (acc[route.method] || 0) + 1;
+            return acc;
+        },
+        {} as Record<string, number>,
+    );
 
     return `
 <!DOCTYPE html>
@@ -115,23 +118,31 @@ function renderDevInfoPage(routes: RouteDocumentation[]): string {
             <div class="stat-number">${totalRoutes}</div>
             <div class="stat-label">Total Routes</div>
         </div>
-        ${Object.entries(routesByMethod).map(([method, count]) => `
+        ${Object.entries(routesByMethod)
+            .map(
+                ([method, count]) => `
         <div class="stat-card">
             <div class="stat-number">${count}</div>
             <div class="stat-label">${method} Routes</div>
         </div>
-        `).join('')}
+        `,
+            )
+            .join('')}
     </div>
 
     <h2>Registered Routes</h2>
     <div class="route-list">
-        ${routes.map(route => `
+        ${routes
+            .map(
+                (route) => `
         <div class="route-item">
             <span class="method ${route.method}">${route.method}</span>
             <span class="path">${route.path}</span>
             ${route.summary ? `<span style="margin-left: auto; color: #6c757d; font-style: italic;">${route.summary}</span>` : ''}
         </div>
-        `).join('')}
+        `,
+            )
+            .join('')}
     </div>
     <div class="links">
         <a href="/docs/openapi.json" class="link-button">OpenAPI JSON</a>
@@ -168,7 +179,8 @@ export class DocumentationGenerator {
     static updateRoutePaths(basePath: string, routeIndices?: number[]): void {
         if (!this.isDocumentationEnabled()) return;
 
-        const normalizedBasePath = basePath === '/' ? '' : (basePath.endsWith('/') ? basePath.slice(0, -1) : basePath);
+        const normalizedBasePath =
+            basePath === '/' ? '' : basePath.endsWith('/') ? basePath.slice(0, -1) : basePath;
         const indicesToUpdate = routeIndices || [];
         if (indicesToUpdate.length === 0) return;
 
@@ -176,9 +188,10 @@ export class DocumentationGenerator {
             if (index >= 0 && index < this.routes.length) {
                 const route = this.routes[index];
                 if (!route.path.startsWith(normalizedBasePath)) {
-                    const newPath = route.path === '/'
-                        ? normalizedBasePath || '/'
-                        : `${normalizedBasePath}${route.path}`;
+                    const newPath =
+                        route.path === '/'
+                            ? normalizedBasePath || '/'
+                            : `${normalizedBasePath}${route.path}`;
                     log.Silly(`Updating route path: ${route.path} -> ${newPath}`);
                     route.path = newPath;
                 }

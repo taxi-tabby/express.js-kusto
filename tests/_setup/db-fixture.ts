@@ -6,7 +6,7 @@ import * as crypto from 'crypto';
 export type TestDbProvider = 'sqlite' | 'postgres';
 
 // 락/대기 상수. jest testTimeout(30s) 보다 작게 잡아 contended 시에도 명확히 실패한다.
-const GEN_MAX_WAIT_MS = 25000;   // 다른 워커의 생성 완료를 기다리는 최대 시간
+const GEN_MAX_WAIT_MS = 25000; // 다른 워커의 생성 완료를 기다리는 최대 시간
 const GEN_STALE_LOCK_MS = 60000; // 락 디렉터리가 이보다 오래되면 크래시로 간주하고 회수
 
 // SharedArrayBuffer 는 한 번만 할당하여 재사용(매 호출 할당 방지)
@@ -25,8 +25,10 @@ function schemaFingerprint(schemaPath: string): string {
 /** 현재 스키마 지문으로 생성된 client 가 require 가능한 상태로 완성됐는지 */
 function isClientReady(clientDir: string, markerFile: string, fingerprint: string): boolean {
     try {
-        return fs.readFileSync(markerFile, 'utf8') === fingerprint
-            && fs.existsSync(path.join(clientDir, 'index.js'));
+        return (
+            fs.readFileSync(markerFile, 'utf8') === fingerprint &&
+            fs.existsSync(path.join(clientDir, 'index.js'))
+        );
     } catch {
         return false;
     }
@@ -64,9 +66,17 @@ function ensurePrismaClientGenerated(schemaPath: string, clientDir: string): voi
             if (isClientReady(clientDir, markerFile, fingerprint)) return;
             // 회수는 "대기 시간"이 아니라 "락 디렉터리의 나이"로만 판단(활성 락 보호).
             let lockAge = Infinity;
-            try { lockAge = Date.now() - fs.statSync(lockDir).mtimeMs; } catch { /* 막 사라짐 */ }
+            try {
+                lockAge = Date.now() - fs.statSync(lockDir).mtimeMs;
+            } catch {
+                /* 막 사라짐 */
+            }
             if (lockAge > GEN_STALE_LOCK_MS) {
-                try { fs.rmdirSync(lockDir); } catch { /* 무시 */ }
+                try {
+                    fs.rmdirSync(lockDir);
+                } catch {
+                    /* 무시 */
+                }
                 continue; // 회수 후 재시도
             }
             if (Date.now() - start > GEN_MAX_WAIT_MS) {
@@ -81,18 +91,26 @@ function ensurePrismaClientGenerated(schemaPath: string, clientDir: string): voi
         if (isClientReady(clientDir, markerFile, fingerprint)) return;
 
         // 부분 생성 마커가 남지 않도록, 생성 전에 기존 마커를 제거한다(생성 성공 후에만 재기록)
-        try { fs.rmSync(markerFile, { force: true }); } catch { /* 무시 */ }
+        try {
+            fs.rmSync(markerFile, { force: true });
+        } catch {
+            /* 무시 */
+        }
 
         const gen = spawnSync('npx', ['prisma', 'generate', '--schema', schemaPath], {
             stdio: 'pipe',
-            shell: true
+            shell: true,
         });
         if (gen.status !== 0) {
             throw new Error(`prisma generate failed: ${gen.stderr?.toString() ?? ''}`);
         }
         fs.writeFileSync(markerFile, fingerprint);
     } finally {
-        try { fs.rmdirSync(lockDir); } catch { /* 무시 */ }
+        try {
+            fs.rmdirSync(lockDir);
+        } catch {
+            /* 무시 */
+        }
     }
 }
 
@@ -129,7 +147,11 @@ async function bootSqlite(): Promise<DbFixture> {
     const dbDir = path.resolve('node_modules/.prisma');
     fs.mkdirSync(dbDir, { recursive: true });
     const dbFile = path.join(dbDir, `test-sqlite-${workerId}.db`);
-    try { fs.unlinkSync(dbFile); } catch { /* 없으면 무시 */ }
+    try {
+        fs.unlinkSync(dbFile);
+    } catch {
+        /* 없으면 무시 */
+    }
     const url = `file:${dbFile}`;
 
     const schemaPath = path.resolve('tests/_fixtures/test-schema.sqlite.prisma');
@@ -139,12 +161,11 @@ async function bootSqlite(): Promise<DbFixture> {
     ensurePrismaClientGenerated(schemaPath, clientDir);
 
     // db push 는 워커별 db 파일 대상이므로 그대로 병렬 수행 가능
-    const push = spawnSync('npx', [
-        'prisma', 'db', 'push',
-        '--accept-data-loss',
-        '--schema', schemaPath,
-        '--url', url
-    ], { stdio: 'pipe', shell: true });
+    const push = spawnSync(
+        'npx',
+        ['prisma', 'db', 'push', '--accept-data-loss', '--schema', schemaPath, '--url', url],
+        { stdio: 'pipe', shell: true },
+    );
     if (push.status !== 0) {
         throw new Error(`prisma db push failed: ${push.stderr?.toString() ?? ''}`);
     }
@@ -161,8 +182,12 @@ async function bootSqlite(): Promise<DbFixture> {
         prisma,
         teardown: async () => {
             await prisma.$disconnect();
-            try { fs.unlinkSync(dbFile); } catch { /* 이미 없을 수 있음 */ }
-        }
+            try {
+                fs.unlinkSync(dbFile);
+            } catch {
+                /* 이미 없을 수 있음 */
+            }
+        },
     };
 }
 
@@ -204,14 +229,15 @@ async function bootPostgres(): Promise<DbFixture> {
     // 서버가 push 연결을 수락하지 못하고 P1001(Can't reach database server)로 실패한다.
     // (sqlite 는 파일 접속이라 spawnSync 로도 무관.) 비동기 spawn 으로 루프를 살려둔다.
     await new Promise<void>((resolve, reject) => {
-        const child = spawn('npx', [
-            'prisma', 'db', 'push',
-            '--accept-data-loss',
-            '--schema', schemaPath,
-            '--url', url
-        ], { stdio: 'pipe', shell: true });
+        const child = spawn(
+            'npx',
+            ['prisma', 'db', 'push', '--accept-data-loss', '--schema', schemaPath, '--url', url],
+            { stdio: 'pipe', shell: true },
+        );
         let stderr = '';
-        child.stderr?.on('data', (d) => { stderr += d.toString(); });
+        child.stderr?.on('data', (d) => {
+            stderr += d.toString();
+        });
         child.on('error', reject);
         child.on('close', (code) => {
             if (code === 0) resolve();
@@ -232,7 +258,7 @@ async function bootPostgres(): Promise<DbFixture> {
             await prisma.$disconnect();
             await server.stop();
             await pglite.close();
-        }
+        },
     };
 }
 
@@ -252,14 +278,24 @@ async function bootPostgresExternal(externalUrl: string): Promise<DbFixture> {
 
     ensurePrismaClientGenerated(schemaPath, clientDir);
 
-    const push = spawnSync('npx', [
-        'prisma', 'db', 'push',
-        '--accept-data-loss',
-        '--schema', schemaPath,
-        '--url', externalUrl
-    ], { stdio: 'pipe', shell: true });
+    const push = spawnSync(
+        'npx',
+        [
+            'prisma',
+            'db',
+            'push',
+            '--accept-data-loss',
+            '--schema',
+            schemaPath,
+            '--url',
+            externalUrl,
+        ],
+        { stdio: 'pipe', shell: true },
+    );
     if (push.status !== 0) {
-        throw new Error(`prisma db push failed (external postgres): ${push.stderr?.toString() ?? ''}`);
+        throw new Error(
+            `prisma db push failed (external postgres): ${push.stderr?.toString() ?? ''}`,
+        );
     }
 
     const clientModule = require(clientDir);
@@ -273,7 +309,7 @@ async function bootPostgresExternal(externalUrl: string): Promise<DbFixture> {
         prisma,
         teardown: async () => {
             await prisma.$disconnect();
-        }
+        },
     };
 }
 
@@ -288,7 +324,7 @@ export async function truncateAll(fixture: DbFixture): Promise<void> {
         }
     } else {
         await fixture.prisma.$executeRawUnsafe(
-            `TRUNCATE TABLE "${tables.join('", "')}" RESTART IDENTITY CASCADE`
+            `TRUNCATE TABLE "${tables.join('", "')}" RESTART IDENTITY CASCADE`,
         );
     }
 }

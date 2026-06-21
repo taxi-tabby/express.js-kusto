@@ -55,8 +55,12 @@ function fetchSnapshot(url: string, timeoutMs: number): Promise<MonitorSnapshot>
             res.on('end', () => {
                 if (aborted) return;
                 let parsed: unknown;
-                try { parsed = JSON.parse(data); }
-                catch { reject(new Error('invalid metrics JSON')); return; }
+                try {
+                    parsed = JSON.parse(data);
+                } catch {
+                    reject(new Error('invalid metrics JSON'));
+                    return;
+                }
                 if (!isSnapshotShape(parsed)) {
                     reject(new Error('unexpected metrics shape (server/CLI version skew?)'));
                     return;
@@ -74,7 +78,7 @@ export function runMonitor(opts: MonitorRunOptions = {}): void {
     const intervalMs = Math.max(200, opts.interval || 1000);
     const out = process.stdout;
 
-    let timer: NodeJS.Timeout | undefined;
+    const timerRef: { current: NodeJS.Timeout | undefined } = { current: undefined };
     let polling = false;
     let lastSnapshot: MonitorSnapshot | null = null;
     let lastError: string | undefined;
@@ -85,16 +89,21 @@ export function runMonitor(opts: MonitorRunOptions = {}): void {
     const draw = (full = false) => {
         const { cols, rows } = dims();
         try {
-            const buf = (full ? screen.clear : screen.home)
-                + renderFrame(lastSnapshot, { cols, rows, url, intervalMs, lastError });
+            const buf =
+                (full ? screen.clear : screen.home) +
+                renderFrame(lastSnapshot, { cols, rows, url, intervalMs, lastError });
             out.write(buf);
         } catch (e) {
             // 렌더 자체가 실패하면(예: 예상 밖 스냅샷) 화면을 깨지 않고 대기 프레임으로 강등.
             lastSnapshot = null;
             lastError = `render error: ${e instanceof Error ? e.message : String(e)}`;
             try {
-                out.write(screen.clear + renderFrame(null, { cols, rows, url, intervalMs, lastError }));
-            } catch { /* 최후의 보루: 무시 */ }
+                out.write(
+                    screen.clear + renderFrame(null, { cols, rows, url, intervalMs, lastError }),
+                );
+            } catch {
+                /* 최후의 보루: 무시 */
+            }
         }
     };
 
@@ -116,7 +125,7 @@ export function runMonitor(opts: MonitorRunOptions = {}): void {
     const cleanup = (code = 0) => {
         if (stopped) return;
         stopped = true;
-        if (timer) clearInterval(timer);
+        if (timerRef.current) clearInterval(timerRef.current);
         if (process.stdin.isTTY) process.stdin.setRawMode(false);
         process.stdin.pause();
         out.write(screen.showCursor + screen.leaveAlt);
@@ -135,15 +144,25 @@ export function runMonitor(opts: MonitorRunOptions = {}): void {
     process.on('SIGINT', () => cleanup(0));
     process.on('SIGTERM', () => cleanup(0));
     // 어떤 예외 경로에서도 터미널을 alt-screen/커서숨김/raw 상태로 남기지 않도록 최종 안전망.
-    process.on('uncaughtException', (e) => { lastError = String(e); cleanup(1); });
-    process.on('unhandledRejection', (e) => { lastError = String(e); cleanup(1); });
+    process.on('uncaughtException', (e) => {
+        lastError = String(e);
+        cleanup(1);
+    });
+    process.on('unhandledRejection', (e) => {
+        lastError = String(e);
+        cleanup(1);
+    });
 
     // 터미널 크기 변화 → 전체 클리어 후 재렌더
-    out.on('resize', () => { if (!stopped) draw(true); });
+    out.on('resize', () => {
+        if (!stopped) draw(true);
+    });
 
     // 시작: alt-screen + 커서 숨김 + 즉시 1회 폴링
     out.write(screen.enterAlt + screen.hideCursor);
     draw(true);
     void tick();
-    timer = setInterval(() => { void tick(); }, intervalMs);
+    timerRef.current = setInterval(() => {
+        void tick();
+    }, intervalMs);
 }

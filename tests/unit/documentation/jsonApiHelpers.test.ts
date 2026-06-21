@@ -12,14 +12,20 @@ describe('jsonApiHelpers', () => {
             expect(body.type).toBe('object');
             expect(body.required).toEqual(['data']);
             expect((body.properties as any).data.type).toBe('object');
-            expect((body.properties as any).data.required).toEqual(expect.arrayContaining(['type', 'attributes']));
-            expect((body.properties as any).data.properties.attributes).toEqual({ $ref: '#/components/schemas/UserAttributes' });
+            expect((body.properties as any).data.required).toEqual(
+                expect.arrayContaining(['type', 'attributes']),
+            );
+            expect((body.properties as any).data.properties.attributes).toEqual({
+                $ref: '#/components/schemas/UserAttributes',
+            });
             expect((body.properties as any).data.properties.type).toBeDefined();
         });
 
         it("'update' op 일 때 data.id 도 required 다", () => {
             const body = jsonApiBody('User', 'update');
-            expect((body.properties as any).data.required).toEqual(expect.arrayContaining(['type', 'id', 'attributes']));
+            expect((body.properties as any).data.required).toEqual(
+                expect.arrayContaining(['type', 'id', 'attributes']),
+            );
         });
     });
 
@@ -36,7 +42,9 @@ describe('jsonApiHelpers', () => {
             const resp = jsonApiErrorResponse(404);
             expect(resp.type).toBe('object');
             expect(resp.required).toEqual(['errors']);
-            expect((resp.properties as any).errors).toEqual({ $ref: '#/components/schemas/JsonApiError' });
+            expect((resp.properties as any).errors).toEqual({
+                $ref: '#/components/schemas/JsonApiError',
+            });
         });
     });
 

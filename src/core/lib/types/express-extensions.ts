@@ -3,27 +3,24 @@ import { MiddlewareParamName, MiddlewareParams } from '@lib/types/generated-inje
 import type { KustoManager } from '@lib/data/di/kustoManager';
 
 declare global {
-  namespace Express {
-    interface Request {
-      /**
-       * WITH 메서드에서 전달된 미들웨어 파라미터들
-       * 각 미들웨어별로 전달된 파라미터에 접근할 수 있습니다.
-       */
-      with: {
-        [K in MiddlewareParamName]?: MiddlewareParams[K];
-      };
-      
-      /**
-       * Kusto 프레임워크의 중앙 관리자
-       * injectable, repo, db 등 모든 주요 서비스에 접근할 수 있습니다.
-       */
-      kusto: KustoManager;
+    // eslint-disable-next-line @typescript-eslint/no-namespace
+    namespace Express {
+        interface Request {
+            /**
+             * WITH 메서드에서 전달된 미들웨어 파라미터들
+             * 각 미들웨어별로 전달된 파라미터에 접근할 수 있습니다.
+             */
+            with: {
+                [K in MiddlewareParamName]?: MiddlewareParams[K];
+            };
+
+            /**
+             * Kusto 프레임워크의 중앙 관리자
+             * injectable, repo, db 등 모든 주요 서비스에 접근할 수 있습니다.
+             */
+            kusto: KustoManager;
+        }
     }
-  }
 }
-
-
-
-
 
 export {};

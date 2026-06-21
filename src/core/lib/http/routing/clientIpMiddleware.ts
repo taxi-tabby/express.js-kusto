@@ -5,18 +5,18 @@ import { Request, Response, NextFunction } from 'express';
  */
 const isValidIp = (ip: string): boolean => {
     if (!ip || ip.length === 0) return false;
-    
+
     // IPv4 패턴
     const ipv4Pattern = /^(\d{1,3}\.){3}\d{1,3}$/;
     if (ipv4Pattern.test(ip)) {
         const parts = ip.split('.').map(Number);
-        return parts.every(part => part >= 0 && part <= 255);
+        return parts.every((part) => part >= 0 && part <= 255);
     }
-    
+
     // IPv6 패턴 (간소화된 검증)
     const ipv6Pattern = /^([0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}$|^::1$|^::$/;
     if (ipv6Pattern.test(ip)) return true;
-    
+
     // IPv6 매핑된 IPv4 (::ffff:x.x.x.x)
     const mappedIpv4Pattern = /^::ffff:(\d{1,3}\.){3}\d{1,3}$/i;
     if (mappedIpv4Pattern.test(ip)) return true;
@@ -42,25 +42,25 @@ const normalizeIp = (ip: string): string => {
  */
 const isPrivateIp = (ip: string): boolean => {
     const normalizedIp = normalizeIp(ip);
-    
+
     // IPv4 사설 대역
     const privateRanges = [
-        /^10\./,                      // 10.0.0.0/8
-        /^172\.(1[6-9]|2\d|3[01])\./,  // 172.16.0.0/12
-        /^192\.168\./,                // 192.168.0.0/16
-        /^127\./,                     // 127.0.0.0/8 (localhost)
-        /^169\.254\./,                // 169.254.0.0/16 (link-local)
-        /^0\./,                       // 0.0.0.0/8
+        /^10\./, // 10.0.0.0/8
+        /^172\.(1[6-9]|2\d|3[01])\./, // 172.16.0.0/12
+        /^192\.168\./, // 192.168.0.0/16
+        /^127\./, // 127.0.0.0/8 (localhost)
+        /^169\.254\./, // 169.254.0.0/16 (link-local)
+        /^0\./, // 0.0.0.0/8
     ];
-    
+
     for (const range of privateRanges) {
         if (range.test(normalizedIp)) return true;
     }
 
     // IPv6 사설/로컬 주소
-    if (normalizedIp === '::1') return true;  // localhost
-    if (normalizedIp.startsWith('fe80:')) return true;  // link-local
-    if (normalizedIp.startsWith('fc') || normalizedIp.startsWith('fd')) return true;  // unique local
+    if (normalizedIp === '::1') return true; // localhost
+    if (normalizedIp.startsWith('fe80:')) return true; // link-local
+    if (normalizedIp.startsWith('fc') || normalizedIp.startsWith('fd')) return true; // unique local
 
     return false;
 };
@@ -68,7 +68,7 @@ const isPrivateIp = (ip: string): boolean => {
 /**
  * 클라이언트 IP 주소 오버라이드 미들웨어
  * trust proxy 설정과 관계없이 프록시 헤더에서 실제 클라이언트 IP를 추출
- * 
+ *
  * 우선순위:
  * 1. CF-Connecting-IP (Cloudflare)
  * 2. True-Client-IP (Cloudflare Enterprise, Akamai)
@@ -105,12 +105,10 @@ export const clientIpMiddleware = (req: Request, res: Response, next: NextFuncti
         // 4. X-Forwarded-For (프록시 체인)
         const xForwardedFor = req.headers['x-forwarded-for'];
         if (xForwardedFor) {
-            const forwarded = Array.isArray(xForwardedFor) 
-                ? xForwardedFor[0] 
-                : xForwardedFor;
-            
+            const forwarded = Array.isArray(xForwardedFor) ? xForwardedFor[0] : xForwardedFor;
+
             // 쉼표로 구분된 IP 목록에서 첫 번째 유효한 공인 IP 추출
-            const ips = forwarded.split(',').map(ip => ip.trim());
+            const ips = forwarded.split(',').map((ip) => ip.trim());
             for (const ip of ips) {
                 if (isValidIp(ip) && !isPrivateIp(ip)) {
                     return ip;
@@ -135,12 +133,12 @@ export const clientIpMiddleware = (req: Request, res: Response, next: NextFuncti
 
     const clientIp = getClientIp();
     const normalizedClientIp = clientIp ? normalizeIp(clientIp) : undefined;
-    
+
     // req.ip를 오버라이드 (getter로 재정의)
     Object.defineProperty(req, 'ip', {
         get: () => normalizedClientIp,
         configurable: true,
-        enumerable: true
+        enumerable: true,
     });
 
     // 추가 정보를 req에 저장 (디버깅/로깅용)
@@ -154,10 +152,10 @@ export const clientIpMiddleware = (req: Request, res: Response, next: NextFuncti
                 'true-client-ip': req.headers['true-client-ip'],
                 'x-real-ip': req.headers['x-real-ip'],
                 'x-forwarded-for': req.headers['x-forwarded-for'],
-            }
+            },
         },
         configurable: true,
-        enumerable: true
+        enumerable: true,
     });
 
     next();

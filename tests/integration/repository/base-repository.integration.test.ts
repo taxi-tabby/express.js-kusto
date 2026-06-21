@@ -6,7 +6,9 @@ import { BaseRepository } from '@lib/data/database/baseRepository';
  * 테스트에서는 fixture 의 prisma 를 반환하는 mock manager 를 주입.
  */
 class TestUserRepository extends BaseRepository<any> {
-    protected getDatabaseName() { return 'default' as any; }
+    protected getDatabaseName() {
+        return 'default' as any;
+    }
 }
 
 function makeMockManager(prisma: any) {
@@ -15,7 +17,7 @@ function makeMockManager(prisma: any) {
         getClient: async () => prisma,
         getClientSync: () => prisma,
         isConnected: () => true,
-        healthCheck: async () => ({ databases: [] })
+        healthCheck: async () => ({ databases: [] }),
     };
 }
 
@@ -44,7 +46,7 @@ describe('BaseRepository (통합)', () => {
 
     it('client 를 통해 user 를 create 후 findMany 로 조회할 수 있다', async () => {
         await (repo as any).client.user.create({
-            data: { id: 'u1', email: 'a@a.com', name: 'Alice' }
+            data: { id: 'u1', email: 'a@a.com', name: 'Alice' },
         });
         const all = await (repo as any).client.user.findMany();
         expect(all).toHaveLength(1);
@@ -65,7 +67,7 @@ describe('BaseRepository (통합)', () => {
             repo.$transaction(async (tx: any) => {
                 await tx.user.create({ data: { id: 'u1', email: 'a@a.com', name: 'A' } });
                 throw new Error('intentional rollback');
-            })
+            }),
         ).rejects.toThrow('intentional rollback');
         const all = await fixture.prisma.user.findMany();
         expect(all).toHaveLength(0);
@@ -78,7 +80,7 @@ describe('BaseRepository (통합)', () => {
                 calls++;
                 await tx.user.create({ data: { id: 'x', email: 'x@x.com', name: 'X' } });
                 throw new Error('always fail');
-            })
+            }),
         ).rejects.toThrow();
         expect(calls).toBe(1);
     });

@@ -11,7 +11,7 @@ const DEFAULT_EXTENSIONS_DIR = './src/app/extensions';
 /** Resolve and require an extension module, returning its default export (or the module). */
 function loadExtensionModule(filePath: string): unknown {
     const resolved = path.resolve(filePath);
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+
     const mod = require(resolved);
     return mod && mod.default !== undefined ? mod.default : mod;
 }
@@ -56,7 +56,7 @@ export function loadExtensions(dir: string = DEFAULT_EXTENSIONS_DIR): KustoExten
 
         if (!isKustoExtension(exported)) {
             throw new Error(
-                `[kusto] Extension file '${entry.name}' must default-export a valid KustoExtension (got: ${typeof exported}).`
+                `[kusto] Extension file '${entry.name}' must default-export a valid KustoExtension (got: ${typeof exported}).`,
             );
         }
 

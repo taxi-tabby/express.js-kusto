@@ -14,7 +14,12 @@ describe('Core 전역 에러 핸들러 등록 순서 회귀', () => {
 
     beforeEach(() => {
         jest.resetModules();
-        process.env = { ...OLD_ENV, NODE_ENV: 'test', AUTO_DOCS: 'false', ENABLE_SCHEMA_API: 'false' };
+        process.env = {
+            ...OLD_ENV,
+            NODE_ENV: 'test',
+            AUTO_DOCS: 'false',
+            ENABLE_SCHEMA_API: 'false',
+        };
     });
 
     afterEach(() => {
@@ -29,7 +34,9 @@ describe('Core 전역 에러 핸들러 등록 순서 회귀', () => {
             __esModule: true,
             default: jest.fn(async (app: any) => {
                 await Promise.resolve();
-                app.get('/__boom', () => { throw new Error('route blew up'); });
+                app.get('/__boom', () => {
+                    throw new Error('route blew up');
+                });
             }),
         }));
         jest.doMock('@lib/data/database/prismaManager', () => ({
@@ -49,7 +56,11 @@ describe('Core 전역 에러 핸들러 등록 순서 회귀', () => {
             __esModule: true,
             repositoryManager: {
                 initialize: jest.fn(async () => {}),
-                getStatus: jest.fn(() => ({ initialized: true, repositoryCount: 0, repositories: [] })),
+                getStatus: jest.fn(() => ({
+                    initialized: true,
+                    repositoryCount: 0,
+                    repositories: [],
+                })),
             },
         }));
         jest.doMock('@lib/data/di/dependencyInjector', () => ({
@@ -59,7 +70,6 @@ describe('Core 전역 에러 핸들러 등록 순서 회귀', () => {
             },
         }));
 
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { Core } = require('@core/bootstrap/Core');
         return Core.getInstance();
     }
@@ -68,7 +78,6 @@ describe('Core 전역 에러 핸들러 등록 순서 회귀', () => {
         const core = bootCoreWithThrowingRoute();
         await core.initialize({ routesPath: './src/app/routes' });
 
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
         const request = require('supertest');
         const res = await request(core.app).get('/__boom');
 

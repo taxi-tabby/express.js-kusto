@@ -12,5 +12,5 @@
  * 끌어오지 않도록 이 변환 로직만 의존성 없는 모듈로 분리했다.
  */
 export function folderNameToEnvVarName(folderName: string): string {
-	return folderName.replace(/([a-z])([A-Z])/g, '$1_$2').toUpperCase() + '__KUSTO_RDB_URL';
+    return folderName.replace(/([a-z])([A-Z])/g, '$1_$2').toUpperCase() + '__KUSTO_RDB_URL';
 }

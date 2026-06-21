@@ -15,5 +15,4 @@ export const JSON_API_VERSION = '1.1';
 export const JSON_API_ATOMIC_EXT = 'https://jsonapi.org/ext/atomic';
 
 /** JSON:API Atomic Operations 확장 미디어 타입 (확장 URI 에서 파생) */
-export const JSON_API_ATOMIC_CONTENT_TYPE =
-    `application/vnd.api+json; ext="${JSON_API_ATOMIC_EXT}"`;
+export const JSON_API_ATOMIC_CONTENT_TYPE = `application/vnd.api+json; ext="${JSON_API_ATOMIC_EXT}"`;

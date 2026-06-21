@@ -66,7 +66,10 @@ function downloadFile(url: string, outputPath: string): Promise<void> {
         const file = fs.createWriteStream(outputPath);
 
         const request = https.get(url, (response) => {
-            if ((response.statusCode === 301 || response.statusCode === 302) && response.headers.location) {
+            if (
+                (response.statusCode === 301 || response.statusCode === 302) &&
+                response.headers.location
+            ) {
                 file.close();
                 fs.rmSync(outputPath, { force: true });
                 downloadFile(response.headers.location, outputPath).then(resolve).catch(reject);
@@ -84,7 +87,9 @@ function downloadFile(url: string, outputPath: string): Promise<void> {
                 downloaded += chunk.length;
                 if (totalSize > 0) {
                     const pct = Math.round((downloaded / totalSize) * 100);
-                    process.stdout.write(`\r   Progress: ${pct}% (${(downloaded / 1024 / 1024).toFixed(2)} MB)`);
+                    process.stdout.write(
+                        `\r   Progress: ${pct}% (${(downloaded / 1024 / 1024).toFixed(2)} MB)`,
+                    );
                 }
             });
             response.pipe(file);
@@ -93,16 +98,26 @@ function downloadFile(url: string, outputPath: string): Promise<void> {
                 // 전송 절단 탐지: content-length 가 있으면 실제 수신량과 비교(절단 시 거부).
                 if (totalSize > 0 && downloaded !== totalSize) {
                     fs.rmSync(outputPath, { force: true });
-                    reject(new Error(`Truncated download: got ${downloaded} of ${totalSize} bytes`));
+                    reject(
+                        new Error(`Truncated download: got ${downloaded} of ${totalSize} bytes`),
+                    );
                     return;
                 }
                 console.log('\n   Download completed');
                 resolve();
             });
-            file.on('error', (err) => { file.close(); fs.rmSync(outputPath, { force: true }); reject(err); });
+            file.on('error', (err) => {
+                file.close();
+                fs.rmSync(outputPath, { force: true });
+                reject(err);
+            });
         });
 
-        request.on('error', (err) => { file.close(); fs.rmSync(outputPath, { force: true }); reject(err); });
+        request.on('error', (err) => {
+            file.close();
+            fs.rmSync(outputPath, { force: true });
+            reject(err);
+        });
         request.setTimeout(30000, () => {
             request.destroy();
             file.close();
@@ -123,7 +138,10 @@ function loadPackageFileMap(extractedPath: string): FileMap {
         throw new Error('Invalid update package: file-map directory not found');
     }
     // 결정적 선택: 정렬 후 첫 항목(현재 패키지는 항상 1개만 담지만 미래 방어).
-    const mapFiles = fs.readdirSync(fileMapDir).filter((f) => f.endsWith('.json')).sort();
+    const mapFiles = fs
+        .readdirSync(fileMapDir)
+        .filter((f) => f.endsWith('.json'))
+        .sort();
     if (mapFiles.length === 0) {
         throw new Error('No file map found in update package');
     }
@@ -285,8 +303,12 @@ function rollback(ops: AppliedOps, backupDir: string): boolean {
     console.warn('\nRolling back changes...');
     let ok = true;
     for (const rel of ops.created) {
-        try { fs.rmSync(path.join(PROJECT_ROOT, rel), { force: true }); }
-        catch (e) { ok = false; console.error(`   Failed to remove created ${rel}:`, e); }
+        try {
+            fs.rmSync(path.join(PROJECT_ROOT, rel), { force: true });
+        } catch (e) {
+            ok = false;
+            console.error(`   Failed to remove created ${rel}:`, e);
+        }
     }
     for (const rel of [...ops.backedUp, ...ops.removed]) {
         try {
@@ -297,7 +319,11 @@ function rollback(ops: AppliedOps, backupDir: string): boolean {
             console.error(`   Failed to restore ${rel}:`, e);
         }
     }
-    console.warn(ok ? 'Rollback complete (restored from backup).' : 'Rollback INCOMPLETE — see errors above.');
+    console.warn(
+        ok
+            ? 'Rollback complete (restored from backup).'
+            : 'Rollback INCOMPLETE — see errors above.',
+    );
     return ok;
 }
 
@@ -374,15 +400,21 @@ export async function performUpdate(options: UpdateOptions = {}): Promise<void> 
             showBackupWarning();
 
             if (!options.dryRun && !options.yes) {
-                const ok = await askUserConfirmation(`Update from v${result.currentVersion} to v${result.latestVersion}?`);
-                if (!ok) { console.log('Update cancelled.'); return; }
+                const ok = await askUserConfirmation(
+                    `Update from v${result.currentVersion} to v${result.latestVersion}?`,
+                );
+                if (!ok) {
+                    console.log('Update cancelled.');
+                    return;
+                }
             }
             packageZip = path.join(tempDir, 'update-package.zip');
             await downloadFile(result.downloadUrls.package, packageZip);
             // 권위 맵: zip 내부가 아니라 릴리스에 별도 게시된 파일맵 에셋을 받아 검증 기준으로 삼는다.
-            authoritativeMap = await downloadJson(
-                result.downloadUrls.fileMap, path.join(tempDir, 'authoritative-map.json')
-            ) as FileMap;
+            authoritativeMap = (await downloadJson(
+                result.downloadUrls.fileMap,
+                path.join(tempDir, 'authoritative-map.json'),
+            )) as FileMap;
         }
 
         // 2) 추출(zip-slip 방어)
@@ -402,11 +434,14 @@ export async function performUpdate(options: UpdateOptions = {}): Promise<void> 
         // 4) 계획 수립 + 출력
         const plan = computePlan(fileMap, loadInstalledMap());
         printPlan(plan);
-        const empty = plan.create.length === 0 && plan.update.length === 0 && plan.remove.length === 0;
+        const empty =
+            plan.create.length === 0 && plan.update.length === 0 && plan.remove.length === 0;
 
         // 5) dry-run: 어떤 쓰기도 하지 않고 종료(설치 맵 동기화조차 하지 않음)
         if (options.dryRun) {
-            console.log(empty ? '\n[dry-run] Nothing to apply.' : '\n[dry-run] No files were written.');
+            console.log(
+                empty ? '\n[dry-run] Nothing to apply.' : '\n[dry-run] No files were written.',
+            );
             return;
         }
 
@@ -423,7 +458,10 @@ export async function performUpdate(options: UpdateOptions = {}): Promise<void> 
         // 7) 최종 확인(비대화형 --yes 가 아니면 로컬/원격 모두 확인)
         if (!options.yes) {
             const ok = await askUserConfirmation('Apply the plan above?');
-            if (!ok) { console.log('Update cancelled.'); return; }
+            if (!ok) {
+                console.log('Update cancelled.');
+                return;
+            }
         }
 
         // 8) 적용(백업) + 실패 시 정확한 롤백
@@ -445,7 +483,9 @@ export async function performUpdate(options: UpdateOptions = {}): Promise<void> 
         if (targetVersion) updatePackageVersion(targetVersion);
 
         console.log('\nUpdate applied successfully.');
-        console.log(`   Created: ${ops.created.length}, Updated: ${ops.backedUp.length}, Removed: ${ops.removed.length}`);
+        console.log(
+            `   Created: ${ops.created.length}, Updated: ${ops.backedUp.length}, Removed: ${ops.removed.length}`,
+        );
         console.log('Restart your application to use the new version.');
         if (preserveBackup) console.log(`Backup kept at: ${backupDir}`);
     } finally {
@@ -468,8 +508,7 @@ function parseArgs(argv: string[]): UpdateOptions {
                 throw new Error('--package requires a file path argument');
             }
             opts.packagePath = next;
-        }
-        else if (a.startsWith('--package=')) opts.packagePath = a.slice('--package='.length);
+        } else if (a.startsWith('--package=')) opts.packagePath = a.slice('--package='.length);
     }
     return opts;
 }

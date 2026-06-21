@@ -1,4 +1,7 @@
-import { syncSchemasFromAnalyzer, registerJsonApiErrorSchema } from '@lib/devtools/documentation/syncSchemas';
+import {
+    syncSchemasFromAnalyzer,
+    registerJsonApiErrorSchema,
+} from '@lib/devtools/documentation/syncSchemas';
 import { DocumentationGenerator } from '@lib/devtools/documentation/documentationGenerator';
 import { PrismaModelInfo } from '@lib/devtools/schema-api/crudSchemaTypes';
 import { snapshotEnv } from '@tests/_setup/env-fixture';
@@ -6,9 +9,42 @@ import { snapshotEnv } from '@tests/_setup/env-fixture';
 const sampleModel: PrismaModelInfo = {
     name: 'User',
     fields: [
-        { name: 'id', type: 'String', jsType: 'string', isOptional: false, isList: false, isId: true, isUnique: true, isReadOnly: false, isGenerated: true, isUpdatedAt: false },
-        { name: 'email', type: 'String', jsType: 'string', isOptional: false, isList: false, isId: false, isUnique: true, isReadOnly: false, isGenerated: false, isUpdatedAt: false },
-        { name: 'role', type: 'Role', jsType: 'Role', isOptional: false, isList: false, isId: false, isUnique: false, isReadOnly: false, isGenerated: false, isUpdatedAt: false },
+        {
+            name: 'id',
+            type: 'String',
+            jsType: 'string',
+            isOptional: false,
+            isList: false,
+            isId: true,
+            isUnique: true,
+            isReadOnly: false,
+            isGenerated: true,
+            isUpdatedAt: false,
+        },
+        {
+            name: 'email',
+            type: 'String',
+            jsType: 'string',
+            isOptional: false,
+            isList: false,
+            isId: false,
+            isUnique: true,
+            isReadOnly: false,
+            isGenerated: false,
+            isUpdatedAt: false,
+        },
+        {
+            name: 'role',
+            type: 'Role',
+            jsType: 'Role',
+            isOptional: false,
+            isList: false,
+            isId: false,
+            isUnique: false,
+            isReadOnly: false,
+            isGenerated: false,
+            isUpdatedAt: false,
+        },
     ],
     relations: [],
     indexes: [],
@@ -77,7 +113,9 @@ describe('syncSchemas', () => {
             const analyzer = createMockAnalyzer([sampleModel]);
             syncSchemasFromAnalyzer(analyzer, 'default');
 
-            expect(() => DocumentationGenerator.generateOpenAPISpec()).toThrow(/Documentation is not enabled/);
+            expect(() => DocumentationGenerator.generateOpenAPISpec()).toThrow(
+                /Documentation is not enabled/,
+            );
         });
 
         it('빈 model 배열일 때 어떤 스키마도 등록하지 않는다', () => {

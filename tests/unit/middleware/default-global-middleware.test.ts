@@ -6,6 +6,7 @@ describe('defaultGlobalMiddleware — 정책 스택', () => {
         expect(stack).toHaveLength(6);
         expect(stack.every((m) => typeof m === 'function')).toBe(true);
         // 모두 일반 미들웨어(에러 핸들러 아님) — arity !== 4
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
         expect(stack.every((m) => (m as Function).length !== 4)).toBe(true);
     });
 
@@ -16,7 +17,9 @@ describe('defaultGlobalMiddleware — 정책 스택', () => {
 
 describe('resolveCorsWhitelist — env 파싱', () => {
     const ORIG = process.env.CORS_WHITELIST;
-    afterEach(() => { process.env.CORS_WHITELIST = ORIG; });
+    afterEach(() => {
+        process.env.CORS_WHITELIST = ORIG;
+    });
 
     it('명시 인자 우선', () => {
         expect(resolveCorsWhitelist(['https://a.com'])).toEqual(['https://a.com']);

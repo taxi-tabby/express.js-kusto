@@ -9,7 +9,12 @@ describe('Core 확장 부팅 순서', () => {
 
     beforeEach(() => {
         jest.resetModules();
-        process.env = { ...OLD_ENV, NODE_ENV: 'test', AUTO_DOCS: 'false', ENABLE_SCHEMA_API: 'false' };
+        process.env = {
+            ...OLD_ENV,
+            NODE_ENV: 'test',
+            AUTO_DOCS: 'false',
+            ENABLE_SCHEMA_API: 'false',
+        };
     });
 
     afterEach(() => {
@@ -22,12 +27,17 @@ describe('Core 확장 부팅 순서', () => {
 
         // loadExtensions mock: 실제 레지스트리에 onInit 확장을 등록한다.
         jest.doMock('@lib/extensions/loadExtensions', () => {
-            // eslint-disable-next-line @typescript-eslint/no-var-requires
             const { extensionRegistry } = require('@lib/extensions/extensionRegistry');
-            // eslint-disable-next-line @typescript-eslint/no-var-requires
+
             const { ExpressRouter } = require('@lib/http/routing/expressRouter');
             const fn = jest.fn(() => {
-                const ext = { name: 'order-probe', routerMethods: { GET_PROBE: () => {} }, onInit: () => { order.push('init'); } };
+                const ext = {
+                    name: 'order-probe',
+                    routerMethods: { GET_PROBE: () => {} },
+                    onInit: () => {
+                        order.push('init');
+                    },
+                };
                 ExpressRouter.registerMethod('GET_PROBE', ext.routerMethods.GET_PROBE);
                 extensionRegistry.register(ext);
                 return [ext];
@@ -38,40 +48,58 @@ describe('Core 확장 부팅 순서', () => {
             __esModule: true,
             default: jest.fn(async () => {
                 await Promise.resolve();
-                // eslint-disable-next-line @typescript-eslint/no-var-requires
+
                 const { ExpressRouter } = require('@lib/http/routing/expressRouter');
                 // 라우트 로드 시점엔 확장 routerMethods 가 이미 prototype 에 등록되어 있어야 한다.
-                order.push(typeof (ExpressRouter.prototype as any).GET_PROBE === 'function' ? 'method-present' : 'method-missing');
+                order.push(
+                    typeof (ExpressRouter.prototype as any).GET_PROBE === 'function'
+                        ? 'method-present'
+                        : 'method-missing',
+                );
                 order.push('routes');
             }),
         }));
-        jest.doMock('@lib/data/database/prismaManager', () => ({ __esModule: true, prismaManager: {
-            initialize: jest.fn(async () => {}),
-            getStatus: jest.fn(() => ({
-                initialized: true, connectedDatabases: 1, totalDatabases: 1,
-                databases: [{ name: 'default', connected: true, generated: true }],
-            })),
-            isConnected: jest.fn(() => true),
-        } }));
-        jest.doMock('@lib/data/database/repositoryManager', () => ({ __esModule: true, repositoryManager: {
-            initialize: jest.fn(async () => {}),
-            getStatus: jest.fn(() => ({ initialized: true, repositoryCount: 0, repositories: [] })),
-        } }));
-        jest.doMock('@lib/data/di/dependencyInjector', () => ({ __esModule: true, DependencyInjector: {
-            getInstance: () => ({ initialize: jest.fn(async () => {}) }),
-        } }));
+        jest.doMock('@lib/data/database/prismaManager', () => ({
+            __esModule: true,
+            prismaManager: {
+                initialize: jest.fn(async () => {}),
+                getStatus: jest.fn(() => ({
+                    initialized: true,
+                    connectedDatabases: 1,
+                    totalDatabases: 1,
+                    databases: [{ name: 'default', connected: true, generated: true }],
+                })),
+                isConnected: jest.fn(() => true),
+            },
+        }));
+        jest.doMock('@lib/data/database/repositoryManager', () => ({
+            __esModule: true,
+            repositoryManager: {
+                initialize: jest.fn(async () => {}),
+                getStatus: jest.fn(() => ({
+                    initialized: true,
+                    repositoryCount: 0,
+                    repositories: [],
+                })),
+            },
+        }));
+        jest.doMock('@lib/data/di/dependencyInjector', () => ({
+            __esModule: true,
+            DependencyInjector: {
+                getInstance: () => ({ initialize: jest.fn(async () => {}) }),
+            },
+        }));
 
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { extensionRegistry } = require('@lib/extensions/extensionRegistry');
         extensionRegistry.clear();
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
+
         const { Core } = require('@core/bootstrap/Core');
         const core = Core.getInstance();
         await core.initialize({ routesPath: './src/app/routes' });
 
         // onInit 이 라우트보다 먼저 실행되고, routerMethods 도 라우트 로드 시점엔 이미 등록되어 있어야 한다.
         expect(order).toEqual(['init', 'method-present', 'routes']);
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
+
         require('@lib/http/routing/expressRouter').ExpressRouter.clearExtensionMethods();
         extensionRegistry.clear();
     });

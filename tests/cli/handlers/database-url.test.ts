@@ -3,15 +3,19 @@ export {};
 const originalArgv = process.argv;
 const originalExit = process.exit;
 process.argv = ['node', 'kusto-db-cli'];
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore - mock exit during import
-process.exit = ((code?: number) => undefined) as never;
+process.exit = ((_code?: number) => undefined) as never;
 const origErr = console.error;
 const origLog = console.log;
 console.error = () => {};
 console.log = () => {};
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const { getDatabaseUrl, getDatabaseEnvVarName } = require('@/src/core/scripts/kusto-db-cli');
+const {
+    getDatabaseUrl,
+    getDatabaseEnvVarName,
+    commandNeedsDatabaseUrl,
+} = require('@/src/core/scripts/kusto-db-cli');
 
 process.argv = originalArgv;
 process.exit = originalExit;
@@ -30,7 +34,9 @@ describe('getDatabaseUrl — env 기반 DB URL 해소 (CI generate 회귀)', () 
     const KEY = getDatabaseEnvVarName('default'); // 'DEFAULT__KUSTO_RDB_URL'
     let saved: string | undefined;
 
-    beforeEach(() => { saved = process.env[KEY]; });
+    beforeEach(() => {
+        saved = process.env[KEY];
+    });
     afterEach(() => {
         if (saved === undefined) delete process.env[KEY];
         else process.env[KEY] = saved;
@@ -63,5 +69,38 @@ describe('getDatabaseUrl — env 기반 DB URL 해소 (CI generate 회귀)', () 
             if (prev === undefined) delete process.env[k];
             else process.env[k] = prev;
         }
+    });
+});
+
+/**
+ * 회귀 (Docker/클라우드 빌드 실패):
+ * `.env` 없이 OS 환경변수만으로 배포하는 Docker 빌드에서 `npm run db -- generate --all` 이
+ * "Database URL not found" 로 죽었다. 근본 원인은 executePrismaCommand 가 generate 에도
+ * DB URL 을 무조건 요구했기 때문이다. 하지만 prisma generate 는 스키마만으로 클라이언트를
+ * 생성하고 DB 에 연결하지 않으므로 URL 이 필요 없다(format/validate 도 동일). URL 은 임시
+ * prisma.config.ts 를 만들어 실제 연결하는 커맨드(migrate/db push 등)에서만 요구해야 한다.
+ * 이 함수가 그 "URL 필요 여부" 판정의 단일 출처(SSOT)다.
+ */
+describe('commandNeedsDatabaseUrl — generate/format/validate 는 DB URL 불필요 (빌드 회귀)', () => {
+    it('generate 는 URL 이 필요 없다 (스키마만으로 생성, DB 연결 안 함)', () => {
+        expect(commandNeedsDatabaseUrl('generate')).toBe(false);
+    });
+
+    it('format 은 URL 이 필요 없다', () => {
+        expect(commandNeedsDatabaseUrl('format')).toBe(false);
+    });
+
+    it('validate 는 URL 이 필요 없다', () => {
+        expect(commandNeedsDatabaseUrl('validate')).toBe(false);
+    });
+
+    it('migrate 계열은 URL 이 필요하다 (실제 연결 → 임시 config)', () => {
+        expect(commandNeedsDatabaseUrl('migrate deploy')).toBe(true);
+        expect(commandNeedsDatabaseUrl('migrate reset --force')).toBe(true);
+    });
+
+    it('db push/pull 은 URL 이 필요하다', () => {
+        expect(commandNeedsDatabaseUrl('db push --accept-data-loss')).toBe(true);
+        expect(commandNeedsDatabaseUrl('db pull')).toBe(true);
     });
 });

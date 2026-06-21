@@ -3,16 +3,16 @@ export {};
 const originalArgv = process.argv;
 const originalExit = process.exit;
 process.argv = ['node', 'kusto-db-cli'];
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore - mock exit during import
-process.exit = ((code?: number) => undefined) as never;
+process.exit = ((_code?: number) => undefined) as never;
 const origErr = console.error;
 const origLog = console.log;
 console.error = () => {};
 console.log = () => {};
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
 const { buildExecuteArgs, getDatabaseEnvVarName } = require('@/src/core/scripts/kusto-db-cli');
-// eslint-disable-next-line @typescript-eslint/no-var-requires
+
 const { folderNameToEnvVarName } = require('@lib/data/database/dbNaming');
 
 process.argv = originalArgv;
@@ -36,7 +36,9 @@ describe('buildExecuteArgs (P1-8 — no shell injection)', () => {
         expect(stdin).toBe(malicious);
         // args 에는 --stdin 플래그만, 평문 SQL 은 절대 포함되지 않음
         expect(args).toContain('--stdin');
-        expect(args.some((a: string) => a.includes('DROP TABLE') || a.includes('rm -rf'))).toBe(false);
+        expect(args.some((a: string) => a.includes('DROP TABLE') || a.includes('rm -rf'))).toBe(
+            false,
+        );
         // echo 셸 파이프 흔적이 전혀 없어야 함
         expect(args.some((a: string) => a.includes('echo') || a.includes('|'))).toBe(false);
     });
@@ -64,6 +66,6 @@ describe('getDatabaseEnvVarName delegates to canonical folderNameToEnvVarName (P
         'is equivalent for "%s"',
         (input) => {
             expect(getDatabaseEnvVarName(input)).toBe(folderNameToEnvVarName(input));
-        }
+        },
     );
 });

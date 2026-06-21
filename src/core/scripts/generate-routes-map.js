@@ -13,7 +13,7 @@ const OUTPUT_FILE = path.resolve(TMP_DIR, 'routes-map.ts');
 const virtualFileSystem = {
     routes: {},
     middlewares: {},
-    structure: {}
+    structure: {},
 };
 
 /**
@@ -22,37 +22,46 @@ const virtualFileSystem = {
 function scanDirectory(dir, virtualPath = '/') {
     // 디렉토리 구조 초기화
     virtualFileSystem.structure[virtualPath] = [];
-    
+
     try {
         const items = fs.readdirSync(dir, { withFileTypes: true });
-        
+
         // 라우트 파일 확인
-        const routeFile = items.find(item => (item.name === 'route.ts' || item.name === 'route.js') && !item.isDirectory());        if (routeFile) {
+        const routeFile = items.find(
+            (item) => (item.name === 'route.ts' || item.name === 'route.js') && !item.isDirectory(),
+        );
+        if (routeFile) {
             const routePath = virtualPath;
-            virtualFileSystem.routes[routePath] = { 
+            virtualFileSystem.routes[routePath] = {
                 path: path.relative(process.cwd(), path.join(dir, routeFile.name)),
-                importPath: `./${path.relative(process.cwd(), path.join(dir, routeFile.name)).replace(/\\/g, '/')}` 
+                importPath: `./${path.relative(process.cwd(), path.join(dir, routeFile.name)).replace(/\\/g, '/')}`,
             };
         }
-        
+
         // 미들웨어 파일 확인
-        const middlewareFile = items.find(item => (item.name === 'middleware.ts' || item.name === 'middleware.js') && !item.isDirectory());        if (middlewareFile) {
+        const middlewareFile = items.find(
+            (item) =>
+                (item.name === 'middleware.ts' || item.name === 'middleware.js') &&
+                !item.isDirectory(),
+        );
+        if (middlewareFile) {
             const middlewarePath = virtualPath;
-            virtualFileSystem.middlewares[middlewarePath] = { 
+            virtualFileSystem.middlewares[middlewarePath] = {
                 path: path.relative(process.cwd(), path.join(dir, middlewareFile.name)),
-                importPath: `./${path.relative(process.cwd(), path.join(dir, middlewareFile.name)).replace(/\\/g, '/')}` 
+                importPath: `./${path.relative(process.cwd(), path.join(dir, middlewareFile.name)).replace(/\\/g, '/')}`,
             };
         }
-        
+
         // 하위 디렉토리 스캔
         for (const item of items) {
             if (item.isDirectory()) {
                 const fullPath = path.join(dir, item.name);
-                const nextVirtualPath = virtualPath === '/' ? `/${item.name}` : `${virtualPath}/${item.name}`;
-                
+                const nextVirtualPath =
+                    virtualPath === '/' ? `/${item.name}` : `${virtualPath}/${item.name}`;
+
                 // 디렉토리 경로 기록
                 virtualFileSystem.structure[virtualPath].push(item.name);
-                
+
                 // 재귀적으로 하위 디렉토리 스캔
                 scanDirectory(fullPath, nextVirtualPath);
             }
@@ -74,8 +83,12 @@ console.log(`🔍 Scanning routes directory: ${ROUTES_DIR}`);
 scanDirectory(ROUTES_DIR);
 
 // 결과 출력
-console.log(`📊 Found ${Object.keys(virtualFileSystem.routes).length} routes and ${Object.keys(virtualFileSystem.middlewares).length} middlewares`);
-console.log(`📊 Directory structure: ${Object.keys(virtualFileSystem.structure).length} directories`);
+console.log(
+    `📊 Found ${Object.keys(virtualFileSystem.routes).length} routes and ${Object.keys(virtualFileSystem.middlewares).length} middlewares`,
+);
+console.log(
+    `📊 Directory structure: ${Object.keys(virtualFileSystem.structure).length} directories`,
+);
 
 // 디렉토리 구조와 경로 출력
 console.log(`\n📁 Virtual File System Structure:`);
@@ -102,19 +115,23 @@ Object.entries(virtualFileSystem.middlewares).forEach(([middlewarePath, middlewa
     middlewaresMapCode[middlewarePath] = `Array.isArray(${varName}) ? ${varName} : [${varName}]`;
 });
 
-        // 상대 경로로 변환 (webpack 번들에서 사용 가능하도록)
-importCode = importCode.map(line => {
+// 상대 경로로 변환 (webpack 번들에서 사용 가능하도록)
+importCode = importCode.map((line) => {
     // 상대 경로 가져오기 ('../../../app/routes/...' 형태로 변환) & .ts 확장자 제거
-    return line.replace(/['"].*['"]/g, matched => {
+    return line.replace(/['"].*['"]/g, (matched) => {
         const importPath = matched.slice(1, -1);
-        let relativePath = path.relative(
-            path.dirname(OUTPUT_FILE), 
-            path.resolve(importPath.startsWith('.') ? importPath : path.join(process.cwd(), importPath))
-        ).replace(/\\/g, '/');
-        
+        let relativePath = path
+            .relative(
+                path.dirname(OUTPUT_FILE),
+                path.resolve(
+                    importPath.startsWith('.') ? importPath : path.join(process.cwd(), importPath),
+                ),
+            )
+            .replace(/\\/g, '/');
+
         // .ts 확장자 제거
         relativePath = relativePath.replace(/\.ts$/, '');
-        
+
         return `'${relativePath.startsWith('.') ? relativePath : './' + relativePath}'`;
     });
 });
@@ -128,12 +145,16 @@ ${importCode.join('\n')}
 
 // 라우트 맵 - 경로와 해당 라우트 모듈 연결
 export const routesMap = {
-${Object.entries(routesMapCode).map(([path, varName]) => `  "${path}": ${varName}`).join(',\n')}
+${Object.entries(routesMapCode)
+    .map(([path, varName]) => `  "${path}": ${varName}`)
+    .join(',\n')}
 };
 
 // 미들웨어 맵 - 경로와 해당 미들웨어 모듈 연결
 export const middlewaresMap = {
-${Object.entries(middlewaresMapCode).map(([path, code]) => `  "${path}": ${code}`).join(',\n')}
+${Object.entries(middlewaresMapCode)
+    .map(([path, code]) => `  "${path}": ${code}`)
+    .join(',\n')}
 };
 
 // 디렉토리 구조

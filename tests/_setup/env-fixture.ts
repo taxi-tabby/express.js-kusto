@@ -37,7 +37,7 @@ export function snapshotEnv(): () => void {
  */
 export async function withEnv<T>(
     overrides: Record<string, string | undefined>,
-    fn: () => T | Promise<T>
+    fn: () => T | Promise<T>,
 ): Promise<T> {
     const original: Record<string, string | undefined> = {};
     for (const key of Object.keys(overrides)) {

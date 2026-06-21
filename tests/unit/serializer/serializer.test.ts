@@ -4,7 +4,7 @@ import {
     serializeDate,
     serializePrismaDate,
     safeJsonResponse,
-    jsonReplacer
+    jsonReplacer,
 } from '@lib/http/serialization/serializer';
 
 describe('serializeBigInt', () => {
@@ -40,7 +40,7 @@ describe('serializePrismaDate', () => {
         const fakePrismaDate: any = {};
         Object.defineProperty(fakePrismaDate, 'valueOf', {
             value: () => Date.UTC(2025, 0, 15), // 2025-01-15
-            enumerable: false
+            enumerable: false,
         });
         const result = serializePrismaDate(fakePrismaDate);
         expect(result).toMatch(/^\d{4}-\d{2}-\d{2}$/);
@@ -49,8 +49,10 @@ describe('serializePrismaDate', () => {
     it('valueOf 가 throw 할 때 원본 객체를 반환한다 (graceful fallback)', () => {
         const broken: any = {};
         Object.defineProperty(broken, 'valueOf', {
-            value: () => { throw new Error('cannot convert'); },
-            enumerable: false
+            value: () => {
+                throw new Error('cannot convert');
+            },
+            enumerable: false,
         });
         expect(() => serializePrismaDate(broken)).not.toThrow();
     });
@@ -61,7 +63,7 @@ describe('serialize (composite)', () => {
         const result = serialize({
             id: 100n,
             createdAt: new Date('2025-01-01T00:00:00Z'),
-            name: 'item'
+            name: 'item',
         });
         expect(result.id).toBe('100');
         expect(typeof result.createdAt).toBe('string');

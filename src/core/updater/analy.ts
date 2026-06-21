@@ -41,87 +41,89 @@ function parseGitignore(gitignorePath: string): string[] {
  * @returns 무시해야 하는 파일이면 true
  */
 function shouldIgnoreFile(filePath: string, patterns: string[]): boolean {
-  // 윈도우 경로 구분자를 슬래시로 변환
-  const normalizedPath = filePath.replace(/\\/g, '/');
-  
-  let shouldIgnore = false;
-  
-  // 패턴을 순서대로 처리 (! 패턴이 이전 매치를 덮어쓸 수 있도록)
-  for (const pattern of patterns) {
-    let currentPattern = pattern;
-    let isNegation = false;
-    
-    // ! 로 시작하는 패턴 처리 (부정 패턴)
-    if (pattern.startsWith('!')) {
-      isNegation = true;
-      currentPattern = pattern.substring(1);
-    }
-    
-    let matches = false;
-    
-    // 디렉토리 패턴 (/ 로 끝나는 경우)
-    if (currentPattern.endsWith('/')) {
-      const dirPattern = currentPattern.slice(0, -1);
-      if (normalizedPath.startsWith(dirPattern + '/') || normalizedPath === dirPattern) {
-        matches = true;
-      }
-    } else {
-      // 정확한 매치
-      if (normalizedPath === currentPattern) {
-        matches = true;
-      }
-      
-      // 디렉토리명 매치 (디렉토리 전체를 무시)
-      else if (normalizedPath.startsWith(currentPattern + '/')) {
-        matches = true;
-      }
-      
-      // 와일드카드 처리
-      else if (currentPattern.includes('*')) {
-        const regexPattern = currentPattern
-          .replace(/\./g, '\\.')
-          .replace(/\*/g, '.*');
-        const regex = new RegExp('^' + regexPattern + '$');
-        if (regex.test(normalizedPath)) {
-          matches = true;
-        } else {
-          // 디렉토리 내 파일도 매치
-          const pathParts = normalizedPath.split('/');
-          for (let i = 0; i < pathParts.length; i++) {
-            const subPath = pathParts.slice(i).join('/');
-            if (regex.test(subPath)) {
-              matches = true;
-              break;
-            }
-          }
-        }
-      }
-      
-      // 파일명 매치 (경로의 어느 부분에서든)
-      else {
-        const pathParts = normalizedPath.split('/');
-        if (pathParts.includes(currentPattern)) {
-          matches = true;
-        }
-      }
-      
-      // 확장자 매치
-      if (!matches && currentPattern.startsWith('*.') && normalizedPath.endsWith(currentPattern.substring(1))) {
-        matches = true;
-      }
-    }
-    
-    // 매치된 경우 무시 여부 결정
-    if (matches) {
-      if (isNegation) {
-        shouldIgnore = false;  // ! 패턴은 이전 무시를 취소
-      } else {
-        shouldIgnore = true;   // 일반 패턴은 무시
-      }
-    }
-  }
+    // 윈도우 경로 구분자를 슬래시로 변환
+    const normalizedPath = filePath.replace(/\\/g, '/');
 
-  return shouldIgnore;
+    let shouldIgnore = false;
+
+    // 패턴을 순서대로 처리 (! 패턴이 이전 매치를 덮어쓸 수 있도록)
+    for (const pattern of patterns) {
+        let currentPattern = pattern;
+        let isNegation = false;
+
+        // ! 로 시작하는 패턴 처리 (부정 패턴)
+        if (pattern.startsWith('!')) {
+            isNegation = true;
+            currentPattern = pattern.substring(1);
+        }
+
+        let matches = false;
+
+        // 디렉토리 패턴 (/ 로 끝나는 경우)
+        if (currentPattern.endsWith('/')) {
+            const dirPattern = currentPattern.slice(0, -1);
+            if (normalizedPath.startsWith(dirPattern + '/') || normalizedPath === dirPattern) {
+                matches = true;
+            }
+        } else {
+            // 정확한 매치
+            if (normalizedPath === currentPattern) {
+                matches = true;
+            }
+
+            // 디렉토리명 매치 (디렉토리 전체를 무시)
+            else if (normalizedPath.startsWith(currentPattern + '/')) {
+                matches = true;
+            }
+
+            // 와일드카드 처리
+            else if (currentPattern.includes('*')) {
+                const regexPattern = currentPattern.replace(/\./g, '\\.').replace(/\*/g, '.*');
+                const regex = new RegExp('^' + regexPattern + '$');
+                if (regex.test(normalizedPath)) {
+                    matches = true;
+                } else {
+                    // 디렉토리 내 파일도 매치
+                    const pathParts = normalizedPath.split('/');
+                    for (let i = 0; i < pathParts.length; i++) {
+                        const subPath = pathParts.slice(i).join('/');
+                        if (regex.test(subPath)) {
+                            matches = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // 파일명 매치 (경로의 어느 부분에서든)
+            else {
+                const pathParts = normalizedPath.split('/');
+                if (pathParts.includes(currentPattern)) {
+                    matches = true;
+                }
+            }
+
+            // 확장자 매치
+            if (
+                !matches &&
+                currentPattern.startsWith('*.') &&
+                normalizedPath.endsWith(currentPattern.substring(1))
+            ) {
+                matches = true;
+            }
+        }
+
+        // 매치된 경우 무시 여부 결정
+        if (matches) {
+            if (isNegation) {
+                shouldIgnore = false; // ! 패턴은 이전 무시를 취소
+            } else {
+                shouldIgnore = true; // 일반 패턴은 무시
+            }
+        }
+    }
+
+    return shouldIgnore;
 }
 
 /**
@@ -130,21 +132,21 @@ function shouldIgnoreFile(filePath: string, patterns: string[]): boolean {
  * @param relativePath 상대 경로
  * @returns 제외해야 하는 파일이면 true
  */
-function shouldExcludeFromDeployment(fileName: string, relativePath: string): boolean {
+export function shouldExcludeFromDeployment(fileName: string, relativePath: string): boolean {
     // npm 관련 파일들
     const npmFiles = [
         'package.json',
         'package-lock.json',
         'npm-shrinkwrap.json',
         '.npmrc',
-        '.npmignore'
+        '.npmignore',
     ];
-    
-    // 개발 도구 관련 파일들
+
+    // 개발 도구 / 프로젝트 메타 파일들 — 소비자(설치 프로젝트)가 소유·커스터마이즈하므로
+    // 프레임워크 업데이트가 덮어쓰면 안 된다. (jest.config 은 .js/.ts 변형이 있어 아래 패턴으로 처리)
     const devFiles = [
         'tsconfig.json',
         'tsconfig.*.json',
-        'jest.config.js',
         'webpack.config.js',
         'nodemon.json',
         'nodemon.*.json',
@@ -154,35 +156,44 @@ function shouldExcludeFromDeployment(fileName: string, relativePath: string): bo
         'CHANGELOG.md',
         'LICENSE',
         'LICENSE.md',
-        'LICENSE.txt'
+        'LICENSE.txt',
+        'CLAUDE.md', // 프로젝트별 에이전트 지침(소비자 소유)
+        'prisma.config.ts', // 루트 Prisma 설정: 소비자의 마이그레이션/어댑터 배선(temp per-DB 설정은 .gitignore)
+        'artillery-test.yml', // 부하 테스트 설정: 소비자별 타깃/SLO
     ];
-    
+
     // 자동 생성되는 타입 파일들 (서비스에서 자동 생성)
     const autoGeneratedFiles = [
         'src/core/lib/types/generated-db-types.ts',
         'src/core/lib/types/generated-injectable-types.ts',
-        'src/core/lib/types/generated-repository-types.ts'
+        'src/core/lib/types/generated-repository-types.ts',
     ];
-    
+
     // 상대 경로로 자동 생성 파일 매치
     if (autoGeneratedFiles.includes(relativePath)) {
         return true;
     }
-    
+
     // 파일명 직접 매치
     if (npmFiles.includes(fileName) || devFiles.includes(fileName)) {
         return true;
     }
-    
+
     // 패턴 매치 (tsconfig.*.json 등)
     if (fileName.startsWith('tsconfig.') && fileName.endsWith('.json')) {
         return true;
     }
-    
+
     if (fileName.startsWith('nodemon.') && fileName.endsWith('.json')) {
         return true;
     }
-    
+
+    // jest 설정은 변형(.js/.ts/.cjs/.mjs/.json)이 많다 — 모두 소비자 소유로 제외.
+    // (기존엔 'jest.config.js' 만 제외돼 이 프로젝트가 쓰는 jest.config.ts 가 누설됐다)
+    if (/^jest\.config\.(js|ts|cjs|mjs|json)$/.test(fileName)) {
+        return true;
+    }
+
     return false;
 }
 
@@ -200,6 +211,32 @@ function calculateFileChecksum(filePath: string): string {
  * @param fileList 파일 목록을 저장할 배열
  * @param baseDir 기준 디렉토리 (상대 경로 계산용)
  */
+/**
+ * 스캔 중 재귀를 건너뛸 디렉토리인지 판정한다(배포 맵 제외의 SSOT, 디렉토리 단위).
+ * @param dirName 디렉토리 이름(basename)
+ * @param relativePath 프로젝트 루트 기준 상대 경로(슬래시 정규화)
+ * @returns 건너뛰어야 하면 true
+ *
+ * 배포 맵은 inclusive-by-default 스캔이므로, 소비자(설치 프로젝트)가 소유하는 트리는 여기서
+ * 명시적으로 제외해야 프레임워크 업데이트가 소비자 파일을 덮어쓰지 않는다.
+ *   - src/app          : 사용자 애플리케이션 코드
+ *   - src/core/updater : updater 자기 자신(업데이트 도중 자기 덮어쓰기 방지; 소비자는 자체 보유)
+ *   - tests            : 테스트는 프로젝트 단위. 프레임워크 자체 회귀 스위트는 @core/updater 등
+ *                        내부를 import 하므로 소비자 환경에선 실행 불가하고 가치도 없다.
+ *   - public           : 소비자 정적 에셋(robots.txt 등)
+ */
+export function shouldSkipDirectory(dirName: string, relativePath: string): boolean {
+    // 빌드 산출물 / VCS / 에디터 / 패키지 디렉토리(성능 + 비배포)
+    if (['node_modules', '.git', '.github', '.vscode', 'dist', 'build'].includes(dirName)) {
+        return true;
+    }
+    // 소비자 소유 트리(프레임워크가 배포로 덮어쓰면 안 됨)
+    const consumerOwnedTrees = ['src/app', 'src/core/updater', 'tests', 'public'];
+    return consumerOwnedTrees.some(
+        (root) => relativePath === root || relativePath.startsWith(root + '/'),
+    );
+}
+
 function scanDirectory(dirPath: string, fileList: string[] = [], baseDir?: string): string[] {
     try {
         const items = fs.readdirSync(dirPath);
@@ -210,19 +247,10 @@ function scanDirectory(dirPath: string, fileList: string[] = [], baseDir?: strin
             const stat = fs.statSync(fullPath);
 
             if (stat.isDirectory()) {
-                // 상대 경로로 변환하여 src/app 경로인지 확인
+                // 프로젝트 루트 기준 상대 경로로 변환하여 스킵 여부 판정
                 const relativePath = path.relative(base, fullPath).replace(/\\/g, '/');
 
-                // node_modules, .git, .github 등 제외할 디렉토리 및 src/app, updater 폴더 제외.
-                // updater 는 src/core/updater 로 이동했으며, 자기 자신을 배포 맵에 포함하면
-                // 업데이트 도중 자기 덮어쓰기 위험이 있으므로 계속 제외한다(소비자는 자체 updater 유지).
-                const shouldSkip = ['node_modules', '.git', '.github', '.vscode', 'dist', 'build'].includes(item) ||
-                    relativePath === 'src/app' ||
-                    relativePath.startsWith('src/app/') ||
-                    relativePath === 'src/core/updater' ||
-                    relativePath.startsWith('src/core/updater/');
-
-                if (!shouldSkip) {
+                if (!shouldSkipDirectory(item, relativePath)) {
                     scanDirectory(fullPath, fileList, base);
                 }
             } else if (stat.isFile()) {
@@ -266,7 +294,7 @@ export function generateFileMap(outputDir: string = MAP_DIR): string {
                 const relativePath = path.relative(parentDir, filePath);
                 // 윈도우 경로 구분자를 슬래시로 변환
                 const normalizedPath = relativePath.replace(/\\/g, '/');
-                
+
                 // 파일명 추출
                 const fileName = path.basename(filePath);
 
@@ -275,7 +303,7 @@ export function generateFileMap(outputDir: string = MAP_DIR): string {
                     ignoredCount++;
                     continue;
                 }
-                
+
                 // 배포 제외 파일인지 확인
                 if (shouldExcludeFromDeployment(fileName, normalizedPath)) {
                     ignoredCount++;

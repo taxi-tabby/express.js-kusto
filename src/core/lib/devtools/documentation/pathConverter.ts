@@ -38,8 +38,13 @@ function normalizePathForDerivation(path: string): string {
 
 /** 경로 세그먼트가 파라미터/와일드카드인지(정적 리소스가 아닌지) 판별. */
 function isDynamicSegment(seg: string): boolean {
-    return seg.startsWith(':') || seg.startsWith('{') || seg.startsWith('[')
-        || seg.startsWith('..') || seg.includes('*');
+    return (
+        seg.startsWith(':') ||
+        seg.startsWith('{') ||
+        seg.startsWith('[') ||
+        seg.startsWith('..') ||
+        seg.includes('*')
+    );
 }
 
 /** 동적 세그먼트에서 파라미터 식별자만 추출(정규식/괄호/별표/대괄호 장식 제거). */
@@ -56,7 +61,9 @@ function paramNameOf(seg: string): string {
  */
 export function deriveResourceTag(path: string): string {
     const statics = normalizePathForDerivation(path)
-        .split('/').filter(Boolean).filter((seg) => !isDynamicSegment(seg));
+        .split('/')
+        .filter(Boolean)
+        .filter((seg) => !isDynamicSegment(seg));
     const last = statics[statics.length - 1];
     if (!last) return 'Default';
     return last.split(/[-_]/).filter(Boolean).map(titleCase).join(' ');
@@ -70,7 +77,9 @@ export function deriveResourceTag(path: string): string {
  */
 export function deriveOperationId(method: string, path: string): string {
     const parts = normalizePathForDerivation(path)
-        .split('/').filter(Boolean).map((seg) => {
+        .split('/')
+        .filter(Boolean)
+        .map((seg) => {
             if (isDynamicSegment(seg)) {
                 const name = paramNameOf(seg);
                 return name ? `By${titleCase(name)}` : '';

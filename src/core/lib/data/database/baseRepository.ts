@@ -1,5 +1,5 @@
 ﻿import { prismaManager, PrismaManager } from '@lib/data/database/prismaManager';
-import { DatabaseClientMap } from '@lib/types/generated-db-types'
+import { DatabaseClientMap } from '@lib/types/generated-db-types';
 import type { DatabaseNamesUnion } from '@lib/types/generated-db-types';
 import { log } from '@ext/winston';
 import {
@@ -7,16 +7,17 @@ import {
     TransactionParticipant,
     TransactionCommitOptions,
     TransactionCommitResult,
-    TransactionState
+    TransactionState,
 } from '@lib/data/database/transactionCommitManager';
-
 
 /**
  * 분산 트랜잭션 작업 정의
  * 자동화된 분산 트랜잭션을 위한 인터페이스 (보상 트랜잭션 지원)
  * @template TDatabase 데이터베이스 타입 (database 속성의 값에 따라 operation 매개변수 타입이 자동 추론됨)
  */
-export interface DistributedTransactionOperation<TDatabase extends DatabaseNamesUnion = DatabaseNamesUnion> {
+export interface DistributedTransactionOperation<
+    TDatabase extends DatabaseNamesUnion = DatabaseNamesUnion,
+> {
     database: TDatabase;
     operation: (prisma: DatabaseClientMap[TDatabase]) => Promise<any>;
     timeout?: number;
@@ -31,14 +32,11 @@ export interface DistributedTransactionOperation<TDatabase extends DatabaseNames
     rollbackOperation?: (prisma: DatabaseClientMap[TDatabase]) => Promise<void>;
 }
 
-
-
 /**
  * 리포지터리의 통합된 규칙을 위한 기본 확장용 클래스.
  * 이 클래스를 상속받아 각 더욱 편리하게 repository를 구현할 목적.
  */
 export abstract class BaseRepository<T extends DatabaseNamesUnion> {
-
     /**
      * PrismaManager 인스턴스. 생성자에서 주입받거나 싱글턴 기본값으로 설정된다.
      */
@@ -47,13 +45,11 @@ export abstract class BaseRepository<T extends DatabaseNamesUnion> {
     /** 2PC 매니저 인스턴스 */
     private twoPhaseCommitManager: TransactionCommitManager;
 
-
     /**
      * 리포지터리의 데이터베이스 이름. 하위 클래스의 `getDatabaseName()` 구현 결과로
      * 생성자에서 설정되며, 타입 안전성을 보장한다.
      */
     protected repositoryDatabaseName!: T;
-
 
     /**
      * 생성자
@@ -62,7 +58,7 @@ export abstract class BaseRepository<T extends DatabaseNamesUnion> {
     constructor(prismaManagerInstance?: PrismaManager) {
         this.db = prismaManagerInstance || prismaManager;
         this.twoPhaseCommitManager = new TransactionCommitManager(this.db);
-        
+
         // 하위 클래스에서 데이터베이스 설정을 완료했는지 확인
         this.validateRepositorySetup();
     }
@@ -80,11 +76,13 @@ export abstract class BaseRepository<T extends DatabaseNamesUnion> {
     private validateRepositorySetup(): void {
         // getDatabaseName()이 구현되지 않으면 런타임 에러 발생
         const databaseName = this.getDatabaseName();
-        
+
         if (!databaseName) {
-            throw new Error(`Repository must implement getDatabaseName() method and return a valid database name. Current class: ${this.constructor.name}`);
+            throw new Error(
+                `Repository must implement getDatabaseName() method and return a valid database name. Current class: ${this.constructor.name}`,
+            );
         }
-        
+
         this.repositoryDatabaseName = databaseName;
     }
 
@@ -105,11 +103,10 @@ export abstract class BaseRepository<T extends DatabaseNamesUnion> {
         return this.db.getWrap(this.repositoryDatabaseName) as DatabaseClientMap[T];
     }
 
-
     /**
      * 타입 안전성을 위한 분산 트랜잭션 작업 생성 헬퍼 메서드
      * database 값에 따라 operation 매개변수 타입이 자동으로 추론됩니다.
-     * 
+     *
      * @template TDatabase 데이터베이스 타입
      * @param database 데이터베이스 이름
      * @param operation 실행할 작업 함수
@@ -126,7 +123,7 @@ export abstract class BaseRepository<T extends DatabaseNamesUnion> {
             rollbackOperation?: (prisma: DatabaseClientMap[TDatabase]) => Promise<void>;
             priority?: number;
             requiredLocks?: string[];
-        }
+        },
     ): DistributedTransactionOperation<TDatabase> {
         return {
             database,
@@ -134,10 +131,9 @@ export abstract class BaseRepository<T extends DatabaseNamesUnion> {
             timeout: options?.timeout,
             rollbackOperation: options?.rollbackOperation,
             priority: options?.priority,
-            requiredLocks: options?.requiredLocks
+            requiredLocks: options?.requiredLocks,
         };
     }
-
 
     /**
      * 고급 트랜잭션 처리 메서드 — 성능 모니터링, 에러 핸들링 통합.
@@ -146,13 +142,17 @@ export abstract class BaseRepository<T extends DatabaseNamesUnion> {
     public async $transaction<R>(
         callback: (prisma: DatabaseClientMap[T]) => Promise<R>,
         options?: {
-            isolationLevel?: 'ReadUncommitted' | 'ReadCommitted' | 'RepeatableRead' | 'Serializable';
+            isolationLevel?:
+                | 'ReadUncommitted'
+                | 'ReadCommitted'
+                | 'RepeatableRead'
+                | 'Serializable';
             maxWait?: number;
             timeout?: number;
             retryAttempts?: number;
             retryDelay?: number;
             enableLogging?: boolean;
-        }
+        },
     ): Promise<R> {
         const config = {
             isolationLevel: options?.isolationLevel || 'Serializable',
@@ -160,7 +160,7 @@ export abstract class BaseRepository<T extends DatabaseNamesUnion> {
             timeout: options?.timeout || 30000,
             retryAttempts: options?.retryAttempts || 1,
             retryDelay: options?.retryDelay || 1000,
-            enableLogging: options?.enableLogging ?? true
+            enableLogging: options?.enableLogging ?? true,
         };
 
         const txId = this.generateTransactionId();
@@ -178,19 +178,18 @@ export abstract class BaseRepository<T extends DatabaseNamesUnion> {
                     {
                         isolationLevel: config.isolationLevel,
                         maxWait: config.maxWait,
-                        timeout: config.timeout
-                    }
+                        timeout: config.timeout,
+                    },
                 );
 
                 if (config.enableLogging) {
                     const duration = Number(process.hrtime.bigint() - startTime) / 1_000_000;
                     log.Debug(`Transaction ${txId} completed`, {
                         duration: `${duration.toFixed(2)}ms`,
-                        attempts: attempt
+                        attempts: attempt,
                     });
                 }
                 return result;
-
             } catch (error) {
                 const isLastAttempt = attempt >= config.retryAttempts;
                 const isRetryable = this.isRetryableError(error);
@@ -200,14 +199,14 @@ export abstract class BaseRepository<T extends DatabaseNamesUnion> {
                     log.Error(`Transaction ${txId} failed`, {
                         duration: `${duration.toFixed(2)}ms`,
                         attempts: attempt,
-                        error: error instanceof Error ? error.message : String(error)
+                        error: error instanceof Error ? error.message : String(error),
                     });
                     throw this.enhanceError(error, txId, attempt);
                 }
 
                 if (config.enableLogging) {
                     log.Warn(`Transaction ${txId} retry ${attempt}`, {
-                        error: this.getErrorType(error)
+                        error: this.getErrorType(error),
                     });
                 }
                 await this.sleep(config.retryDelay * attempt);
@@ -217,21 +216,19 @@ export abstract class BaseRepository<T extends DatabaseNamesUnion> {
         throw new Error(`Transaction ${txId} failed after ${config.retryAttempts} attempts`);
     }
 
-
-
     /**
      * 배치 작업 처리 - 대량 데이터 작업 최적화
      */
     public async $batchOperation<R>(
         operations: Array<(prisma: DatabaseClientMap[T]) => Promise<R>>,
-        batchSize: number = 100
+        batchSize: number = 100,
     ): Promise<R[]> {
         const results: R[] = [];
 
         for (let i = 0; i < operations.length; i += batchSize) {
             const batch = operations.slice(i, i + batchSize);
             const batchResults = await this.$transaction(async (prisma) => {
-                return Promise.all(batch.map(op => op(prisma)));
+                return Promise.all(batch.map((op) => op(prisma)));
             });
             results.push(...batchResults);
         }
@@ -243,9 +240,8 @@ export abstract class BaseRepository<T extends DatabaseNamesUnion> {
      * 비동기 sleep 함수
      */
     private sleep(ms: number): Promise<void> {
-        return new Promise(resolve => setTimeout(resolve, ms));
+        return new Promise((resolve) => setTimeout(resolve, ms));
     }
-
 
     /**
      * 에러 정보 강화
@@ -263,7 +259,6 @@ export abstract class BaseRepository<T extends DatabaseNamesUnion> {
         return enhanced;
     }
 
-
     /**
      * 트랜잭션 ID 생성
      */
@@ -279,8 +274,14 @@ export abstract class BaseRepository<T extends DatabaseNamesUnion> {
     private isRetryableError(error: unknown): boolean {
         if (!(error instanceof Error)) return false;
         const message = error.message.toLowerCase();
-        return ['deadlock', 'lock timeout', 'connection', 'timeout', 'serialization failure', 'transaction was aborted']
-            .some(pattern => message.includes(pattern));
+        return [
+            'deadlock',
+            'lock timeout',
+            'connection',
+            'timeout',
+            'serialization failure',
+            'transaction was aborted',
+        ].some((pattern) => message.includes(pattern));
     }
 
     /**
@@ -296,52 +297,51 @@ export abstract class BaseRepository<T extends DatabaseNamesUnion> {
             connection: 'connection',
             constraint: 'constraint_violation',
             serialization: 'serialization_failure',
-            syntax: 'syntax_error'
+            syntax: 'syntax_error',
         };
 
-        const matchedKey = Object.keys(errorMap).find(key => message.includes(key));
+        const matchedKey = Object.keys(errorMap).find((key) => message.includes(key));
         return matchedKey ? errorMap[matchedKey] : 'database_error';
     }
     /**
      * Saga Pattern 분산 트랜잭션 실행 (내부 메서드)
      * 여러 데이터베이스에 걸친 분산 트랜잭션을 Saga Pattern + 보상 트랜잭션으로 처리
-     * 
+     *
      * @param operations 각 데이터베이스별 실행할 작업들
      * @param options Saga 실행 옵션
      * @returns 분산 트랜잭션 실행 결과
      */
     private async distributedTransaction<TResult = any>(
         operations: readonly DistributedTransactionOperation<any>[],
-        options: TransactionCommitOptions = {}
+        options: TransactionCommitOptions = {},
     ): Promise<TransactionCommitResult<TResult>> {
-        const participants: Omit<TransactionParticipant, 'state'>[] = operations.map(op => ({
+        const participants: Omit<TransactionParticipant, 'state'>[] = operations.map((op) => ({
             database: op.database,
             operation: op.operation,
             timeout: op.timeout,
             rollbackOperation: op.rollbackOperation,
             priority: op.priority,
-            requiredLocks: op.requiredLocks
-        }));        return await this.twoPhaseCommitManager.executeDistributedTransaction<TResult>(
+            requiredLocks: op.requiredLocks,
+        }));
+        return await this.twoPhaseCommitManager.executeDistributedTransaction<TResult>(
             participants,
             {
                 enableLogging: true,
                 enableCompensation: true, // 보상 트랜잭션 활성화
-                ...options
-            }
+                ...options,
+            },
         );
     }
-
-
 
     /**
      * 분산 트랜잭션 상태 검증
      * 실제 실행 전에 커밋 가능성을 미리 검사
-     * 
+     *
      * @param operations 검증할 작업들
      * @returns 커밋 가능성과 이유
      */
     private async validateDistributedTransaction(
-        operations: readonly DistributedTransactionOperation<any>[]
+        operations: readonly DistributedTransactionOperation<any>[],
     ): Promise<{
         canProceed: boolean;
         issues: string[];
@@ -358,9 +358,11 @@ export abstract class BaseRepository<T extends DatabaseNamesUnion> {
             if (connected) {
                 try {
                     const healthCheck = await this.db.healthCheck();
-                    const dbHealth = healthCheck.databases.find(db => db.name === operation.database);
+                    const dbHealth = healthCheck.databases.find(
+                        (db) => db.name === operation.database,
+                    );
                     healthy = dbHealth?.status === 'healthy';
-                } catch (error) {
+                } catch (_error) {
                     healthy = false;
                 }
             }
@@ -368,7 +370,7 @@ export abstract class BaseRepository<T extends DatabaseNamesUnion> {
             databaseStates.push({
                 database: operation.database,
                 connected,
-                healthy
+                healthy,
             });
 
             if (!connected) {
@@ -380,8 +382,10 @@ export abstract class BaseRepository<T extends DatabaseNamesUnion> {
         }
 
         // 2. 중복 데이터베이스 확인
-        const databaseNames = operations.map(op => op.database);
-        const duplicates = databaseNames.filter((name, index) => databaseNames.indexOf(name) !== index);
+        const databaseNames = operations.map((op) => op.database);
+        const duplicates = databaseNames.filter(
+            (name, index) => databaseNames.indexOf(name) !== index,
+        );
         if (duplicates.length > 0) {
             issues.push(`Duplicate databases detected: ${[...new Set(duplicates)].join(', ')}`);
         }
@@ -394,7 +398,7 @@ export abstract class BaseRepository<T extends DatabaseNamesUnion> {
         return {
             canProceed: issues.length === 0,
             issues,
-            databaseStates
+            databaseStates,
         };
     }
 
@@ -410,20 +414,21 @@ export abstract class BaseRepository<T extends DatabaseNamesUnion> {
     } {
         const recommendations: string[] = [];
         let canRecover = false;
-        let recoveryStrategy: 'retry' | 'manual-intervention' | 'compensating-transaction' = 'manual-intervention';
+        let recoveryStrategy: 'retry' | 'manual-intervention' | 'compensating-transaction' =
+            'manual-intervention';
         let analysis = '';
 
         // 실패 원인 분석
-        const failedParticipants = result.participants.filter(p =>
-            p.state === TransactionState.FAILED || p.state === TransactionState.TIMEOUT
+        const failedParticipants = result.participants.filter(
+            (p) => p.state === TransactionState.FAILED || p.state === TransactionState.TIMEOUT,
         );
 
-        const preparedParticipants = result.participants.filter(p =>
-            p.state === TransactionState.PREPARED
+        const preparedParticipants = result.participants.filter(
+            (p) => p.state === TransactionState.PREPARED,
         );
 
-        const committedParticipants = result.participants.filter(p =>
-            p.state === TransactionState.COMMITTED
+        const committedParticipants = result.participants.filter(
+            (p) => p.state === TransactionState.COMMITTED,
         );
 
         if (failedParticipants.length === 0) {
@@ -456,11 +461,15 @@ export abstract class BaseRepository<T extends DatabaseNamesUnion> {
                 if (errorMessage.includes('timeout')) {
                     recommendations.push(`Increase timeout for database ${participant.database}`);
                 } else if (errorMessage.includes('deadlock')) {
-                    recommendations.push(`Check for deadlock issues in database ${participant.database}`);
+                    recommendations.push(
+                        `Check for deadlock issues in database ${participant.database}`,
+                    );
                 } else if (errorMessage.includes('connection')) {
                     recommendations.push(`Check database connection for ${participant.database}`);
                 } else if (errorMessage.includes('constraint')) {
-                    recommendations.push(`Check data constraints in database ${participant.database}`);
+                    recommendations.push(
+                        `Check data constraints in database ${participant.database}`,
+                    );
                 }
             }
         }
@@ -469,31 +478,39 @@ export abstract class BaseRepository<T extends DatabaseNamesUnion> {
             canRecover,
             recoveryStrategy,
             analysis,
-            recommendations: [...new Set(recommendations)] // 중복 제거
+            recommendations: [...new Set(recommendations)], // 중복 제거
         };
     }
 
-    
     /**
      * Saga Pattern 분산 트랜잭션 실행 (메인 메서드)
      * 사전 검증, Saga 실행, 실패 분석을 모두 포함한 완전한 분산 트랜잭션 메서드
-     * 
+     *
      * @param operations 실행할 작업들 (createDistributedOperation 를 사용하여 생성하여야 타입 추론이 완전함)
      * @param options Saga 실행 옵션
      * @returns 분산 트랜잭션 실행 결과
      */
     public async $runDistributedTransaction<TResult = any>(
-        operations: readonly (DistributedTransactionOperation<any> | {
-            database: DatabaseNamesUnion;
-            operation: (prisma: any) => Promise<any>;
-            timeout?: number;
-        })[],        options: {
+        operations: readonly (
+            | DistributedTransactionOperation<any>
+            | {
+                  database: DatabaseNamesUnion;
+                  operation: (prisma: any) => Promise<any>;
+                  timeout?: number;
+              }
+        )[],
+        options: {
             prepareTimeout?: number;
             commitTimeout?: number;
             enableLogging?: boolean;
-            isolationLevel?: 'ReadUncommitted' | 'ReadCommitted' | 'RepeatableRead' | 'Serializable';
+            isolationLevel?:
+                | 'ReadUncommitted'
+                | 'ReadCommitted'
+                | 'RepeatableRead'
+                | 'Serializable';
             skipValidation?: boolean; // 검증 단계를 건너뛸지 여부
-        } = {}): Promise<{
+        } = {},
+    ): Promise<{
         success: boolean;
         result?: TransactionCommitResult<TResult>;
         validationIssues?: string[];
@@ -512,14 +529,14 @@ export abstract class BaseRepository<T extends DatabaseNamesUnion> {
                         log.Warn('Distributed transaction validation failed', {
                             issues: validation.issues,
                             databaseStates: validation.databaseStates,
-                            recommendations
+                            recommendations,
                         });
                     }
 
                     return {
                         success: false,
                         validationIssues: validation.issues,
-                        recommendations
+                        recommendations,
                     };
                 }
             }
@@ -527,7 +544,7 @@ export abstract class BaseRepository<T extends DatabaseNamesUnion> {
             // 2. 분산 트랜잭션 실행
             const result = await this.distributedTransaction<TResult>(operations, {
                 enableLogging: true,
-                ...options
+                ...options,
             });
 
             // 3. 결과 분석 및 권장사항 제공
@@ -538,18 +555,18 @@ export abstract class BaseRepository<T extends DatabaseNamesUnion> {
                     log.Error('Distributed transaction failed', {
                         globalTransactionId: result.globalTransactionId,
                         analysis,
-                        participantStates: result.participants.map(p => ({
+                        participantStates: result.participants.map((p) => ({
                             database: p.database,
                             state: p.state,
-                            error: p.error?.message
-                        }))
+                            error: p.error?.message,
+                        })),
                     });
                 }
 
                 return {
                     success: false,
                     result,
-                    recommendations: analysis.recommendations
+                    recommendations: analysis.recommendations,
                 };
             }
 
@@ -558,15 +575,14 @@ export abstract class BaseRepository<T extends DatabaseNamesUnion> {
                 log.Debug('Distributed transaction completed successfully', {
                     globalTransactionId: result.globalTransactionId,
                     participantCount: result.participants.length,
-                    totalDuration: `${result.totalDuration}ms`
+                    totalDuration: `${result.totalDuration}ms`,
                 });
             }
 
             return {
                 success: true,
-                result
+                result,
             };
-
         } catch (error) {
             const errorObj = error instanceof Error ? error : new Error(String(error));
 
@@ -574,14 +590,18 @@ export abstract class BaseRepository<T extends DatabaseNamesUnion> {
                 log.Error('Unexpected error in distributed transaction', {
                     error: errorObj.message,
                     operationCount: operations.length,
-                    databases: operations.map(op => op.database)
+                    databases: operations.map((op) => op.database),
                 });
             }
 
             return {
                 success: false,
                 error: errorObj,
-                recommendations: ['Check logs for detailed error information', 'Verify database connections', 'Review operation logic']
+                recommendations: [
+                    'Check logs for detailed error information',
+                    'Verify database connections',
+                    'Review operation logic',
+                ],
             };
         }
     }
@@ -605,20 +625,23 @@ export abstract class BaseRepository<T extends DatabaseNamesUnion> {
         }
 
         // 일반적인 문제에 대한 권장사항
-        if (validation.issues.some(issue => issue.includes('not connected'))) {
+        if (validation.issues.some((issue) => issue.includes('not connected'))) {
             recommendations.push('Verify database connection strings and network connectivity');
         }
 
-        if (validation.issues.some(issue => issue.includes('not healthy'))) {
+        if (validation.issues.some((issue) => issue.includes('not healthy'))) {
             recommendations.push('Check database server status and resource availability');
         }
 
-        if (validation.issues.some(issue => issue.includes('Duplicate databases'))) {
-            recommendations.push('Remove duplicate database operations or combine them into single operations');
+        if (validation.issues.some((issue) => issue.includes('Duplicate databases'))) {
+            recommendations.push(
+                'Remove duplicate database operations or combine them into single operations',
+            );
         }
 
-        if (validation.issues.some(issue => issue.includes('at least 2 participants'))) {
+        if (validation.issues.some((issue) => issue.includes('at least 2 participants'))) {
             recommendations.push('Add more operations or use single database transaction instead');
-        } return [...new Set(recommendations)]; // 중복 제거
+        }
+        return [...new Set(recommendations)]; // 중복 제거
     }
 }

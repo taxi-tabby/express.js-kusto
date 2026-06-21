@@ -1,5 +1,9 @@
 import { log } from '@ext/winston';
-import type { KustoExtension, ExtensionInitContext, ExtensionBuildContext } from '@lib/extensions/extensionTypes';
+import type {
+    KustoExtension,
+    ExtensionInitContext,
+    ExtensionBuildContext,
+} from '@lib/extensions/extensionTypes';
 
 /**
  * Singleton store of loaded extensions. The loader (`loadExtensions`) registers each

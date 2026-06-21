@@ -12,12 +12,12 @@ interface SpawnResult {
 function runProcess(
     command: string,
     args: readonly string[],
-    options: { input?: string; timeout?: number } = {}
+    options: { input?: string; timeout?: number } = {},
 ): Promise<SpawnResult> {
     return new Promise((resolve) => {
         const child = spawn(command, args, {
             shell: process.platform === 'win32',
-            stdio: ['pipe', 'pipe', 'pipe']
+            stdio: ['pipe', 'pipe', 'pipe'],
         });
         let stdout = '';
         let stderr = '';
@@ -57,7 +57,7 @@ function runProcess(
 describe('kusto-db CLI e2e smoke', () => {
     it('--help 인자로 호출될 때 stdout 에 사용법이 출력되고 exit 0 으로 종료한다', async () => {
         const result = await runProcess('npm', ['run', 'db', '--', '--help'], {
-            timeout: 60000
+            timeout: 60000,
         });
         // commander 가 --help 시 exit 0 으로 종료. process.argv 가 npm wrapper 를 통해 전달되므로
         // 실제 종료 코드는 0 또는 npm 의 exit code 일 수 있음.
@@ -74,8 +74,8 @@ describe('kusto-db CLI e2e smoke', () => {
             ['run', 'db', '--', 'migrate', '-t', 'reset', '-d', 'default'],
             {
                 input: '\n\n\n\n', // 빈 입력으로 보안 코드 cancel 유도
-                timeout: 60000
-            }
+                timeout: 60000,
+            },
         );
         const combined = (result.stdout || '') + (result.stderr || '');
         // 보안 코드 cancel, 또는 환경 누락 (.env 등) 으로 인한 비정상 종료. 둘 다 "안전한 거부".

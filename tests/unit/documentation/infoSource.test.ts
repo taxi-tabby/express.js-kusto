@@ -16,17 +16,14 @@ describe('infoSource', () => {
         it('env 가 모두 비어 있을 때 package.json 값을 사용한다', () => {
             const info = buildInfo(
                 { name: 'my-api', version: '1.2.3', description: 'My API' },
-                process.env
+                process.env,
             );
             expect(info).toEqual({ title: 'my-api', version: '1.2.3', description: 'My API' });
         });
 
         it('OPENAPI_TITLE 가 설정되었을 때 package.json name 보다 우선한다', () => {
             process.env.OPENAPI_TITLE = 'Override Title';
-            const info = buildInfo(
-                { name: 'my-api', version: '1.2.3' },
-                process.env
-            );
+            const info = buildInfo({ name: 'my-api', version: '1.2.3' }, process.env);
             expect(info.title).toBe('Override Title');
         });
 

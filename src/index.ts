@@ -10,7 +10,9 @@ EnvironmentLoader.load();
 
 // 환경 정보 출력
 log.Debug(`Environment: ${EnvironmentLoader.get('NODE_ENV', 'undefined')}`);
-log.Debug(`Host: ${EnvironmentLoader.get('HOST', 'localhost')}:${EnvironmentLoader.get('PORT', '3000')}`);
+log.Debug(
+    `Host: ${EnvironmentLoader.get('HOST', 'localhost')}:${EnvironmentLoader.get('PORT', '3000')}`,
+);
 log.Debug(`Production Mode: ${EnvironmentLoader.isProduction()}`);
 
 // 애플리케이션 생성 및 설정
@@ -21,7 +23,7 @@ const app = new Application({
     routesPath: './src/app/routes',
     viewsPath: './src/app/views',
     viewEngine: 'ejs',
-    trustProxy: true
+    trustProxy: true,
 });
 
 // 보안 헤더 설정
@@ -36,4 +38,3 @@ app.start()
         log.Error('Failed to start API Service', { error });
         process.exit(1);
     });
-

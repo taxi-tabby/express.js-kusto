@@ -16,9 +16,9 @@ function makeFlakeyClient(failures: number) {
                     throw err;
                 }
                 return [{ id: 'u1' }];
-            })
+            }),
         },
-        $disconnect: jest.fn(async () => {})
+        $disconnect: jest.fn(async () => {}),
     };
 }
 
@@ -28,9 +28,9 @@ function makeFlakeyClient(failures: number) {
 function makeFreshClient() {
     return {
         user: {
-            findMany: jest.fn(async () => [{ id: 'u1' }])
+            findMany: jest.fn(async () => [{ id: 'u1' }]),
         },
-        $disconnect: jest.fn(async () => {})
+        $disconnect: jest.fn(async () => {}),
     };
 }
 
@@ -116,9 +116,9 @@ describe('PrismaManager.getWrap 재연결 Proxy', () => {
                     const err: any = new Error('Validation failed');
                     err.code = 'P2025'; // not a connection error (record not found)
                     throw err;
-                })
+                }),
             },
-            $disconnect: jest.fn()
+            $disconnect: jest.fn(),
         };
         (manager as any).databases.set('test', client);
 

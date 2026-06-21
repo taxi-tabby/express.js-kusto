@@ -23,8 +23,8 @@ export interface DatabaseClientMap {
 /**
  * Enhanced client type that preserves actual Prisma client type information
  */
-export type DatabaseClientType<T extends string> = T extends keyof DatabaseClientMap 
-  ? DatabaseClientMap[T] 
+export type DatabaseClientType<T extends string> = T extends keyof DatabaseClientMap
+  ? DatabaseClientMap[T]
   : any;
 
 /**

@@ -12,7 +12,9 @@ import { loadExtensions } from '@lib/extensions/loadExtensions';
 describe('loadExtensions (CoC 발견)', () => {
     let tmp: string;
 
-    beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'kusto-ext-')); });
+    beforeEach(() => {
+        tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'kusto-ext-'));
+    });
     afterEach(() => {
         ExpressRouter.clearExtensionMethods();
         extensionRegistry.clear();
@@ -26,7 +28,10 @@ describe('loadExtensions (CoC 발견)', () => {
     });
 
     it('default export 확장을 발견·등록하고 routerMethods 를 적용한다', () => {
-        writeExt('a.js', `module.exports.default = { name: 'ext-a', routerMethods: { GET_AAA: function (ctx) {} } };`);
+        writeExt(
+            'a.js',
+            `module.exports.default = { name: 'ext-a', routerMethods: { GET_AAA: function (ctx) {} } };`,
+        );
         const loaded = loadExtensions(tmp);
         expect(loaded.map((e) => e.name)).toEqual(['ext-a']);
         expect(extensionRegistry.getAll().length).toBe(1);

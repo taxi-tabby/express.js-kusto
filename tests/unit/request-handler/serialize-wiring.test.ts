@@ -12,9 +12,16 @@ function mockRes() {
     return {
         headersSent: false,
         statusCode: 200,
-        status(c: number) { this.statusCode = c; return this; },
-        json(b: any) { (this as any).body = b; this.headersSent = true; return this; },
-        body: undefined as any
+        status(c: number) {
+            this.statusCode = c;
+            return this;
+        },
+        json(b: any) {
+            (this as any).body = b;
+            this.headersSent = true;
+            return this;
+        },
+        body: undefined as any,
     };
 }
 

@@ -38,6 +38,8 @@ npm run dev
 
 자세한 사용법은 [문서](./docs/00-documentation-index.md)를 참고하세요.
 
+> 일괄 포맷 커밋이 `git blame`을 가리지 않도록: `git config blame.ignoreRevsFile .git-blame-ignore-revs`
+
 ## 테스트
 
 ```bash

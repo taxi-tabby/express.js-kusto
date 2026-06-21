@@ -20,32 +20,44 @@ describe('CRUD 가 등록한 OpenAPI spec 의 표준 준수', () => {
 
     it('CRUD 스타일 라우트 6개를 등록하고 spec 을 빌드했을 때 swagger-parser validate 를 통과한다', async () => {
         DocumentationGenerator.registerRoute({
-            method: 'GET', path: '/users', contentType: 'jsonapi',
+            method: 'GET',
+            path: '/users',
+            contentType: 'jsonapi',
             parameters: { query: { 'page[number]': { type: 'number', required: false } } },
             responses: { 200: { data: { type: 'array', required: true } } },
         });
         DocumentationGenerator.registerRoute({
-            method: 'GET', path: '/users/:id', contentType: 'jsonapi',
+            method: 'GET',
+            path: '/users/:id',
+            contentType: 'jsonapi',
             parameters: { params: { id: { type: 'string', required: true } } },
             responses: { 200: { data: { type: 'object', required: true } } },
         });
         DocumentationGenerator.registerRoute({
-            method: 'POST', path: '/users', contentType: 'jsonapi',
+            method: 'POST',
+            path: '/users',
+            contentType: 'jsonapi',
             parameters: { body: { name: { type: 'string', required: true } } },
             responses: { 201: { data: { type: 'object', required: true } } },
         });
         DocumentationGenerator.registerRoute({
-            method: 'PUT', path: '/users/:id', contentType: 'jsonapi',
+            method: 'PUT',
+            path: '/users/:id',
+            contentType: 'jsonapi',
             parameters: { params: { id: { type: 'string', required: true } } },
             responses: { 200: { data: { type: 'object', required: true } } },
         });
         DocumentationGenerator.registerRoute({
-            method: 'PATCH', path: '/users/:id', contentType: 'jsonapi',
+            method: 'PATCH',
+            path: '/users/:id',
+            contentType: 'jsonapi',
             parameters: { params: { id: { type: 'string', required: true } } },
             responses: { 200: { data: { type: 'object', required: true } } },
         });
         DocumentationGenerator.registerRoute({
-            method: 'DELETE', path: '/users/:id', contentType: 'jsonapi',
+            method: 'DELETE',
+            path: '/users/:id',
+            contentType: 'jsonapi',
             parameters: { params: { id: { type: 'string', required: true } } },
             responses: { 204: {} },
         });
@@ -61,7 +73,12 @@ describe('CRUD 가 등록한 OpenAPI spec 의 표준 준수', () => {
             method: 'GET',
             path: '/users/:userId/posts/:postId',
             contentType: 'jsonapi',
-            parameters: { params: { userId: { type: 'string', required: true }, postId: { type: 'string', required: true } } },
+            parameters: {
+                params: {
+                    userId: { type: 'string', required: true },
+                    postId: { type: 'string', required: true },
+                },
+            },
             responses: { 200: { data: { type: 'object', required: true } } },
         });
 
@@ -180,11 +197,13 @@ describe('CRUD 가 등록한 OpenAPI spec 의 표준 준수', () => {
         });
 
         // 201 응답의 data 가 $ref 보존
-        const resSchema = op?.responses?.['201']?.content?.['application/vnd.api+json']?.schema as any;
+        const resSchema = op?.responses?.['201']?.content?.['application/vnd.api+json']
+            ?.schema as any;
         expect(resSchema.properties.data).toEqual({ $ref: '#/components/schemas/User' });
 
         // 422 응답의 errors 가 JsonApiError 로 $ref 보존
-        const errSchema = op?.responses?.['422']?.content?.['application/vnd.api+json']?.schema as any;
+        const errSchema = op?.responses?.['422']?.content?.['application/vnd.api+json']
+            ?.schema as any;
         expect(errSchema.properties.errors).toEqual({ $ref: '#/components/schemas/JsonApiError' });
 
         // swagger-parser validate 가 components.schemas 가 등록된 상태에서도 통과

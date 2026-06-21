@@ -18,10 +18,10 @@ export function buildTestApp(
     fixture: DbFixture,
     options: any = {},
     modelName: string = 'Post',
-    mountPath: string = '/posts'
+    mountPath: string = '/posts',
 ) {
     // Late require so the doMock applied before this call takes effect.
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+
     const { ExpressRouter } = require('@lib/http/routing/expressRouter');
 
     const app = express();
@@ -36,7 +36,9 @@ export function buildTestApp(
     // 예외를 JSON 형태로 surface 하여 디버깅을 돕는다 (정상 경로는 CRUD 라우트가 직접 응답).
     app.use((err: any, _req: any, res: any, _next: any) => {
         if (!res.headersSent) {
-            res.status(500).json({ errors: [{ status: '500', detail: err?.message || String(err) }] });
+            res.status(500).json({
+                errors: [{ status: '500', detail: err?.message || String(err) }],
+            });
         }
     });
     return app;
@@ -56,33 +58,33 @@ export function applyPrismaManagerMock(fixture: DbFixture) {
         getAvailableDatabases: () => ['default'],
         getDatabaseProviders: () => [{ name: 'default', provider: 'sqlite' }],
         getProviderForDatabase: (_name: string) => 'sqlite',
-        healthCheck: async () => ({ databases: [{ name: 'default', status: 'healthy' }] })
+        healthCheck: async () => ({ databases: [{ name: 'default', status: 'healthy' }] }),
     };
     jest.doMock('@lib/data/database/prismaManager', () => ({
         prismaManager: mockManager,
-        PrismaManager: { getInstance: () => mockManager }
+        PrismaManager: { getInstance: () => mockManager },
     }));
 
     // DependencyInjector — initialized 상태로 빈 modules/middlewares 노출
     const mockInjector = {
         getInjectedModules: () => ({}),
         getInjectedMiddlewares: () => ({}),
-        getInjectedMiddleware: (_name: string) => undefined
+        getInjectedMiddleware: (_name: string) => undefined,
     };
     jest.doMock('@lib/data/di/dependencyInjector', () => ({
-        DependencyInjector: { getInstance: () => mockInjector }
+        DependencyInjector: { getInstance: () => mockInjector },
     }));
 
     // repositoryManager — 빈 stub 으로 충분 (CRUD 라우트는 직접 사용 안 함)
     jest.doMock('@lib/data/database/repositoryManager', () => ({
         repositoryManager: {
             getRepository: (_name: string) => undefined,
-            getAllRepositories: () => ({})
-        }
+            getAllRepositories: () => ({}),
+        },
     }));
 
     // kustoManager — req.kusto 에 할당. 단순 객체로 충분
     jest.doMock('@lib/data/di/kustoManager', () => ({
-        kustoManager: {}
+        kustoManager: {},
     }));
 }

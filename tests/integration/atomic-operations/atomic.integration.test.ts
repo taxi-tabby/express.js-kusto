@@ -42,10 +42,10 @@ describe('JSON:API Atomic Operations (통합)', () => {
                         op: 'add',
                         data: {
                             type: 'users',
-                            attributes: { id: 'u1', email: 'a@a.com', name: 'Alice' }
-                        }
-                    }
-                ]
+                            attributes: { id: 'u1', email: 'a@a.com', name: 'Alice' },
+                        },
+                    },
+                ],
             })
             .set('Content-Type', ATOMIC_CONTENT_TYPE);
         expect([200, 201]).toContain(res.status);
@@ -63,10 +63,10 @@ describe('JSON:API Atomic Operations (통합)', () => {
                         op: 'add',
                         data: {
                             type: 'users',
-                            attributes: { id: 'u1', email: 'a@a.com', name: 'Alice' }
-                        }
-                    }
-                ]
+                            attributes: { id: 'u1', email: 'a@a.com', name: 'Alice' },
+                        },
+                    },
+                ],
             })
             .set('Content-Type', ATOMIC_CONTENT_TYPE);
         if (res.status >= 200 && res.status < 300) {

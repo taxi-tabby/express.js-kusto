@@ -31,6 +31,7 @@ export const screen = {
 
 // ANSI 이스케이프(CSI: 색 m, clearLine K, 커서이동 H/J 등 letter 로 끝나는 시퀀스)를 제거한
 // "보이는" 길이. 폭 계산은 0폭 제어문자를 모두 무시해야 정확하다.
+// eslint-disable-next-line no-control-regex
 const ANSI_RE = /\x1b\[[0-9;]*[A-Za-z]/g;
 export function visibleLength(s: string): number {
     return s.replace(ANSI_RE, '').length;
@@ -45,9 +46,16 @@ export function truncate(s: string, width: number): string {
     let vis = 0;
     let i = 0;
     while (i < s.length && vis < width - 1) {
+        // eslint-disable-next-line no-control-regex
         const m = s.slice(i).match(/^\x1b\[[0-9;]*m/);
-        if (m) { out += m[0]; i += m[0].length; continue; }
-        out += s[i]; i++; vis++;
+        if (m) {
+            out += m[0];
+            i += m[0].length;
+            continue;
+        }
+        out += s[i];
+        i++;
+        vis++;
     }
     return out + RESET + '…';
 }
@@ -103,14 +111,22 @@ const BOX = { tl: '╭', tr: '╮', bl: '╰', br: '╯', h: '─', v: '│' };
  * 제목이 박힌 둥근 박스를 그린다. 반환 각 줄의 "보이는" 폭은 정확히 width.
  * @param content 내부 줄(이미 색 포함 가능). 폭이 넘치면 자르고 모자라면 패딩.
  */
-export function boxLines(title: string, content: string[], width: number, innerHeight?: number): string[] {
+export function boxLines(
+    title: string,
+    content: string[],
+    width: number,
+    innerHeight?: number,
+): string[] {
     const w = Math.max(8, width);
     const innerW = w - 4; // "│ " + content + " │"
     // top: tl ─ ' TITLE ' ─*fill tr
     const t = ` ${title} `;
     const used = 2 + visibleLength(t); // tl + 첫 ─ + title
     const fill = Math.max(0, w - used - 1); // - tr
-    const top = border(BOX.tl + BOX.h) + bold(cyan(title.length ? t : '')) + border(BOX.h.repeat(fill) + BOX.tr);
+    const top =
+        border(BOX.tl + BOX.h) +
+        bold(cyan(title.length ? t : '')) +
+        border(BOX.h.repeat(fill) + BOX.tr);
 
     const rows = innerHeight ?? content.length;
     const body: string[] = [];
@@ -123,7 +139,13 @@ export function boxLines(title: string, content: string[], width: number, innerH
 }
 
 /** 두 박스(같은/다른 높이)를 좌우로 합친다. 각 박스 줄은 자기 폭으로 패딩돼 있어야 한다. */
-export function sideBySide(left: string[], right: string[], leftW: number, rightW: number, gap = 1): string[] {
+export function sideBySide(
+    left: string[],
+    right: string[],
+    leftW: number,
+    rightW: number,
+    gap = 1,
+): string[] {
     const h = Math.max(left.length, right.length);
     const blankL = ' '.repeat(leftW);
     const blankR = ' '.repeat(rightW);
@@ -155,7 +177,10 @@ export function humanBytes(n: number): string {
     const units = ['KB', 'MB', 'GB', 'TB'];
     let v = n / 1024;
     let u = 0;
-    while (v >= 1024 && u < units.length - 1) { v /= 1024; u++; }
+    while (v >= 1024 && u < units.length - 1) {
+        v /= 1024;
+        u++;
+    }
     return `${v.toFixed(1)} ${units[u]}`;
 }
 

@@ -16,7 +16,6 @@ const ORIGINAL_ENV = { ...process.env };
 
 /** app 의 정책 스택(middleware.ts = defaultGlobalMiddleware). import 시점에 env 반영. */
 function loadPolicyStack(): express.RequestHandler[] {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const mod = require('@app/routes/middleware');
     return (mod.default ?? mod) as express.RequestHandler[];
 }

@@ -38,7 +38,7 @@ describe('RepositoryManager', () => {
         expect(status).toMatchObject({
             initialized: true,
             repositoryCount: 1,
-            repositories: expect.arrayContaining(['example'])
+            repositories: expect.arrayContaining(['example']),
         });
     });
 });

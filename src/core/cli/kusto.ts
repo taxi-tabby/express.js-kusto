@@ -39,7 +39,9 @@ const update = new Command('update').description('Framework self-update');
 update
     .command('check')
     .description('Check whether a newer framework release is available')
-    .action(async () => { await runUpdateCheck(); });
+    .action(async () => {
+        await runUpdateCheck();
+    });
 
 update
     .command('apply')
@@ -60,7 +62,9 @@ update
 update
     .command('build')
     .description('Build a release update package + file map (maintainers)')
-    .action(async () => { await generateAndCompress(); });
+    .action(async () => {
+        await generateAndCompress();
+    });
 
 kusto.addCommand(update);
 
@@ -68,7 +72,9 @@ kusto.addCommand(update);
 kusto
     .command('monitor')
     .alias('top')
-    .description('Live server dashboard (process / requests / DB / routes). Dev server must be running.')
+    .description(
+        'Live server dashboard (process / requests / DB / routes). Dev server must be running.',
+    )
     .option('--url <url>', 'Full metrics URL (overrides host/port)')
     .option('--host <host>', 'Server host (default localhost)')
     .option('--port <port>', 'Server port (default $PORT or 3000)', (v) => parseInt(v, 10))

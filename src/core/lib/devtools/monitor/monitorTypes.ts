@@ -17,7 +17,7 @@ export interface StatusClassCounts {
 
 /** 최근 요청 1건 */
 export interface RecentRequest {
-    ts: number;          // epoch ms
+    ts: number; // epoch ms
     method: string;
     path: string;
     status: number;

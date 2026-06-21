@@ -18,7 +18,12 @@ import {
     getSmartPrimaryKeyParser as getSmartPrimaryKeyParserImpl,
     UUID_REGEX,
 } from '@lib/crud/primaryKeyParsers';
-import { DEFAULT_PRIMARY_KEY, DEFAULT_SOFT_DELETE_FIELD, DEFAULT_PAGE_SIZE, CRUD_ACTIONS_WITH_RECOVER } from '@lib/crud/crudConstants';
+import {
+    DEFAULT_PRIMARY_KEY,
+    DEFAULT_SOFT_DELETE_FIELD,
+    DEFAULT_PAGE_SIZE,
+    CRUD_ACTIONS_WITH_RECOVER,
+} from '@lib/crud/crudConstants';
 import { ERROR_CODES } from '@lib/http/errors/errorCodes';
 import { PrismaSchemaAnalyzer } from '@lib/devtools/schema-api/prismaSchemaAnalyzer';
 import {
@@ -27,10 +32,19 @@ import {
     jsonApiBody,
     jsonApiErrorResponse,
 } from '@lib/devtools/documentation';
-import { JSON_API_CONTENT_TYPE, JSON_API_ATOMIC_CONTENT_TYPE, JSON_API_VERSION, JSON_API_ATOMIC_EXT } from '@lib/crud/jsonApiConstants';
+import {
+    JSON_API_CONTENT_TYPE,
+    JSON_API_ATOMIC_CONTENT_TYPE,
+    JSON_API_VERSION,
+    JSON_API_ATOMIC_EXT,
+} from '@lib/crud/jsonApiConstants';
 import { ErrorHandler, ErrorResponseFormat } from '@lib/http/errors/errorHandler';
 import { log } from '@ext/winston';
-import type { HandlerFunction, MiddlewareHandlerFunction, RouterContext } from '@lib/http/routing/expressRouter';
+import type {
+    HandlerFunction,
+    MiddlewareHandlerFunction,
+    RouterContext,
+} from '@lib/http/routing/expressRouter';
 
 /**
  * Capabilities the CrudRouteBuilder needs from the ExpressRouter that drives it.
@@ -55,17 +69,23 @@ export class CrudRouteBuilder {
      */
     public build(databaseName: string, modelName: string, options?: any): void {
         // 개발 모드에서 스키마 등록 (비동기로 백그라운드 실행)
-        this.registerSchemaInDevelopment(databaseName, modelName as string, options)
-            .catch(error => {
-                log.Error(`Failed to register schema (${databaseName}.${modelName}):`, error.message);
-            });
+        this.registerSchemaInDevelopment(databaseName, modelName as string, options).catch(
+            (error) => {
+                log.Error(
+                    `Failed to register schema (${databaseName}.${modelName}):`,
+                    error.message,
+                );
+            },
+        );
 
         const enabledActions = this.getEnabledActions(options);
         const client = prismaManager.getWrap(databaseName as any);
 
         // Primary key 설정 및 자동 파서 선택
         const primaryKey = options?.primaryKey || DEFAULT_PRIMARY_KEY;
-        const primaryKeyParser = options?.primaryKeyParser || this.getSmartPrimaryKeyParser(databaseName, modelName, primaryKey);
+        const primaryKeyParser =
+            options?.primaryKeyParser ||
+            this.getSmartPrimaryKeyParser(databaseName, modelName, primaryKey);
 
         // INDEX - GET / (목록 조회)
         if (enabledActions.includes('index')) {
@@ -110,7 +130,7 @@ export class CrudRouteBuilder {
     private async registerSchemaInDevelopment(
         databaseName: string,
         modelName: string,
-        options?: any
+        options?: any,
     ): Promise<void> {
         if (!this.ctx.schemaRegistry.isSchemaApiEnabled() || !this.ctx.schemaAnalyzer) {
             return; // 개발 모드가 아니거나 스키마 분석기가 없으면 등록하지 않음
@@ -124,7 +144,9 @@ export class CrudRouteBuilder {
                 if (requestedClient) {
                     analyzer = PrismaSchemaAnalyzer.getInstance(requestedClient, databaseName);
                 } else {
-                    log.Warn(`Requested database '${databaseName}' not found. Using the default analyzer.`);
+                    log.Warn(
+                        `Requested database '${databaseName}' not found. Using the default analyzer.`,
+                    );
                 }
             }
 
@@ -137,12 +159,12 @@ export class CrudRouteBuilder {
                 modelName,
                 basePath,
                 options,
-                analyzer
+                analyzer,
             );
         } catch (error) {
             log.Warn(
                 `Failed to register schema (${databaseName}.${modelName}):`,
-                error instanceof Error ? error.message : String(error)
+                error instanceof Error ? error.message : String(error),
             );
         }
     }
@@ -161,7 +183,11 @@ export class CrudRouteBuilder {
      * Primary key 타입을 자동으로 감지하고 적절한 파서를 반환하는 헬퍼 메서드
      * (순수 로직은 ./primaryKeyParsers 로 추출됨)
      */
-    private getSmartPrimaryKeyParser(databaseName: string, modelName: string, primaryKey: string): (value: string) => any {
+    private getSmartPrimaryKeyParser(
+        databaseName: string,
+        modelName: string,
+        primaryKey: string,
+    ): (value: string) => any {
         return getSmartPrimaryKeyParserImpl(databaseName, modelName, primaryKey);
     }
 
@@ -188,7 +214,7 @@ export class CrudRouteBuilder {
         if (options?.only && options?.except) {
             log.Warn(
                 '[CRUD Warning] Both "only" and "except" options are specified. ' +
-                '"only" takes precedence and "except" will be ignored.'
+                    '"only" takes precedence and "except" will be ignored.',
             );
             return options.only;
         }
@@ -200,7 +226,7 @@ export class CrudRouteBuilder {
 
         // except가 지정된 경우
         if (options?.except) {
-            return allActions.filter(action => !options.except.includes(action));
+            return allActions.filter((action) => !options.except.includes(action));
         }
 
         // 기본값: 모든 액션
@@ -210,11 +236,15 @@ export class CrudRouteBuilder {
     /**
      * INDEX 라우트 설정 (GET /) - JSON:API 준수
      */
-    private setupIndexRoute(client: any, modelName: string, options?: any, primaryKey: string = DEFAULT_PRIMARY_KEY): void {
+    private setupIndexRoute(
+        client: any,
+        modelName: string,
+        options?: any,
+        primaryKey: string = DEFAULT_PRIMARY_KEY,
+    ): void {
         const middlewares = options?.middleware?.index || [];
         const isSoftDelete = options?.softDelete?.enabled;
         const softDeleteField = options?.softDelete?.field || DEFAULT_SOFT_DELETE_FIELD;
-
 
         const handler: HandlerFunction = async (req, res, injected, repo, db) => {
             try {
@@ -233,12 +263,22 @@ export class CrudRouteBuilder {
                 let findManyOptions = PrismaQueryBuilder.buildFindManyOptions(queryParams);
 
                 // beforeIndex 훅 실행 (쿼리 옵션 가공)
-                const hookResult = await this.runBeforeIndexHook(findManyOptions, req, res, options);
+                const hookResult = await this.runBeforeIndexHook(
+                    findManyOptions,
+                    req,
+                    res,
+                    options,
+                );
                 if (!hookResult) return; // 에러 응답은 이미 헬퍼에서 전송됨
                 findManyOptions = hookResult.findManyOptions;
 
                 // Soft Delete 필터 추가 (기존 where 조건과 병합)
-                findManyOptions = this.applyIndexSoftDeleteFilter(findManyOptions, req, isSoftDelete, softDeleteField);
+                findManyOptions = this.applyIndexSoftDeleteFilter(
+                    findManyOptions,
+                    req,
+                    isSoftDelete,
+                    softDeleteField,
+                );
 
                 // 총 개수 조회 (페이지네이션용)
                 const totalCountOptions = { ...findManyOptions };
@@ -248,14 +288,21 @@ export class CrudRouteBuilder {
 
                 const [items, total] = await Promise.all([
                     client[modelName].findMany(findManyOptions),
-                    client[modelName].count({ where: totalCountOptions.where })
+                    client[modelName].count({ where: totalCountOptions.where }),
                 ]);
 
                 // JSON:API 응답 엔벨로프 조립 + 직렬화
-                const serializedResponse = this.buildIndexResponse(items, total, queryParams, req, modelName, options, primaryKey);
+                const serializedResponse = this.buildIndexResponse(
+                    items,
+                    total,
+                    queryParams,
+                    req,
+                    modelName,
+                    options,
+                    primaryKey,
+                );
 
                 res.json(serializedResponse);
-
             } catch (error: any) {
                 log.Error(`CRUD Index Error for ${modelName}:`, error);
 
@@ -265,7 +312,9 @@ export class CrudRouteBuilder {
 
         // 미들웨어 등록
         if (middlewares.length > 0) {
-            const wrappedMiddlewares = middlewares.map((mw: MiddlewareHandlerFunction) => this.ctx.wrapMiddleware(mw));
+            const wrappedMiddlewares = middlewares.map((mw: MiddlewareHandlerFunction) =>
+                this.ctx.wrapMiddleware(mw),
+            );
             this.ctx.router.get('/', ...wrappedMiddlewares, this.ctx.wrapHandler(handler));
         } else {
             this.ctx.router.get('/', this.ctx.wrapHandler(handler));
@@ -273,13 +322,44 @@ export class CrudRouteBuilder {
 
         // 문서화 등록
         const queryParams: any = {
-            include: { type: 'string', required: false, description: 'Related resources to include (comma-separated). Example: author,comments.author' },
-            'fields[type]': { type: 'string', required: false, description: 'Sparse fieldsets - specify which fields to include for each resource type. Example: fields[posts]=title,content&fields[users]=name,email' },
-            sort: { type: 'string', required: false, description: 'Sort fields (prefix with - for desc). Example: -createdAt,title' },
-            'page[number]': { type: 'number', required: true, description: 'Page number for offset-based pagination (required with page[size])' },
-            'page[cursor]': { type: 'string', required: false, description: 'Cursor for cursor-based pagination (alternative to page[number])' },
-            'page[size]': { type: 'number', required: true, description: 'Page size for pagination (required)' },
-            'filter[field_op]': { type: 'string', required: false, description: 'Filter conditions. Operators: eq, ne, gt, gte, lt, lte, like, in, etc. Example: filter[status_eq]=active&filter[age_gte]=18' }
+            include: {
+                type: 'string',
+                required: false,
+                description:
+                    'Related resources to include (comma-separated). Example: author,comments.author',
+            },
+            'fields[type]': {
+                type: 'string',
+                required: false,
+                description:
+                    'Sparse fieldsets - specify which fields to include for each resource type. Example: fields[posts]=title,content&fields[users]=name,email',
+            },
+            sort: {
+                type: 'string',
+                required: false,
+                description: 'Sort fields (prefix with - for desc). Example: -createdAt,title',
+            },
+            'page[number]': {
+                type: 'number',
+                required: true,
+                description: 'Page number for offset-based pagination (required with page[size])',
+            },
+            'page[cursor]': {
+                type: 'string',
+                required: false,
+                description: 'Cursor for cursor-based pagination (alternative to page[number])',
+            },
+            'page[size]': {
+                type: 'number',
+                required: true,
+                description: 'Page size for pagination (required)',
+            },
+            'filter[field_op]': {
+                type: 'string',
+                required: false,
+                description:
+                    'Filter conditions. Operators: eq, ne, gt, gte, lt, lte, like, in, etc. Example: filter[status_eq]=active&filter[age_gte]=18',
+            },
         };
 
         // Soft delete가 설정된 경우 include_deleted 파라미터 추가
@@ -287,19 +367,19 @@ export class CrudRouteBuilder {
             queryParams.include_deleted = {
                 type: 'boolean',
                 required: false,
-                description: 'Include soft deleted items (default: false)'
+                description: 'Include soft deleted items (default: false)',
             };
         }
 
         this.ctx.registerDocumentation('GET', '/', {
             summary: `Get ${modelName} list with required pagination, optional filtering and sorting`,
             parameters: {
-                query: queryParams
+                query: queryParams,
             },
             responses: {
                 200: jsonApiCollectionResponse(modelName),
                 400: jsonApiErrorResponse(400),
-            }
+            },
         });
     }
 
@@ -311,7 +391,7 @@ export class CrudRouteBuilder {
         modelName: string,
         options?: any,
         primaryKey: string = DEFAULT_PRIMARY_KEY,
-        primaryKeyParser: (value: string) => any = parseStringImpl
+        primaryKeyParser: (value: string) => any = parseStringImpl,
     ): void {
         const middlewares = options?.middleware?.show || [];
         const isSoftDelete = options?.softDelete?.enabled;
@@ -325,7 +405,11 @@ export class CrudRouteBuilder {
 
                 // 파라미터 추출 및 파싱
                 const { success, parsedIdentifier } = this.extractAndParsePrimaryKey(
-                    req, res, primaryKey, primaryKeyParser, modelName
+                    req,
+                    res,
+                    primaryKey,
+                    primaryKeyParser,
+                    modelName,
                 );
                 if (!success) return; // 에러 응답은 이미 헬퍼에서 처리됨
 
@@ -348,7 +432,7 @@ export class CrudRouteBuilder {
                 // Prisma findFirst 옵션 구성
                 let findOptions: any = {
                     where: whereClause,
-                    ...(includeOptions && { include: includeOptions })
+                    ...(includeOptions && { include: includeOptions }),
                 };
 
                 // beforeShow 훅 실행 (조회 옵션 가공)
@@ -360,11 +444,13 @@ export class CrudRouteBuilder {
                         }
                     } catch (hookError) {
                         const errorResponse = this.formatJsonApiError(
-                            hookError instanceof Error ? hookError : new Error('Hook execution failed'),
+                            hookError instanceof Error
+                                ? hookError
+                                : new Error('Hook execution failed'),
                             ERROR_CODES.INTERNAL_SERVER_ERROR,
                             500,
                             req.path,
-                            req.method
+                            req.method,
                         );
                         return res.status(500).json(errorResponse);
                     }
@@ -376,7 +462,7 @@ export class CrudRouteBuilder {
                     // Soft delete된 데이터 확인 (include_deleted=false 상태에서)
                     if (isSoftDelete && !includeDeleted) {
                         const deletedItem = await client[modelName].findUnique({
-                            where: { [primaryKey]: parsedIdentifier }
+                            where: { [primaryKey]: parsedIdentifier },
                         });
 
                         if (deletedItem && deletedItem[softDeleteField]) {
@@ -386,7 +472,7 @@ export class CrudRouteBuilder {
                                 ERROR_CODES.RESOURCE_DELETED,
                                 410,
                                 req.path,
-                                req.method
+                                req.method,
                             );
                             return res.status(410).json(errorResponse);
                         }
@@ -397,7 +483,7 @@ export class CrudRouteBuilder {
                         ERROR_CODES.NOT_FOUND,
                         404,
                         req.path,
-                        req.method
+                        req.method,
                     );
                     return res.status(404).json(errorResponse);
                 }
@@ -407,12 +493,16 @@ export class CrudRouteBuilder {
 
                 // 포함된 리소스 생성 (include 파라미터가 있는 경우)
                 let included: JsonApiResource[] | undefined;
-                if (queryParams.include && queryParams.include.length > 0 && !options?.includeMerge) {
+                if (
+                    queryParams.include &&
+                    queryParams.include.length > 0 &&
+                    !options?.includeMerge
+                ) {
                     included = JsonApiTransformer.createIncludedResources(
                         [item],
                         queryParams.include,
                         queryParams.fields,
-                        baseUrl
+                        baseUrl,
                     );
                 }
 
@@ -429,18 +519,18 @@ export class CrudRouteBuilder {
                         baseUrl,
                         included,
                         includeMerge: options?.includeMerge || false,
-                        jsonFields
-                    }
+                        jsonFields,
+                    },
                 );
 
                 // metadata 객체 생성 - 기존 헬퍼 함수 사용
                 const metadata = CrudResponseFormatter.createPaginationMeta(
                     [item], // 단일 아이템을 배열로 감싸서 전달
-                    1,      // total count는 1
+                    1, // total count는 1
                     undefined, // page 파라미터 없음 (단일 조회)
                     'show',
                     queryParams.include,
-                    queryParams
+                    queryParams,
                 );
 
                 // excludedFields 추가 (show 전용)
@@ -452,7 +542,6 @@ export class CrudRouteBuilder {
                 const serializedResponse = serialize({ ...response, metadata });
 
                 res.json(serializedResponse);
-
             } catch (error: any) {
                 log.Error(`CRUD Show Error for ${modelName}:`, error);
 
@@ -463,7 +552,9 @@ export class CrudRouteBuilder {
         // 미들웨어 등록 - 정적 경로 사용
         const routePath = `/:${primaryKey}`;
         if (middlewares.length > 0) {
-            const wrappedMiddlewares = middlewares.map((mw: MiddlewareHandlerFunction) => this.ctx.wrapMiddleware(mw));
+            const wrappedMiddlewares = middlewares.map((mw: MiddlewareHandlerFunction) =>
+                this.ctx.wrapMiddleware(mw),
+            );
             this.ctx.router.get(routePath, ...wrappedMiddlewares, this.ctx.wrapHandler(handler));
         } else {
             this.ctx.router.get(routePath, this.ctx.wrapHandler(handler));
@@ -471,7 +562,11 @@ export class CrudRouteBuilder {
 
         // 문서화 등록
         const queryParams: any = {
-            include: { type: 'string', required: false, description: 'Related resources to include' }
+            include: {
+                type: 'string',
+                required: false,
+                description: 'Related resources to include',
+            },
         };
 
         // Soft delete가 설정된 경우 include_deleted 파라미터 추가
@@ -479,7 +574,7 @@ export class CrudRouteBuilder {
             queryParams.include_deleted = {
                 type: 'boolean',
                 required: false,
-                description: 'Include soft deleted items (default: false)'
+                description: 'Include soft deleted items (default: false)',
             };
         }
 
@@ -497,18 +592,27 @@ export class CrudRouteBuilder {
             summary: `Get single ${modelName} by ${primaryKey}`,
             parameters: {
                 params: {
-                    [primaryKey]: { type: 'string', required: true, description: `${modelName} ${primaryKey}` }
+                    [primaryKey]: {
+                        type: 'string',
+                        required: true,
+                        description: `${modelName} ${primaryKey}`,
+                    },
                 },
-                query: queryParams
+                query: queryParams,
             },
-            responses: responses
+            responses: responses,
         });
     }
 
     /**
      * CREATE 라우트 설정 (POST /) - JSON:API 준수
      */
-    private setupCreateRoute(client: any, modelName: string, options?: any, primaryKey: string = DEFAULT_PRIMARY_KEY): void {
+    private setupCreateRoute(
+        client: any,
+        modelName: string,
+        options?: any,
+        primaryKey: string = DEFAULT_PRIMARY_KEY,
+    ): void {
         const middlewares = options?.middleware?.create || [];
 
         const handler: HandlerFunction = async (req, res, injected, repo, db) => {
@@ -533,7 +637,7 @@ export class CrudRouteBuilder {
                         ERROR_CODES.INVALID_REQUEST,
                         400,
                         req.path,
-                        req.method
+                        req.method,
                     );
                     return res.status(400).json(errorResponse);
                 }
@@ -541,7 +645,8 @@ export class CrudRouteBuilder {
                 const { data: requestData } = req.body;
 
                 // 리소스 타입 검증 (라우트 경로에서 추출 또는 옵션 사용)
-                const routeResourceType = req.baseUrl.split('/').filter(Boolean).pop() || modelName.toLowerCase();
+                const routeResourceType =
+                    req.baseUrl.split('/').filter(Boolean).pop() || modelName.toLowerCase();
                 const expectedType = options?.resourceType || routeResourceType;
 
                 // JSON:API 리소스 구조 검증
@@ -571,7 +676,7 @@ export class CrudRouteBuilder {
                             client,
                             modelName,
                             false, // 생성 모드
-                            options // softDelete 옵션 전달 (생성 시에는 parentId 불필요)
+                            options, // softDelete 옵션 전달 (생성 시에는 parentId 불필요)
                         );
                     } catch (relationshipError: any) {
                         const errorResponse = this.formatJsonApiError(
@@ -579,7 +684,7 @@ export class CrudRouteBuilder {
                             ERROR_CODES.INVALID_RELATIONSHIP,
                             422,
                             req.path,
-                            req.method
+                            req.method,
                         );
                         return res.status(422).json(errorResponse);
                     }
@@ -591,13 +696,14 @@ export class CrudRouteBuilder {
                 }
 
                 // include 옵션 빌드 (?include= 또는 defaultIncludes 적용 시)
-                const createIncludeOptions = queryParams.include && queryParams.include.length > 0
-                    ? PrismaQueryBuilder['buildIncludeOptions'](queryParams.include)
-                    : undefined;
+                const createIncludeOptions =
+                    queryParams.include && queryParams.include.length > 0
+                        ? PrismaQueryBuilder['buildIncludeOptions'](queryParams.include)
+                        : undefined;
 
                 const result = await client[modelName].create({
                     data,
-                    ...(createIncludeOptions && { include: createIncludeOptions })
+                    ...(createIncludeOptions && { include: createIncludeOptions }),
                 });
 
                 // After hook 실행
@@ -610,12 +716,16 @@ export class CrudRouteBuilder {
 
                 // 포함된 리소스 생성 (include 파라미터가 있는 경우)
                 let createIncluded: JsonApiResource[] | undefined;
-                if (queryParams.include && queryParams.include.length > 0 && !options?.includeMerge) {
+                if (
+                    queryParams.include &&
+                    queryParams.include.length > 0 &&
+                    !options?.includeMerge
+                ) {
                     createIncluded = JsonApiTransformer.createIncludedResources(
                         [result],
                         queryParams.include,
                         queryParams.fields,
-                        baseUrl
+                        baseUrl,
                     );
                 }
 
@@ -632,14 +742,14 @@ export class CrudRouteBuilder {
                         baseUrl,
                         included: createIncluded,
                         includeMerge: options?.includeMerge || false,
-                        jsonFields
-                    }
+                        jsonFields,
+                    },
                 );
 
                 // metadata 객체 생성 - 기존 헬퍼 함수 사용
                 const metadata = CrudResponseFormatter.createPaginationMeta(
                     [result], // 단일 항목을 배열로 감싸서 전달
-                    1,        // total count = 1
+                    1, // total count = 1
                     undefined, // page 파라미터 없음 (단일 생성)
                     'create',
                     queryParams.include,
@@ -650,7 +760,6 @@ export class CrudRouteBuilder {
                 const serializedResponse = serialize({ ...response, metadata });
 
                 res.status(201).json(serializedResponse);
-
             } catch (error: any) {
                 log.Error(`CRUD Create Error for ${modelName}:`, error);
 
@@ -662,7 +771,7 @@ export class CrudRouteBuilder {
         if (options?.validation?.create) {
             const validationMiddlewares = CustomRequestHandler.withValidation(
                 options.validation.create,
-                handler
+                handler,
             );
 
             if (middlewares.length > 0) {
@@ -673,7 +782,9 @@ export class CrudRouteBuilder {
         } else {
             // 일반 핸들러
             if (middlewares.length > 0) {
-                const wrappedMiddlewares = middlewares.map((mw: MiddlewareHandlerFunction) => this.ctx.wrapMiddleware(mw));
+                const wrappedMiddlewares = middlewares.map((mw: MiddlewareHandlerFunction) =>
+                    this.ctx.wrapMiddleware(mw),
+                );
                 this.ctx.router.post('/', ...wrappedMiddlewares, this.ctx.wrapHandler(handler));
             } else {
                 this.ctx.router.post('/', this.ctx.wrapHandler(handler));
@@ -690,7 +801,7 @@ export class CrudRouteBuilder {
                 201: jsonApiResponse(modelName, 201),
                 400: jsonApiErrorResponse(400),
                 422: jsonApiErrorResponse(422),
-            }
+            },
         });
     }
 
@@ -721,7 +832,7 @@ export class CrudRouteBuilder {
                         ERROR_CODES.INVALID_REQUEST,
                         400,
                         req.path,
-                        req.method
+                        req.method,
                     );
                     return res.status(400).json(errorResponse);
                 }
@@ -732,7 +843,13 @@ export class CrudRouteBuilder {
                 // 트랜잭션으로 모든 작업 실행
                 await client.$transaction(async (tx: any) => {
                     for (const operation of operations) {
-                        const result = await this.executeAtomicOperation(tx, operation, modelName, options, req);
+                        const result = await this.executeAtomicOperation(
+                            tx,
+                            operation,
+                            modelName,
+                            options,
+                            req,
+                        );
                         results.push(result);
                     }
                 });
@@ -741,12 +858,11 @@ export class CrudRouteBuilder {
                     'atomic:results': results,
                     jsonapi: {
                         version: JSON_API_VERSION,
-                        ext: [JSON_API_ATOMIC_EXT]
-                    }
+                        ext: [JSON_API_ATOMIC_EXT],
+                    },
                 };
 
                 res.status(200).json(response);
-
             } catch (error: any) {
                 log.Error(`Atomic Operations Error for ${modelName}:`, error);
                 this.sendMappedCrudError(res, error, req);
@@ -764,7 +880,7 @@ export class CrudRouteBuilder {
         operation: any,
         modelName: string,
         options: any,
-        req: any
+        req: any,
     ): Promise<any | null> {
         switch (operation.op) {
             case 'add':
@@ -778,7 +894,7 @@ export class CrudRouteBuilder {
                         createData,
                         operation.data.relationships,
                         tx,
-                        modelName
+                        modelName,
                     );
                     Object.assign(createData, processedData);
                 }
@@ -797,14 +913,14 @@ export class CrudRouteBuilder {
                         updateData,
                         operation.data.relationships,
                         tx,
-                        modelName
+                        modelName,
                     );
                     Object.assign(updateData, processedData);
                 }
 
                 const updated = await tx[modelName].update({
                     where: { id: operation.ref.id },
-                    data: updateData
+                    data: updateData,
                 });
                 return JsonApiTransformer.transformToResource(updated, { resourceType: modelName });
 
@@ -820,12 +936,12 @@ export class CrudRouteBuilder {
 
                     await tx[modelName].update({
                         where: { id: operation.ref.id },
-                        data: relationshipData
+                        data: relationshipData,
                     });
                 } else {
                     // 리소스 제거
                     await tx[modelName].delete({
-                        where: { id: operation.ref.id }
+                        where: { id: operation.ref.id },
                     });
                 }
                 return null;
@@ -838,14 +954,20 @@ export class CrudRouteBuilder {
     /**
      * JSON:API 고급 에러 검증
      */
-    private validateJsonApiResource(data: any, expectedType: string, req: any, res: any, isUpdate: boolean = false): boolean {
+    private validateJsonApiResource(
+        data: any,
+        expectedType: string,
+        req: any,
+        res: any,
+        isUpdate: boolean = false,
+    ): boolean {
         // 리소스 객체 구조 검증
         if (!data || typeof data !== 'object') {
             const errorResponse = this.formatJsonApiError(
                 new Error('Resource must be an object'),
                 'INVALID_RESOURCE_STRUCTURE',
                 400,
-                req.path
+                req.path,
             );
             res.status(400).json(errorResponse);
             return false;
@@ -882,7 +1004,7 @@ export class CrudRouteBuilder {
                     new Error('Resource must have an id field for updates'),
                     'MISSING_RESOURCE_ID',
                     400,
-                    req.path
+                    req.path,
                 );
                 res.status(400).json(errorResponse);
                 return false;
@@ -895,7 +1017,7 @@ export class CrudRouteBuilder {
                     new Error(`Resource id "${data.id}" does not match URL id "${urlId}"`),
                     'ID_MISMATCH',
                     400,
-                    req.path
+                    req.path,
                 );
                 res.status(400).json(errorResponse);
                 return false;
@@ -908,7 +1030,7 @@ export class CrudRouteBuilder {
                 new Error('Resource attributes must be an object'),
                 'INVALID_ATTRIBUTES',
                 400,
-                req.path
+                req.path,
             );
             res.status(400).json(errorResponse);
             return false;
@@ -919,7 +1041,7 @@ export class CrudRouteBuilder {
                 new Error('Resource relationships must be an object'),
                 'INVALID_RELATIONSHIPS',
                 400,
-                req.path
+                req.path,
             );
             res.status(400).json(errorResponse);
             return false;
@@ -934,7 +1056,7 @@ export class CrudRouteBuilder {
     private async applyPatchStrategy(
         existingData: any,
         newData: any,
-        strategy: 'merge' | 'replace' = 'merge'
+        strategy: 'merge' | 'replace' = 'merge',
     ): Promise<any> {
         if (strategy === 'replace') {
             return newData;
@@ -943,13 +1065,17 @@ export class CrudRouteBuilder {
         // merge 전략: 기존 데이터와 새 데이터를 병합
         const mergedData = { ...existingData };
 
-        Object.keys(newData).forEach(key => {
+        Object.keys(newData).forEach((key) => {
             if (newData[key] !== undefined) {
-                if (typeof newData[key] === 'object' && newData[key] !== null && !Array.isArray(newData[key])) {
+                if (
+                    typeof newData[key] === 'object' &&
+                    newData[key] !== null &&
+                    !Array.isArray(newData[key])
+                ) {
                     // 객체인 경우 재귀적으로 병합
                     mergedData[key] = {
                         ...(mergedData[key] || {}),
-                        ...newData[key]
+                        ...newData[key],
                     };
                 } else {
                     // 원시값 또는 배열인 경우 교체
@@ -984,7 +1110,7 @@ export class CrudRouteBuilder {
         isUpdate: boolean = false,
         options?: any,
         parentId?: any,
-        parentIdField: string = DEFAULT_PRIMARY_KEY
+        parentIdField: string = DEFAULT_PRIMARY_KEY,
     ): Promise<any> {
         const processedData = { ...data };
 
@@ -1005,12 +1131,12 @@ export class CrudRouteBuilder {
                                 relationName,
                                 parentId,
                                 parentIdField,
-                                softDeleteField
+                                softDeleteField,
                             );
                             // Prisma 관계는 disconnect하지 않음 (soft delete된 레코드 유지)
                         } else {
                             processedData[relationName] = {
-                                disconnect: true
+                                disconnect: true,
                             };
                         }
                     }
@@ -1029,11 +1155,11 @@ export class CrudRouteBuilder {
                                     relationName,
                                     parentId,
                                     parentIdField,
-                                    softDeleteField
+                                    softDeleteField,
                                 );
                             } else {
                                 processedData[relationName] = {
-                                    set: []
+                                    set: [],
                                 };
                             }
                         }
@@ -1046,7 +1172,9 @@ export class CrudRouteBuilder {
 
                         for (const item of relationshipData.data) {
                             if (!item.type) {
-                                throw new Error(`Invalid relationship data: missing type in ${relationName}`);
+                                throw new Error(
+                                    `Invalid relationship data: missing type in ${relationName}`,
+                                );
                             }
 
                             // 첫 번째 아이템의 type을 저장 (soft delete 시 사용)
@@ -1056,7 +1184,9 @@ export class CrudRouteBuilder {
 
                             // JSON:API 표준: id가 반드시 있어야 함
                             if (!item.id) {
-                                throw new Error(`Invalid relationship data: missing id in ${relationName}. JSON:API requires resource identifier objects to have both type and id.`);
+                                throw new Error(
+                                    `Invalid relationship data: missing id in ${relationName}. JSON:API requires resource identifier objects to have both type and id.`,
+                                );
                             }
 
                             connectIds.push({ id: this.parseRelationshipId(item.id) });
@@ -1073,27 +1203,27 @@ export class CrudRouteBuilder {
                                     relatedResourceType, // relationName 대신 실제 type 사용
                                     parentId,
                                     parentIdField,
-                                    connectIds.map(c => c.id),
-                                    softDeleteField
+                                    connectIds.map((c) => c.id),
+                                    softDeleteField,
                                 );
 
                                 // 2. 새 연결 처리
                                 if (connectIds.length > 0) {
                                     processedData[relationName] = {
-                                        connect: connectIds
+                                        connect: connectIds,
                                     };
                                 }
                             } else {
                                 // Hard delete: set으로 완전 대체
                                 processedData[relationName] = {
-                                    set: connectIds
+                                    set: connectIds,
                                 };
                             }
                         } else {
                             // CREATE 시에는 connect 사용
                             if (connectIds.length > 0) {
                                 processedData[relationName] = {
-                                    connect: connectIds
+                                    connect: connectIds,
                                 };
                             }
                         }
@@ -1102,17 +1232,21 @@ export class CrudRouteBuilder {
                 // 단일 객체인 경우 - 일대일 관계
                 else if (typeof relationshipData.data === 'object') {
                     if (!relationshipData.data.type) {
-                        throw new Error(`Invalid relationship data: missing type in ${relationName}`);
+                        throw new Error(
+                            `Invalid relationship data: missing type in ${relationName}`,
+                        );
                     }
 
                     // JSON:API 표준: id가 반드시 있어야 함
                     if (!relationshipData.data.id) {
-                        throw new Error(`Invalid relationship data: missing id in ${relationName}. JSON:API requires resource identifier objects to have both type and id.`);
+                        throw new Error(
+                            `Invalid relationship data: missing id in ${relationName}. JSON:API requires resource identifier objects to have both type and id.`,
+                        );
                     }
 
                     // 기존 리소스 연결
                     processedData[relationName] = {
-                        connect: { id: this.parseRelationshipId(relationshipData.data.id) }
+                        connect: { id: this.parseRelationshipId(relationshipData.data.id) },
                     };
                 }
             }
@@ -1149,13 +1283,15 @@ export class CrudRouteBuilder {
         resourceType: string,
         parentId: any,
         parentIdField: string,
-        softDeleteField: string
+        softDeleteField: string,
     ): Promise<void> {
         try {
             // 리소스 타입에서 모델명 추론 (예: UserRole -> UserRole, userRole -> UserRole)
             const relatedModelName = this.getModelNameFromResourceType(resourceType);
             if (!relatedModelName || !client[relatedModelName]) {
-                log.Warn(`Could not find model for resourceType: ${resourceType} (tried: ${relatedModelName})`);
+                log.Warn(
+                    `Could not find model for resourceType: ${resourceType} (tried: ${relatedModelName})`,
+                );
                 return;
             }
 
@@ -1166,17 +1302,20 @@ export class CrudRouteBuilder {
             await client[relatedModelName].updateMany({
                 where: {
                     [parentRefField]: parentId,
-                    [softDeleteField]: null // 아직 삭제되지 않은 것만
+                    [softDeleteField]: null, // 아직 삭제되지 않은 것만
                 },
                 data: {
-                    [softDeleteField]: new Date()
-                }
+                    [softDeleteField]: new Date(),
+                },
             });
         } catch (error) {
             // 호출자(destroy 핸들러)가 데이터 일관성을 인지할 수 있도록 재던진다.
             // 예전에는 Warn 로그만 남기고 부모 삭제는 성공(204) 응답을 보냈는데, 이는 orphan 관계를 만들고
             // 클라이언트가 "성공" 으로 오해하게 한다.
-            log.Error(`Failed to soft delete related records for ${resourceType}`, { error: error instanceof Error ? error.message : String(error), parentId });
+            log.Error(`Failed to soft delete related records for ${resourceType}`, {
+                error: error instanceof Error ? error.message : String(error),
+                parentId,
+            });
             throw error;
         }
     }
@@ -1193,13 +1332,15 @@ export class CrudRouteBuilder {
         parentId: any,
         parentIdField: string,
         newIds: any[],
-        softDeleteField: string
+        softDeleteField: string,
     ): Promise<void> {
         try {
             // 리소스 타입에서 모델명 추론 (예: UserRole -> UserRole, userRole -> UserRole)
             const relatedModelName = this.getModelNameFromResourceType(resourceType);
             if (!relatedModelName || !client[relatedModelName]) {
-                log.Warn(`Could not find model for resourceType: ${resourceType} (tried: ${relatedModelName})`);
+                log.Warn(
+                    `Could not find model for resourceType: ${resourceType} (tried: ${relatedModelName})`,
+                );
                 return;
             }
 
@@ -1208,7 +1349,7 @@ export class CrudRouteBuilder {
             // 새 목록에 없는 기존 관계만 soft delete
             const whereClause: any = {
                 [parentRefField]: parentId,
-                [softDeleteField]: null
+                [softDeleteField]: null,
             };
 
             // newIds가 있으면 해당 ID들은 제외
@@ -1219,8 +1360,8 @@ export class CrudRouteBuilder {
             await client[relatedModelName].updateMany({
                 where: whereClause,
                 data: {
-                    [softDeleteField]: new Date()
-                }
+                    [softDeleteField]: new Date(),
+                },
             });
 
             // soft delete된 레코드 중 다시 연결해야 할 것들 복원
@@ -1229,16 +1370,20 @@ export class CrudRouteBuilder {
                     where: {
                         [parentRefField]: parentId,
                         id: { in: newIds },
-                        [softDeleteField]: { not: null }
+                        [softDeleteField]: { not: null },
                     },
                     data: {
-                        [softDeleteField]: null
-                    }
+                        [softDeleteField]: null,
+                    },
                 });
             }
         } catch (error) {
             // 부모 update 가 성공한 뒤 자식 관계 갱신만 실패하면 데이터 일관성이 깨진다 — 호출자가 인지하도록 재던진다.
-            log.Error(`Failed to replace relationships with soft delete for ${resourceType}`, { error: error instanceof Error ? error.message : String(error), parentId, newIdsCount: newIds.length });
+            log.Error(`Failed to replace relationships with soft delete for ${resourceType}`, {
+                error: error instanceof Error ? error.message : String(error),
+                parentId,
+                newIdsCount: newIds.length,
+            });
             throw error;
         }
     }
@@ -1277,7 +1422,7 @@ export class CrudRouteBuilder {
             // camelCase 또는 lowercase 처리
             // userRole -> ['user', 'Role'] -> ['user', 'role']
             // userrole -> ['userrole']
-            parts = resourceType.split(/(?=[A-Z])/).map(p => p.toLowerCase());
+            parts = resourceType.split(/(?=[A-Z])/).map((p) => p.toLowerCase());
 
             // 전부 소문자인 경우 (userrole) 일반적인 패턴으로 분리 시도
             if (parts.length === 1 && parts[0] === resourceType.toLowerCase()) {
@@ -1291,7 +1436,7 @@ export class CrudRouteBuilder {
                 for (const { pattern, split } of knownPatterns) {
                     const match = resourceType.match(pattern);
                     if (match) {
-                        parts = split.map(s => s.startsWith('$') ? match[parseInt(s[1])] : s);
+                        parts = split.map((s) => (s.startsWith('$') ? match[parseInt(s[1])] : s));
                         break;
                     }
                 }
@@ -1300,7 +1445,7 @@ export class CrudRouteBuilder {
 
         // 2. 각 부분을 PascalCase로 변환
         let pascalCase = parts
-            .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+            .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
             .join('');
 
         // 3. 복수형 -> 단수형 변환
@@ -1321,12 +1466,11 @@ export class CrudRouteBuilder {
         modelName: string,
         options?: any,
         primaryKey: string = DEFAULT_PRIMARY_KEY,
-        primaryKeyParser: (value: string) => any = parseStringImpl
+        primaryKeyParser: (value: string) => any = parseStringImpl,
     ): void {
         const middlewares = options?.middleware?.update || [];
 
         const handler: HandlerFunction = async (req, res, injected, repo, db) => {
-
             try {
                 // JSON:API Content-Type 헤더 설정
                 res.setHeader('Content-Type', JSON_API_CONTENT_TYPE);
@@ -1341,7 +1485,13 @@ export class CrudRouteBuilder {
                 // }
 
                 // 파라미터 추출 검사
-                const extractResult = this.extractAndParsePrimaryKey(req, res, primaryKey, primaryKeyParser, modelName);
+                const extractResult = this.extractAndParsePrimaryKey(
+                    req,
+                    res,
+                    primaryKey,
+                    primaryKeyParser,
+                    modelName,
+                );
                 // 파라미터 추출 및 검증
 
                 const { parsedIdentifier } = extractResult;
@@ -1349,15 +1499,16 @@ export class CrudRouteBuilder {
                 // JSON:API 요청 형식 검증
                 if (!req.body || !req.body.data) {
                     // 리소스 타입을 동적으로 결정
-                    const routeResourceType = req.baseUrl.split('/').filter(Boolean).pop() || modelName.toLowerCase();
+                    const routeResourceType =
+                        req.baseUrl.split('/').filter(Boolean).pop() || modelName.toLowerCase();
                     const resourceType = options?.resourceType || routeResourceType;
 
                     const exampleRequest = {
                         data: {
                             type: resourceType,
                             id: String(parsedIdentifier),
-                            attributes: {}
-                        }
+                            attributes: {},
+                        },
                     };
 
                     const errorDetail = `Request must contain a data object following JSON:API specification. Expected format: ${JSON.stringify(exampleRequest, null, 2)}`;
@@ -1365,7 +1516,7 @@ export class CrudRouteBuilder {
                         new Error(errorDetail),
                         ERROR_CODES.INVALID_REQUEST,
                         400,
-                        req.path
+                        req.path,
                     );
                     return res.status(400).json(errorResponse);
                 }
@@ -1373,7 +1524,8 @@ export class CrudRouteBuilder {
                 const { data: requestData } = req.body;
 
                 // 리소스 타입 검증 (라우트 경로에서 추출 또는 옵션 사용)
-                const routeResourceType = req.baseUrl.split('/').filter(Boolean).pop() || modelName.toLowerCase();
+                const routeResourceType =
+                    req.baseUrl.split('/').filter(Boolean).pop() || modelName.toLowerCase();
                 const expectedType = options?.resourceType || routeResourceType;
 
                 // JSON:API 리소스 구조 검증
@@ -1395,14 +1547,14 @@ export class CrudRouteBuilder {
                             true, // 업데이트 모드
                             options, // softDelete 옵션 전달
                             parsedIdentifier, // 부모 ID
-                            primaryKey // 부모 ID 필드명
+                            primaryKey, // 부모 ID 필드명
                         );
                     } catch (relationshipError: any) {
                         const errorResponse = this.formatJsonApiError(
                             relationshipError,
                             ERROR_CODES.INVALID_RELATIONSHIP,
                             422,
-                            req.path
+                            req.path,
                         );
                         return res.status(422).json(errorResponse);
                     }
@@ -1417,14 +1569,15 @@ export class CrudRouteBuilder {
                 }
 
                 // include 옵션 빌드 (?include= 또는 defaultIncludes 적용 시)
-                const updateIncludeOptions = queryParams.include && queryParams.include.length > 0
-                    ? PrismaQueryBuilder['buildIncludeOptions'](queryParams.include)
-                    : undefined;
+                const updateIncludeOptions =
+                    queryParams.include && queryParams.include.length > 0
+                        ? PrismaQueryBuilder['buildIncludeOptions'](queryParams.include)
+                        : undefined;
 
                 const result = await client[modelName].update({
                     where: { [primaryKey]: parsedIdentifier },
                     data,
-                    ...(updateIncludeOptions && { include: updateIncludeOptions })
+                    ...(updateIncludeOptions && { include: updateIncludeOptions }),
                 });
 
                 // After hook 실행
@@ -1433,10 +1586,16 @@ export class CrudRouteBuilder {
                 }
 
                 // JSON:API 단일 리소스 응답 조립 + 직렬화
-                const serializedResponse = this.buildUpdateResponse(result, queryParams, req, modelName, options, primaryKey);
+                const serializedResponse = this.buildUpdateResponse(
+                    result,
+                    queryParams,
+                    req,
+                    modelName,
+                    options,
+                    primaryKey,
+                );
 
                 res.json(serializedResponse);
-
             } catch (error: any) {
                 log.Error(`CRUD Update Error for ${modelName}:`, error);
 
@@ -1450,7 +1609,7 @@ export class CrudRouteBuilder {
             if (options?.validation?.update) {
                 const validationMiddlewares = CustomRequestHandler.withValidation(
                     options.validation.update,
-                    handler
+                    handler,
                 );
 
                 if (middlewares.length > 0) {
@@ -1460,8 +1619,14 @@ export class CrudRouteBuilder {
                 }
             } else {
                 if (middlewares.length > 0) {
-                    const wrappedMiddlewares = middlewares.map((mw: MiddlewareHandlerFunction) => this.ctx.wrapMiddleware(mw));
-                    this.ctx.router[method](routePath, ...wrappedMiddlewares, this.ctx.wrapHandler(handler));
+                    const wrappedMiddlewares = middlewares.map((mw: MiddlewareHandlerFunction) =>
+                        this.ctx.wrapMiddleware(mw),
+                    );
+                    this.ctx.router[method](
+                        routePath,
+                        ...wrappedMiddlewares,
+                        this.ctx.wrapHandler(handler),
+                    );
                 } else {
                     this.ctx.router[method](routePath, this.ctx.wrapHandler(handler));
                 }
@@ -1472,12 +1637,16 @@ export class CrudRouteBuilder {
         registerMethod('patch');
 
         // 문서화 등록 (PUT/PATCH 동일) - JSON:API ref
-        ['PUT', 'PATCH'].forEach(method => {
+        ['PUT', 'PATCH'].forEach((method) => {
             this.ctx.registerDocumentation(method, routePath, {
                 summary: `Update ${modelName} by ${primaryKey} (JSON:API)`,
                 parameters: {
                     params: {
-                        [primaryKey]: { type: 'string', required: true, description: `${modelName} ${primaryKey}` }
+                        [primaryKey]: {
+                            type: 'string',
+                            required: true,
+                            description: `${modelName} ${primaryKey}`,
+                        },
                     },
                     body: jsonApiBody(modelName, 'update'),
                 },
@@ -1486,13 +1655,10 @@ export class CrudRouteBuilder {
                     400: jsonApiErrorResponse(400),
                     404: jsonApiErrorResponse(404),
                     422: jsonApiErrorResponse(422),
-                }
+                },
             });
         });
     }
-
-
-
 
     /**
      * DESTROY 라우트 설정 (DELETE /:identifier) - JSON:API 준수
@@ -1502,7 +1668,7 @@ export class CrudRouteBuilder {
         modelName: string,
         options?: any,
         primaryKey: string = DEFAULT_PRIMARY_KEY,
-        primaryKeyParser: (value: string) => any = parseStringImpl
+        primaryKeyParser: (value: string) => any = parseStringImpl,
     ): void {
         const middlewares = options?.middleware?.destroy || [];
         const isSoftDelete = options?.softDelete?.enabled;
@@ -1522,7 +1688,11 @@ export class CrudRouteBuilder {
 
                 // 파라미터 추출 및 파싱
                 const { success, parsedIdentifier } = this.extractAndParsePrimaryKey(
-                    req, res, primaryKey, primaryKeyParser, modelName
+                    req,
+                    res,
+                    primaryKey,
+                    primaryKeyParser,
+                    modelName,
                 );
                 if (!success) return; // 에러 응답은 이미 헬퍼에서 처리됨
 
@@ -1535,7 +1705,7 @@ export class CrudRouteBuilder {
                     // Soft Delete: 삭제 시간 설정
                     const result = await client[modelName].update({
                         where: { [primaryKey]: parsedIdentifier },
-                        data: { [softDeleteField]: new Date() }
+                        data: { [softDeleteField]: new Date() },
                     });
 
                     // After hook 실행
@@ -1546,27 +1716,27 @@ export class CrudRouteBuilder {
                     // metadata 객체 생성 - 기존 헬퍼 함수 사용
                     const metadata = CrudResponseFormatter.createPaginationMeta(
                         [result], // 삭제된 단일 항목을 배열로 감싸서 전달
-                        1,        // total count??1
+                        1, // total count??1
                         undefined, // page 파라미터 없음 (단일 삭제)
                         'soft_delete',
                         undefined, // includedRelations 없음
                         undefined, // includedRelations 없음
                     );
 
-                    undefined  // queryParams 없음
+                    undefined; // queryParams 없음
                     metadata.wasSoftDeleted = false; // 이전에는 삭제되지 않았음
 
                     // JSON:API 준수 - 성공적인 soft delete 응답 (200 OK with meta)
                     const response = {
                         jsonapi: {
-                            version: JSON_API_VERSION
+                            version: JSON_API_VERSION,
                         },
                         meta: {
                             operation: 'soft_delete',
                             timestamp: metadata.timestamp,
-                            [softDeleteField]: result[softDeleteField]
+                            [softDeleteField]: result[softDeleteField],
                         },
-                        metadata
+                        metadata,
                     };
 
                     res.status(200).json(response);
@@ -1581,14 +1751,14 @@ export class CrudRouteBuilder {
                             new Error(`${modelName} not found`),
                             ERROR_CODES.NOT_FOUND,
                             404,
-                            req.path
+                            req.path,
                         );
                         return res.status(404).json(errorResponse);
                     }
 
                     // Hard Delete: 완전 삭제
                     await client[modelName].delete({
-                        where: { [primaryKey]: parsedIdentifier }
+                        where: { [primaryKey]: parsedIdentifier },
                     });
 
                     // After hook 실행
@@ -1599,7 +1769,6 @@ export class CrudRouteBuilder {
                     // JSON:API 삭제 성공 응답 (204 No Content)
                     res.status(204).end();
                 }
-
             } catch (error: any) {
                 log.Error(`CRUD Destroy Error for ${modelName}:`, error);
 
@@ -1610,42 +1779,50 @@ export class CrudRouteBuilder {
         // 미들웨어 등록 - 동적 경로 사용
         const routePath = `/:${primaryKey}`;
         if (middlewares.length > 0) {
-            const wrappedMiddlewares = middlewares.map((mw: MiddlewareHandlerFunction) => this.ctx.wrapMiddleware(mw));
+            const wrappedMiddlewares = middlewares.map((mw: MiddlewareHandlerFunction) =>
+                this.ctx.wrapMiddleware(mw),
+            );
             this.ctx.router.delete(routePath, ...wrappedMiddlewares, this.ctx.wrapHandler(handler));
         } else {
             this.ctx.router.delete(routePath, this.ctx.wrapHandler(handler));
         }
 
         // 문서화 등록 - JSON:API 형식
-        const deleteDescription = isSoftDelete ?
-            `Soft delete ${modelName} by ${primaryKey} (JSON:API)` :
-            `Delete ${modelName} by ${primaryKey} (JSON:API)`;
+        const deleteDescription = isSoftDelete
+            ? `Soft delete ${modelName} by ${primaryKey} (JSON:API)`
+            : `Delete ${modelName} by ${primaryKey} (JSON:API)`;
 
-        const deleteResponses: any = isSoftDelete ? {
-            200: {
-                type: 'object',
-                required: ['meta'],
-                properties: {
-                    meta: { type: 'object' },
-                },
-            },
-            404: jsonApiErrorResponse(404),
-        } : {
-            204: {
-                type: 'object',
-                description: 'Successfully deleted (no content)',
-            },
-            404: jsonApiErrorResponse(404),
-        };
+        const deleteResponses: any = isSoftDelete
+            ? {
+                  200: {
+                      type: 'object',
+                      required: ['meta'],
+                      properties: {
+                          meta: { type: 'object' },
+                      },
+                  },
+                  404: jsonApiErrorResponse(404),
+              }
+            : {
+                  204: {
+                      type: 'object',
+                      description: 'Successfully deleted (no content)',
+                  },
+                  404: jsonApiErrorResponse(404),
+              };
 
         this.ctx.registerDocumentation('DELETE', routePath, {
             summary: deleteDescription,
             parameters: {
                 params: {
-                    [primaryKey]: { type: 'string', required: true, description: `${modelName} ${primaryKey}` }
-                }
+                    [primaryKey]: {
+                        type: 'string',
+                        required: true,
+                        description: `${modelName} ${primaryKey}`,
+                    },
+                },
             },
-            responses: deleteResponses
+            responses: deleteResponses,
         });
     }
 
@@ -1657,7 +1834,7 @@ export class CrudRouteBuilder {
         modelName: string,
         options?: any,
         primaryKey: string = DEFAULT_PRIMARY_KEY,
-        primaryKeyParser: (value: string) => any = parseStringImpl
+        primaryKeyParser: (value: string) => any = parseStringImpl,
     ): void {
         const middlewares = options?.middleware?.recover || [];
         // P0-3: 형제 핸들러(index/destroy)와 동일하게 설정된 soft-delete 필드를 해석한다.
@@ -1671,7 +1848,11 @@ export class CrudRouteBuilder {
 
                 // 파라미터 추출 및 파싱
                 const { success, parsedIdentifier } = this.extractAndParsePrimaryKey(
-                    req, res, primaryKey, primaryKeyParser, modelName
+                    req,
+                    res,
+                    primaryKey,
+                    primaryKeyParser,
+                    modelName,
                 );
                 if (!success) return; // 에러 응답은 이미 헬퍼에서 처리됨
 
@@ -1684,14 +1865,14 @@ export class CrudRouteBuilder {
                 const existingItem = await client[modelName].findFirst({
                     where: {
                         [primaryKey]: parsedIdentifier,
-                        [softDeleteField]: { not: null } // 소프트 삭제된 항목만 조회
-                    }
+                        [softDeleteField]: { not: null }, // 소프트 삭제된 항목만 조회
+                    },
                 });
 
                 if (!existingItem) {
                     // 이미 삭제되지 않은 복구할 상태
                     const activeItem = await client[modelName].findUnique({
-                        where: { [primaryKey]: parsedIdentifier }
+                        where: { [primaryKey]: parsedIdentifier },
                     });
 
                     if (activeItem) {
@@ -1699,7 +1880,7 @@ export class CrudRouteBuilder {
                             new Error(`${modelName} is already active (not deleted)`),
                             'CONFLICT',
                             409,
-                            req.path
+                            req.path,
                         );
                         return res.status(409).json(errorResponse);
                     } else {
@@ -1707,7 +1888,7 @@ export class CrudRouteBuilder {
                             new Error(`${modelName} not found`),
                             ERROR_CODES.NOT_FOUND,
                             404,
-                            req.path
+                            req.path,
                         );
                         return res.status(404).json(errorResponse);
                     }
@@ -1716,7 +1897,7 @@ export class CrudRouteBuilder {
                 // 복구 실행 (soft-delete 필드를 null로 설정)
                 const result = await client[modelName].update({
                     where: { [primaryKey]: parsedIdentifier },
-                    data: { [softDeleteField]: null }
+                    data: { [softDeleteField]: null },
                 });
 
                 // After hook 실행
@@ -1727,7 +1908,7 @@ export class CrudRouteBuilder {
                 // metadata 객체 생성 - 기존 헬퍼 함수 사용
                 const metadata = CrudResponseFormatter.createPaginationMeta(
                     [result], // 단일 항목을 배열로 감싸서 전달
-                    1,        // total count = 1
+                    1, // total count = 1
                     undefined, // page 파라미터 없음 (단일 복구)
                     'recover',
                     undefined, // includedRelations 없음
@@ -1741,20 +1922,19 @@ export class CrudRouteBuilder {
                 const response = {
                     data: this.transformToJsonApiResource(result, modelName, req, primaryKey),
                     jsonapi: {
-                        version: JSON_API_VERSION
+                        version: JSON_API_VERSION,
                     },
                     meta: {
                         operation: 'recover',
-                        timestamp: metadata.timestamp
+                        timestamp: metadata.timestamp,
                     },
-                    metadata
+                    metadata,
                 };
 
                 // BigInt와 DATE 타입 직렬화 처리
                 const serializedResponse = serialize(response);
 
                 res.json(serializedResponse);
-
             } catch (error: any) {
                 log.Error(`CRUD Recover Error for ${modelName}:`, error);
 
@@ -1767,7 +1947,7 @@ export class CrudRouteBuilder {
         if (options?.validation?.recover) {
             const validationMiddlewares = CustomRequestHandler.withValidation(
                 options.validation.recover,
-                handler
+                handler,
             );
 
             if (middlewares.length > 0) {
@@ -1778,8 +1958,14 @@ export class CrudRouteBuilder {
         } else {
             // 일반 핸들러
             if (middlewares.length > 0) {
-                const wrappedMiddlewares = middlewares.map((mw: MiddlewareHandlerFunction) => this.ctx.wrapMiddleware(mw));
-                this.ctx.router.post(routePath, ...wrappedMiddlewares, this.ctx.wrapHandler(handler));
+                const wrappedMiddlewares = middlewares.map((mw: MiddlewareHandlerFunction) =>
+                    this.ctx.wrapMiddleware(mw),
+                );
+                this.ctx.router.post(
+                    routePath,
+                    ...wrappedMiddlewares,
+                    this.ctx.wrapHandler(handler),
+                );
             } else {
                 this.ctx.router.post(routePath, this.ctx.wrapHandler(handler));
             }
@@ -1790,22 +1976,31 @@ export class CrudRouteBuilder {
             summary: `Recover soft-deleted ${modelName} by ${primaryKey} (JSON:API)`,
             parameters: {
                 params: {
-                    [primaryKey]: { type: 'string', required: true, description: `${modelName} ${primaryKey}` }
+                    [primaryKey]: {
+                        type: 'string',
+                        required: true,
+                        description: `${modelName} ${primaryKey}`,
+                    },
                 },
-                body: options?.validation?.recover?.body || undefined
+                body: options?.validation?.recover?.body || undefined,
             },
             responses: {
                 200: jsonApiResponse(modelName, 200),
                 404: jsonApiErrorResponse(404),
                 409: jsonApiErrorResponse(409),
-            }
+            },
         });
     }
 
     /**
      * JSON:API 리소스 객체로 변환하는 헬퍼 메서드
      */
-    private transformToJsonApiResource(item: any, modelName: string, req: any, primaryKey: string = DEFAULT_PRIMARY_KEY): any {
+    private transformToJsonApiResource(
+        item: any,
+        modelName: string,
+        req: any,
+        primaryKey: string = DEFAULT_PRIMARY_KEY,
+    ): any {
         const resourceType = modelName.toLowerCase();
         const baseUrl = this.buildBaseUrl(req);
 
@@ -1825,27 +2020,27 @@ export class CrudRouteBuilder {
         const relationships: any = {};
         const resourceAttributes: any = {};
 
-        Object.keys(attributes).forEach(key => {
+        Object.keys(attributes).forEach((key) => {
             const value = attributes[key];
             // 배열이거나 객체이면서 id를 가진 경우 관계로 처리
             if (Array.isArray(value) || (value && typeof value === 'object' && value.id)) {
                 relationships[key] = {
                     links: {
                         self: `${baseUrl}/${id}/relationships/${key}`,
-                        related: `${baseUrl}/${id}/${key}`
-                    }
+                        related: `${baseUrl}/${id}/${key}`,
+                    },
                 };
 
                 // 관계 데이터가 포함된 경우
                 if (Array.isArray(value)) {
                     relationships[key].data = value.map((relItem: any) => ({
                         type: key.slice(0, -1), // 복수형에서 단수형으로(간단한 변환)
-                        id: relItem.id || relItem.uuid || relItem._id
+                        id: relItem.id || relItem.uuid || relItem._id,
                     }));
                 } else if (value.id) {
                     relationships[key].data = {
                         type: key,
-                        id: value.id || value.uuid || value._id
+                        id: value.id || value.uuid || value._id,
                     };
                 }
             } else {
@@ -1858,8 +2053,8 @@ export class CrudRouteBuilder {
             id: String(id),
             attributes: resourceAttributes,
             links: {
-                self: `${baseUrl}/${id}`
-            }
+                self: `${baseUrl}/${id}`,
+            },
         };
 
         // 관계가 있는 경우에만 relationships 필드 추가
@@ -1877,16 +2072,24 @@ export class CrudRouteBuilder {
         const params = new URLSearchParams();
 
         // 기존 쿼리 파라미터 유지 (page 제외)
-        Object.keys(query).forEach(key => {
+        Object.keys(query).forEach((key) => {
             if (!key.startsWith('page[')) {
                 const value = query[key];
                 // 객체나 배열인 경우 JSON.stringify로 직렬화하거나 무시
-                if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+                if (
+                    typeof value === 'string' ||
+                    typeof value === 'number' ||
+                    typeof value === 'boolean'
+                ) {
                     params.append(key, String(value));
                 } else if (Array.isArray(value)) {
                     // 배열인 경우 각 요소를 개별적으로 추가
-                    value.forEach(item => {
-                        if (typeof item === 'string' || typeof item === 'number' || typeof item === 'boolean') {
+                    value.forEach((item) => {
+                        if (
+                            typeof item === 'string' ||
+                            typeof item === 'number' ||
+                            typeof item === 'boolean'
+                        ) {
                             params.append(key, String(item));
                         }
                     });
@@ -1913,11 +2116,13 @@ export class CrudRouteBuilder {
         // 페이지네이션 방식 검증 - 반드시 지정되어야 함
         if (!queryParams.page) {
             const errorResponse = this.formatJsonApiError(
-                new Error('Pagination is required. You must specify either page-based pagination (page[number] & page[size]) or cursor-based pagination (page[cursor] & page[size])'),
+                new Error(
+                    'Pagination is required. You must specify either page-based pagination (page[number] & page[size]) or cursor-based pagination (page[cursor] & page[size])',
+                ),
                 ERROR_CODES.PAGINATION_REQUIRED,
                 400,
                 req.path,
-                req.method
+                req.method,
             );
             res.status(400).json(errorResponse);
             return true;
@@ -1926,11 +2131,13 @@ export class CrudRouteBuilder {
         // 페이지네이션 파라미터 세부 검증
         if (!queryParams.page.number && !queryParams.page.cursor) {
             const errorResponse = this.formatJsonApiError(
-                new Error('Invalid pagination parameters. Specify either page[number] for offset-based pagination or page[cursor] for cursor-based pagination'),
+                new Error(
+                    'Invalid pagination parameters. Specify either page[number] for offset-based pagination or page[cursor] for cursor-based pagination',
+                ),
                 ERROR_CODES.INVALID_PAGINATION_PARAMS,
                 400,
                 req.path,
-                req.method
+                req.method,
             );
             res.status(400).json(errorResponse);
             return true;
@@ -1943,7 +2150,7 @@ export class CrudRouteBuilder {
                 ERROR_CODES.INVALID_PAGE_SIZE,
                 400,
                 req.path,
-                req.method
+                req.method,
             );
             res.status(400).json(errorResponse);
             return true;
@@ -1963,7 +2170,7 @@ export class CrudRouteBuilder {
         findManyOptions: any,
         req: any,
         res: any,
-        options: any
+        options: any,
     ): Promise<{ findManyOptions: any } | null> {
         if (options?.hooks?.beforeIndex) {
             try {
@@ -1977,7 +2184,7 @@ export class CrudRouteBuilder {
                     ERROR_CODES.INTERNAL_SERVER_ERROR,
                     500,
                     req.path,
-                    req.method
+                    req.method,
                 );
                 res.status(500).json(errorResponse);
                 return null;
@@ -1996,7 +2203,7 @@ export class CrudRouteBuilder {
         findManyOptions: any,
         req: any,
         isSoftDelete: boolean,
-        softDeleteField: string
+        softDeleteField: string,
     ): any {
         if (isSoftDelete) {
             // include_deleted 쿼리 파라미터가 true가 아닌 경우 삭제된 것들 제외
@@ -2006,10 +2213,7 @@ export class CrudRouteBuilder {
                 // 기존 where 조건이 있는 경우 AND 조건으로 추가
                 if (findManyOptions.where) {
                     findManyOptions.where = {
-                        AND: [
-                            findManyOptions.where,
-                            { [softDeleteField]: null }
-                        ]
+                        AND: [findManyOptions.where, { [softDeleteField]: null }],
                     };
                 } else {
                     // where 조건이 없는 경우 새로 생성
@@ -2032,7 +2236,7 @@ export class CrudRouteBuilder {
         req: any,
         modelName: string,
         options: any,
-        primaryKey: string
+        primaryKey: string,
     ): any {
         // Base URL 생성
         const baseUrl = this.buildBaseUrl(req);
@@ -2044,7 +2248,7 @@ export class CrudRouteBuilder {
                 items,
                 queryParams.include,
                 queryParams.fields,
-                baseUrl
+                baseUrl,
             );
         }
 
@@ -2058,7 +2262,7 @@ export class CrudRouteBuilder {
             links = {
                 self: this.buildPaginationUrl(baseUrl, req.query, currentPage, pageSize),
                 first: this.buildPaginationUrl(baseUrl, req.query, 1, pageSize),
-                last: this.buildPaginationUrl(baseUrl, req.query, totalPages, pageSize)
+                last: this.buildPaginationUrl(baseUrl, req.query, totalPages, pageSize),
             };
 
             if (currentPage > 1) {
@@ -2072,8 +2276,8 @@ export class CrudRouteBuilder {
         // 메타데이터 생성 (JSON:API 스펙 준수)
         const meta: any = {
             timestamp: new Date().toISOString(),
-            total: total,  // 전체 레코드 수(JSON:API에서 일반적으로 사용)
-            count: items.length  // 현재 응답 레코드 수
+            total: total, // 전체 레코드 수(JSON:API에서 일반적으로 사용)
+            count: items.length, // 현재 응답 레코드 수
         };
 
         // 페이지네이션이 설정된 경우에만 페이지 정보 추가
@@ -2085,7 +2289,7 @@ export class CrudRouteBuilder {
             meta.page = {
                 current: currentPage,
                 size: pageSize,
-                total: totalPages  // 전체 페이지 수
+                total: totalPages, // 전체 페이지 수
             };
         }
 
@@ -2104,8 +2308,8 @@ export class CrudRouteBuilder {
                 meta,
                 included,
                 includeMerge: options?.includeMerge || false,
-                jsonFields
-            }
+                jsonFields,
+            },
         );
 
         // metadata 생성 - 기존 헬퍼 함수 사용
@@ -2115,7 +2319,7 @@ export class CrudRouteBuilder {
             queryParams.page,
             'index',
             queryParams.include,
-            queryParams
+            queryParams,
         );
 
         // BigInt와 DATE 타입 직렬화 처리
@@ -2133,7 +2337,7 @@ export class CrudRouteBuilder {
         req: any,
         modelName: string,
         options: any,
-        primaryKey: string
+        primaryKey: string,
     ): any {
         // Base URL 생성
         const baseUrl = this.buildBaseUrl(req);
@@ -2145,7 +2349,7 @@ export class CrudRouteBuilder {
                 [result],
                 queryParams.include,
                 queryParams.fields,
-                baseUrl
+                baseUrl,
             );
         }
 
@@ -2162,14 +2366,14 @@ export class CrudRouteBuilder {
                 baseUrl,
                 included: updateIncluded,
                 includeMerge: options?.includeMerge || false,
-                jsonFields
-            }
+                jsonFields,
+            },
         );
 
         // metadata 객체 생성 - 기존 헬퍼 함수 사용
         const metadata = CrudResponseFormatter.createPaginationMeta(
             [result], // 단일 항목을 배열로 감싸서 전달
-            1,        // total count = 1
+            1, // total count = 1
             undefined, // page 파라미터 없음 (단일 수정)
             'update',
             queryParams.include,
@@ -2183,7 +2387,13 @@ export class CrudRouteBuilder {
     /**
      * JSON:API 에러 형식으로 포맷하는 헬퍼 메서드 (통합 ErrorHandler 사용)
      */
-    private formatJsonApiError(error: Error | unknown, code: string, status: number, path: string, method?: string): JsonApiErrorResponse {
+    private formatJsonApiError(
+        error: Error | unknown,
+        code: string,
+        status: number,
+        path: string,
+        method?: string,
+    ): JsonApiErrorResponse {
         return ErrorHandler.handleError(error, {
             format: ErrorResponseFormat.JSON_API,
             context: {
@@ -2192,14 +2402,14 @@ export class CrudRouteBuilder {
                 path,
                 method: method || 'UNKNOWN',
                 source: {
-                    pointer: path
-                }
+                    pointer: path,
+                },
             },
             security: {
                 isDevelopment: process.env.NODE_ENV === 'development',
                 sanitizeDetails: process.env.NODE_ENV !== 'development',
-                maxDetailLength: 500
-            }
+                maxDetailLength: 500,
+            },
         });
     }
 
@@ -2244,7 +2454,7 @@ export class CrudRouteBuilder {
                 new Error(`Content-Type must be ${JSON_API_CONTENT_TYPE}`),
                 'INVALID_CONTENT_TYPE',
                 415,
-                req.path
+                req.path,
             );
             res.status(415).json(errorResponse);
             return true;
@@ -2260,7 +2470,12 @@ export class CrudRouteBuilder {
      * 파싱/검증 실패 시 기존과 동일한 400 (또는 parseError.statusCode) JSON:API 에러를 즉시 전송하고
      * `null` 을 반환한다. 호출자는 `null` 인 경우 그대로 `return` 하여 기존 early-return 제어 흐름을 보존한다.
      */
-    private parseQueryWithIncludePolicy(req: any, res: any, modelName: string, options?: any): any | null {
+    private parseQueryWithIncludePolicy(
+        req: any,
+        res: any,
+        modelName: string,
+        options?: any,
+    ): any | null {
         try {
             const queryParams = CrudQueryParser.parseQuery(req, modelName, this.ctx.schemaAnalyzer);
             CrudQueryParser.validateIncludes(queryParams.include, {
@@ -2270,7 +2485,7 @@ export class CrudRouteBuilder {
             });
             queryParams.include = CrudQueryParser.mergeDefaultIncludes(
                 queryParams.include,
-                options?.defaultIncludes
+                options?.defaultIncludes,
             );
             return queryParams;
         } catch (parseError: any) {
@@ -2280,7 +2495,7 @@ export class CrudRouteBuilder {
                 parseError.code || ERROR_CODES.VALIDATION_ERROR,
                 parseError.statusCode || 400,
                 req.path,
-                req.method
+                req.method,
             );
             res.status(parseError.statusCode || 400).json(errorResponse);
             return null;
@@ -2305,7 +2520,7 @@ export class CrudRouteBuilder {
                 parseError.code || ERROR_CODES.VALIDATION_ERROR,
                 parseError.statusCode || 400,
                 req.path,
-                req.method
+                req.method,
             );
             res.status(parseError.statusCode || 400).json(errorResponse);
             return null;
@@ -2318,7 +2533,7 @@ export class CrudRouteBuilder {
     private cleanEmptyValues(data: any): any {
         const cleanedData = { ...data };
 
-        Object.keys(cleanedData).forEach(key => {
+        Object.keys(cleanedData).forEach((key) => {
             const value = cleanedData[key];
 
             // undefined 제거
@@ -2354,7 +2569,7 @@ export class CrudRouteBuilder {
         res: any,
         primaryKey: string,
         primaryKeyParser: (value: string) => any,
-        modelName: string
+        modelName: string,
     ): { success: boolean; parsedIdentifier?: any } {
         // 파라미터 추출
         let identifier: string;
@@ -2372,7 +2587,7 @@ export class CrudRouteBuilder {
                     new Error(`Missing ${primaryKey} parameter`),
                     ERROR_CODES.VALIDATION_ERROR,
                     400,
-                    req.path
+                    req.path,
                 );
                 res.status(400).json(errorResponse);
                 return { success: false };
@@ -2385,7 +2600,7 @@ export class CrudRouteBuilder {
                 new Error(`Invalid ${primaryKey} parameter`),
                 ERROR_CODES.VALIDATION_ERROR,
                 400,
-                req.path
+                req.path,
             );
             res.status(400).json(errorResponse);
             return { success: false };
@@ -2397,7 +2612,13 @@ export class CrudRouteBuilder {
             return { success: true, parsedIdentifier };
         } catch (parseError: any) {
             const { code, status } = ErrorFormatter.mapPrismaError(parseError);
-            const errorResponse = this.formatJsonApiError(parseError, code, status, req.path, req.method);
+            const errorResponse = this.formatJsonApiError(
+                parseError,
+                code,
+                status,
+                req.path,
+                req.method,
+            );
             res.status(status).json(errorResponse);
             return { success: false };
         }
@@ -2412,7 +2633,7 @@ export class CrudRouteBuilder {
         modelName: string,
         options?: any,
         primaryKey: string = DEFAULT_PRIMARY_KEY,
-        primaryKeyParser: (value: string) => any = parseStringImpl
+        primaryKeyParser: (value: string) => any = parseStringImpl,
     ): void {
         // 현재는 기본적인 관계 조회 라우트만 구현
         // 향후 확장 가능: POST, PATCH, DELETE for relationships
@@ -2423,7 +2644,11 @@ export class CrudRouteBuilder {
                 res.setHeader('Content-Type', JSON_API_CONTENT_TYPE);
 
                 const { success, parsedIdentifier } = this.extractAndParsePrimaryKey(
-                    req, res, primaryKey, primaryKeyParser, modelName
+                    req,
+                    res,
+                    primaryKey,
+                    primaryKeyParser,
+                    modelName,
                 );
                 if (!success) return;
 
@@ -2437,7 +2662,7 @@ export class CrudRouteBuilder {
                 // 기본 리소??조회
                 const item = await client[modelName].findUnique({
                     where: { [primaryKey]: parsedIdentifier },
-                    include: { [relationName]: true }
+                    include: { [relationName]: true },
                 });
 
                 if (!item) {
@@ -2445,7 +2670,7 @@ export class CrudRouteBuilder {
                         new Error(`${modelName} not found`),
                         ERROR_CODES.NOT_FOUND,
                         404,
-                        req.path
+                        req.path,
                     );
                     return res.status(404).json(errorResponse);
                 }
@@ -2457,7 +2682,7 @@ export class CrudRouteBuilder {
                         new Error(`Relationship '${relationName}' not found`),
                         ERROR_CODES.RELATIONSHIP_NOT_FOUND,
                         404,
-                        req.path
+                        req.path,
                     );
                     return res.status(404).json(errorResponse);
                 }
@@ -2471,7 +2696,7 @@ export class CrudRouteBuilder {
                 const relationResourceType = JsonApiTransformer.inferResourceTypeFromData(
                     sampleData,
                     relationName,
-                    isArray
+                    isArray,
                 );
 
                 // Json 타입 필드 목록 가져오기 (관계 리소스 타입 기준)
@@ -2487,14 +2712,13 @@ export class CrudRouteBuilder {
                         baseUrl,
                         links: {
                             self: `${baseUrl}/${modelName.toLowerCase()}/${parsedIdentifier}/${relationName}`,
-                            related: `${baseUrl}/${modelName.toLowerCase()}/${parsedIdentifier}/relationships/${relationName}`
+                            related: `${baseUrl}/${modelName.toLowerCase()}/${parsedIdentifier}/relationships/${relationName}`,
                         },
-                        jsonFields
-                    }
+                        jsonFields,
+                    },
                 );
 
                 res.json(serialize(response));
-
             } catch (error: any) {
                 log.Error(`Related Resource Error for ${modelName}:`, error);
                 this.sendMappedCrudError(res, error, req);
@@ -2507,7 +2731,11 @@ export class CrudRouteBuilder {
                 res.setHeader('Content-Type', JSON_API_CONTENT_TYPE);
 
                 const { success, parsedIdentifier } = this.extractAndParsePrimaryKey(
-                    req, res, primaryKey, primaryKeyParser, modelName
+                    req,
+                    res,
+                    primaryKey,
+                    primaryKeyParser,
+                    modelName,
                 );
                 if (!success) return;
 
@@ -2516,7 +2744,7 @@ export class CrudRouteBuilder {
                 // 기본 리소??조회
                 const item = await client[modelName].findUnique({
                     where: { [primaryKey]: parsedIdentifier },
-                    include: { [relationName]: true }
+                    include: { [relationName]: true },
                 });
 
                 if (!item) {
@@ -2524,7 +2752,7 @@ export class CrudRouteBuilder {
                         new Error(`${modelName} not found`),
                         ERROR_CODES.NOT_FOUND,
                         404,
-                        req.path
+                        req.path,
                     );
                     return res.status(404).json(errorResponse);
                 }
@@ -2535,14 +2763,22 @@ export class CrudRouteBuilder {
                 let data = null;
                 if (relationData) {
                     if (Array.isArray(relationData)) {
-                        data = relationData.map(relItem => ({
-                            type: JsonApiTransformer.inferResourceTypeFromData(relItem, relationName, true),
-                            id: String(relItem.id || relItem.uuid || relItem._id)
+                        data = relationData.map((relItem) => ({
+                            type: JsonApiTransformer.inferResourceTypeFromData(
+                                relItem,
+                                relationName,
+                                true,
+                            ),
+                            id: String(relItem.id || relItem.uuid || relItem._id),
                         }));
                     } else {
                         data = {
-                            type: JsonApiTransformer.inferResourceTypeFromData(relationData, relationName, false),
-                            id: String(relationData.id || relationData.uuid || relationData._id)
+                            type: JsonApiTransformer.inferResourceTypeFromData(
+                                relationData,
+                                relationName,
+                                false,
+                            ),
+                            id: String(relationData.id || relationData.uuid || relationData._id),
                         };
                     }
                 }
@@ -2552,15 +2788,14 @@ export class CrudRouteBuilder {
                     data,
                     links: {
                         self: `${baseUrl}/${modelName.toLowerCase()}/${parsedIdentifier}/relationships/${relationName}`,
-                        related: `${baseUrl}/${modelName.toLowerCase()}/${parsedIdentifier}/${relationName}`
+                        related: `${baseUrl}/${modelName.toLowerCase()}/${parsedIdentifier}/${relationName}`,
                     },
                     jsonapi: {
-                        version: JSON_API_VERSION
-                    }
+                        version: JSON_API_VERSION,
+                    },
                 };
 
                 res.json(serialize(response));
-
             } catch (error: any) {
                 log.Error(`Relationship Error for ${modelName}:`, error);
                 this.sendMappedCrudError(res, error, req);
@@ -2576,7 +2811,11 @@ export class CrudRouteBuilder {
                 if (this.rejectInvalidJsonApiContentType(req, res)) return;
 
                 const { success, parsedIdentifier } = this.extractAndParsePrimaryKey(
-                    req, res, primaryKey, primaryKeyParser, modelName
+                    req,
+                    res,
+                    primaryKey,
+                    primaryKeyParser,
+                    modelName,
                 );
                 if (!success) return;
 
@@ -2587,7 +2826,7 @@ export class CrudRouteBuilder {
                         new Error('Request must contain data field with relationship identifiers'),
                         ERROR_CODES.INVALID_REQUEST,
                         400,
-                        req.path
+                        req.path,
                     );
                     return res.status(400).json(errorResponse);
                 }
@@ -2596,18 +2835,21 @@ export class CrudRouteBuilder {
                 let connectData;
 
                 if (Array.isArray(relationshipData)) {
-                    connectData = { [relationName]: { connect: relationshipData.map((item: any) => ({ id: item.id })) } };
+                    connectData = {
+                        [relationName]: {
+                            connect: relationshipData.map((item: any) => ({ id: item.id })),
+                        },
+                    };
                 } else {
                     connectData = { [relationName]: { connect: { id: relationshipData.id } } };
                 }
 
                 await client[modelName].update({
                     where: { [primaryKey]: parsedIdentifier },
-                    data: connectData
+                    data: connectData,
                 });
 
                 res.status(204).end();
-
             } catch (error: any) {
                 log.Error(`Relationship Update Error for ${modelName}:`, error);
                 this.sendMappedCrudError(res, error, req);
@@ -2623,7 +2865,11 @@ export class CrudRouteBuilder {
                 if (this.rejectInvalidJsonApiContentType(req, res)) return;
 
                 const { success, parsedIdentifier } = this.extractAndParsePrimaryKey(
-                    req, res, primaryKey, primaryKeyParser, modelName
+                    req,
+                    res,
+                    primaryKey,
+                    primaryKeyParser,
+                    modelName,
                 );
                 if (!success) return;
 
@@ -2634,7 +2880,7 @@ export class CrudRouteBuilder {
                         new Error('Request must contain data field'),
                         ERROR_CODES.INVALID_REQUEST,
                         400,
-                        req.path
+                        req.path,
                     );
                     return res.status(400).json(errorResponse);
                 }
@@ -2649,8 +2895,8 @@ export class CrudRouteBuilder {
                     // 일대다 관계 교체
                     updateData = {
                         [relationName]: {
-                            set: relationshipData.map((item: any) => ({ id: item.id }))
-                        }
+                            set: relationshipData.map((item: any) => ({ id: item.id })),
+                        },
                     };
                 } else {
                     // 일대일 관계 교체
@@ -2659,11 +2905,10 @@ export class CrudRouteBuilder {
 
                 await client[modelName].update({
                     where: { [primaryKey]: parsedIdentifier },
-                    data: updateData
+                    data: updateData,
                 });
 
                 res.status(204).end();
-
             } catch (error: any) {
                 log.Error(`Relationship Replace Error for ${modelName}:`, error);
                 this.sendMappedCrudError(res, error, req);
@@ -2679,7 +2924,11 @@ export class CrudRouteBuilder {
                 if (this.rejectInvalidJsonApiContentType(req, res)) return;
 
                 const { success, parsedIdentifier } = this.extractAndParsePrimaryKey(
-                    req, res, primaryKey, primaryKeyParser, modelName
+                    req,
+                    res,
+                    primaryKey,
+                    primaryKeyParser,
+                    modelName,
                 );
                 if (!success) return;
 
@@ -2687,10 +2936,12 @@ export class CrudRouteBuilder {
 
                 if (!req.body || !req.body.data) {
                     const errorResponse = this.formatJsonApiError(
-                        new Error('Request must contain data field with relationship identifiers to remove'),
+                        new Error(
+                            'Request must contain data field with relationship identifiers to remove',
+                        ),
                         ERROR_CODES.INVALID_REQUEST,
                         400,
-                        req.path
+                        req.path,
                     );
                     return res.status(400).json(errorResponse);
                 }
@@ -2699,18 +2950,23 @@ export class CrudRouteBuilder {
                 let disconnectData;
 
                 if (Array.isArray(relationshipData)) {
-                    disconnectData = { [relationName]: { disconnect: relationshipData.map((item: any) => ({ id: item.id })) } };
+                    disconnectData = {
+                        [relationName]: {
+                            disconnect: relationshipData.map((item: any) => ({ id: item.id })),
+                        },
+                    };
                 } else {
-                    disconnectData = { [relationName]: { disconnect: { id: relationshipData.id } } };
+                    disconnectData = {
+                        [relationName]: { disconnect: { id: relationshipData.id } },
+                    };
                 }
 
                 await client[modelName].update({
                     where: { [primaryKey]: parsedIdentifier },
-                    data: disconnectData
+                    data: disconnectData,
                 });
 
                 res.status(204).end();
-
             } catch (error: any) {
                 log.Error(`Relationship Delete Error for ${modelName}:`, error);
                 this.sendMappedCrudError(res, error, req);
@@ -2723,7 +2979,11 @@ export class CrudRouteBuilder {
                 res.setHeader('Content-Type', JSON_API_CONTENT_TYPE);
 
                 const { success, parsedIdentifier } = this.extractAndParsePrimaryKey(
-                    req, res, primaryKey, primaryKeyParser, modelName
+                    req,
+                    res,
+                    primaryKey,
+                    primaryKeyParser,
+                    modelName,
                 );
                 if (!success) return;
 
@@ -2737,7 +2997,7 @@ export class CrudRouteBuilder {
                 // 기본 리소??조회
                 const item = await client[modelName].findUnique({
                     where: { [primaryKey]: parsedIdentifier },
-                    include: { [relationName]: true }
+                    include: { [relationName]: true },
                 });
 
                 if (!item) {
@@ -2745,7 +3005,7 @@ export class CrudRouteBuilder {
                         new Error(`${modelName} not found`),
                         ERROR_CODES.NOT_FOUND,
                         404,
-                        req.path
+                        req.path,
                     );
                     return res.status(404).json(errorResponse);
                 }
@@ -2757,8 +3017,8 @@ export class CrudRouteBuilder {
                     const response = {
                         data: Array.isArray(relationData) ? [] : null,
                         jsonapi: {
-                            version: JSON_API_VERSION
-                        }
+                            version: JSON_API_VERSION,
+                        },
                     };
                     return res.json(response);
                 }
@@ -2770,7 +3030,7 @@ export class CrudRouteBuilder {
                 const resourceType = JsonApiTransformer.inferResourceTypeFromData(
                     sampleRelationData,
                     relationName,
-                    isArrayRelation
+                    isArrayRelation,
                 );
 
                 // Json 타입 필드 목록 가져오기 (관계 리소스 타입 기준)
@@ -2784,12 +3044,11 @@ export class CrudRouteBuilder {
                         primaryKey: 'id', // 관련 리소스는 기본적으로 id 사용
                         fields: queryParams.fields,
                         baseUrl,
-                        jsonFields
-                    }
+                        jsonFields,
+                    },
                 );
 
                 res.json(serialize(response));
-
             } catch (error: any) {
                 log.Error(`Related Resource Error for ${modelName}:`, error);
                 this.sendMappedCrudError(res, error, req);

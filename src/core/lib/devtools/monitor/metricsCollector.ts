@@ -13,9 +13,9 @@ import {
  * 모든 버퍼는 고정 크기 링이라 메모리는 상한이 있다(누수 없음).
  */
 
-const RECENT_CAP = 50;        // 최근 요청 보관 수
+const RECENT_CAP = 50; // 최근 요청 보관 수
 const LATENCY_SAMPLE_CAP = 500; // 지연 백분위 표본 수
-const TOP_ROUTES_CAP = 200;   // route→집계 맵 상한(폭주 방지)
+const TOP_ROUTES_CAP = 200; // route→집계 맵 상한(폭주 방지)
 
 function nowSec(): number {
     return Math.floor(Date.now() / 1000);
@@ -38,7 +38,7 @@ export class MetricsCollector {
     private buckets: number[] = new Array(PER_SECOND_WINDOW).fill(0);
     private bucketSec: number[] = new Array(PER_SECOND_WINDOW).fill(-1);
 
-    private latencies: number[] = [];     // 최근 지연 표본(링)
+    private latencies: number[] = []; // 최근 지연 표본(링)
     private latencyMax = 0;
     private latencySum = 0;
     private latencyCount = 0;
@@ -62,7 +62,7 @@ export class MetricsCollector {
         this.total++;
 
         // 상태 분류
-        const cls = (`${Math.floor(status / 100)}xx`) as keyof StatusClassCounts;
+        const cls = `${Math.floor(status / 100)}xx` as keyof StatusClassCounts;
         if (this.statusClasses[cls] !== undefined) this.statusClasses[cls]++;
 
         // 초 버킷
@@ -96,7 +96,10 @@ export class MetricsCollector {
                 let minKey: string | undefined;
                 let minCount = Infinity;
                 for (const [k, v] of this.routes) {
-                    if (v.count < minCount) { minCount = v.count; minKey = k; }
+                    if (v.count < minCount) {
+                        minCount = v.count;
+                        minKey = k;
+                    }
                 }
                 if (minKey !== undefined) this.routes.delete(minKey);
             }
@@ -120,7 +123,11 @@ export class MetricsCollector {
 
         const sorted = [...this.latencies].sort((a, b) => a - b);
         const topRoutes: RouteStat[] = [...this.routes.entries()]
-            .map(([route, v]) => ({ route, count: v.count, avgMs: Math.round(v.totalMs / v.count) }))
+            .map(([route, v]) => ({
+                route,
+                count: v.count,
+                avgMs: Math.round(v.totalMs / v.count),
+            }))
             .sort((a, b) => b.count - a.count)
             .slice(0, 10);
 

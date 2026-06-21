@@ -42,7 +42,7 @@ export interface CoreConfig {
 export function resolveServerDefaults(): { port: number; host: string } {
     return {
         port: parseInt(process.env.PORT || '3000'),
-        host: process.env.HOST || '0.0.0.0'
+        host: process.env.HOST || '0.0.0.0',
     };
 }
 
@@ -78,11 +78,10 @@ export class Core {
             viewEngine: 'ejs',
             port,
             host,
-            trustProxy: process.env.TRUST_PROXY === 'true'
+            trustProxy: process.env.TRUST_PROXY === 'true',
         };
     }
-    
-    
+
     /**
      * Initialize the core with custom configuration
      */
@@ -104,23 +103,21 @@ export class Core {
 
         // Initialize PrismaManager before setting up routes
         await this.initializePrismaManager();
-        
+
         // Initialize Repository Manager
         await this.initializeRepositoryManager();
-        
+
         // Initialize Dependency Injector
         await this.initializeDependencyInjector();
 
-
-        
         await this.loadExtensions(); // 확장 발견 + 라우터 메서드 prototype 등록 — 라우트보다 먼저
         this.setupExpress();
         this.setupCoreMiddleware(); // 프레임워크 필수(req.kusto 주입 + clientIp) — 라우트보다 먼저
         await this.runExtensionInit(); // 확장 onInit(미들웨어/정적/서비스) — 라우트보다 먼저
-        this.setupMonitor();     // dev 모니터(메트릭 미들웨어 + /__kusto/metrics) — 라우트보다 먼저
+        this.setupMonitor(); // dev 모니터(메트릭 미들웨어 + /__kusto/metrics) — 라우트보다 먼저
         this.setupHealthCheck(); // /healthz readiness (글로벌 라우트보다 먼저)
         this.setupDocumentationRoutes(); // 문서화 라우트를 먼저 등록
-        await this.loadRoutes();          // await: 전역 에러 핸들러보다 라우트가 먼저 등록되도록 보장
+        await this.loadRoutes(); // await: 전역 에러 핸들러보다 라우트가 먼저 등록되도록 보장
         this.setupViews();
 
         // 스키마 API 등록 (개발 모드에서만)
@@ -139,30 +136,31 @@ export class Core {
         if (process.env.NODE_ENV === 'development') {
             log.Info('Core initialized successfully', { config: this._config });
         }
-        
+
         return this;
-    }    
-      private setupExpress(): void {
+    }
+    private setupExpress(): void {
         // Set trust proxy
         this._app.set('trust proxy', this._config.trustProxy ? 1 : 0);
-        
+
         // JSON parsing middleware is handled by global middleware.ts
         // No need to add express.json() here as it's already in src/app/routes/middleware.ts
-        
+
         // Serve static files from public directory
         // In webpack build environment, use dist/public, otherwise use public
-        const publicPath = process.env.WEBPACK_BUILD === 'true' 
-            ? path.join(__dirname, 'public')  // dist/public in build environment
-            : path.join(process.cwd(), 'public');  // public in development
+        const publicPath =
+            process.env.WEBPACK_BUILD === 'true'
+                ? path.join(__dirname, 'public') // dist/public in build environment
+                : path.join(process.cwd(), 'public'); // public in development
         this._app.use(express.static(publicPath));
-        
+
         // Serve development static files when AUTO_DOCS=true
         this._app.use(StaticFileMiddleware.serveStaticFiles());
-        
+
         if (process.env.NODE_ENV === 'development') {
-            log.Debug('Express app configured', { 
+            log.Debug('Express app configured', {
                 trustProxy: this._config.trustProxy,
-                staticPath: publicPath
+                staticPath: publicPath,
             });
         }
     }
@@ -189,7 +187,9 @@ export class Core {
         const ctx: ExtensionInitContext = {
             app: this._app,
             config: this._config,
-            registerMiddleware: (mw) => { this._app.use(mw); },
+            registerMiddleware: (mw) => {
+                this._app.use(mw);
+            },
             log,
         };
         await extensionRegistry.runInit(ctx);
@@ -210,14 +210,14 @@ export class Core {
             throw error;
         }
     }
-    
+
     private setupViews(): void {
         this._app.set('view engine', this._config.viewEngine);
         this._app.set('views', this._config.viewsPath);
-        
-        log.Debug('Views configured', { 
-            engine: this._config.viewEngine, 
-            path: this._config.viewsPath 
+
+        log.Debug('Views configured', {
+            engine: this._config.viewEngine,
+            path: this._config.viewsPath,
         });
     }
 
@@ -225,16 +225,15 @@ export class Core {
         // 환경 변수 체크: development 모드이고 AUTO_DOCS가 true일 때만 활성화
         const isDevelopment = process.env.NODE_ENV !== 'production';
         const autoDocsEnabled = process.env.AUTO_DOCS === 'true';
-        
+
         if (!isDevelopment || !autoDocsEnabled) {
-            log.Debug('Documentation routes disabled', { 
-                isDevelopment, 
-                autoDocsEnabled 
+            log.Debug('Documentation routes disabled', {
+                isDevelopment,
+                autoDocsEnabled,
             });
             return;
-        }        
-        
-        
+        }
+
         // HTML 문서 페이지
         this._app.get('/docs', (req, res) => {
             try {
@@ -255,8 +254,8 @@ export class Core {
                 log.Error('Failed to generate OpenAPI spec', { error });
                 res.status(500).json({ error: 'Failed to generate OpenAPI specification' });
             }
-        });        
-        
+        });
+
         // 개발 정보 페이지
         this._app.get('/docs/dev', (req, res) => {
             try {
@@ -266,8 +265,7 @@ export class Core {
                 log.Error('Failed to generate dev info', { error });
                 res.status(500).json({ error: 'Failed to generate development info' });
             }
-        });        
-
+        });
 
         log.Debug('Documentation routes enabled at /docs');
     }
@@ -295,7 +293,7 @@ export class Core {
                 log.Info('Server started successfully', {
                     port: serverPort,
                     host: serverHost,
-                    environment: process.env.NODE_ENV || 'development'
+                    environment: process.env.NODE_ENV || 'development',
                 });
                 resolve(this._server!);
             });
@@ -384,15 +382,14 @@ export class Core {
         try {
             log.Debug('Initializing Prisma Manager...');
             await prismaManager.initialize();
-            
+
             const status = prismaManager.getStatus();
             log.Info('Prisma Manager initialization complete', {
                 initialized: status.initialized,
                 connectedDatabases: status.connectedDatabases,
                 totalDatabases: status.totalDatabases,
-                databases: status.databases
+                databases: status.databases,
             });
-
         } catch (error) {
             // P0-1: DB 연결 실패는 의도적으로 non-fatal 이다 (서버리스 lazy-reconnect 전제).
             // 단, 부팅을 green 으로 위장하지 않도록 degraded 상태로 기록한다 → /healthz 503.
@@ -410,12 +407,12 @@ export class Core {
         try {
             log.Debug('Initializing Repository Manager...');
             await repositoryManager.initialize();
-            
+
             const status = repositoryManager.getStatus();
             log.Info('Repository Manager initialization complete', {
                 initialized: status.initialized,
                 repositoryCount: status.repositoryCount,
-                repositories: status.repositories
+                repositories: status.repositories,
             });
         } catch (error) {
             // P0-1: Repository 매니저는 개별 repo 로드 실패를 내부 루프에서 이미 흡수한다.
@@ -462,10 +459,10 @@ export class Core {
         prisma: { connected: number; total: number; unconnected: string[]; error?: string };
     } {
         const prismaStatus = prismaManager.getStatus();
-        const generated = (prismaStatus.databases ?? []).filter(d => d.generated);
+        const generated = (prismaStatus.databases ?? []).filter((d) => d.generated);
         const total = generated.length;
-        const connected = generated.filter(d => d.connected).length;
-        const unconnected = generated.filter(d => !d.connected).map(d => d.name);
+        const connected = generated.filter((d) => d.connected).length;
+        const unconnected = generated.filter((d) => !d.connected).map((d) => d.name);
         const dbDegraded = !!this._degraded.prisma || unconnected.length > 0;
 
         return {
@@ -475,8 +472,11 @@ export class Core {
                 connected,
                 total,
                 unconnected,
-                error: this._degraded.prisma
-                    ?? (unconnected.length ? `unconnected databases: ${unconnected.join(', ')}` : undefined),
+                error:
+                    this._degraded.prisma ??
+                    (unconnected.length
+                        ? `unconnected databases: ${unconnected.join(', ')}`
+                        : undefined),
             },
         };
     }
@@ -514,8 +514,11 @@ export class Core {
             port: this._config.port || 3000,
             getReadiness: () => {
                 const r = this.getReadiness();
-                const degraded = r.prisma.error
-                    || (r.prisma.unconnected.length ? `unconnected: ${r.prisma.unconnected.join(', ')}` : undefined);
+                const degraded =
+                    r.prisma.error ||
+                    (r.prisma.unconnected.length
+                        ? `unconnected: ${r.prisma.unconnected.join(', ')}`
+                        : undefined);
                 return { ready: r.ready, degraded };
             },
             getRouteCount: () => this.countRoutes(),
@@ -524,7 +527,8 @@ export class Core {
 
     /** Express 라우터 스택에서 등록된 라우트 수(best-effort). */
     private countRoutes(): number {
-        const stack = (this._app as unknown as { _router?: { stack?: Array<{ route?: unknown }> } })._router?.stack;
+        const stack = (this._app as unknown as { _router?: { stack?: Array<{ route?: unknown }> } })
+            ._router?.stack;
         if (!Array.isArray(stack)) return 0;
         return stack.filter((l) => l.route).length;
     }

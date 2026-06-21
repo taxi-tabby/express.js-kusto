@@ -32,9 +32,9 @@ async function loadDynamicRouteMap(): Promise<void> {
         virtualFS.middlewares = middlewaresMap;
         virtualFS.structure = directoryStructure;
 
-        log.Silly(`Successfully loaded dynamic route map with ${Object.keys(routesMap).length} routes`);
-
-
+        log.Silly(
+            `Successfully loaded dynamic route map with ${Object.keys(routesMap).length} routes`,
+        );
     } catch (error) {
         log.Error(`Error loading dynamic route map:`, error);
         // 빈 맵으로 초기화
@@ -45,14 +45,12 @@ async function loadDynamicRouteMap(): Promise<void> {
         virtualFS.routes = {};
         virtualFS.middlewares = {};
         virtualFS.structure = { '/': [] };
-
     }
-
 }
 
 // Webpack 빌드 환경을 위한 가상 파일 시스템 구조
 interface VirtualFileSystem {
-    routes: Record<string, any>;  // 라우트 파일들
+    routes: Record<string, any>; // 라우트 파일들
     middlewares: Record<string, any[]>; // 미들웨어 파일들
     structure: Record<string, string[]>; // 디렉토리 구조
 }
@@ -61,7 +59,7 @@ interface VirtualFileSystem {
 const virtualFS: VirtualFileSystem = {
     routes: routesMap,
     middlewares: middlewaresMap,
-    structure: directoryStructure
+    structure: directoryStructure,
 };
 
 /**
@@ -76,10 +74,9 @@ function getFileExtension(): string {
  * 환경에 따른 라우트 디렉토리 경로 반환
  */
 function getRoutesDirectory(): string {
-
     if (process.env.WEBPACK_BUILD === 'true') {
         // 빌드 환경에서는 가상 파일 시스템 사용
-        return '/';  // 루트 경로만 사용
+        return '/'; // 루트 경로만 사용
     }
 
     // 개발 환경에서는 src/app/routes 사용
@@ -96,7 +93,7 @@ const moduleResolutionCache = new Map<string, string>();
 const ROUTE_PATTERNS = {
     regex: /^\[\^(.+)\]$/,
     dynamic: /^\.\.\[\^(.+)\]$/,
-    namedParam: /^\[(.+)\]$/
+    namedParam: /^\[(.+)\]$/,
 } as const;
 
 interface DirectoryInfo {
@@ -171,7 +168,10 @@ function fileExists(filePath: string): boolean {
     } catch (error: any) {
         // ENOENT 만 "없음" 으로 캐시. 권한 거부 등은 경고 로그를 남긴다.
         if (error?.code !== 'ENOENT') {
-            log.Warn(`Abnormal fs error during fileExists check: ${filePath}`, { code: error?.code, message: error?.message });
+            log.Warn(`Abnormal fs error during fileExists check: ${filePath}`, {
+                code: error?.code,
+                message: error?.message,
+            });
         }
         fileExistsCache.set(filePath, false);
         return false;
@@ -327,7 +327,6 @@ function buildRoutePath(parentRoute: string, dirName: string): string {
  * 디렉토리 스캔 - 빌드 환경에서는 가상 파일 시스템 사용
  */
 function getDirectories(dir: string): string[] {
-    
     // Webpack 빌드 환경에서는 가상 파일 시스템 사용
     if (process.env.WEBPACK_BUILD === 'true') {
         const virtualPath = convertToVirtualPath(dir);
@@ -336,13 +335,17 @@ function getDirectories(dir: string): string[] {
 
     // 개발 환경에서는 실제 파일 시스템 사용
     try {
-        return fs.readdirSync(dir, { withFileTypes: true })
-            .filter(entry => entry.isDirectory())
-            .map(entry => entry.name);
+        return fs
+            .readdirSync(dir, { withFileTypes: true })
+            .filter((entry) => entry.isDirectory())
+            .map((entry) => entry.name);
     } catch (error: any) {
         // ENOENT 는 "없음" 으로 처리. 권한 거부 등은 라우트 누락의 흔적이라 경고.
         if (error?.code !== 'ENOENT') {
-            log.Warn(`Abnormal directory read failure: ${dir}`, { code: error?.code, message: error?.message });
+            log.Warn(`Abnormal directory read failure: ${dir}`, {
+                code: error?.code,
+                message: error?.message,
+            });
         }
         return [];
     }
@@ -362,7 +365,7 @@ function loadMiddleware(dir: string): any[] {
         const middlewares = virtualFS.middlewares[virtualPath] || [];
 
         // 빌드 환경에서는 이미 로드된 미들웨어 배열이므로 배열의 길이를 정확히 측정
-        const result = Array.isArray(middlewares) ? middlewares : (middlewares ? [middlewares] : []);
+        const result = Array.isArray(middlewares) ? middlewares : middlewares ? [middlewares] : [];
         middlewareCache.set(dir, result);
         return result;
     }
@@ -382,9 +385,14 @@ function loadMiddleware(dir: string): any[] {
             delete require.cache[path.resolve(middlewarePath)];
         }
         const middlewares = smartRequire(middlewarePath);
-        const result = middlewares && middlewares.default
-            ? (Array.isArray(middlewares.default) ? middlewares.default : [middlewares.default])
-            : (Array.isArray(middlewares) ? middlewares : [middlewares]);
+        const result =
+            middlewares && middlewares.default
+                ? Array.isArray(middlewares.default)
+                    ? middlewares.default
+                    : [middlewares.default]
+                : Array.isArray(middlewares)
+                  ? middlewares
+                  : [middlewares];
 
         middlewareCache.set(dir, result);
         return result;
@@ -423,10 +431,10 @@ function loadRoute(filePath: string): Router {
             return route;
         }
 
-        // 다양한 경로 형식 시도 
+        // 다양한 경로 형식 시도
         const alternativePaths = [
             virtualPath,
-            virtualPath.replace(/^\//, ''),  // 시작 슬래시 제거
+            virtualPath.replace(/^\//, ''), // 시작 슬래시 제거
             `/${virtualPath.replace(/^\//, '')}`, // 시작 슬래시 보장
             virtualPath.replace(/\/+/g, '/'), // 중복 슬래시 제거
         ];
@@ -473,7 +481,7 @@ function scanDirectories(rootDir: string): DirectoryInfo[] {
     if (process.env.WEBPACK_BUILD === 'true') {
         const directories: DirectoryInfo[] = [];
         const queue: Array<{ path: string; parentRoute: string; depth: number }> = [
-            { path: '/', parentRoute: '', depth: 0 }
+            { path: '/', parentRoute: '', depth: 0 },
         ];
 
         // BFS로 가상 파일 구조 탐색
@@ -486,7 +494,7 @@ function scanDirectories(rootDir: string): DirectoryInfo[] {
                 parentRoute: current.parentRoute,
                 hasMiddleware: virtualFS.middlewares[virtualPath] !== undefined,
                 hasRoute: virtualFS.routes[virtualPath] !== undefined,
-                depth: current.depth
+                depth: current.depth,
             };
 
             directories.push(dirInfo);
@@ -500,7 +508,7 @@ function scanDirectories(rootDir: string): DirectoryInfo[] {
                 queue.push({
                     path: childPath,
                     parentRoute: routePath,
-                    depth: current.depth + 1
+                    depth: current.depth + 1,
                 });
             }
         }
@@ -511,7 +519,7 @@ function scanDirectories(rootDir: string): DirectoryInfo[] {
     // 개발 환경에서는 실제 파일 시스템 스캔
     const directories: DirectoryInfo[] = [];
     const queue: Array<{ dir: string; parentRoute: string; depth: number }> = [
-        { dir: rootDir, parentRoute: '', depth: 0 }
+        { dir: rootDir, parentRoute: '', depth: 0 },
     ];
 
     const fileExt = getFileExtension();
@@ -524,7 +532,7 @@ function scanDirectories(rootDir: string): DirectoryInfo[] {
             parentRoute: current.parentRoute,
             hasMiddleware: fileExists(path.join(current.dir, `middleware${fileExt}`)),
             hasRoute: fileExists(path.join(current.dir, `route${fileExt}`)),
-            depth: current.depth
+            depth: current.depth,
         };
 
         directories.push(dirInfo);
@@ -538,7 +546,7 @@ function scanDirectories(rootDir: string): DirectoryInfo[] {
             queue.push({
                 dir: fullPath,
                 parentRoute: routePath,
-                depth: current.depth + 1
+                depth: current.depth + 1,
             });
         }
     }
@@ -550,7 +558,11 @@ function scanDirectories(rootDir: string): DirectoryInfo[] {
  * 경로의 모든 미들웨어 수집 (깊은 곳에서 낮은 곳으로 역방향)
  * excludeGlobal이 true이면 최상위(전역) 미들웨어는 제외
  */
-function collectMiddlewares(targetPath: string, allDirectories: DirectoryInfo[], excludeGlobal: boolean = false): any[] {
+function collectMiddlewares(
+    targetPath: string,
+    allDirectories: DirectoryInfo[],
+    excludeGlobal: boolean = false,
+): any[] {
     const middlewares: any[] = [];
 
     if (process.env.WEBPACK_BUILD === 'true') {
@@ -565,7 +577,8 @@ function collectMiddlewares(targetPath: string, allDirectories: DirectoryInfo[],
         }
 
         for (let i = 0; i < pathParts.length; i++) {
-            currentPath = currentPath === '/' ? `/${pathParts[i]}` : `${currentPath}/${pathParts[i]}`;
+            currentPath =
+                currentPath === '/' ? `/${pathParts[i]}` : `${currentPath}/${pathParts[i]}`;
             if (virtualFS.middlewares[currentPath]) {
                 middlewares.push(...virtualFS.middlewares[currentPath]);
             }
@@ -580,7 +593,9 @@ function collectMiddlewares(targetPath: string, allDirectories: DirectoryInfo[],
     // 상위 경로부터 깊은 경로로 정방향 미들웨어 수집 (올바른 실행 순서)
     for (let i = 0; i < pathParts.length; i++) {
         const partialPath = pathParts.slice(0, i + 1).join(path.sep);
-        const dirInfo = allDirectories.find(d => normalizeSlash(d.path) === normalizeSlash(partialPath));
+        const dirInfo = allDirectories.find(
+            (d) => normalizeSlash(d.path) === normalizeSlash(partialPath),
+        );
 
         if (dirInfo?.hasMiddleware) {
             // 전역 미들웨어 제외 옵션이 활성화되고, 현재 디렉토리가 루트인 경우 건너뛰기
@@ -609,16 +624,19 @@ async function loadRoutes(app: Express, dir?: string): Promise<void> {
     const routesDir = dir || getRoutesDirectory();
 
     log.Route(`Starting Clean V6 route loader: ${routesDir}`);
-    log.Route(`Environment: ${process.env.WEBPACK_BUILD === 'true' ? 'Build (Production)' : 'Development'}`);
+    log.Route(
+        `Environment: ${process.env.WEBPACK_BUILD === 'true' ? 'Build (Production)' : 'Development'}`,
+    );
     log.Route(`File extension: ${getFileExtension()}`);
 
     try {
-
         // 1. 디렉토리 구조 스캔
         const directories = scanDirectories(routesDir);
-        const routeDirectories = directories.filter(d => d.hasRoute);
+        const routeDirectories = directories.filter((d) => d.hasRoute);
 
-        log.Route(`Found ${directories.length} directories, ${routeDirectories.length} routes in ${routesDir}`);
+        log.Route(
+            `Found ${directories.length} directories, ${routeDirectories.length} routes in ${routesDir}`,
+        );
 
         if (routeDirectories.length === 0) {
             // early-return 하지 않는다: 라우트가 없어도 전역 미들웨어/에러 핸들러는 등록되어야 한다.
@@ -631,35 +649,38 @@ async function loadRoutes(app: Express, dir?: string): Promise<void> {
         //       에러 핸들러가 라우트보다 먼저 mount 되면 라우트에서 던진 에러를 못 잡으므로,
         //       pre-미들웨어와 에러 핸들러를 분리하여 에러 핸들러는 라우트 등록 이후 맨 뒤에 mount 한다.
         let globalErrorMiddlewares: any[] = [];
-        const rootDirectory = directories.find(d => d.parentRoute === '' || d.parentRoute === '/');
-        const rootMiddlewares = (rootDirectory && rootDirectory.hasMiddleware)
-            ? loadMiddleware(rootDirectory.path)
-            : [];
+        const rootDirectory = directories.find(
+            (d) => d.parentRoute === '' || d.parentRoute === '/',
+        );
+        const rootMiddlewares =
+            rootDirectory && rootDirectory.hasMiddleware ? loadMiddleware(rootDirectory.path) : [];
 
         // app/routes/middleware.ts 의 pre-미들웨어(정책)와 4-arg 에러 핸들러를 분리.
         const preMiddlewares = (rootMiddlewares || []).filter(
-            (m: any) => typeof m !== 'function' || m.length !== 4
+            (m: any) => typeof m !== 'function' || m.length !== 4,
         );
         globalErrorMiddlewares = (rootMiddlewares || []).filter(
-            (m: any) => typeof m === 'function' && m.length === 4
+            (m: any) => typeof m === 'function' && m.length === 4,
         );
 
         if (preMiddlewares.length > 0) {
             // 사용자가 정의한 글로벌 정책 스택 사용.
             app.use(...preMiddlewares);
-            log.Route(`Global middlewares registered: ${preMiddlewares.length} pre + ${globalErrorMiddlewares.length} error handler(s)`);
+            log.Route(
+                `Global middlewares registered: ${preMiddlewares.length} pre + ${globalErrorMiddlewares.length} error handler(s)`,
+            );
         } else {
             // 정책 미들웨어가 없으면(파일 없음·빈 배열·에러 핸들러만) 프레임워크 기본 정책 적용(safe default).
             // helmet/CORS/body 누락으로 인한 footgun 방지. (필수 — req.kusto/clientIp/전역 에러 — 는 Core 소유.)
             app.use(...defaultGlobalMiddleware());
-            log.Route(`Applied defaultGlobalMiddleware() (no app policy middleware) + ${globalErrorMiddlewares.length} error handler(s)`);
+            log.Route(
+                `Applied defaultGlobalMiddleware() (no app policy middleware) + ${globalErrorMiddlewares.length} error handler(s)`,
+            );
         }
 
         // 2. 모든 라우트 모듈 사전 로드
         const routeModules = new Map<string, Router>();
         const middlewareCollections = new Map<string, any[]>();
-
-
 
         // 라우트별로 모듈과 미들웨어 준비
         for (const dirInfo of routeDirectories) {
@@ -688,16 +709,20 @@ async function loadRoutes(app: Express, dir?: string): Promise<void> {
 
             // 경로 길이가 같으면 깊이로 정렬
             return a.depth - b.depth;
-            
-        }); 
-        
+        });
+
         for (const dirInfo of sortedRoutes) {
             const route = routeModules.get(dirInfo.path);
-            const middlewares = middlewareCollections.get(dirInfo.path); if (route && middlewares) {
-                const routePath = normalizeSlash("/" + dirInfo.parentRoute);
+            const middlewares = middlewareCollections.get(dirInfo.path);
+            if (route && middlewares) {
+                const routePath = normalizeSlash('/' + dirInfo.parentRoute);
 
                 // 라우트에 basePath 설정 (ExpressRouter의 setBasePath 메서드 호출)
-                if (route && 'setBasePath' in route && typeof (route as any).setBasePath === 'function') {
+                if (
+                    route &&
+                    'setBasePath' in route &&
+                    typeof (route as any).setBasePath === 'function'
+                ) {
                     (route as any).setBasePath(routePath);
                 }
 
@@ -712,7 +737,7 @@ async function loadRoutes(app: Express, dir?: string): Promise<void> {
                 if (routeCountAfter > routeCountBefore && routePath !== '/') {
                     const newRouteIndices = Array.from(
                         { length: routeCountAfter - routeCountBefore },
-                        (_, i) => routeCountBefore + i
+                        (_, i) => routeCountBefore + i,
                     );
                     DocumentationGenerator.updateRoutePaths(routePath, newRouteIndices);
                 }
@@ -724,7 +749,9 @@ async function loadRoutes(app: Express, dir?: string): Promise<void> {
         // 3.5. 전역 에러 핸들러(4-arg)를 라우트 등록 이후 맨 뒤에 mount (P1-7)
         if (globalErrorMiddlewares.length > 0) {
             app.use(...globalErrorMiddlewares);
-            log.Route(`Global error handler(s) registered after routes: ${globalErrorMiddlewares.length}`);
+            log.Route(
+                `Global error handler(s) registered after routes: ${globalErrorMiddlewares.length}`,
+            );
         }
 
         // 4. 완료 통계
@@ -733,7 +760,6 @@ async function loadRoutes(app: Express, dir?: string): Promise<void> {
 
         log.Route(`Clean V6 completed: ${getElapsedTimeInString(endTime)}`);
         log.Route(`   Routes: ${stats.routes}, Middlewares: ${stats.middlewares}`);
-
     } catch (error) {
         log.Error(`Route loading failed:`, error);
         throw error;
@@ -749,7 +775,7 @@ function getCacheStats() {
 
     if (process.env.WEBPACK_BUILD === 'true') {
         // 빌드 환경에서는 virtualFS.middlewares에서 실제 미들웨어 수 계산
-        actualMiddlewareCount = Object.keys(virtualFS.middlewares).filter(key => {
+        actualMiddlewareCount = Object.keys(virtualFS.middlewares).filter((key) => {
             const middlewares = virtualFS.middlewares[key];
             return Array.isArray(middlewares) && middlewares.length > 0;
         }).length;
@@ -759,7 +785,7 @@ function getCacheStats() {
         routes: routeCache.size,
         middlewares: actualMiddlewareCount,
         fileStats: fileExistsCache.size,
-        moduleResolutions: moduleResolutionCache.size
+        moduleResolutions: moduleResolutionCache.size,
     };
 }
 

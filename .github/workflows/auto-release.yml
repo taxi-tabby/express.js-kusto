@@ -1,235 +1,235 @@
 name: Auto Release Framework
 
 on:
-  pull_request:
-    types:
-      - closed
-    branches:
-      - main
-  # Manual trigger — for when commits reach main outside a PR merge (e.g. a direct push / fast-forward),
-  # so a release can still be cut. The version+tag guard below prevents accidental re-releases.
-  workflow_dispatch:
+    pull_request:
+        types:
+            - closed
+        branches:
+            - main
+    # Manual trigger — for when commits reach main outside a PR merge (e.g. a direct push / fast-forward),
+    # so a release can still be cut. The version+tag guard below prevents accidental re-releases.
+    workflow_dispatch:
 
 permissions:
-  contents: write
-  packages: write
-  pull-requests: read
+    contents: write
+    packages: write
+    pull-requests: read
 
 jobs:
-  auto-release:
-    # A merged PR into main, or a manual dispatch — on the canonical repo only.
-    if: (github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true) && github.repository == 'taxi-tabby/express.js-kusto'
-    runs-on: ubuntu-latest
+    auto-release:
+        # A merged PR into main, or a manual dispatch — on the canonical repo only.
+        if: (github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true) && github.repository == 'taxi-tabby/express.js-kusto'
+        runs-on: ubuntu-latest
 
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-        token: ${{ secrets.GITHUB_TOKEN }}
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+                  token: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '20'
-        cache: 'npm'
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: '20'
+                  cache: 'npm'
 
-    - name: Install dependencies
-      run: npm ci
+            - name: Install dependencies
+              run: npm ci
 
-    - name: Resolve release metadata
-      id: version
-      run: |
-        PACKAGE_VERSION=$(node -p "require('./package.json').version")
-        TAG_NAME="framework-v${PACKAGE_VERSION}"
-        TIMESTAMP=$(date -u +"%Y.%m.%d-%H%M")
-        echo "package_version=${PACKAGE_VERSION}" >> "$GITHUB_OUTPUT"
-        echo "tag_name=${TAG_NAME}" >> "$GITHUB_OUTPUT"
-        echo "timestamp=${TIMESTAMP}" >> "$GITHUB_OUTPUT"
-        echo "Resolved release tag: ${TAG_NAME}"
+            - name: Resolve release metadata
+              id: version
+              run: |
+                  PACKAGE_VERSION=$(node -p "require('./package.json').version")
+                  TAG_NAME="framework-v${PACKAGE_VERSION}"
+                  TIMESTAMP=$(date -u +"%Y.%m.%d-%H%M")
+                  echo "package_version=${PACKAGE_VERSION}" >> "$GITHUB_OUTPUT"
+                  echo "tag_name=${TAG_NAME}" >> "$GITHUB_OUTPUT"
+                  echo "timestamp=${TIMESTAMP}" >> "$GITHUB_OUTPUT"
+                  echo "Resolved release tag: ${TAG_NAME}"
 
-    - name: Guard — skip if this version was already released
-      id: guard
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
-        # The release tag is derived from package.json. A PR merged without a version
-        # bump must NOT try to re-release an existing tag (that would fail). Skip cleanly.
-        if gh release view "${{ steps.version.outputs.tag_name }}" >/dev/null 2>&1; then
-          echo "Release ${{ steps.version.outputs.tag_name }} already exists — skipping."
-          echo "Bump \"version\" in package.json to publish a new release."
-          echo "should_release=false" >> "$GITHUB_OUTPUT"
-        else
-          echo "should_release=true" >> "$GITHUB_OUTPUT"
-        fi
+            - name: Guard — skip if this version was already released
+              id: guard
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              run: |
+                  # The release tag is derived from package.json. A PR merged without a version
+                  # bump must NOT try to re-release an existing tag (that would fail). Skip cleanly.
+                  if gh release view "${{ steps.version.outputs.tag_name }}" >/dev/null 2>&1; then
+                    echo "Release ${{ steps.version.outputs.tag_name }} already exists — skipping."
+                    echo "Bump \"version\" in package.json to publish a new release."
+                    echo "should_release=false" >> "$GITHUB_OUTPUT"
+                  else
+                    echo "should_release=true" >> "$GITHUB_OUTPUT"
+                  fi
 
-    - name: Generate update package
-      if: steps.guard.outputs.should_release == 'true'
-      run: npm run updater:generate
+            - name: Generate update package
+              if: steps.guard.outputs.should_release == 'true'
+              run: npm run updater:generate
 
-    - name: Find generated package
-      id: package
-      if: steps.guard.outputs.should_release == 'true'
-      run: |
-        PACKAGE_FILE=$(ls -t src/core/updater/packages/update-package-*.zip | head -1)
-        if [ -z "$PACKAGE_FILE" ] || [ ! -f "$PACKAGE_FILE" ]; then
-          echo "::error::No update package (.zip) was produced by updater:generate"
-          exit 1
-        fi
-        FILE_SIZE=$(stat -c%s "$PACKAGE_FILE")
-        FILE_SIZE_MB=$(awk "BEGIN {printf \"%.2f\", $FILE_SIZE/1024/1024}")
-        echo "package_file=${PACKAGE_FILE}" >> "$GITHUB_OUTPUT"
-        echo "package_size=${FILE_SIZE_MB}MB" >> "$GITHUB_OUTPUT"
-        echo "Package: ${PACKAGE_FILE} (${FILE_SIZE_MB}MB)"
+            - name: Find generated package
+              id: package
+              if: steps.guard.outputs.should_release == 'true'
+              run: |
+                  PACKAGE_FILE=$(ls -t src/core/updater/packages/update-package-*.zip | head -1)
+                  if [ -z "$PACKAGE_FILE" ] || [ ! -f "$PACKAGE_FILE" ]; then
+                    echo "::error::No update package (.zip) was produced by updater:generate"
+                    exit 1
+                  fi
+                  FILE_SIZE=$(stat -c%s "$PACKAGE_FILE")
+                  FILE_SIZE_MB=$(awk "BEGIN {printf \"%.2f\", $FILE_SIZE/1024/1024}")
+                  echo "package_file=${PACKAGE_FILE}" >> "$GITHUB_OUTPUT"
+                  echo "package_size=${FILE_SIZE_MB}MB" >> "$GITHUB_OUTPUT"
+                  echo "Package: ${PACKAGE_FILE} (${FILE_SIZE_MB}MB)"
 
-    - name: Find generated map file
-      id: mapfile
-      if: steps.guard.outputs.should_release == 'true'
-      run: |
-        MAP_FILE=$(ls -t src/core/updater/map/v*.json | head -1)
-        if [ -z "$MAP_FILE" ] || [ ! -f "$MAP_FILE" ]; then
-          echo "::error::No file map (v*.json) was produced by updater:generate"
-          exit 1
-        fi
-        FILE_COUNT=$(jq 'length' "$MAP_FILE")
-        echo "map_file=${MAP_FILE}" >> "$GITHUB_OUTPUT"
-        echo "file_count=${FILE_COUNT}" >> "$GITHUB_OUTPUT"
-        echo "Map: ${MAP_FILE} (${FILE_COUNT} files)"
+            - name: Find generated map file
+              id: mapfile
+              if: steps.guard.outputs.should_release == 'true'
+              run: |
+                  MAP_FILE=$(ls -t src/core/updater/map/v*.json | head -1)
+                  if [ -z "$MAP_FILE" ] || [ ! -f "$MAP_FILE" ]; then
+                    echo "::error::No file map (v*.json) was produced by updater:generate"
+                    exit 1
+                  fi
+                  FILE_COUNT=$(jq 'length' "$MAP_FILE")
+                  echo "map_file=${MAP_FILE}" >> "$GITHUB_OUTPUT"
+                  echo "file_count=${FILE_COUNT}" >> "$GITHUB_OUTPUT"
+                  echo "Map: ${MAP_FILE} (${FILE_COUNT} files)"
 
-    - name: Resolve contributors
-      id: contributors
-      if: steps.guard.outputs.should_release == 'true'
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
-        # Contributors come from the GitHub *commit authors* in this release range —
-        # i.e. real GitHub accounts. We deliberately do NOT parse commit scopes
-        # (e.g. "core", "crud") or "@ext/@core/@lib" import aliases, which are not people.
-        # Bots, the merge account (web-flow), and *[bot] logins are excluded.
-        PREVIOUS_TAG=$(git tag --sort=-version:refname | grep "framework-v" | head -1 || true)
-        JQ_FILTER='[.commits[].author | select(. != null) | select(.type != "Bot") | .login] | map(select(. != "web-flow" and (endswith("[bot]") | not))) | unique | .[]'
+            - name: Resolve contributors
+              id: contributors
+              if: steps.guard.outputs.should_release == 'true'
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              run: |
+                  # Contributors come from the GitHub *commit authors* in this release range —
+                  # i.e. real GitHub accounts. We deliberately do NOT parse commit scopes
+                  # (e.g. "core", "crud") or "@ext/@core/@lib" import aliases, which are not people.
+                  # Bots, the merge account (web-flow), and *[bot] logins are excluded.
+                  PREVIOUS_TAG=$(git tag --sort=-version:refname | grep "framework-v" | head -1 || true)
+                  JQ_FILTER='[.commits[].author | select(. != null) | select(.type != "Bot") | .login] | map(select(. != "web-flow" and (endswith("[bot]") | not))) | unique | .[]'
 
-        if [ -n "$PREVIOUS_TAG" ]; then
-          LOGINS=$(gh api --paginate "repos/${{ github.repository }}/compare/${PREVIOUS_TAG}...${{ github.sha }}" --jq "$JQ_FILTER" 2>/dev/null | sort -u || true)
-        else
-          LOGINS=$(gh api --paginate "repos/${{ github.repository }}/commits?sha=${{ github.sha }}" --jq '[.[].author | select(. != null) | select(.type != "Bot") | .login] | map(select(. != "web-flow" and (endswith("[bot]") | not))) | unique | .[]' 2>/dev/null | sort -u || true)
-        fi
+                  if [ -n "$PREVIOUS_TAG" ]; then
+                    LOGINS=$(gh api --paginate "repos/${{ github.repository }}/compare/${PREVIOUS_TAG}...${{ github.sha }}" --jq "$JQ_FILTER" 2>/dev/null | sort -u || true)
+                  else
+                    LOGINS=$(gh api --paginate "repos/${{ github.repository }}/commits?sha=${{ github.sha }}" --jq '[.[].author | select(. != null) | select(.type != "Bot") | .login] | map(select(. != "web-flow" and (endswith("[bot]") | not))) | unique | .[]' 2>/dev/null | sort -u || true)
+                  fi
 
-        : > contributors.md
-        COUNT=0
-        if [ -n "$LOGINS" ]; then
-          while IFS= read -r login; do
-            [ -z "$login" ] && continue
-            echo "- @${login}" >> contributors.md
-            COUNT=$((COUNT + 1))
-          done <<< "$LOGINS"
-        else
-          echo "- _(no GitHub-identified contributors in this range)_" >> contributors.md
-        fi
-        echo "count=${COUNT}" >> "$GITHUB_OUTPUT"
-        echo "Contributors resolved: ${COUNT}"
+                  : > contributors.md
+                  COUNT=0
+                  if [ -n "$LOGINS" ]; then
+                    while IFS= read -r login; do
+                      [ -z "$login" ] && continue
+                      echo "- @${login}" >> contributors.md
+                      COUNT=$((COUNT + 1))
+                    done <<< "$LOGINS"
+                  else
+                    echo "- _(no GitHub-identified contributors in this range)_" >> contributors.md
+                  fi
+                  echo "count=${COUNT}" >> "$GITHUB_OUTPUT"
+                  echo "Contributors resolved: ${COUNT}"
 
-    - name: Generate release notes
-      id: notes
-      if: steps.guard.outputs.should_release == 'true'
-      run: |
-        PREVIOUS_TAG=$(git tag --sort=-version:refname | grep "framework-v" | head -1 || true)
-        if [ -z "$PREVIOUS_TAG" ]; then
-          COMPARE_BASE=$(git rev-list --max-parents=0 HEAD | tail -1)
-        else
-          COMPARE_BASE="$PREVIOUS_TAG"
-        fi
-        RANGE="${COMPARE_BASE}..HEAD"
+            - name: Generate release notes
+              id: notes
+              if: steps.guard.outputs.should_release == 'true'
+              run: |
+                  PREVIOUS_TAG=$(git tag --sort=-version:refname | grep "framework-v" | head -1 || true)
+                  if [ -z "$PREVIOUS_TAG" ]; then
+                    COMPARE_BASE=$(git rev-list --max-parents=0 HEAD | tail -1)
+                  else
+                    COMPARE_BASE="$PREVIOUS_TAG"
+                  fi
+                  RANGE="${COMPARE_BASE}..HEAD"
 
-        # Non-merge commits, one bullet each: "- <subject> (<short-sha>)"
-        COMMITS=$(git log --no-merges --pretty=format:"- %s (%h)" "$RANGE")
-        TOTAL=$(printf "%s\n" "$COMMITS" | grep -c . || true)
-        DIFFSTAT=$(git diff --shortstat "$RANGE" | sed 's/^ *//')
-        [ -z "$DIFFSTAT" ] && DIFFSTAT="no file changes"
+                  # Non-merge commits, one bullet each: "- <subject> (<short-sha>)"
+                  COMMITS=$(git log --no-merges --pretty=format:"- %s (%h)" "$RANGE")
+                  TOTAL=$(printf "%s\n" "$COMMITS" | grep -c . || true)
+                  DIFFSTAT=$(git diff --shortstat "$RANGE" | sed 's/^ *//')
+                  [ -z "$DIFFSTAT" ] && DIFFSTAT="no file changes"
 
-        n() { printf "%s\n" "$COMMITS" | grep -ciE "$1" || true; }
-        FEAT=$(n "^- feat"); FIX=$(n "^- fix"); REF=$(n "^- refactor"); DOC=$(n "^- docs"); TST=$(n "^- test")
+                  n() { printf "%s\n" "$COMMITS" | grep -ciE "$1" || true; }
+                  FEAT=$(n "^- feat"); FIX=$(n "^- fix"); REF=$(n "^- refactor"); DOC=$(n "^- docs"); TST=$(n "^- test")
 
-        # Plain-English summary derived from conventional-commit type counts.
-        PARTS=""
-        [ "$FEAT" -gt 0 ] && PARTS="${PARTS}${FEAT} feature(s), "
-        [ "$FIX" -gt 0 ] && PARTS="${PARTS}${FIX} fix(es), "
-        [ "$REF" -gt 0 ] && PARTS="${PARTS}${REF} refactor(s), "
-        [ "$DOC" -gt 0 ] && PARTS="${PARTS}${DOC} docs change(s), "
-        [ "$TST" -gt 0 ] && PARTS="${PARTS}${TST} test change(s), "
-        PARTS=$(printf "%s" "$PARTS" | sed 's/, $//')
-        if [ -n "$PARTS" ]; then
-          SUMMARY="This release contains ${PARTS} across ${TOTAL} commits."
-        else
-          SUMMARY="Maintenance release — ${TOTAL} commits."
-        fi
+                  # Plain-English summary derived from conventional-commit type counts.
+                  PARTS=""
+                  [ "$FEAT" -gt 0 ] && PARTS="${PARTS}${FEAT} feature(s), "
+                  [ "$FIX" -gt 0 ] && PARTS="${PARTS}${FIX} fix(es), "
+                  [ "$REF" -gt 0 ] && PARTS="${PARTS}${REF} refactor(s), "
+                  [ "$DOC" -gt 0 ] && PARTS="${PARTS}${DOC} docs change(s), "
+                  [ "$TST" -gt 0 ] && PARTS="${PARTS}${TST} test change(s), "
+                  PARTS=$(printf "%s" "$PARTS" | sed 's/, $//')
+                  if [ -n "$PARTS" ]; then
+                    SUMMARY="This release contains ${PARTS} across ${TOTAL} commits."
+                  else
+                    SUMMARY="Maintenance release — ${TOTAL} commits."
+                  fi
 
-        # Emit a "### Title" section for a commit-type pattern, only if non-empty.
-        # NOTE: must end in a command that returns 0 — under `bash -e`, a function whose
-        # last command is `[ -n "$body" ] && printf ...` returns 1 when the section is
-        # empty, and a standalone `emit ...` call would then abort the whole step
-        # (e.g. a release range with no `perf` commits). Use `if` so emit always returns 0.
-        emit() {
-          local body
-          body=$(printf "%s\n" "$COMMITS" | grep -iE "$1" || true)
-          if [ -n "$body" ]; then
-            printf "### %s\n%s\n\n" "$2" "$body"
-          fi
-        }
+                  # Emit a "### Title" section for a commit-type pattern, only if non-empty.
+                  # NOTE: must end in a command that returns 0 — under `bash -e`, a function whose
+                  # last command is `[ -n "$body" ] && printf ...` returns 1 when the section is
+                  # empty, and a standalone `emit ...` call would then abort the whole step
+                  # (e.g. a release range with no `perf` commits). Use `if` so emit always returns 0.
+                  emit() {
+                    local body
+                    body=$(printf "%s\n" "$COMMITS" | grep -iE "$1" || true)
+                    if [ -n "$body" ]; then
+                      printf "### %s\n%s\n\n" "$2" "$body"
+                    fi
+                  }
 
-        {
-          echo "# Express.js Kusto Framework v${{ steps.version.outputs.package_version }}"
-          echo ""
-          echo "$SUMMARY"
-          echo ""
-          echo "## Package"
-          echo "- **Version**: \`v${{ steps.version.outputs.package_version }}\`"
-          echo "- **Built (UTC)**: ${{ steps.version.outputs.timestamp }}"
-          echo "- **Update package**: ${{ steps.package.outputs.package_size }} — ${{ steps.mapfile.outputs.file_count }} files"
-          echo "- **Commits**: ${TOTAL} · ${DIFFSTAT}"
-          echo ""
-          echo "## Changes"
-          emit "^- feat" "Features"
-          emit "^- fix" "Fixes"
-          emit "^- perf" "Performance"
-          emit "^- refactor" "Refactoring"
-          emit "^- docs" "Documentation"
-          emit "^- test" "Tests"
-          emit "^- (build|ci|chore)" "Build & Tooling"
-          OTHERS=$(printf "%s\n" "$COMMITS" | grep -ivE "^- (feat|fix|perf|refactor|docs|test|build|ci|chore)" || true)
-          [ -n "$OTHERS" ] && printf "### Other\n%s\n\n" "$OTHERS"
-          echo "## Contributors"
-          cat contributors.md
-          echo ""
-          echo "---"
-          echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${COMPARE_BASE}...${{ steps.version.outputs.tag_name }}"
-        } > release_notes.md
+                  {
+                    echo "# Express.js Kusto Framework v${{ steps.version.outputs.package_version }}"
+                    echo ""
+                    echo "$SUMMARY"
+                    echo ""
+                    echo "## Package"
+                    echo "- **Version**: \`v${{ steps.version.outputs.package_version }}\`"
+                    echo "- **Built (UTC)**: ${{ steps.version.outputs.timestamp }}"
+                    echo "- **Update package**: ${{ steps.package.outputs.package_size }} — ${{ steps.mapfile.outputs.file_count }} files"
+                    echo "- **Commits**: ${TOTAL} · ${DIFFSTAT}"
+                    echo ""
+                    echo "## Changes"
+                    emit "^- feat" "Features"
+                    emit "^- fix" "Fixes"
+                    emit "^- perf" "Performance"
+                    emit "^- refactor" "Refactoring"
+                    emit "^- docs" "Documentation"
+                    emit "^- test" "Tests"
+                    emit "^- (build|ci|chore)" "Build & Tooling"
+                    OTHERS=$(printf "%s\n" "$COMMITS" | grep -ivE "^- (feat|fix|perf|refactor|docs|test|build|ci|chore)" || true)
+                    [ -n "$OTHERS" ] && printf "### Other\n%s\n\n" "$OTHERS"
+                    echo "## Contributors"
+                    cat contributors.md
+                    echo ""
+                    echo "---"
+                    echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${COMPARE_BASE}...${{ steps.version.outputs.tag_name }}"
+                  } > release_notes.md
 
-        echo "Release notes generated (${TOTAL} commits, ${{ steps.contributors.outputs.count }} contributors)."
+                  echo "Release notes generated (${TOTAL} commits, ${{ steps.contributors.outputs.count }} contributors)."
 
-    - name: Create Release
-      id: create_release
-      if: steps.guard.outputs.should_release == 'true'
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
-        # NOTE: the part after '#' is only the asset display label. The actual asset
-        # filename stays the basename (update-package-*.zip / v*.json) which the updater
-        # client (src/core/updater/compare.ts) matches on — do not change those basenames.
-        gh release create "${{ steps.version.outputs.tag_name }}" \
-          --title "Framework v${{ steps.version.outputs.package_version }} (${{ steps.version.outputs.timestamp }})" \
-          --notes-file release_notes.md \
-          --target main \
-          "${{ steps.package.outputs.package_file }}#Framework update package (v${{ steps.version.outputs.package_version }})" \
-          "${{ steps.mapfile.outputs.map_file }}#File map (v${{ steps.version.outputs.package_version }})"
+            - name: Create Release
+              id: create_release
+              if: steps.guard.outputs.should_release == 'true'
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              run: |
+                  # NOTE: the part after '#' is only the asset display label. The actual asset
+                  # filename stays the basename (update-package-*.zip / v*.json) which the updater
+                  # client (src/core/updater/compare.ts) matches on — do not change those basenames.
+                  gh release create "${{ steps.version.outputs.tag_name }}" \
+                    --title "Framework v${{ steps.version.outputs.package_version }} (${{ steps.version.outputs.timestamp }})" \
+                    --notes-file release_notes.md \
+                    --target main \
+                    "${{ steps.package.outputs.package_file }}#Framework update package (v${{ steps.version.outputs.package_version }})" \
+                    "${{ steps.mapfile.outputs.map_file }}#File map (v${{ steps.version.outputs.package_version }})"
 
-        RELEASE_URL=$(gh release view "${{ steps.version.outputs.tag_name }}" --json url --jq .url)
-        echo "html_url=${RELEASE_URL}" >> "$GITHUB_OUTPUT"
+                  RELEASE_URL=$(gh release view "${{ steps.version.outputs.tag_name }}" --json url --jq .url)
+                  echo "html_url=${RELEASE_URL}" >> "$GITHUB_OUTPUT"
 
-    - name: Summary
-      if: steps.guard.outputs.should_release == 'true'
-      run: |
-        echo "Released ${{ steps.version.outputs.tag_name }}"
-        echo "URL:      ${{ steps.create_release.outputs.html_url }}"
-        echo "Package:  ${{ steps.package.outputs.package_file }} (${{ steps.package.outputs.package_size }})"
-        echo "Map:      ${{ steps.mapfile.outputs.map_file }} (${{ steps.mapfile.outputs.file_count }} files)"
+            - name: Summary
+              if: steps.guard.outputs.should_release == 'true'
+              run: |
+                  echo "Released ${{ steps.version.outputs.tag_name }}"
+                  echo "URL:      ${{ steps.create_release.outputs.html_url }}"
+                  echo "Package:  ${{ steps.package.outputs.package_file }} (${{ steps.package.outputs.package_size }})"
+                  echo "Map:      ${{ steps.mapfile.outputs.map_file }} (${{ steps.mapfile.outputs.file_count }} files)"

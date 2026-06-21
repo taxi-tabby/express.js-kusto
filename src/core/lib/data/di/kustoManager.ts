@@ -3,9 +3,11 @@ import { repositoryManager } from '@lib/data/database/repositoryManager';
 import { prismaManager } from '@lib/data/database/prismaManager';
 import { Injectable } from '@lib/types/generated-injectable-types';
 import { RepositoryTypeMap, RepositoryName } from '@lib/types/generated-repository-types';
-import { PrismaManagerClientOverloads, DatabaseNamesUnion, DatabaseClientType } from '@lib/types/generated-db-types';
-
-
+import {
+    PrismaManagerClientOverloads,
+    DatabaseNamesUnion,
+    DatabaseClientType,
+} from '@lib/types/generated-db-types';
 
 /**
  * 데이터베이스 접근을 위한 프록시 인터페이스
@@ -15,7 +17,7 @@ export interface KustoDbProxy {
     /** 비동기 클라이언트 가져오기 (재연결 로직 포함) */
     getClient<T extends DatabaseNamesUnion>(name: T): Promise<DatabaseClientType<T>>;
     getClient<T = any>(name: string): Promise<T>;
-    
+
     /** 동기 클라이언트 가져오기 (재연결 로직 없음) */
     getClientSync<T extends DatabaseNamesUnion>(name: T): DatabaseClientType<T>;
     getClientSync<T = any>(name: string): T;
@@ -34,7 +36,7 @@ export interface KustoDbProxy {
         totalDatabases: number;
         databases: { name: string; connected: boolean; generated: boolean }[];
     };
-    
+
     /** 데이터베이스 헬스체크 */
     healthCheck(): Promise<{
         overall: 'healthy' | 'degraded' | 'unhealthy';
@@ -86,33 +88,45 @@ export class KustoManager {
         if (this._repoProxy) return this._repoProxy;
 
         // Proxy 객체는 캐시하되, 내부 조회는 항상 live 상태를 확인
-        const repoProxy = new Proxy({}, {
-            get(target, prop) {
-                if (typeof prop === 'string' && repositoryManager.hasRepository(prop as RepositoryName)) {
-                    return repositoryManager.getRepository(prop as RepositoryName);
-                }
-                return undefined;
-            },
+        const repoProxy = new Proxy(
+            {},
+            {
+                get(target, prop) {
+                    if (
+                        typeof prop === 'string' &&
+                        repositoryManager.hasRepository(prop as RepositoryName)
+                    ) {
+                        return repositoryManager.getRepository(prop as RepositoryName);
+                    }
+                    return undefined;
+                },
 
-            has(target, prop) {
-                return typeof prop === 'string' && repositoryManager.hasRepository(prop as RepositoryName);
-            },
+                has(target, prop) {
+                    return (
+                        typeof prop === 'string' &&
+                        repositoryManager.hasRepository(prop as RepositoryName)
+                    );
+                },
 
-            ownKeys(target) {
-                return repositoryManager.getLoadedRepositoryNames();
-            },
+                ownKeys(target) {
+                    return repositoryManager.getLoadedRepositoryNames();
+                },
 
-            getOwnPropertyDescriptor(target, prop) {
-                if (typeof prop === 'string' && repositoryManager.hasRepository(prop as RepositoryName)) {
-                    return {
-                        enumerable: true,
-                        configurable: true,
-                        get: () => repositoryManager.getRepository(prop as RepositoryName)
-                    };
-                }
-                return undefined;
-            }
-        });
+                getOwnPropertyDescriptor(target, prop) {
+                    if (
+                        typeof prop === 'string' &&
+                        repositoryManager.hasRepository(prop as RepositoryName)
+                    ) {
+                        return {
+                            enumerable: true,
+                            configurable: true,
+                            get: () => repositoryManager.getRepository(prop as RepositoryName),
+                        };
+                    }
+                    return undefined;
+                },
+            },
+        );
 
         this._repoProxy = repoProxy as RepositoryTypeMap;
         return this._repoProxy;
@@ -126,38 +140,43 @@ export class KustoManager {
         if (this._dbProxy) return this._dbProxy;
 
         // Proxy 객체는 캐시하되, 동적 DB 접근은 항상 live 상태를 확인
-        const dbProxy = new Proxy({
-            getClient: async (name: string) => {
-                return await prismaManager.getClient(name);
+        const dbProxy = new Proxy(
+            {
+                getClient: async (name: string) => {
+                    return await prismaManager.getClient(name);
+                },
+
+                getClientSync: (name: string) => {
+                    return prismaManager.getClientSync(name);
+                },
+
+                getWrap: (name: string) => prismaManager.getWrap(name),
+
+                // available은 getter로 동적 반환
+                get available() {
+                    return prismaManager.getAvailableDatabases();
+                },
+
+                status: () => prismaManager.getStatus(),
+
+                healthCheck: () => prismaManager.healthCheck(),
             },
+            {
+                get(target, prop) {
+                    // 먼저 target의 기본 속성들 확인
+                    if (prop in target) {
+                        return target[prop as keyof typeof target];
+                    }
 
-            getClientSync: (name: string) => {
-                return prismaManager.getClientSync(name);
+                    // 데이터베이스 이름으로 직접 접근 — live 상태 확인
+                    if (typeof prop === 'string' && prismaManager.isConnected(prop)) {
+                        return prismaManager.getClientSync(prop);
+                    }
+
+                    return undefined;
+                },
             },
-
-            getWrap: (name: string) => prismaManager.getWrap(name),
-
-            // available은 getter로 동적 반환
-            get available() { return prismaManager.getAvailableDatabases(); },
-
-            status: () => prismaManager.getStatus(),
-
-            healthCheck: () => prismaManager.healthCheck()
-        }, {
-            get(target, prop) {
-                // 먼저 target의 기본 속성들 확인
-                if (prop in target) {
-                    return target[prop as keyof typeof target];
-                }
-
-                // 데이터베이스 이름으로 직접 접근 — live 상태 확인
-                if (typeof prop === 'string' && prismaManager.isConnected(prop)) {
-                    return prismaManager.getClientSync(prop);
-                }
-
-                return undefined;
-            }
-        });
+        );
 
         this._dbProxy = dbProxy;
         return this._dbProxy;

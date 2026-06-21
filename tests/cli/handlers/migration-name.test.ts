@@ -11,10 +11,7 @@ console.error = () => {};
 console.log = () => {};
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const {
-    parseMigrationName,
-    validateMigrationTarget
-} = require('@/src/core/scripts/kusto-db-cli');
+const { parseMigrationName, validateMigrationTarget } = require('@/src/core/scripts/kusto-db-cli');
 
 process.argv = originalArgv;
 process.exit = originalExit;

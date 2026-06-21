@@ -10,14 +10,11 @@ const scriptsDir = path.join(__dirname);
 const baseScripts = [
     'generate-db-types.js',
     'generate-injectable-types.js',
-    'generate-repository-types.js'
+    'generate-repository-types.js',
 ];
 
 // 빌드 전용 스크립트
-const buildScripts = [
-    'generate-routes-map.js',
-    'build-routes.js'
-];
+const buildScripts = ['generate-routes-map.js', 'build-routes.js'];
 
 const scriptsToRun = isBuild ? [...baseScripts, ...buildScripts] : baseScripts;
 

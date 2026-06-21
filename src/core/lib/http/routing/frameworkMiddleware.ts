@@ -25,14 +25,20 @@ export function kustoInitMiddleware(req: Request, _res: Response, next: NextFunc
  * 에러가 명시한 HTTP 상태를 존중하고, ErrorHandler 를 경유해 NODE_ENV 기준으로 민감정보를
  * redaction 한 뒤 JSON:API 형태로 응답한다.
  */
-export function globalErrorMiddleware(err: Error, req: Request, res: Response, next: NextFunction): void {
+export function globalErrorMiddleware(
+    err: Error,
+    req: Request,
+    res: Response,
+    next: NextFunction,
+): void {
     if (res.headersSent) {
         next(err);
         return;
     }
-    const status = (err as { statusCode?: number; status?: number })?.statusCode
-        ?? (err as { status?: number })?.status
-        ?? 500;
+    const status =
+        (err as { statusCode?: number; status?: number })?.statusCode ??
+        (err as { status?: number })?.status ??
+        500;
     const body = ErrorHandler.handleError(err, {
         format: ErrorResponseFormat.JSON_API,
         context: { path: req.originalUrl, method: req.method, status },

@@ -7,7 +7,7 @@ import {
     PRISMA_ERROR_CODES,
     HTTP_ERROR_CODES,
     MIDDLEWARE_ERROR_CODES,
-    BUSINESS_ERROR_CODES
+    BUSINESS_ERROR_CODES,
 } from '@lib/http/errors/errorCodes';
 
 describe('ERROR_CODES 무결성', () => {
@@ -18,7 +18,7 @@ describe('ERROR_CODES 무결성', () => {
             ...PRISMA_ERROR_CODES,
             ...HTTP_ERROR_CODES,
             ...MIDDLEWARE_ERROR_CODES,
-            ...BUSINESS_ERROR_CODES
+            ...BUSINESS_ERROR_CODES,
         };
         for (const key of Object.keys(all)) {
             expect((ERROR_CODES as any)[key]).toBe((all as any)[key]);

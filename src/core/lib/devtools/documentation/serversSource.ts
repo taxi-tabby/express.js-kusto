@@ -31,7 +31,11 @@ export function buildServers(env: NodeJS.ProcessEnv): OpenApiServer[] {
 
     const valid: OpenApiServer[] = [];
     for (const item of parsed) {
-        if (item && typeof item === 'object' && typeof (item as { url?: unknown }).url === 'string') {
+        if (
+            item &&
+            typeof item === 'object' &&
+            typeof (item as { url?: unknown }).url === 'string'
+        ) {
             const entry = item as OpenApiServer;
             valid.push({
                 url: entry.url,

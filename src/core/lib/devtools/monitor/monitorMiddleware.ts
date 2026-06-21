@@ -10,7 +10,7 @@ function labelRoute(req: Request): string {
     const matched = (req as any).route?.path;
     if (matched && typeof matched === 'string') {
         const base = req.baseUrl || '';
-        return (base + matched) || '/';
+        return base + matched || '/';
     }
     // 패턴이 없으면(주로 404/미매칭) 동적으로 보이는 세그먼트를 :id 로 접어 카디널리티를 줄인다.
     // 숫자 / UUID / 긴 hex 토큰 / 아주 긴 세그먼트를 모두 접어 fuzzing 잡음을 억제.
@@ -44,6 +44,6 @@ export function monitorMiddleware(req: Request, res: Response, next: NextFunctio
         collector.onFinish(req.method, labelRoute(req), res.statusCode, durationMs);
     };
     res.on('finish', finish); // 정상 완료
-    res.on('close', finish);  // 클라이언트가 중간에 끊은 경우
+    res.on('close', finish); // 클라이언트가 중간에 끊은 경우
     next();
 }

@@ -10,7 +10,7 @@ interface ReleaseInfo {
     html_url: string;
     assets: Array<{
         name: string;
-        download_url: string;  // 실제 GitHub API에서 사용하는 필드명
+        download_url: string; // 실제 GitHub API에서 사용하는 필드명
         size: number;
     }>;
 }
@@ -56,8 +56,8 @@ function fetchLatestRelease(): Promise<ReleaseInfo> {
             method: 'GET',
             headers: {
                 'User-Agent': 'Express-Kusto-Framework-Updater',
-                'Accept': 'application/vnd.github.v3+json'
-            }
+                Accept: 'application/vnd.github.v3+json',
+            },
         };
 
         const req = https.request(options, (res) => {
@@ -73,18 +73,19 @@ function fetchLatestRelease(): Promise<ReleaseInfo> {
                         const release = JSON.parse(data);
 
                         // assets 정보 매핑
-                        const assets = release.assets?.map((asset: any) => ({
-                            name: asset.name,
-                            download_url: asset.browser_download_url,
-                            size: asset.size
-                        })) || [];
+                        const assets =
+                            release.assets?.map((asset: any) => ({
+                                name: asset.name,
+                                download_url: asset.browser_download_url,
+                                size: asset.size,
+                            })) || [];
 
                         const releaseInfo: ReleaseInfo = {
                             tag_name: release.tag_name,
                             name: release.name,
                             published_at: release.published_at,
                             html_url: release.html_url,
-                            assets
+                            assets,
                         };
 
                         resolve(releaseInfo);
@@ -144,7 +145,9 @@ function compareVersions(version1: string, version2: string): number {
 /**
  * 릴리즈 에셋에서 다운로드 URL을 찾습니다.
  */
-function extractDownloadUrls(assets: ReleaseInfo['assets']): { package: string; fileMap: string } | null {
+function extractDownloadUrls(
+    assets: ReleaseInfo['assets'],
+): { package: string; fileMap: string } | null {
     console.log(`Searching ${assets.length} release assets...`);
 
     let packageUrl: string | undefined;
@@ -205,11 +208,10 @@ export async function checkForUpdates(): Promise<ComparisonResult> {
             latestVersion,
             updateAvailable,
             releaseInfo,
-            downloadUrls: downloadUrls || undefined
+            downloadUrls: downloadUrls || undefined,
         };
 
         return result;
-
     } catch (error) {
         console.error('❌ Error checking for updates:', error);
         throw error;
@@ -237,7 +239,7 @@ export function displayUpdateStatus(result: ComparisonResult): void {
 
         if (result.releaseInfo?.assets) {
             console.log(`\n📦 Assets (${result.releaseInfo.assets.length}):`);
-            result.releaseInfo.assets.forEach(asset => {
+            result.releaseInfo.assets.forEach((asset) => {
                 const sizeMB = (asset.size / 1024 / 1024).toFixed(2);
                 console.log(`   • ${asset.name} (${sizeMB} MB)`);
             });
@@ -260,10 +262,11 @@ export async function runUpdateCheck(): Promise<void> {
         displayUpdateStatus(result);
 
         if (result.updateAvailable) {
-            console.log('💡 To update, download the package and extract it to your framework directory.');
+            console.log(
+                '💡 To update, download the package and extract it to your framework directory.',
+            );
             console.log('   Or run: npm run updater:download (if implemented)');
         }
-
     } catch (error) {
         console.error('Failed to check for updates:', error);
         process.exit(1);

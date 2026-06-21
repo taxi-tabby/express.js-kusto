@@ -13,7 +13,11 @@ import { OpenApiTag } from '@lib/devtools/documentation/openApiTypes';
 import { schemaToOpenApi, fieldToOpenApi } from '@lib/devtools/documentation/schemaConverter';
 import { buildInfo } from '@lib/devtools/documentation/infoSource';
 import { buildServers } from '@lib/devtools/documentation/serversSource';
-import { toOpenApiPath, deriveResourceTag, deriveOperationId } from '@lib/devtools/documentation/pathConverter';
+import {
+    toOpenApiPath,
+    deriveResourceTag,
+    deriveOperationId,
+} from '@lib/devtools/documentation/pathConverter';
 import { mediaTypeFor } from '@lib/devtools/documentation/contentTypeRule';
 import { getStatusText } from '@lib/http/errors/errorCodes';
 import { log } from '@ext/winston';
@@ -65,8 +69,15 @@ function isOpenApiSchemaShape(value: unknown): boolean {
     if (typeof v.$ref === 'string') return true;
     if (typeof v.type === 'string') {
         const t = v.type;
-        if (t === 'object' || t === 'array' || t === 'string' || t === 'number' ||
-            t === 'integer' || t === 'boolean' || t === 'null') {
+        if (
+            t === 'object' ||
+            t === 'array' ||
+            t === 'string' ||
+            t === 'number' ||
+            t === 'integer' ||
+            t === 'boolean' ||
+            t === 'null'
+        ) {
             return true;
         }
     }
@@ -100,7 +111,10 @@ function buildParameters(route: RouteDocumentationLike): OpenApiParameter[] {
     return out;
 }
 
-function buildRequestBody(route: RouteDocumentationLike, mediaType: string): OpenApiRequestBody | undefined {
+function buildRequestBody(
+    route: RouteDocumentationLike,
+    mediaType: string,
+): OpenApiRequestBody | undefined {
     if (!route.parameters?.body) return undefined;
     const body = route.parameters.body;
     const schema: OpenApiSchemaOrRef = isOpenApiSchemaShape(body)
@@ -114,7 +128,10 @@ function buildRequestBody(route: RouteDocumentationLike, mediaType: string): Ope
     };
 }
 
-function buildResponses(route: RouteDocumentationLike, mediaType: string): Record<string, OpenApiResponse> {
+function buildResponses(
+    route: RouteDocumentationLike,
+    mediaType: string,
+): Record<string, OpenApiResponse> {
     const out: Record<string, OpenApiResponse> = {};
     if (route.responses) {
         for (const [code, schema] of Object.entries(route.responses)) {
@@ -131,16 +148,17 @@ function buildResponses(route: RouteDocumentationLike, mediaType: string): Recor
     }
     if (Object.keys(out).length === 0) {
         // HTML page routes (e.g. extension-registered GET_REACT) return a document, not a JSON envelope.
-        const defaultSchema: OpenApiSchema = mediaType === 'text/html'
-            ? { type: 'string' }
-            : {
-                type: 'object',
-                properties: {
-                    success: { type: 'boolean' },
-                    data: { type: 'object' },
-                    timestamp: { type: 'string', format: 'date-time' },
-                },
-            };
+        const defaultSchema: OpenApiSchema =
+            mediaType === 'text/html'
+                ? { type: 'string' }
+                : {
+                      type: 'object',
+                      properties: {
+                          success: { type: 'boolean' },
+                          data: { type: 'object' },
+                          timestamp: { type: 'string', format: 'date-time' },
+                      },
+                  };
         out['200'] = {
             description: mediaType === 'text/html' ? 'HTML page' : 'Success',
             content: { [mediaType]: { schema: defaultSchema } },
@@ -175,9 +193,11 @@ function buildDocumentTags(
     for (const route of routes) {
         for (const tag of effectiveTags(route)) names.add(tag);
     }
-    return [...names].sort().map((name) => (
-        tagDescriptions[name] ? { name, description: tagDescriptions[name] } : { name }
-    ));
+    return [...names]
+        .sort()
+        .map((name) =>
+            tagDescriptions[name] ? { name, description: tagDescriptions[name] } : { name },
+        );
 }
 
 export function buildOpenApiDocument(input: BuildOpenApiInput): OpenApiDocument {
@@ -194,7 +214,10 @@ export function buildOpenApiDocument(input: BuildOpenApiInput): OpenApiDocument 
             if (!paths[openApiPath]) paths[openApiPath] = {};
             paths[openApiPath][route.method.toLowerCase()] = operation;
         } catch (error) {
-            log.Warn(`Skipping route in OpenAPI spec — documentation conversion failed: ${route.method} ${route.path}`, { error });
+            log.Warn(
+                `Skipping route in OpenAPI spec — documentation conversion failed: ${route.method} ${route.path}`,
+                { error },
+            );
         }
     }
 

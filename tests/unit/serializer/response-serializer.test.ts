@@ -7,7 +7,7 @@ describe('applyResponseSerializer', () => {
         const out = await applyResponseSerializer(
             { id: 1, password: 'x', name: 'a' },
             (u: any) => ({ id: u.id, name: u.name }),
-            fakeReq
+            fakeReq,
         );
         expect(out).toEqual({ id: 1, name: 'a' });
     });
@@ -16,7 +16,7 @@ describe('applyResponseSerializer', () => {
         const out = await applyResponseSerializer(
             { id: 1 },
             async (u: any) => ({ id: u.id, extra: true }),
-            fakeReq
+            fakeReq,
         );
         expect(out).toEqual({ id: 1, extra: true });
     });
@@ -25,7 +25,7 @@ describe('applyResponseSerializer', () => {
         const out = await applyResponseSerializer(
             { id: 1, password: 'x', ssn: '9' },
             { omit: ['password', 'ssn'] },
-            fakeReq
+            fakeReq,
         );
         expect(out).toEqual({ id: 1 });
     });
@@ -34,16 +34,19 @@ describe('applyResponseSerializer', () => {
         const out = await applyResponseSerializer(
             { id: 1, password: 'x', name: 'a' },
             { pick: ['id', 'name'] },
-            fakeReq
+            fakeReq,
         );
         expect(out).toEqual({ id: 1, name: 'a' });
     });
 
     it('{omit} 는 배열이면 원소별로 적용한다', async () => {
         const out = await applyResponseSerializer(
-            [{ id: 1, password: 'x' }, { id: 2, password: 'y' }],
+            [
+                { id: 1, password: 'x' },
+                { id: 2, password: 'y' },
+            ],
             { omit: ['password'] },
-            fakeReq
+            fakeReq,
         );
         expect(out).toEqual([{ id: 1 }, { id: 2 }]);
     });
@@ -52,7 +55,7 @@ describe('applyResponseSerializer', () => {
         const out = await applyResponseSerializer(
             [{ id: 1, name: 'a', secret: 's' }],
             { pick: ['id', 'name'] },
-            fakeReq
+            fakeReq,
         );
         expect(out).toEqual([{ id: 1, name: 'a' }]);
     });
@@ -63,7 +66,11 @@ describe('applyResponseSerializer', () => {
     });
 
     it('존재하지 않는 키를 omit/pick 해도 안전하다', async () => {
-        expect(await applyResponseSerializer({ id: 1 }, { omit: ['nope'] as any }, fakeReq)).toEqual({ id: 1 });
-        expect(await applyResponseSerializer({ id: 1 }, { pick: ['nope'] as any }, fakeReq)).toEqual({});
+        expect(
+            await applyResponseSerializer({ id: 1 }, { omit: ['nope'] as any }, fakeReq),
+        ).toEqual({ id: 1 });
+        expect(
+            await applyResponseSerializer({ id: 1 }, { pick: ['nope'] as any }, fakeReq),
+        ).toEqual({});
     });
 });

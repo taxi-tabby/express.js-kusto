@@ -9,7 +9,13 @@ describe('extensionTypes', () => {
     it('isKustoExtension 이 올바른 형태를 통과시킨다', () => {
         expect(isKustoExtension({ name: 'x' })).toBe(true);
         expect(
-            isKustoExtension({ name: 'x', version: '1.0.0', routerMethods: { A: () => {} }, onInit: () => {}, onBuild: async () => {} })
+            isKustoExtension({
+                name: 'x',
+                version: '1.0.0',
+                routerMethods: { A: () => {} },
+                onInit: () => {},
+                onBuild: async () => {},
+            }),
         ).toBe(true);
     });
 

@@ -3,16 +3,16 @@ import { log } from '@ext/winston';
 
 /**
  * @deprecated Use Core class instead. This is kept for backward compatibility.
- * 
+ *
  * Express Application Singleton
  * This class is now a simple wrapper around Express for legacy support.
- * 
+ *
  * @example
  * ```typescript
  * // Legacy usage (deprecated)
  * import expressApp from '@core/bootstrap/expressAppSingleton';
  * const app = expressApp.getApp();
- * 
+ *
  * // New recommended usage
  * import { Core, Application } from '@core/bootstrap/Core';
  * const app = new Application();

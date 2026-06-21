@@ -62,7 +62,11 @@ function buildDatabases(): DatabaseStatus[] {
 }
 
 function safe<T>(fn: () => T, fallback: T): T {
-    try { return fn(); } catch { return fallback; }
+    try {
+        return fn();
+    } catch {
+        return fallback;
+    }
 }
 
 /** 전체 스냅샷 조립(producer). */
@@ -91,9 +95,15 @@ export function buildSnapshot(ctx: MonitorContext): MonitorSnapshot {
         elMonitor.reset();
     }
 
-    const readiness = safe(() => ctx.getReadiness(), { ready: false } as { ready: boolean; degraded?: string });
+    const readiness = safe(() => ctx.getReadiness(), { ready: false } as {
+        ready: boolean;
+        degraded?: string;
+    });
     const repoCount = safe(() => RepositoryManager.getInstance().getStatus().repositoryCount, 0);
-    const injCount = safe(() => Object.keys(DependencyInjector.getInstance().getInjectedModules() || {}).length, 0);
+    const injCount = safe(
+        () => Object.keys(DependencyInjector.getInstance().getInjectedModules() || {}).length,
+        0,
+    );
 
     return {
         ts: nowMs,

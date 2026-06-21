@@ -14,7 +14,7 @@ export enum TransactionState {
     ABORTING = 'ABORTING',
     ABORTED = 'ABORTED',
     FAILED = 'FAILED',
-    TIMEOUT = 'TIMEOUT'
+    TIMEOUT = 'TIMEOUT',
 }
 
 /**
@@ -70,7 +70,7 @@ export interface TransactionCommitResult<T = any> {
  * - Interactive Transaction($transaction)만이 단일 커넥션 보장
  * - 진정한 2PC Phase 1 구현 불가능 (트랜잭션 유지 불가)
  * - 완전한 원자성(Atomicity) 및 격리성(Isolation) 보장 불가
- * 
+ *
  * 현재 구현 패턴:
  * 1. Phase 1: 검증 (Validation Phase)
  *    - 부수효과 없는 사전 검증(리소스 헬스 체크)만 수행. operation 은 실행하지 않는다.
@@ -78,13 +78,13 @@ export interface TransactionCommitResult<T = any> {
  *    - 개별 트랜잭션으로 순차 커밋. operation 은 여기서 단 한 번만 실행된다(부분 실패 가능).
  * 3. Compensation Phase: 실패 시 보상 트랜잭션 실행
  *    - 이미 커밋된 데이터를 보상 로직으로 되돌림
- * 
+ *
  * 📋 ACID 속성 지원 현황:
  * ✅ Consistency: 최종 일관성(Eventual Consistency) 보장
  * ✅ Durability: 개별 DB 레벨에서 완전 보장
  * ⚠️ Atomicity: 순차 커밋으로 인한 일시적 불일치 발생 가능
  * ❌ Isolation: 중간 상태가 다른 트랜잭션에 노출될 수 있음
- * 
+ *
  */
 export class TransactionCommitManager {
     private prismaManager: PrismaManager;
@@ -94,27 +94,27 @@ export class TransactionCommitManager {
         this.prismaManager = prismaManager;
     }
 
-
     /**
      * 분산 트랜잭션 실행 (Saga Pattern + Compensating Transactions)
-     * 
+     *
      * 실행 단계:
      * 1. Validation Phase: 모든 작업의 실행 가능성 검증
      * 2. Sequential Commit Phase: 우선순위 순으로 순차 커밋
      * 3. Compensation Phase: 실패 시 보상 트랜잭션 실행
-     * 
+     *
      * @param participants 참여자 목록
      * @param options 실행 옵션
-     */    
+     */
     async executeDistributedTransaction<T = any>(
         participants: Omit<TransactionParticipant, 'state'>[],
-        options: TransactionCommitOptions = {}
-    ): Promise<TransactionCommitResult<T>> {        const config = {
+        options: TransactionCommitOptions = {},
+    ): Promise<TransactionCommitResult<T>> {
+        const config = {
             prepareTimeout: options.prepareTimeout || 10000,
             commitTimeout: options.commitTimeout || 15000,
             enableLogging: options.enableLogging ?? true,
             isolationLevel: options.isolationLevel || 'Serializable',
-            enableCompensation: options.enableCompensation ?? true
+            enableCompensation: options.enableCompensation ?? true,
         };
 
         const globalTransactionId = this.generateGlobalTransactionId();
@@ -123,20 +123,26 @@ export class TransactionCommitManager {
         let phase2Duration = 0;
 
         // 참여자 초기화
-        const transactionParticipants: TransactionParticipant[] = participants.map(p => ({
+        const transactionParticipants: TransactionParticipant[] = participants.map((p) => ({
             ...p,
-            state: TransactionState.INITIAL
-        })); if (config.enableLogging) {
+            state: TransactionState.INITIAL,
+        }));
+        if (config.enableLogging) {
             log.Debug(`Starting Saga transaction ${globalTransactionId}`, {
                 participantCount: transactionParticipants.length,
-                databases: transactionParticipants.map(p => p.database),
-                pattern: 'Saga + Compensating Transactions'
+                databases: transactionParticipants.map((p) => p.database),
+                pattern: 'Saga + Compensating Transactions',
             });
         }
 
-        try {            // Phase 1: Validation (작업 검증 단계)
+        try {
+            // Phase 1: Validation (작업 검증 단계)
             const phase1Start = Date.now();
-            const prepareResult = await this.preparePhase(transactionParticipants, config, globalTransactionId);
+            const prepareResult = await this.preparePhase(
+                transactionParticipants,
+                config,
+                globalTransactionId,
+            );
             phase1Duration = Date.now() - phase1Start;
 
             if (!prepareResult.success) {
@@ -150,13 +156,17 @@ export class TransactionCommitManager {
                     phase2Duration: 0,
                     totalDuration: Date.now() - startTime,
                     error: prepareResult.error,
-                    partialSuccess: false
+                    partialSuccess: false,
                 };
             }
 
             // Phase 2: Sequential Commit (순차 커밋 단계)
             const phase2Start = Date.now();
-            const commitResult = await this.commitPhase(transactionParticipants, config, globalTransactionId);
+            const commitResult = await this.commitPhase(
+                transactionParticipants,
+                config,
+                globalTransactionId,
+            );
             phase2Duration = Date.now() - phase2Start;
 
             const totalDuration = Date.now() - startTime;
@@ -165,15 +175,18 @@ export class TransactionCommitManager {
                 const compensationResults = await this.executeCompensation(
                     transactionParticipants,
                     config,
-                    globalTransactionId
+                    globalTransactionId,
                 );
 
                 if (config.enableLogging) {
-                    log.Warn(`Saga transaction ${globalTransactionId} failed, compensation executed`, {
-                        compensationResults,
-                        partialSuccess: commitResult.partialSuccess,
-                        pattern: 'Compensating Transaction Pattern'
-                    });
+                    log.Warn(
+                        `Saga transaction ${globalTransactionId} failed, compensation executed`,
+                        {
+                            compensationResults,
+                            partialSuccess: commitResult.partialSuccess,
+                            pattern: 'Compensating Transaction Pattern',
+                        },
+                    );
                 }
 
                 return {
@@ -186,7 +199,7 @@ export class TransactionCommitManager {
                     totalDuration,
                     error: commitResult.error,
                     compensationResults,
-                    partialSuccess: commitResult.partialSuccess
+                    partialSuccess: commitResult.partialSuccess,
                 };
             }
 
@@ -196,9 +209,10 @@ export class TransactionCommitManager {
                     phase1Duration: `${phase1Duration}ms`,
                     phase2Duration: `${phase2Duration}ms`,
                     totalDuration: `${totalDuration}ms`,
-                    pattern: 'Saga + Compensating Transactions'
+                    pattern: 'Saga + Compensating Transactions',
                 });
-            } return {
+            }
+            return {
                 success: commitResult.success,
                 globalTransactionId,
                 results: commitResult.results,
@@ -207,7 +221,7 @@ export class TransactionCommitManager {
                 phase2Duration,
                 totalDuration,
                 error: commitResult.error,
-                partialSuccess: commitResult.partialSuccess
+                partialSuccess: commitResult.partialSuccess,
             };
         } catch (error) {
             // 예상치 못한 에러 발생 시 롤백
@@ -224,65 +238,70 @@ export class TransactionCommitManager {
                 phase2Duration,
                 totalDuration,
                 error: error instanceof Error ? error : new Error(String(error)),
-                partialSuccess: false
+                partialSuccess: false,
             };
         }
     }
 
-
-
     /**
      * Phase 1: Validation - 모든 참여자의 작업 실행 가능성 검증
      * 실제 데이터 변경 없이 시뮬레이션을 통해 검증만 수행
-     */    
-    
+     */
+
     private async preparePhase(
         participants: TransactionParticipant[],
         config: TransactionCommitOptions,
-        globalTxId: string
+        globalTxId: string,
     ): Promise<{ success: boolean; error?: Error }> {
-        const preparePromises = participants.map(participant =>
-            this.prepareParticipant(participant, config, globalTxId)
+        const preparePromises = participants.map((participant) =>
+            this.prepareParticipant(participant, config, globalTxId),
         );
 
         try {
             // 모든 참여자의 Prepare 단계 실행 (타임아웃 적용)
             await Promise.race([
                 Promise.all(preparePromises),
-                this.createTimeoutPromise(config.prepareTimeout!, 'Prepare phase timeout')
+                this.createTimeoutPromise(config.prepareTimeout!, 'Prepare phase timeout'),
             ]);
 
             // 모든 참여자가 PREPARED 상태인지 확인
-            const allPrepared = participants.every(p => p.state === TransactionState.PREPARED);
+            const allPrepared = participants.every((p) => p.state === TransactionState.PREPARED);
 
             if (!allPrepared) {
-                const failedParticipants = participants.filter(p => p.state !== TransactionState.PREPARED);
-                const error = new Error(`Prepare phase failed for databases: ${failedParticipants.map(p => p.database).join(', ')}`);
+                const failedParticipants = participants.filter(
+                    (p) => p.state !== TransactionState.PREPARED,
+                );
+                const error = new Error(
+                    `Prepare phase failed for databases: ${failedParticipants.map((p) => p.database).join(', ')}`,
+                );
 
                 if (config.enableLogging) {
                     log.Error(`2PC ${globalTxId} prepare phase failed`, {
-                        failedDatabases: failedParticipants.map(p => ({
+                        failedDatabases: failedParticipants.map((p) => ({
                             database: p.database,
                             state: p.state,
-                            error: p.error?.message
-                        }))
+                            error: p.error?.message,
+                        })),
                     });
                 }
 
                 return { success: false, error };
-            } if (config.enableLogging) {
+            }
+            if (config.enableLogging) {
                 log.Debug(`Saga ${globalTxId} validation phase completed successfully`, {
-                    participantStates: participants.map(p => ({ database: p.database, state: p.state })),
-                    pattern: 'Validation Phase'
+                    participantStates: participants.map((p) => ({
+                        database: p.database,
+                        state: p.state,
+                    })),
+                    pattern: 'Validation Phase',
                 });
             }
 
             return { success: true };
-
         } catch (error) {
             return {
                 success: false,
-                error: error instanceof Error ? error : new Error(String(error))
+                error: error instanceof Error ? error : new Error(String(error)),
             };
         }
     }
@@ -294,7 +313,7 @@ export class TransactionCommitManager {
     private async prepareParticipant(
         participant: TransactionParticipant,
         config: TransactionCommitOptions,
-        globalTxId: string
+        globalTxId: string,
     ): Promise<void> {
         try {
             participant.state = TransactionState.PREPARING;
@@ -306,10 +325,12 @@ export class TransactionCommitManager {
 
             // 데이터베이스 건강성 확인
             const healthCheck = await this.prismaManager.healthCheck();
-            const dbHealth = healthCheck.databases.find(db => db.name === participant.database);
+            const dbHealth = healthCheck.databases.find((db) => db.name === participant.database);
 
             if (dbHealth?.status !== 'healthy') {
-                throw new Error(`Database ${participant.database} is not healthy: ${dbHealth?.error || 'Unknown issue'}`);
+                throw new Error(
+                    `Database ${participant.database} is not healthy: ${dbHealth?.error || 'Unknown issue'}`,
+                );
             }
 
             const client = this.prismaManager.getClientSync(participant.database);
@@ -319,28 +340,27 @@ export class TransactionCommitManager {
             participant.transactionId = transactionId;
 
             // Interactive Transaction을 사용하여 안전하게 실행
-            await this.startManagedTransaction(
-                client,
-                participant,
-                config,
-                transactionId
-            );
+            await this.startManagedTransaction(client, participant, config, transactionId);
 
             participant.state = TransactionState.PREPARED;
             participant.preparedAt = new Date();
 
             if (config.enableLogging) {
-                log.Silly(`Saga ${globalTxId} participant ${participant.database} validation completed with simulation ${transactionId}`);
+                log.Silly(
+                    `Saga ${globalTxId} participant ${participant.database} validation completed with simulation ${transactionId}`,
+                );
             }
-
         } catch (error) {
             participant.state = TransactionState.FAILED;
             participant.error = error instanceof Error ? error : new Error(String(error));
 
             if (config.enableLogging) {
-                log.Error(`Safe 2PC ${globalTxId} participant ${participant.database} prepare failed`, {
-                    error: participant.error.message
-                });
+                log.Error(
+                    `Safe 2PC ${globalTxId} participant ${participant.database} prepare failed`,
+                    {
+                        error: participant.error.message,
+                    },
+                );
             }
 
             // 호출자(`preparePhase` 의 Promise.all)가 즉시 인지하고 abort phase 로 이동할 수 있도록 재던진다.
@@ -349,8 +369,6 @@ export class TransactionCommitManager {
         }
     }
 
-    
-    
     /**
      * 진정한 2PC Phase 1: Prepare 트랜잭션 시작 및 검증
      *     * ⚠️ PRISMA 제약사항:
@@ -361,24 +379,24 @@ export class TransactionCommitManager {
      *   client.$executeRaw`COMMIT` → 커넥션3 (또 다른 커넥션!)
      * - Interactive Transaction($transaction)만이 단일 커넥션 보장
      * - 따라서 시뮬레이션 방식으로 검증 후 강제 롤백
-     * 
+     *
      * 이상적인 2PC Phase 1 (현재 불가능):
      * 1. BEGIN TRANSACTION
      * 2. 작업 수행 및 검증
      * 3. 트랜잭션 유지 (PREPARED 상태)
      * 4. 글로벌 코디네이터 지시 대기
      * 5. COMMIT 또는 ROLLBACK
-     * 
+     *
      * 현재 구현(Saga):
      *  - operation 은 실행하지 않는다. 부수효과 없는 사전 검증(리소스 헬스 체크)만 수행한다.
      *  - 실제 operation 은 commit 단계(commitParticipant)에서 단 한 번만 실행된다.
      *    (과거에는 여기서 operation 을 실행 후 롤백하는 "시뮬레이션"을 했으나, commit 이
      *     operation 을 다시 실행하여 비멱등 작업이 두 번 실행되는 버그가 있었다 — P0-4)
-     */private async startManagedTransaction(
+     */ private async startManagedTransaction(
         client: any,
         participant: TransactionParticipant,
         config: TransactionCommitOptions,
-        transactionId: string
+        transactionId: string,
     ): Promise<void> {
         try {
             // 데이터베이스 연결 및 리소스 확인 (부수효과 없음)
@@ -388,21 +406,24 @@ export class TransactionCommitManager {
             }
 
             if (config.enableLogging) {
-                log.Silly(`Saga prepare (validation) completed for ${participant.database} with transaction ${transactionId}`);
+                log.Silly(
+                    `Saga prepare (validation) completed for ${participant.database} with transaction ${transactionId}`,
+                );
             }
-
         } catch (error) {
-            throw new Error(`Saga prepare failed for ${participant.database}: ${error instanceof Error ? error.message : String(error)}`);
+            throw new Error(
+                `Saga prepare failed for ${participant.database}: ${error instanceof Error ? error.message : String(error)}`,
+            );
         }
     }
-
-
-
 
     /**
      * 데이터베이스 리소스 확인
      */
-    private async checkDatabaseResources(client: any, participant: TransactionParticipant): Promise<{
+    private async checkDatabaseResources(
+        client: any,
+        participant: TransactionParticipant,
+    ): Promise<{
         healthy: boolean;
         issue?: string;
     }> {
@@ -415,25 +436,30 @@ export class TransactionCommitManager {
                 // 리소스 락 확인 로직 (데이터베이스별로 구현 필요)
                 const lockStatus = await this.checkResourceLocks(client, participant.requiredLocks);
                 if (!lockStatus.available) {
-                    return { healthy: false, issue: `Required locks not available: ${lockStatus.blockedLocks.join(', ')}` };
+                    return {
+                        healthy: false,
+                        issue: `Required locks not available: ${lockStatus.blockedLocks.join(', ')}`,
+                    };
                 }
             }
 
             return { healthy: true };
         } catch (error) {
-            return { healthy: false, issue: error instanceof Error ? error.message : String(error) };
+            return {
+                healthy: false,
+                issue: error instanceof Error ? error.message : String(error),
+            };
         }
-    }    
-    
+    }
 
-
-
-    
     /**
      * 리소스 락 상태 확인
      * PrismaManager에서 provider 정보를 가져와서 동적으로 락 확인 방법 결정
      */
-    private async checkResourceLocks(client: any, requiredLocks: string[]): Promise<{
+    private async checkResourceLocks(
+        client: any,
+        requiredLocks: string[],
+    ): Promise<{
         available: boolean;
         blockedLocks: string[];
     }> {
@@ -442,10 +468,10 @@ export class TransactionCommitManager {
         try {
             // 클라이언트에서 데이터베이스 이름 추출 시도
             const dbName = this.getDatabaseNameFromClient(client);
-            
+
             // PrismaManager에서 provider 정보 가져오기
             let provider = 'postgresql'; // 기본값
-            
+
             if (dbName && this.prismaManager) {
                 try {
                     provider = this.prismaManager.getProviderForDatabase(dbName);
@@ -453,7 +479,7 @@ export class TransactionCommitManager {
                     log.Debug(`Could not get provider for ${dbName}, using default PostgreSQL`);
                 }
             }
-            
+
             // provider별 락 확인 로직 분기
             for (const lockName of requiredLocks) {
                 const isBlocked = await this.checkLockByProvider(client, lockName, provider);
@@ -469,13 +495,10 @@ export class TransactionCommitManager {
 
         return {
             available: blockedLocks.length === 0,
-            blockedLocks
+            blockedLocks,
         };
-    }    
-    
-    
-    
-    
+    }
+
     /**
      * 클라이언트에서 데이터베이스 이름 추출 시도
      */
@@ -485,7 +508,7 @@ export class TransactionCommitManager {
             if (client.__databaseName) {
                 return client.__databaseName;
             }
-            
+
             // PrismaManager의 모든 연결된 데이터베이스에서 클라이언트 매칭 시도
             const availableDbs = this.prismaManager.getAvailableDatabases();
             for (const dbName of availableDbs) {
@@ -494,7 +517,7 @@ export class TransactionCommitManager {
                     return dbName;
                 }
             }
-            
+
             return null;
         } catch (error) {
             log.Debug('Could not determine database name from client:', error);
@@ -502,14 +525,14 @@ export class TransactionCommitManager {
         }
     }
 
-
-
-
-
     /**
      * Provider별 락 확인 로직
      */
-    private async checkLockByProvider(client: any, lockName: string, provider: string): Promise<boolean> {
+    private async checkLockByProvider(
+        client: any,
+        lockName: string,
+        provider: string,
+    ): Promise<boolean> {
         switch (provider.toLowerCase()) {
             case 'postgresql':
                 return this.checkPostgreSQLLock(client, lockName);
@@ -523,11 +546,6 @@ export class TransactionCommitManager {
         }
     }
 
-
-
-
-
-
     /**
      * PostgreSQL 개별 락 상태 확인
      * @param client Prisma 클라이언트
@@ -535,10 +553,9 @@ export class TransactionCommitManager {
      */
     private async checkPostgreSQLLock(client: any, lockName: string): Promise<boolean> {
         try {
-
             // PostgreSQL의 pg_locks 시스템 뷰를 사용하여 락 상태 확인
             // lockName 형식: "table:table_name" 또는 "record:table_name:id"
-            
+
             const lockParts = lockName.split(':');
             const lockType = lockParts[0]; // 'table' 또는 'record'
             const tableName = lockParts[1];
@@ -558,17 +575,16 @@ export class TransactionCommitManager {
                 `;
 
                 return Number(result[0]?.lock_count || 0) > 0;
-
             } else if (lockType === 'record' && recordId) {
                 // 레코드 레벨 락 확인 (advisory lock 사용)
                 const lockKey = this.generateAdvisoryLockKey(tableName, recordId);
-                
+
                 const result = await client.$queryRaw`
                     SELECT pg_try_advisory_lock(${lockKey}) as acquired
                 `;
 
                 const acquired = result[0]?.acquired;
-                
+
                 // 락을 획득했다면 즉시 해제 (테스트 목적이므로)
                 if (acquired) {
                     await client.$queryRaw`
@@ -578,22 +594,15 @@ export class TransactionCommitManager {
                 } else {
                     return true; // 락이 이미 사용 중
                 }
-
             } else {
                 log.Warn(`Unsupported lock format: ${lockName}`);
                 return false; // 형식이 잘못된 경우 사용 가능으로 간주
             }
-
         } catch (error) {
             log.Error(`Failed to check PostgreSQL lock for ${lockName}:`, error);
             return true; // 에러 시 안전하게 차단된 것으로 간주
         }
     }
-
-
-
-
-
 
     /**
      * PostgreSQL Advisory Lock용 숫자 키 생성
@@ -603,21 +612,16 @@ export class TransactionCommitManager {
         // 간단한 해시 함수로 문자열을 정수로 변환
         let hash = 0;
         const combined = `${tableName}:${recordId}`;
-        
+
         for (let i = 0; i < combined.length; i++) {
             const char = combined.charCodeAt(i);
-            hash = ((hash << 5) - hash) + char;
+            hash = (hash << 5) - hash + char;
             hash = hash & hash; // 32비트 정수로 변환
         }
-        
+
         // 양수로 변환 (PostgreSQL advisory lock은 양수 키를 선호)
         return Math.abs(hash);
     }
-
-
-
-
-
 
     /**
      * MySQL 개별 락 상태 확인 (참고용 - 현재 프로젝트에서 사용 안함)
@@ -637,7 +641,6 @@ export class TransactionCommitManager {
                 `;
 
                 return Number(result[0]?.lock_count || 0) > 0;
-
             } else if (lockType === 'record') {
                 // MySQL Named Lock 사용
                 const result = await client.$queryRaw`
@@ -653,11 +656,6 @@ export class TransactionCommitManager {
             return true;
         }
     }
-
-
-
-
-
 
     /**
      * SQLite 개별 락 상태 확인 (참고용 - 현재 프로젝트에서 사용 안함)
@@ -678,27 +676,23 @@ export class TransactionCommitManager {
         }
     }
 
-
-
-
-
-
     /**
      * Phase 2: Sequential Commit - 우선순위 순으로 순차적 커밋 수행
      * 실패 시 이미 커밋된 것들에 대해 보상 트랜잭션 필요
-     */    
-    
+     */
+
     private async commitPhase(
         participants: TransactionParticipant[],
         config: TransactionCommitOptions,
-        globalTxId: string
+        globalTxId: string,
     ): Promise<{ success: boolean; results: any[]; error?: Error; partialSuccess?: boolean }> {
-
         const results: any[] = [];
 
         try {
             // 우선순위 순으로 정렬 (높은 우선순위부터)
-            const sortedParticipants = [...participants].sort((a, b) => (b.priority || 0) - (a.priority || 0));
+            const sortedParticipants = [...participants].sort(
+                (a, b) => (b.priority || 0) - (a.priority || 0),
+            );
 
             // 순차적 커밋 실행 (Saga Pattern)
             for (const participant of sortedParticipants) {
@@ -710,11 +704,15 @@ export class TransactionCommitManager {
                     const failedError = error instanceof Error ? error : new Error(String(error));
 
                     if (config.enableLogging) {
-                        log.Error(`Saga ${globalTxId} sequential commit failed at ${participant.database}`, {
-                            error: failedError.message,
-                            completedCommits: results.length,
-                            remainingParticipants: sortedParticipants.length - results.length - 1
-                        });
+                        log.Error(
+                            `Saga ${globalTxId} sequential commit failed at ${participant.database}`,
+                            {
+                                error: failedError.message,
+                                completedCommits: results.length,
+                                remainingParticipants:
+                                    sortedParticipants.length - results.length - 1,
+                            },
+                        );
                     }
 
                     // 부분 성공 상황 처리
@@ -724,28 +722,34 @@ export class TransactionCommitManager {
                         success: false,
                         results: results,
                         error: failedError,
-                        partialSuccess: hasPartialSuccess
+                        partialSuccess: hasPartialSuccess,
                     };
                 }
             }
 
             // 모든 참여자가 COMMITTED 상태인지 확인
-            const allCommitted = participants.every(p => p.state === TransactionState.COMMITTED);
+            const allCommitted = participants.every((p) => p.state === TransactionState.COMMITTED);
 
             if (!allCommitted) {
-                const failedParticipants = participants.filter(p => p.state !== TransactionState.COMMITTED);
-                const committedParticipants = participants.filter(p => p.state === TransactionState.COMMITTED);
+                const failedParticipants = participants.filter(
+                    (p) => p.state !== TransactionState.COMMITTED,
+                );
+                const committedParticipants = participants.filter(
+                    (p) => p.state === TransactionState.COMMITTED,
+                );
 
-                const error = new Error(`Commit phase failed for databases: ${failedParticipants.map(p => p.database).join(', ')}`);
+                const error = new Error(
+                    `Commit phase failed for databases: ${failedParticipants.map((p) => p.database).join(', ')}`,
+                );
 
                 if (config.enableLogging) {
                     log.Error(`2PC ${globalTxId} commit phase failed`, {
-                        failedDatabases: failedParticipants.map(p => ({
+                        failedDatabases: failedParticipants.map((p) => ({
                             database: p.database,
                             state: p.state,
-                            error: p.error?.message
+                            error: p.error?.message,
                         })),
-                        committedDatabases: committedParticipants.map(p => p.database)
+                        committedDatabases: committedParticipants.map((p) => p.database),
                     });
                 }
 
@@ -757,48 +761,44 @@ export class TransactionCommitManager {
                     success: false,
                     results: results,
                     error,
-                    partialSuccess: hasPartialSuccess
+                    partialSuccess: hasPartialSuccess,
                 };
             }
 
             if (config.enableLogging) {
                 log.Debug(`Saga ${globalTxId} sequential commit phase completed successfully`, {
                     totalCommits: results.length,
-                    pattern: 'Sequential Commit'
+                    pattern: 'Sequential Commit',
                 });
             }
 
             return { success: true, results, partialSuccess: false };
-
         } catch (error) {
             return {
                 success: false,
                 results: [],
                 error: error instanceof Error ? error : new Error(String(error)),
-                partialSuccess: false
+                partialSuccess: false,
             };
         }
     }
 
-
-
-
-
-
     /**
-      * 개별 참여자의 Sequential Commit 실행
-      * 검증된 작업을 실제로 커밋 수행
-      */    
-     private async commitParticipant(
+     * 개별 참여자의 Sequential Commit 실행
+     * 검증된 작업을 실제로 커밋 수행
+     */
+    private async commitParticipant(
         participant: TransactionParticipant,
         config: TransactionCommitOptions,
-        globalTxId: string
+        globalTxId: string,
     ): Promise<any> {
         try {
             participant.state = TransactionState.COMMITTING;
 
             if (!participant.transactionId) {
-                throw new Error(`No active transaction found for participant ${participant.database}`);
+                throw new Error(
+                    `No active transaction found for participant ${participant.database}`,
+                );
             }
 
             const client = this.prismaManager.getClientSync(participant.database);
@@ -809,28 +809,34 @@ export class TransactionCommitManager {
             const finalResult = await client.$transaction(
                 async (tx: any) => {
                     return await participant.operation(tx);
-                }, {
-                isolationLevel: config.isolationLevel as any,
-                maxWait: config.commitTimeout || 15000,
-                timeout: config.commitTimeout || 15000
-            }
+                },
+                {
+                    isolationLevel: config.isolationLevel as any,
+                    maxWait: config.commitTimeout || 15000,
+                    timeout: config.commitTimeout || 15000,
+                },
             );
 
             participant.state = TransactionState.COMMITTED;
-            participant.committedAt = new Date(); if (config.enableLogging) {
-                log.Silly(`Saga ${globalTxId} participant ${participant.database} commit completed for transaction ${participant.transactionId}`);
+            participant.committedAt = new Date();
+            if (config.enableLogging) {
+                log.Silly(
+                    `Saga ${globalTxId} participant ${participant.database} commit completed for transaction ${participant.transactionId}`,
+                );
             }
 
             return finalResult;
-
         } catch (error) {
             participant.state = TransactionState.FAILED;
             participant.error = error instanceof Error ? error : new Error(String(error));
 
             if (config.enableLogging) {
-                log.Error(`Safe 2PC ${globalTxId} participant ${participant.database} commit failed`, {
-                    error: participant.error.message
-                });
+                log.Error(
+                    `Safe 2PC ${globalTxId} participant ${participant.database} commit failed`,
+                    {
+                        error: participant.error.message,
+                    },
+                );
             }
 
             throw participant.error;
@@ -844,7 +850,7 @@ export class TransactionCommitManager {
     private async abortPhase(
         participants: TransactionParticipant[],
         config: TransactionCommitOptions,
-        globalTxId: string
+        globalTxId: string,
     ): Promise<void> {
         if (config.enableLogging) {
             log.Warn(`Saga ${globalTxId} aborting transaction (validation failed)`);
@@ -853,10 +859,15 @@ export class TransactionCommitManager {
         // 검증 단계에서 실패했으므로 실제 커밋된 데이터는 없음
         // 참여자 상태만 업데이트
         for (const participant of participants) {
-            if (participant.state === TransactionState.PREPARED || participant.state === TransactionState.PREPARING) {
+            if (
+                participant.state === TransactionState.PREPARED ||
+                participant.state === TransactionState.PREPARING
+            ) {
                 participant.state = TransactionState.ABORTED;
                 if (config.enableLogging) {
-                    log.Silly(`Saga ${globalTxId} participant ${participant.database} validation aborted`);
+                    log.Silly(
+                        `Saga ${globalTxId} participant ${participant.database} validation aborted`,
+                    );
                 }
             }
         }
@@ -872,7 +883,6 @@ export class TransactionCommitManager {
             }, timeoutMs);
         });
     }
-
 
     /**
      * 글로벌 트랜잭션 ID 생성 (Saga Pattern용)
@@ -892,27 +902,25 @@ export class TransactionCommitManager {
         return `tx_${database}_${timestamp}_${counter}`;
     }
 
-
-
-
-    
-
     /**
      * 보상 트랜잭션 실행 (Compensating Transaction Pattern)
      * 이미 커밋된 작업들을 되돌리기 위한 보상 작업 수행
      * Saga Pattern의 핵심 요소로, 분산 트랜잭션의 일관성 보장
-     */    
+     */
     private async executeCompensation(
         participants: TransactionParticipant[],
         config: TransactionCommitOptions,
-        globalTxId: string
+        globalTxId: string,
     ): Promise<any[]> {
-
         const compensationResults: any[] = [];
-        const committedParticipants = participants.filter(p => p.state === TransactionState.COMMITTED);
+        const committedParticipants = participants.filter(
+            (p) => p.state === TransactionState.COMMITTED,
+        );
 
         if (config.enableLogging && committedParticipants.length > 0) {
-            log.Warn(`Saga ${globalTxId} executing compensating transactions for ${committedParticipants.length} committed operations`);
+            log.Warn(
+                `Saga ${globalTxId} executing compensating transactions for ${committedParticipants.length} committed operations`,
+            );
         }
 
         // 역순으로 보상 실행 (LIFO 방식 - Last In, First Out)
@@ -929,51 +937,55 @@ export class TransactionCommitManager {
                         {
                             isolationLevel: config.isolationLevel as any,
                             maxWait: config.commitTimeout || 15000,
-                            timeout: config.commitTimeout || 15000
-                        }
+                            timeout: config.commitTimeout || 15000,
+                        },
                     );
 
                     compensationResults.push({
                         database: participant.database,
                         result: compensationResult,
                         success: true,
-                        type: 'compensation'
+                        type: 'compensation',
                     });
 
                     if (config.enableLogging) {
-                        log.Silly(`Compensating transaction executed successfully for ${participant.database}`);
+                        log.Silly(
+                            `Compensating transaction executed successfully for ${participant.database}`,
+                        );
                     }
-
                 } catch (compensationError) {
-
                     compensationResults.push({
                         database: participant.database,
-                        error: compensationError instanceof Error ? compensationError.message : String(compensationError),
+                        error:
+                            compensationError instanceof Error
+                                ? compensationError.message
+                                : String(compensationError),
                         success: false,
-                        type: 'compensation_failed'
+                        type: 'compensation_failed',
                     });
 
                     if (config.enableLogging) {
                         log.Error(`Compensating transaction failed for ${participant.database}`, {
-                            error: compensationError instanceof Error ? compensationError.message : String(compensationError),
-                            warning: 'Manual intervention may be required'
+                            error:
+                                compensationError instanceof Error
+                                    ? compensationError.message
+                                    : String(compensationError),
+                            warning: 'Manual intervention may be required',
                         });
                     }
-
                 }
             } else {
-                
                 // 보상 트랜잭션이 정의되지 않은 경우 경고
                 compensationResults.push({
                     database: participant.database,
                     warning: 'No rollback operation defined - manual intervention required',
                     success: false,
-                    type: 'no_compensation'
+                    type: 'no_compensation',
                 });
 
                 if (config.enableLogging) {
                     log.Warn(`No compensating transaction defined for ${participant.database}`, {
-                        warning: 'Manual data cleanup may be required'
+                        warning: 'Manual data cleanup may be required',
                     });
                 }
             }

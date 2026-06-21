@@ -25,11 +25,9 @@ describe('ExpressRouter fluent API', () => {
 
     it('POST 와 PUT 을 체이닝으로 호출할 때 둘 다 stack 에 등록된다', () => {
         const router = new ExpressRouter();
-        router
-            .POST((req, res) => res.json({}))
-            .PUT((req, res) => res.json({}));
+        router.POST((req, res) => res.json({})).PUT((req, res) => res.json({}));
         const stack = (router.build() as any).stack;
-        const methods = stack.flatMap((l: any) => l.route ? Object.keys(l.route.methods) : []);
+        const methods = stack.flatMap((l: any) => (l.route ? Object.keys(l.route.methods) : []));
         expect(methods).toContain('post');
         expect(methods).toContain('put');
     });

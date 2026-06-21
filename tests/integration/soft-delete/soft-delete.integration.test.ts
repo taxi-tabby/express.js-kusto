@@ -23,7 +23,7 @@ describe('CRUD soft delete 흐름 (통합)', () => {
 
     async function seedUser(id = 'u1', email = 'a@a.com') {
         await fixture.prisma.user.create({
-            data: { id, email, name: 'Alice' }
+            data: { id, email, name: 'Alice' },
         });
     }
 
@@ -32,7 +32,7 @@ describe('CRUD soft delete 흐름 (통합)', () => {
             fixture,
             { softDelete: { enabled: true, field: 'deletedAt' } },
             'User',
-            '/users'
+            '/users',
         );
         await seedUser();
         const res = await request(app).delete('/users/u1');
@@ -47,13 +47,13 @@ describe('CRUD soft delete 흐름 (통합)', () => {
             fixture,
             { softDelete: { enabled: true, field: 'deletedAt' } },
             'User',
-            '/users'
+            '/users',
         );
         await seedUser('u1');
         await seedUser('u2', 'b@b.com');
         await fixture.prisma.user.update({
             where: { id: 'u2' },
-            data: { deletedAt: new Date() }
+            data: { deletedAt: new Date() },
         });
         const res = await request(app).get('/users?page[number]=1&page[size]=10');
         expect(res.status).toBe(200);
@@ -67,15 +67,17 @@ describe('CRUD soft delete 흐름 (통합)', () => {
             fixture,
             { softDelete: { enabled: true, field: 'deletedAt' } },
             'User',
-            '/users'
+            '/users',
         );
         await seedUser('u1');
         await seedUser('u2', 'b@b.com');
         await fixture.prisma.user.update({
             where: { id: 'u2' },
-            data: { deletedAt: new Date() }
+            data: { deletedAt: new Date() },
         });
-        const res = await request(app).get('/users?include_deleted=true&page[number]=1&page[size]=10');
+        const res = await request(app).get(
+            '/users?include_deleted=true&page[number]=1&page[size]=10',
+        );
         expect(res.status).toBe(200);
         const ids = res.body.data.map((d: any) => d.id);
         expect(ids).toEqual(expect.arrayContaining(['u1', 'u2']));
@@ -86,12 +88,12 @@ describe('CRUD soft delete 흐름 (통합)', () => {
             fixture,
             { softDelete: { enabled: true, field: 'deletedAt' } },
             'User',
-            '/users'
+            '/users',
         );
         await seedUser('u1');
         await fixture.prisma.user.update({
             where: { id: 'u1' },
-            data: { deletedAt: new Date() }
+            data: { deletedAt: new Date() },
         });
         const res = await request(app).get('/users/u1');
         expect(res.status).toBe(410);
@@ -103,12 +105,12 @@ describe('CRUD soft delete 흐름 (통합)', () => {
             fixture,
             { softDelete: { enabled: true, field: 'deletedAt' } },
             'User',
-            '/users'
+            '/users',
         );
         await seedUser('u1');
         await fixture.prisma.user.update({
             where: { id: 'u1' },
-            data: { deletedAt: new Date() }
+            data: { deletedAt: new Date() },
         });
         const res = await request(app).post('/users/u1/recover');
         expect([200, 201]).toContain(res.status);
@@ -121,13 +123,13 @@ describe('CRUD soft delete 흐름 (통합)', () => {
             fixture,
             { softDelete: { enabled: true, field: 'removedAt' } },
             'User',
-            '/users'
+            '/users',
         );
         await seedUser('u1');
         // 커스텀 필드로 soft-delete 상태 만들기
         await fixture.prisma.user.update({
             where: { id: 'u1' },
-            data: { removedAt: new Date() }
+            data: { removedAt: new Date() },
         });
         const res = await request(app).post('/users/u1/recover');
         // 수정 전: recover 가 deletedAt:{not:null} 로 조회 → 매칭 실패 → 409/404, removedAt 그대로

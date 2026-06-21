@@ -14,7 +14,7 @@ console.log = () => {};
 const {
     extractTableName,
     extractAlterAddColumn,
-    extractIndexName
+    extractIndexName,
 } = require('@/src/core/scripts/kusto-db-cli');
 
 process.argv = originalArgv;

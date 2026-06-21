@@ -30,17 +30,19 @@ describe('CRUD include 정책 wiring (통합)', () => {
                 posts: {
                     create: [
                         { id: 'p1', title: 'Hello' },
-                        { id: 'p2', title: 'World' }
-                    ]
-                }
-            }
+                        { id: 'p2', title: 'World' },
+                    ],
+                },
+            },
         });
     }
 
     it('index 에서 ?include= 가 maxIncludeCount 초과할 때 400 INCLUDE_LIMIT_EXCEEDED 응답한다', async () => {
         const app = buildTestApp(fixture, { maxIncludeCount: 1 });
         await seed();
-        const res = await request(app).get('/posts?include=author,comments&page[number]=1&page[size]=10');
+        const res = await request(app).get(
+            '/posts?include=author,comments&page[number]=1&page[size]=10',
+        );
         expect(res.status).toBe(400);
         expect(res.body.errors[0].code).toBe('INCLUDE_LIMIT_EXCEEDED');
     });
@@ -48,7 +50,9 @@ describe('CRUD include 정책 wiring (통합)', () => {
     it('index 에서 ?include= 가 maxIncludeDepth 초과할 때 400 INCLUDE_DEPTH_EXCEEDED 응답한다', async () => {
         const app = buildTestApp(fixture, { maxIncludeDepth: 1 });
         await seed();
-        const res = await request(app).get('/posts?include=author.profile&page[number]=1&page[size]=10');
+        const res = await request(app).get(
+            '/posts?include=author.profile&page[number]=1&page[size]=10',
+        );
         expect(res.status).toBe(400);
         expect(res.body.errors[0].code).toBe('INCLUDE_DEPTH_EXCEEDED');
     });
@@ -86,8 +90,8 @@ describe('CRUD include 정책 wiring (통합)', () => {
             .send({
                 data: {
                     type: 'posts',
-                    attributes: { id: 'p3', title: 'New', authorId: 'u1' }
-                }
+                    attributes: { id: 'p3', title: 'New', authorId: 'u1' },
+                },
             })
             .set('Content-Type', 'application/vnd.api+json');
         expect(res.status).toBe(201);
@@ -104,8 +108,8 @@ describe('CRUD include 정책 wiring (통합)', () => {
                 data: {
                     type: 'posts',
                     id: 'p1',
-                    attributes: { title: 'Updated' }
-                }
+                    attributes: { title: 'Updated' },
+                },
             })
             .set('Content-Type', 'application/vnd.api+json');
         expect(res.status).toBe(200);
@@ -115,7 +119,7 @@ describe('CRUD include 정책 wiring (통합)', () => {
     it('defaultIncludes 가 allowedIncludes 화이트리스트에 없어도 통과한다 (서버 신뢰)', async () => {
         const app = buildTestApp(fixture, {
             allowedIncludes: ['author'],
-            defaultIncludes: ['tags']
+            defaultIncludes: ['tags'],
         });
         await seed();
         const res = await request(app).get('/posts?page[number]=1&page[size]=10');

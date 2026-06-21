@@ -11,7 +11,11 @@ console.error = () => {};
 console.log = () => {};
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const { getDatabaseUrl, getDatabaseEnvVarName, commandNeedsDatabaseUrl } = require('@/src/core/scripts/kusto-db-cli');
+const {
+    getDatabaseUrl,
+    getDatabaseEnvVarName,
+    commandNeedsDatabaseUrl,
+} = require('@/src/core/scripts/kusto-db-cli');
 
 process.argv = originalArgv;
 process.exit = originalExit;
@@ -30,7 +34,9 @@ describe('getDatabaseUrl — env 기반 DB URL 해소 (CI generate 회귀)', () 
     const KEY = getDatabaseEnvVarName('default'); // 'DEFAULT__KUSTO_RDB_URL'
     let saved: string | undefined;
 
-    beforeEach(() => { saved = process.env[KEY]; });
+    beforeEach(() => {
+        saved = process.env[KEY];
+    });
     afterEach(() => {
         if (saved === undefined) delete process.env[KEY];
         else process.env[KEY] = saved;

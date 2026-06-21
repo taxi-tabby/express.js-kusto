@@ -1,7 +1,15 @@
 import { PrismaSchemaAnalyzer } from '@lib/devtools/schema-api/prismaSchemaAnalyzer';
 import { PrismaModelInfo } from '@lib/devtools/schema-api/crudSchemaTypes';
-import { DocumentationGenerator, isDocumentationEnabled } from '@lib/devtools/documentation/documentationGenerator';
-import { jsonApiResource, jsonApiAttributes, jsonApiRelationships, jsonApiErrorObject } from '@lib/devtools/documentation/jsonApiSchemas';
+import {
+    DocumentationGenerator,
+    isDocumentationEnabled,
+} from '@lib/devtools/documentation/documentationGenerator';
+import {
+    jsonApiResource,
+    jsonApiAttributes,
+    jsonApiRelationships,
+    jsonApiErrorObject,
+} from '@lib/devtools/documentation/jsonApiSchemas';
 import { enumToOpenApi } from '@lib/devtools/documentation/dmmfToOpenApi';
 import { log } from '@ext/winston';
 
@@ -11,7 +19,10 @@ import { log } from '@ext/winston';
  *
  * AUTO_DOCS off / production 에서는 즉시 return.
  */
-export function syncSchemasFromAnalyzer(analyzer: PrismaSchemaAnalyzer, databaseName: string): void {
+export function syncSchemasFromAnalyzer(
+    analyzer: PrismaSchemaAnalyzer,
+    databaseName: string,
+): void {
     if (!isEnabled()) return;
 
     const models = analyzer.getAllModels();
@@ -24,8 +35,14 @@ export function syncSchemasFromAnalyzer(analyzer: PrismaSchemaAnalyzer, database
 
     for (const model of models) {
         DocumentationGenerator.registerSchema(model.name, jsonApiResource(model, enumValuesByName));
-        DocumentationGenerator.registerSchema(`${model.name}Attributes`, jsonApiAttributes(model, enumValuesByName));
-        DocumentationGenerator.registerSchema(`${model.name}Relationships`, jsonApiRelationships(model));
+        DocumentationGenerator.registerSchema(
+            `${model.name}Attributes`,
+            jsonApiAttributes(model, enumValuesByName),
+        );
+        DocumentationGenerator.registerSchema(
+            `${model.name}Relationships`,
+            jsonApiRelationships(model),
+        );
     }
 
     log.Debug('Documentation schemas synced', {
@@ -49,7 +66,10 @@ function isEnabled(): boolean {
     return isDocumentationEnabled();
 }
 
-function collectEnumValues(analyzer: PrismaSchemaAnalyzer, models: PrismaModelInfo[]): Map<string, string[]> {
+function collectEnumValues(
+    analyzer: PrismaSchemaAnalyzer,
+    models: PrismaModelInfo[],
+): Map<string, string[]> {
     const map = new Map<string, string[]>();
 
     for (const model of models) {

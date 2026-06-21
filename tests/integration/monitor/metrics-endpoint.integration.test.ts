@@ -1,6 +1,10 @@
 import request from 'supertest';
 import express from 'express';
-import { registerMonitor, stopMonitor, MonitorContext } from '@core/lib/devtools/monitor/monitorSetup';
+import {
+    registerMonitor,
+    stopMonitor,
+    MonitorContext,
+} from '@core/lib/devtools/monitor/monitorSetup';
 import { MetricsCollector } from '@core/lib/devtools/monitor/metricsCollector';
 import { MONITOR_PATH } from '@core/lib/devtools/monitor/monitorTypes';
 

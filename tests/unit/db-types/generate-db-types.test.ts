@@ -28,7 +28,9 @@ describe('buildDatabaseTypesContent — DB 타입 코드 생성 (DB-less 빌드 
 
     it('DB 가 있으면 해당 client import 와 union 을 생성한다', () => {
         const out = buildDatabaseTypesContent(['default']);
-        expect(out).toContain("import { PrismaClient as DefaultPrismaClient } from '@app/db/default/client';");
+        expect(out).toContain(
+            "import { PrismaClient as DefaultPrismaClient } from '@app/db/default/client';",
+        );
         expect(out).toContain("export type DatabaseNamesUnion = 'default';");
     });
 

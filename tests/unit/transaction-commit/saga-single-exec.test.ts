@@ -35,7 +35,7 @@ describe('TransactionCommitManager — Saga single-execution (P0-4)', () => {
 
         const result = await manager.executeDistributedTransaction(
             [{ database: 'default', operation } as any],
-            { enableLogging: false }
+            { enableLogging: false },
         );
 
         expect(result.success).toBe(true);

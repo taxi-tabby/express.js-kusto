@@ -5,17 +5,29 @@ import { log } from '@ext/winston';
 /**
  * Prisma 스칼라 타입 → OpenAPI primitive type / format.
  */
-function prismaTypeToOpenApi(prismaType: string): { type: 'string' | 'number' | 'integer' | 'boolean' | 'object'; format?: string } {
+function prismaTypeToOpenApi(prismaType: string): {
+    type: 'string' | 'number' | 'integer' | 'boolean' | 'object';
+    format?: string;
+} {
     switch (prismaType) {
-        case 'String':   return { type: 'string' };
-        case 'Int':      return { type: 'integer', format: 'int32' };
-        case 'BigInt':   return { type: 'integer', format: 'int64' };
-        case 'Float':    return { type: 'number', format: 'float' };
-        case 'Decimal':  return { type: 'string', format: 'decimal' };
-        case 'Boolean':  return { type: 'boolean' };
-        case 'DateTime': return { type: 'string', format: 'date-time' };
-        case 'Json':     return { type: 'object' };
-        case 'Bytes':    return { type: 'string', format: 'byte' };
+        case 'String':
+            return { type: 'string' };
+        case 'Int':
+            return { type: 'integer', format: 'int32' };
+        case 'BigInt':
+            return { type: 'integer', format: 'int64' };
+        case 'Float':
+            return { type: 'number', format: 'float' };
+        case 'Decimal':
+            return { type: 'string', format: 'decimal' };
+        case 'Boolean':
+            return { type: 'boolean' };
+        case 'DateTime':
+            return { type: 'string', format: 'date-time' };
+        case 'Json':
+            return { type: 'object' };
+        case 'Bytes':
+            return { type: 'string', format: 'byte' };
         default:
             // enum 또는 알 수 없는 타입 — 호출자가 enum 별도 등록을 가정
             return { type: 'string' };
@@ -27,7 +39,10 @@ function prismaTypeToOpenApi(prismaType: string): { type: 'string' | 'number' | 
  * isOptional 시 type union (T | null) 으로 표현 (OpenAPI 3.1 / JSON Schema 2020-12).
  * isList 시 array wrapper.
  */
-export function fieldToSchema(field: PrismaFieldMetadata, enumValuesByName: Map<string, string[]>): OpenApiSchemaOrRef {
+export function fieldToSchema(
+    field: PrismaFieldMetadata,
+    enumValuesByName: Map<string, string[]>,
+): OpenApiSchemaOrRef {
     if (enumValuesByName.has(field.type)) {
         return { $ref: `#/components/schemas/${field.type}` };
     }

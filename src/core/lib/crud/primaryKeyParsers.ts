@@ -78,7 +78,11 @@ export const parseIdSmart = (id: string): any => {
 /**
  * Primary key 타입을 자동으로 감지하고 적절한 파서를 반환하는 헬퍼
  */
-export const getSmartPrimaryKeyParser = (databaseName: string, modelName: string, primaryKey: string): (value: string) => any => {
+export const getSmartPrimaryKeyParser = (
+    databaseName: string,
+    modelName: string,
+    primaryKey: string,
+): ((value: string) => any) => {
     // 간단한 타입 추론 로직
     // 실제로는 Prisma 스키마나 메타데이터를 통해 판단할 수 있음
     // 여기서는 일반적인 패턴을 기반으로 추론

@@ -8,7 +8,7 @@ function makeError(message = 'test error') {
 function format(err: Error, ctx: any = {}) {
     return ErrorHandler.handleError(err, {
         format: ErrorResponseFormat.JSON_API,
-        context: ctx
+        context: ctx,
     });
 }
 
@@ -41,11 +41,11 @@ describe('ErrorHandler.formatJsonApiError 구조', () => {
             code: ERROR_CODES.VALIDATION_ERROR,
             status: 400,
             path: '/users/abc',
-            method: 'GET'
+            method: 'GET',
         });
         expect((r as any).meta?.requestInfo).toMatchObject({
             path: '/users/abc',
-            method: 'GET'
+            method: 'GET',
         });
     });
 

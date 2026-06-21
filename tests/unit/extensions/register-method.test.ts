@@ -11,7 +11,9 @@ describe('ExpressRouter.registerMethod (확장 메서드 런타임 등록)', () 
 
     it('등록한 메서드가 인스턴스에 부착되고 this 를 반환한다(체이닝)', () => {
         const calls: Array<string | undefined> = [];
-        ExpressRouter.registerMethod('GET_PING', (_ctx, label?: string) => { calls.push(label); });
+        ExpressRouter.registerMethod('GET_PING', (_ctx, label?: string) => {
+            calls.push(label);
+        });
         const r = new ExpressRouter();
         const ret = (r as any).GET_PING('x');
         expect(ret).toBe(r);
@@ -20,7 +22,9 @@ describe('ExpressRouter.registerMethod (확장 메서드 런타임 등록)', () 
 
     it('등록 메서드가 ctx.router 로 실제 라우트를 mount 한다', async () => {
         ExpressRouter.registerMethod('GET_PING', (ctx) => {
-            ctx.router.get('/ping', (_req: express.Request, res: express.Response) => { res.json({ pong: true }); });
+            ctx.router.get('/ping', (_req: express.Request, res: express.Response) => {
+                res.json({ pong: true });
+            });
         });
         const r = new ExpressRouter();
         (r as any).GET_PING();
@@ -50,8 +54,12 @@ describe('ExpressRouter.registerMethod (확장 메서드 런타임 등록)', () 
     });
 
     it('impl 이 함수가 아니면 throw 한다', () => {
-        expect(() => ExpressRouter.registerMethod('GET_BAD', 'nope' as any)).toThrow(/must be a function/);
-        expect(() => ExpressRouter.registerMethod('GET_BAD', undefined as any)).toThrow(/must be a function/);
+        expect(() => ExpressRouter.registerMethod('GET_BAD', 'nope' as any)).toThrow(
+            /must be a function/,
+        );
+        expect(() => ExpressRouter.registerMethod('GET_BAD', undefined as any)).toThrow(
+            /must be a function/,
+        );
     });
 
     it('생성자 인스턴스 필드 이름(router/basePath 등)과 충돌하면 throw 한다', () => {

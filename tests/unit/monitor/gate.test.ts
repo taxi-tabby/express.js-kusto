@@ -6,7 +6,7 @@ import { isLocalRequest } from '@core/lib/devtools/monitor/monitorSetup';
  * trust proxy 가 켜지면 req.ip 는 X-Forwarded-For 로 위조될 수 있기 때문이다.
  */
 const fakeReq = (socketIp: string, spoofedReqIp?: string) =>
-    ({ ip: spoofedReqIp, socket: { remoteAddress: socketIp } } as any);
+    ({ ip: spoofedReqIp, socket: { remoteAddress: socketIp } }) as any;
 
 describe('monitor isLocalRequest — 루프백 게이트(XFF 우회 방어)', () => {
     it('루프백 소켓은 허용', () => {

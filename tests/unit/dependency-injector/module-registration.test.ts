@@ -14,13 +14,15 @@ describe('pathToCamelCaseIdentifier', () => {
     });
 
     it('middleware 확장자도 동일하게 처리된다', () => {
-        expect(pathToCamelCaseIdentifier('auth/rateLimiter/default.middleware.ts'))
-            .toBe('authRateLimiterDefault');
+        expect(pathToCamelCaseIdentifier('auth/rateLimiter/default.middleware.ts')).toBe(
+            'authRateLimiterDefault',
+        );
     });
 
     it('middleware.interface 확장자도 동일하게 처리된다', () => {
-        expect(pathToCamelCaseIdentifier('auth/rateLimiter/option.middleware.interface.ts'))
-            .toBe('authRateLimiterOption');
+        expect(pathToCamelCaseIdentifier('auth/rateLimiter/option.middleware.interface.ts')).toBe(
+            'authRateLimiterOption',
+        );
     });
 
     it('첫 세그먼트는 lowercase 로 시작하고 나머지는 PascalCase 로 합쳐진다', () => {

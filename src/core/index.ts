@@ -39,24 +39,27 @@ export { SchemaApiSetup } from '@lib/devtools/schema-api/schemaApiSetup';
 export * from '@lib/devtools/schema-api/crudSchemaTypes';
 
 // Validation system
-export { Validator, ValidationResult, ValidationError, Schema, FieldSchema } from '@lib/http/validation/validator';
-export { 
-    RequestHandler, 
-    RequestConfig, 
-    ResponseConfig, 
+export {
+    Validator,
+    ValidationResult,
+    ValidationError,
+    Schema,
+    FieldSchema,
+} from '@lib/http/validation/validator';
+export {
+    RequestHandler,
+    RequestConfig,
+    ResponseConfig,
     ValidatedRequest,
     createValidatedHandler,
     withValidation,
     withFullValidation,
     sendSuccess,
-    sendError
+    sendError,
 } from '@lib/http/validation/requestHandler';
-
 
 // Legacy singleton for backward compatibility
 export { default as expressApp } from '@core/bootstrap/expressAppSingleton';
 
 // Re-export for convenience
 export { default as core } from '@core/bootstrap/Core';
-
-

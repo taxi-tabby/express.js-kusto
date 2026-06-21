@@ -1,16 +1,16 @@
 {
-  "watch": ["src", ".env*"],
-  "ext": "ts,js,json,env",
-  "ignore": [
-    "src/core/tmp/**/*",
-    "src/core/lib/types/**/*",
-    "**/*.test.ts",
-    "**/*.spec.ts",
-    "**/node_modules/**"
-  ],
-  "exec": "npm run generate -- --build && npm run serve",
-  "env": {
-    "NODE_ENV": "development"
-  },
-  "delay": 1000
+    "watch": ["src", ".env*"],
+    "ext": "ts,js,json,env",
+    "ignore": [
+        "src/core/tmp/**/*",
+        "src/core/lib/types/**/*",
+        "**/*.test.ts",
+        "**/*.spec.ts",
+        "**/node_modules/**"
+    ],
+    "exec": "npm run generate -- --build && npm run serve",
+    "env": {
+        "NODE_ENV": "development"
+    },
+    "delay": 1000
 }

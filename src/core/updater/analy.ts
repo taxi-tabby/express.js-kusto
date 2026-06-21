@@ -41,87 +41,89 @@ function parseGitignore(gitignorePath: string): string[] {
  * @returns 무시해야 하는 파일이면 true
  */
 function shouldIgnoreFile(filePath: string, patterns: string[]): boolean {
-  // 윈도우 경로 구분자를 슬래시로 변환
-  const normalizedPath = filePath.replace(/\\/g, '/');
-  
-  let shouldIgnore = false;
-  
-  // 패턴을 순서대로 처리 (! 패턴이 이전 매치를 덮어쓸 수 있도록)
-  for (const pattern of patterns) {
-    let currentPattern = pattern;
-    let isNegation = false;
-    
-    // ! 로 시작하는 패턴 처리 (부정 패턴)
-    if (pattern.startsWith('!')) {
-      isNegation = true;
-      currentPattern = pattern.substring(1);
-    }
-    
-    let matches = false;
-    
-    // 디렉토리 패턴 (/ 로 끝나는 경우)
-    if (currentPattern.endsWith('/')) {
-      const dirPattern = currentPattern.slice(0, -1);
-      if (normalizedPath.startsWith(dirPattern + '/') || normalizedPath === dirPattern) {
-        matches = true;
-      }
-    } else {
-      // 정확한 매치
-      if (normalizedPath === currentPattern) {
-        matches = true;
-      }
-      
-      // 디렉토리명 매치 (디렉토리 전체를 무시)
-      else if (normalizedPath.startsWith(currentPattern + '/')) {
-        matches = true;
-      }
-      
-      // 와일드카드 처리
-      else if (currentPattern.includes('*')) {
-        const regexPattern = currentPattern
-          .replace(/\./g, '\\.')
-          .replace(/\*/g, '.*');
-        const regex = new RegExp('^' + regexPattern + '$');
-        if (regex.test(normalizedPath)) {
-          matches = true;
-        } else {
-          // 디렉토리 내 파일도 매치
-          const pathParts = normalizedPath.split('/');
-          for (let i = 0; i < pathParts.length; i++) {
-            const subPath = pathParts.slice(i).join('/');
-            if (regex.test(subPath)) {
-              matches = true;
-              break;
-            }
-          }
-        }
-      }
-      
-      // 파일명 매치 (경로의 어느 부분에서든)
-      else {
-        const pathParts = normalizedPath.split('/');
-        if (pathParts.includes(currentPattern)) {
-          matches = true;
-        }
-      }
-      
-      // 확장자 매치
-      if (!matches && currentPattern.startsWith('*.') && normalizedPath.endsWith(currentPattern.substring(1))) {
-        matches = true;
-      }
-    }
-    
-    // 매치된 경우 무시 여부 결정
-    if (matches) {
-      if (isNegation) {
-        shouldIgnore = false;  // ! 패턴은 이전 무시를 취소
-      } else {
-        shouldIgnore = true;   // 일반 패턴은 무시
-      }
-    }
-  }
+    // 윈도우 경로 구분자를 슬래시로 변환
+    const normalizedPath = filePath.replace(/\\/g, '/');
 
-  return shouldIgnore;
+    let shouldIgnore = false;
+
+    // 패턴을 순서대로 처리 (! 패턴이 이전 매치를 덮어쓸 수 있도록)
+    for (const pattern of patterns) {
+        let currentPattern = pattern;
+        let isNegation = false;
+
+        // ! 로 시작하는 패턴 처리 (부정 패턴)
+        if (pattern.startsWith('!')) {
+            isNegation = true;
+            currentPattern = pattern.substring(1);
+        }
+
+        let matches = false;
+
+        // 디렉토리 패턴 (/ 로 끝나는 경우)
+        if (currentPattern.endsWith('/')) {
+            const dirPattern = currentPattern.slice(0, -1);
+            if (normalizedPath.startsWith(dirPattern + '/') || normalizedPath === dirPattern) {
+                matches = true;
+            }
+        } else {
+            // 정확한 매치
+            if (normalizedPath === currentPattern) {
+                matches = true;
+            }
+
+            // 디렉토리명 매치 (디렉토리 전체를 무시)
+            else if (normalizedPath.startsWith(currentPattern + '/')) {
+                matches = true;
+            }
+
+            // 와일드카드 처리
+            else if (currentPattern.includes('*')) {
+                const regexPattern = currentPattern.replace(/\./g, '\\.').replace(/\*/g, '.*');
+                const regex = new RegExp('^' + regexPattern + '$');
+                if (regex.test(normalizedPath)) {
+                    matches = true;
+                } else {
+                    // 디렉토리 내 파일도 매치
+                    const pathParts = normalizedPath.split('/');
+                    for (let i = 0; i < pathParts.length; i++) {
+                        const subPath = pathParts.slice(i).join('/');
+                        if (regex.test(subPath)) {
+                            matches = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // 파일명 매치 (경로의 어느 부분에서든)
+            else {
+                const pathParts = normalizedPath.split('/');
+                if (pathParts.includes(currentPattern)) {
+                    matches = true;
+                }
+            }
+
+            // 확장자 매치
+            if (
+                !matches &&
+                currentPattern.startsWith('*.') &&
+                normalizedPath.endsWith(currentPattern.substring(1))
+            ) {
+                matches = true;
+            }
+        }
+
+        // 매치된 경우 무시 여부 결정
+        if (matches) {
+            if (isNegation) {
+                shouldIgnore = false; // ! 패턴은 이전 무시를 취소
+            } else {
+                shouldIgnore = true; // 일반 패턴은 무시
+            }
+        }
+    }
+
+    return shouldIgnore;
 }
 
 /**
@@ -137,7 +139,7 @@ export function shouldExcludeFromDeployment(fileName: string, relativePath: stri
         'package-lock.json',
         'npm-shrinkwrap.json',
         '.npmrc',
-        '.npmignore'
+        '.npmignore',
     ];
 
     // 개발 도구 / 프로젝트 메타 파일들 — 소비자(설치 프로젝트)가 소유·커스터마이즈하므로
@@ -155,33 +157,33 @@ export function shouldExcludeFromDeployment(fileName: string, relativePath: stri
         'LICENSE',
         'LICENSE.md',
         'LICENSE.txt',
-        'CLAUDE.md',           // 프로젝트별 에이전트 지침(소비자 소유)
-        'prisma.config.ts',    // 루트 Prisma 설정: 소비자의 마이그레이션/어댑터 배선(temp per-DB 설정은 .gitignore)
-        'artillery-test.yml'   // 부하 테스트 설정: 소비자별 타깃/SLO
+        'CLAUDE.md', // 프로젝트별 에이전트 지침(소비자 소유)
+        'prisma.config.ts', // 루트 Prisma 설정: 소비자의 마이그레이션/어댑터 배선(temp per-DB 설정은 .gitignore)
+        'artillery-test.yml', // 부하 테스트 설정: 소비자별 타깃/SLO
     ];
-    
+
     // 자동 생성되는 타입 파일들 (서비스에서 자동 생성)
     const autoGeneratedFiles = [
         'src/core/lib/types/generated-db-types.ts',
         'src/core/lib/types/generated-injectable-types.ts',
-        'src/core/lib/types/generated-repository-types.ts'
+        'src/core/lib/types/generated-repository-types.ts',
     ];
-    
+
     // 상대 경로로 자동 생성 파일 매치
     if (autoGeneratedFiles.includes(relativePath)) {
         return true;
     }
-    
+
     // 파일명 직접 매치
     if (npmFiles.includes(fileName) || devFiles.includes(fileName)) {
         return true;
     }
-    
+
     // 패턴 매치 (tsconfig.*.json 등)
     if (fileName.startsWith('tsconfig.') && fileName.endsWith('.json')) {
         return true;
     }
-    
+
     if (fileName.startsWith('nodemon.') && fileName.endsWith('.json')) {
         return true;
     }
@@ -231,7 +233,7 @@ export function shouldSkipDirectory(dirName: string, relativePath: string): bool
     // 소비자 소유 트리(프레임워크가 배포로 덮어쓰면 안 됨)
     const consumerOwnedTrees = ['src/app', 'src/core/updater', 'tests', 'public'];
     return consumerOwnedTrees.some(
-        (root) => relativePath === root || relativePath.startsWith(root + '/')
+        (root) => relativePath === root || relativePath.startsWith(root + '/'),
     );
 }
 
@@ -292,7 +294,7 @@ export function generateFileMap(outputDir: string = MAP_DIR): string {
                 const relativePath = path.relative(parentDir, filePath);
                 // 윈도우 경로 구분자를 슬래시로 변환
                 const normalizedPath = relativePath.replace(/\\/g, '/');
-                
+
                 // 파일명 추출
                 const fileName = path.basename(filePath);
 
@@ -301,7 +303,7 @@ export function generateFileMap(outputDir: string = MAP_DIR): string {
                     ignoredCount++;
                     continue;
                 }
-                
+
                 // 배포 제외 파일인지 확인
                 if (shouldExcludeFromDeployment(fileName, normalizedPath)) {
                     ignoredCount++;

@@ -9,9 +9,9 @@ import { serialize } from '@lib/http/serialization/serializer';
 export function serializationMiddleware(req: Request, res: Response, next: NextFunction) {
     // 원본 json 메서드 백업
     const originalJson = res.json;
-    
+
     // json 메서드 오버라이드
-    res.json = function(body: any) {
+    res.json = function (body: any) {
         try {
             // 데이터 직렬화
             const serializedBody = serialize(body);
@@ -22,7 +22,7 @@ export function serializationMiddleware(req: Request, res: Response, next: NextF
             return originalJson.call(this, body);
         }
     };
-    
+
     next();
 }
 
@@ -40,7 +40,7 @@ declare global {
 export function setupGlobalBigIntSerialization() {
     // BigInt.prototype.toJSON 메서드 추가
     if (!(BigInt.prototype as any).toJSON) {
-        (BigInt.prototype as any).toJSON = function() {
+        (BigInt.prototype as any).toJSON = function () {
             return this.toString();
         };
     }

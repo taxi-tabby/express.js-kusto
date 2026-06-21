@@ -87,7 +87,9 @@ describe('syncSchemasFromAnalyzer 통합', () => {
         try {
             syncSchemasFromAnalyzer(analyzer, 'default');
             // AUTO_DOCS 가 꺼져 있어 generateOpenAPISpec 자체가 throw
-            expect(() => DocumentationGenerator.generateOpenAPISpec()).toThrow(/Documentation is not enabled/);
+            expect(() => DocumentationGenerator.generateOpenAPISpec()).toThrow(
+                /Documentation is not enabled/,
+            );
         } finally {
             process.env.AUTO_DOCS = oldAutoDocs;
         }

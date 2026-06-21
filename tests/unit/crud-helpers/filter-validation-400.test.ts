@@ -18,7 +18,11 @@ describe('CrudQueryParser — 필터 검증 실패는 400 throw (P0-2)', () => {
     it('잘못된 UUID 형식 eq 필터는 statusCode 400 으로 throw', () => {
         let thrown: any;
         try {
-            CrudQueryParser.parseQuery(makeReq({ 'filter[id_eq]': 'not-a-uuid' }), 'Thing', uuidAnalyzer);
+            CrudQueryParser.parseQuery(
+                makeReq({ 'filter[id_eq]': 'not-a-uuid' }),
+                'Thing',
+                uuidAnalyzer,
+            );
         } catch (e) {
             thrown = e;
         }
@@ -55,7 +59,7 @@ describe('CrudQueryParser — 필터 검증 실패는 400 throw (P0-2)', () => {
         const params = CrudQueryParser.parseQuery(
             makeReq({ 'filter[id_eq]': uuid }),
             'Thing',
-            uuidAnalyzer
+            uuidAnalyzer,
         );
         expect(params.filter).toMatchObject({ id: expect.objectContaining({ eq: uuid }) });
     });

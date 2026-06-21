@@ -16,7 +16,9 @@ describe('ExpressRouter 타입 augmentation (declaration merging)', () => {
 
     it('augment 된 메서드가 타입에 합류하고 체이닝 타입이 보존된다', () => {
         let received: string | undefined;
-        ExpressRouter.registerMethod('GET_AUGMENTED', (_ctx, component: string) => { received = component; });
+        ExpressRouter.registerMethod('GET_AUGMENTED', (_ctx, component: string) => {
+            received = component;
+        });
 
         const r = new ExpressRouter();
         // GET_AUGMENTED 가 타입에 존재해야 컴파일된다(체이닝은 this 반환).

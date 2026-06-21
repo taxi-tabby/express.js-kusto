@@ -10,41 +10,41 @@
 import { ERROR_CODES } from '@lib/http/errors/errorCodes';
 
 export class ErrorFormatter {
-  /**
-   * Prisma 에러를 JSON:API 응답에 사용할 { code, status } 로 매핑한다.
-   * 알려지지 않은 에러는 INTERNAL_ERROR / 500 으로 fallback.
-   */
-  static mapPrismaError(error: Error): { code: string; status: number } {
-    const errorName = error.constructor.name;
-    const message = error.message;
+    /**
+     * Prisma 에러를 JSON:API 응답에 사용할 { code, status } 로 매핑한다.
+     * 알려지지 않은 에러는 INTERNAL_ERROR / 500 으로 fallback.
+     */
+    static mapPrismaError(error: Error): { code: string; status: number } {
+        const errorName = error.constructor.name;
+        const message = error.message;
 
-    if (errorName === 'PrismaClientValidationError') {
-      return { code: ERROR_CODES.VALIDATION_ERROR, status: 400 };
+        if (errorName === 'PrismaClientValidationError') {
+            return { code: ERROR_CODES.VALIDATION_ERROR, status: 400 };
+        }
+
+        if (errorName === 'PrismaClientKnownRequestError') {
+            const prismaCode = (error as any).code;
+
+            switch (prismaCode) {
+                case 'P2001':
+                case 'P2015':
+                case 'P2018':
+                case 'P2025':
+                    return { code: ERROR_CODES.NOT_FOUND, status: 404 };
+                case 'P2002':
+                    return { code: ERROR_CODES.DUPLICATE_ENTRY, status: 409 };
+                case 'P2003':
+                case 'P2004':
+                    return { code: ERROR_CODES.VALIDATION_ERROR, status: 400 };
+                default:
+                    return { code: ERROR_CODES.DATABASE_ERROR, status: 500 };
+            }
+        }
+
+        if (message.includes('Invalid UUID')) {
+            return { code: ERROR_CODES.INVALID_UUID, status: 400 };
+        }
+
+        return { code: ERROR_CODES.INTERNAL_ERROR, status: 500 };
     }
-
-    if (errorName === 'PrismaClientKnownRequestError') {
-      const prismaCode = (error as any).code;
-
-      switch (prismaCode) {
-        case 'P2001':
-        case 'P2015':
-        case 'P2018':
-        case 'P2025':
-          return { code: ERROR_CODES.NOT_FOUND, status: 404 };
-        case 'P2002':
-          return { code: ERROR_CODES.DUPLICATE_ENTRY, status: 409 };
-        case 'P2003':
-        case 'P2004':
-          return { code: ERROR_CODES.VALIDATION_ERROR, status: 400 };
-        default:
-          return { code: ERROR_CODES.DATABASE_ERROR, status: 500 };
-      }
-    }
-
-    if (message.includes('Invalid UUID')) {
-      return { code: ERROR_CODES.INVALID_UUID, status: 400 };
-    }
-
-    return { code: ERROR_CODES.INTERNAL_ERROR, status: 500 };
-  }
 }

@@ -12,14 +12,29 @@ describe('extensionRegistry', () => {
 
     it('runInit 이 onInit 훅을 등록 순서로 실행한다', async () => {
         const order: string[] = [];
-        extensionRegistry.register({ name: 'a', onInit: () => { order.push('a'); } } as KustoExtension);
-        extensionRegistry.register({ name: 'b', onInit: async () => { order.push('b'); } } as KustoExtension);
+        extensionRegistry.register({
+            name: 'a',
+            onInit: () => {
+                order.push('a');
+            },
+        } as KustoExtension);
+        extensionRegistry.register({
+            name: 'b',
+            onInit: async () => {
+                order.push('b');
+            },
+        } as KustoExtension);
         await extensionRegistry.runInit({} as any);
         expect(order).toEqual(['a', 'b']);
     });
 
     it('runInit 에서 발생한 에러를 re-throw 한다(fail-fast)', async () => {
-        extensionRegistry.register({ name: 'a', onInit: () => { throw new Error('boom'); } } as KustoExtension);
+        extensionRegistry.register({
+            name: 'a',
+            onInit: () => {
+                throw new Error('boom');
+            },
+        } as KustoExtension);
         await expect(extensionRegistry.runInit({} as any)).rejects.toThrow('boom');
     });
 
@@ -30,14 +45,24 @@ describe('extensionRegistry', () => {
 
     it('runBuild 가 onBuild 훅을 실행한다', async () => {
         const order: string[] = [];
-        extensionRegistry.register({ name: 'a', onBuild: () => { order.push('a'); } } as KustoExtension);
+        extensionRegistry.register({
+            name: 'a',
+            onBuild: () => {
+                order.push('a');
+            },
+        } as KustoExtension);
         extensionRegistry.register({ name: 'b' } as KustoExtension); // onBuild 없음 → 스킵
         await extensionRegistry.runBuild({} as any);
         expect(order).toEqual(['a']);
     });
 
     it('runBuild 에서 발생한 에러를 re-throw 한다(fail-fast)', async () => {
-        extensionRegistry.register({ name: 'a', onBuild: () => { throw new Error('boom'); } } as KustoExtension);
+        extensionRegistry.register({
+            name: 'a',
+            onBuild: () => {
+                throw new Error('boom');
+            },
+        } as KustoExtension);
         await expect(extensionRegistry.runBuild({} as any)).rejects.toThrow('boom');
     });
 

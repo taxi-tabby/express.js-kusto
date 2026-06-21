@@ -1,7 +1,7 @@
-const path = require("path");
-const webpack = require("webpack");
-const CopyWebpackPlugin = require("copy-webpack-plugin");
-const nodeExternals = require("webpack-node-externals");
+const path = require('path');
+const webpack = require('webpack');
+const CopyWebpackPlugin = require('copy-webpack-plugin');
+const nodeExternals = require('webpack-node-externals');
 const { config } = require('dotenv');
 const fs = require('fs');
 
@@ -50,14 +50,13 @@ const BUILD_TIME_ENV_ALLOWLIST = [];
 
 function getEnvironmentVariables() {
     const envVars = {};
-    BUILD_TIME_ENV_ALLOWLIST.forEach(key => {
+    BUILD_TIME_ENV_ALLOWLIST.forEach((key) => {
         if (process.env[key] !== undefined) {
             envVars[`process.env.${key}`] = JSON.stringify(process.env[key]);
         }
     });
     return envVars;
 }
-
 
 module.exports = (env, argv) => {
     const mode = argv.mode || 'production';
@@ -75,23 +74,24 @@ module.exports = (env, argv) => {
     return {
         mode: mode,
         entry: {
-            bundle: path.resolve(__dirname, "./src/index.ts"),
+            bundle: path.resolve(__dirname, './src/index.ts'),
         },
         output: {
-            path: path.resolve(__dirname, "dist"),
-            filename: "server.js",
-        }, module: {
+            path: path.resolve(__dirname, 'dist'),
+            filename: 'server.js',
+        },
+        module: {
             rules: [
                 {
                     test: /\.ts$/,
                     use: {
-                        loader: "ts-loader",
+                        loader: 'ts-loader',
                         options: {
-                            configFile: "tsconfig.webpack.json",
+                            configFile: 'tsconfig.webpack.json',
                             // 타입 검사는 build 스크립트의 `npm run typecheck`(tsc --noEmit)가 단독으로 수행.
                             // 여기서는 transpile 만 하여 전체 프로젝트 이중 타입체크(빌드 2배 시간)를 피한다.
-                            transpileOnly: true
-                        }
+                            transpileOnly: true,
+                        },
                     },
                     exclude: /node_modules/,
                 },
@@ -99,28 +99,30 @@ module.exports = (env, argv) => {
         },
         ignoreWarnings: [
             /Critical dependency: the request of a dependency is an expression/,
-            /require function is used in a way in which dependencies cannot be statically extracted/
-        ], resolve: {
-            extensions: [".ts", ".js"], // .ts 파일을 인식할 수 있도록 확장자 추가
-            alias: buildAliasesFromTsconfig()
-        }, plugins: [
+            /require function is used in a way in which dependencies cannot be statically extracted/,
+        ],
+        resolve: {
+            extensions: ['.ts', '.js'], // .ts 파일을 인식할 수 있도록 확장자 추가
+            alias: buildAliasesFromTsconfig(),
+        },
+        plugins: [
             new webpack.DefinePlugin({
                 'process.env.NODE_ENV': JSON.stringify(mode),
                 'process.env.WEBPACK_BUILD': JSON.stringify('true'),
-                ...envVariables
+                ...envVariables,
             }),
             new CopyWebpackPlugin({
                 patterns: [
                     // view 파일들 복사
                     {
                         from: 'src/app/views',
-                        to: 'views'
+                        to: 'views',
                     },
                     {
                         from: 'public',
                         to: 'public',
                     },
-                    
+
                     // Prisma 클라이언트 파일들 복사
                     {
                         from: 'src/app/db/**/client/**',
@@ -129,27 +131,25 @@ module.exports = (env, argv) => {
                             return relativePath;
                         },
                         globOptions: {
-                            ignore: ['**/node_modules/**']
-                        }
+                            ignore: ['**/node_modules/**'],
+                        },
                     },
-                    
+
                     // Prisma 스키마 파일들 복사
                     {
                         from: 'src/app/db/**/schema.prisma',
                         to: ({ context, absoluteFilename }) => {
                             const relativePath = path.relative(context, absoluteFilename);
                             return relativePath;
-                        }
-                    }
-                ]
-            })
+                        },
+                    },
+                ],
+            }),
         ],
-        target: "node",
+        target: 'node',
         externalsPresets: {
             node: true,
         },
-        externals: [
-            nodeExternals({})
-        ],
+        externals: [nodeExternals({})],
     };
 };

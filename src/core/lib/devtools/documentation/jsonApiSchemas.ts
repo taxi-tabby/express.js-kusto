@@ -1,5 +1,9 @@
 import { PrismaModelInfo } from '@lib/devtools/schema-api/crudSchemaTypes';
-import { OpenApiSchema, OpenApiObjectSchema, OpenApiSchemaOrRef } from '@lib/devtools/documentation/openApiTypes';
+import {
+    OpenApiSchema,
+    OpenApiObjectSchema,
+    OpenApiSchemaOrRef,
+} from '@lib/devtools/documentation/openApiTypes';
 import { fieldToSchema } from '@lib/devtools/documentation/dmmfToOpenApi';
 
 /**
@@ -7,7 +11,10 @@ import { fieldToSchema } from '@lib/devtools/documentation/dmmfToOpenApi';
  * Prisma 7 의 _runtimeDataModel 은 isId 메타데이터를 일관되게 노출하지 않을 수 있어
  * model.primaryKey.fields 도 함께 제외 기준으로 사용한다.
  */
-export function jsonApiAttributes(model: PrismaModelInfo, enumValuesByName: Map<string, string[]>): OpenApiObjectSchema {
+export function jsonApiAttributes(
+    model: PrismaModelInfo,
+    enumValuesByName: Map<string, string[]>,
+): OpenApiObjectSchema {
     const properties: Record<string, OpenApiSchemaOrRef> = {};
     const required: string[] = [];
 
@@ -60,7 +67,10 @@ export function jsonApiRelationships(model: PrismaModelInfo): OpenApiObjectSchem
  * JSON:API resource object schema — id/type/attributes/relationships 4 키.
  * type 은 const = 모델명 으로 고정 (3.1 / JSON Schema 2020-12).
  */
-export function jsonApiResource(model: PrismaModelInfo, enumValuesByName: Map<string, string[]>): OpenApiObjectSchema {
+export function jsonApiResource(
+    model: PrismaModelInfo,
+    enumValuesByName: Map<string, string[]>,
+): OpenApiObjectSchema {
     const attributes = jsonApiAttributes(model, enumValuesByName);
     const relationships = jsonApiRelationships(model);
 

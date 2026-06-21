@@ -8,7 +8,12 @@ describe('Core readiness / fail-fast boot (P0-1)', () => {
 
     beforeEach(() => {
         jest.resetModules();
-        process.env = { ...OLD_ENV, NODE_ENV: 'test', AUTO_DOCS: 'false', ENABLE_SCHEMA_API: 'false' };
+        process.env = {
+            ...OLD_ENV,
+            NODE_ENV: 'test',
+            AUTO_DOCS: 'false',
+            ENABLE_SCHEMA_API: 'false',
+        };
     });
 
     afterEach(() => {
@@ -23,14 +28,19 @@ describe('Core readiness / fail-fast boot (P0-1)', () => {
         databases?: { name: string; connected: boolean; generated: boolean }[];
     }) {
         const databases = opts.databases ?? [{ name: 'default', connected: true, generated: true }];
-        jest.doMock('@lib/http/routing/loadRoutes_V6_Clean', () => ({ __esModule: true, default: jest.fn() }));
+        jest.doMock('@lib/http/routing/loadRoutes_V6_Clean', () => ({
+            __esModule: true,
+            default: jest.fn(),
+        }));
         jest.doMock('@lib/data/database/prismaManager', () => ({
             __esModule: true,
             prismaManager: {
-                initialize: jest.fn(async () => { if (opts.prismaThrows) throw new Error('db down'); }),
+                initialize: jest.fn(async () => {
+                    if (opts.prismaThrows) throw new Error('db down');
+                }),
                 getStatus: jest.fn(() => ({
                     initialized: true,
-                    connectedDatabases: databases.filter(d => d.connected).length,
+                    connectedDatabases: databases.filter((d) => d.connected).length,
                     totalDatabases: databases.length,
                     databases,
                 })),
@@ -40,15 +50,23 @@ describe('Core readiness / fail-fast boot (P0-1)', () => {
         jest.doMock('@lib/data/database/repositoryManager', () => ({
             __esModule: true,
             repositoryManager: {
-                initialize: jest.fn(async () => { if (opts.repoThrows) throw new Error('repo registry broken'); }),
-                getStatus: jest.fn(() => ({ initialized: true, repositoryCount: 0, repositories: [] })),
+                initialize: jest.fn(async () => {
+                    if (opts.repoThrows) throw new Error('repo registry broken');
+                }),
+                getStatus: jest.fn(() => ({
+                    initialized: true,
+                    repositoryCount: 0,
+                    repositories: [],
+                })),
             },
         }));
         jest.doMock('@lib/data/di/dependencyInjector', () => ({
             __esModule: true,
             DependencyInjector: {
                 getInstance: () => ({
-                    initialize: jest.fn(async () => { if (opts.diThrows) throw new Error('di broken'); }),
+                    initialize: jest.fn(async () => {
+                        if (opts.diThrows) throw new Error('di broken');
+                    }),
                 }),
             },
         }));

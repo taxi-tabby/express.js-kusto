@@ -14,15 +14,15 @@ export function serializeBigInt(obj: any): any {
     if (obj === null || obj === undefined) {
         return obj;
     }
-    
+
     if (typeof obj === 'bigint') {
         return obj.toString();
     }
-    
+
     if (Array.isArray(obj)) {
         return obj.map(serializeBigInt);
     }
-    
+
     if (typeof obj === 'object') {
         const serialized: any = {};
         for (const [key, value] of Object.entries(obj)) {
@@ -30,7 +30,7 @@ export function serializeBigInt(obj: any): any {
         }
         return serialized;
     }
-    
+
     return obj;
 }
 
@@ -41,15 +41,15 @@ export function serializeDate(obj: any): any {
     if (obj === null || obj === undefined) {
         return obj;
     }
-    
+
     if (obj instanceof Date) {
         return obj.toISOString();
     }
-    
+
     if (Array.isArray(obj)) {
         return obj.map(serializeDate);
     }
-    
+
     if (typeof obj === 'object') {
         const serialized: any = {};
         for (const [key, value] of Object.entries(obj)) {
@@ -57,7 +57,7 @@ export function serializeDate(obj: any): any {
         }
         return serialized;
     }
-    
+
     return obj;
 }
 
@@ -69,15 +69,15 @@ export function serialize(obj: any): any {
     if (obj === null || obj === undefined) {
         return obj;
     }
-    
+
     if (typeof obj === 'bigint') {
         return obj.toString();
     }
-    
+
     if (obj instanceof Date) {
         return obj.toISOString();
     }
-    
+
     // Prisma의 @db.Date 타입 처리 - 빈 객체이지만 내부적으로 날짜 데이터를 가지고 있음
     if (typeof obj === 'object' && obj.constructor === Object) {
         // 빈 객체이지만 Date 프로토타입 메서드가 있는 경우 (Prisma Date)
@@ -93,15 +93,18 @@ export function serialize(obj: any): any {
                 }
             } catch (e: any) {
                 // valueOf() 실패 시 원본 반환. 빈 객체가 응답에 포함될 수 있으니 디버그용 흔적은 남긴다.
-                log.Debug('serialize: valueOf() failed on Date-candidate object, returning original', { message: e?.message });
+                log.Debug(
+                    'serialize: valueOf() failed on Date-candidate object, returning original',
+                    { message: e?.message },
+                );
             }
         }
     }
-    
+
     if (Array.isArray(obj)) {
         return obj.map(serialize);
     }
-    
+
     if (typeof obj === 'object') {
         const serialized: any = {};
         for (const [key, value] of Object.entries(obj)) {
@@ -109,7 +112,7 @@ export function serialize(obj: any): any {
         }
         return serialized;
     }
-    
+
     return obj;
 }
 
@@ -120,7 +123,7 @@ export function serializePrismaDate(obj: any): any {
     if (obj === null || obj === undefined) {
         return obj;
     }
-    
+
     // Prisma Date 객체 감지 및 처리
     if (typeof obj === 'object' && obj.constructor === Object && Object.keys(obj).length === 0) {
         try {
@@ -132,7 +135,7 @@ export function serializePrismaDate(obj: any): any {
                     return date.toISOString().split('T')[0]; // YYYY-MM-DD 형식
                 }
             }
-            
+
             // valueOf 메서드 시도
             if (typeof obj.valueOf === 'function') {
                 const dateValue = obj.valueOf();
@@ -145,18 +148,21 @@ export function serializePrismaDate(obj: any): any {
             }
         } catch (e: any) {
             // 변환 실패 시 원본 반환. 빈 객체가 응답에 포함될 수 있으니 디버그용 흔적은 남긴다.
-            log.Debug('serializePrismaDate: failed to convert Prisma Date-candidate object, returning original', { message: e?.message });
+            log.Debug(
+                'serializePrismaDate: failed to convert Prisma Date-candidate object, returning original',
+                { message: e?.message },
+            );
         }
     }
-    
+
     if (obj instanceof Date) {
         return obj.toISOString().split('T')[0]; // DATE 타입은 날짜만
     }
-    
+
     if (Array.isArray(obj)) {
         return obj.map(serializePrismaDate);
     }
-    
+
     if (typeof obj === 'object') {
         const serialized: any = {};
         for (const [key, value] of Object.entries(obj)) {
@@ -164,7 +170,7 @@ export function serializePrismaDate(obj: any): any {
         }
         return serialized;
     }
-    
+
     return obj;
 }
 
@@ -199,13 +205,17 @@ export type ResponseSerializer<T> =
     | { omit: readonly (keyof ArrEl<T>)[] };
 
 /** 정제 후 응답 본문(data) 타입 계산 — IDE 추론/문서용 */
-export type SerializedResult<T, Sz> =
-    Sz extends (d: T, req: Request) => infer R ? Awaited<R> :
-    Sz extends { pick: readonly (infer K extends keyof ArrEl<T>)[] }
-        ? (T extends readonly any[] ? Pick<ArrEl<T>, K>[] : Pick<ArrEl<T>, K>) :
-    Sz extends { omit: readonly (infer K extends keyof ArrEl<T>)[] }
-        ? (T extends readonly any[] ? Omit<ArrEl<T>, K>[] : Omit<ArrEl<T>, K>) :
-    never;
+export type SerializedResult<T, Sz> = Sz extends (d: T, req: Request) => infer R
+    ? Awaited<R>
+    : Sz extends { pick: readonly (infer K extends keyof ArrEl<T>)[] }
+      ? T extends readonly any[]
+          ? Pick<ArrEl<T>, K>[]
+          : Pick<ArrEl<T>, K>
+      : Sz extends { omit: readonly (infer K extends keyof ArrEl<T>)[] }
+        ? T extends readonly any[]
+            ? Omit<ArrEl<T>, K>[]
+            : Omit<ArrEl<T>, K>
+        : never;
 
 function pickKeys<T extends object, K extends keyof T>(obj: T, keys: readonly K[]): Pick<T, K> {
     const out = {} as Pick<T, K>;
@@ -228,7 +238,7 @@ function omitKeys<T extends object, K extends keyof T>(obj: T, keys: readonly K[
 export async function applyResponseSerializer(
     data: unknown,
     sz: ResponseSerializer<any>,
-    req: Request
+    req: Request,
 ): Promise<unknown> {
     if (typeof sz === 'function') {
         return await sz(data as any, req);
@@ -238,7 +248,9 @@ export async function applyResponseSerializer(
     }
     const apply = (item: any) =>
         item && typeof item === 'object'
-            ? ('pick' in sz ? pickKeys(item, sz.pick as any) : omitKeys(item, sz.omit as any))
+            ? 'pick' in sz
+                ? pickKeys(item, sz.pick as any)
+                : omitKeys(item, sz.omit as any)
             : item;
     return Array.isArray(data) ? data.map(apply) : apply(data);
 }

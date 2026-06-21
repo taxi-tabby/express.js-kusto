@@ -1,5 +1,9 @@
 ﻿import { log } from '@ext/winston';
-import { REPOSITORY_REGISTRY, RepositoryName, GetRepositoryType } from '@lib/types/generated-repository-types';
+import {
+    REPOSITORY_REGISTRY,
+    RepositoryName,
+    GetRepositoryType,
+} from '@lib/types/generated-repository-types';
 import { PrismaManager } from '@lib/data/database/prismaManager';
 
 export class RepositoryManager {
@@ -30,7 +34,9 @@ export class RepositoryManager {
         try {
             await this.loadRepositories();
             this.initialized = true;
-            log.Info(`Repository manager initialized with ${Object.keys(this.repositories).length} repositories`);
+            log.Info(
+                `Repository manager initialized with ${Object.keys(this.repositories).length} repositories`,
+            );
         } catch (error) {
             log.Error('Failed to initialize repository manager:', error);
             throw error;
@@ -47,16 +53,19 @@ export class RepositoryManager {
             try {
                 // Dynamic import using the repository registry
                 const repositoryLoader = REPOSITORY_REGISTRY[repositoryName];
-                
+
                 // Skip if repository loader is not found
                 if (!repositoryLoader) {
                     log.Warn(`Repository loader not found for: ${repositoryName}, skipping`);
                     continue;
                 }
-                
-                const repositoryExports = await (repositoryLoader as () => Promise<any>)();                // Handle different export patterns
-                const RepositoryClass = this.resolveRepositoryClass(repositoryExports, repositoryName);
-                  if (typeof RepositoryClass === 'function') {
+
+                const repositoryExports = await (repositoryLoader as () => Promise<any>)(); // Handle different export patterns
+                const RepositoryClass = this.resolveRepositoryClass(
+                    repositoryExports,
+                    repositoryName,
+                );
+                if (typeof RepositoryClass === 'function') {
                     // Pass the PrismaManager instance to the repository constructor
                     const repositoryInstance = new RepositoryClass(this.prismaManager);
                     this.repositories[repositoryName] = repositoryInstance;
@@ -101,7 +110,7 @@ export class RepositoryManager {
     private pascalCase(name: string): string {
         return name
             .split(/[-_\s]+/)
-            .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+            .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
             .join('');
     }
 
@@ -141,7 +150,7 @@ export class RepositoryManager {
     public async reloadRepository(name: RepositoryName): Promise<void> {
         try {
             delete this.repositories[name];
-            
+
             const repositoryLoader = REPOSITORY_REGISTRY[name];
             if (!repositoryLoader) {
                 throw new Error(`Repository ${name} not found in registry`);
@@ -149,7 +158,7 @@ export class RepositoryManager {
 
             const repositoryExports = await (repositoryLoader as () => Promise<any>)();
             const RepositoryClass = this.resolveRepositoryClass(repositoryExports, name);
-              if (typeof RepositoryClass === 'function') {
+            if (typeof RepositoryClass === 'function') {
                 const repositoryInstance = new RepositoryClass(this.prismaManager);
                 this.repositories[name] = repositoryInstance;
                 log.Debug(`Reloaded repository: ${name}`);
@@ -171,7 +180,7 @@ export class RepositoryManager {
         return {
             initialized: this.initialized,
             repositoryCount: Object.keys(this.repositories).length,
-            repositories: this.getLoadedRepositoryNames()
+            repositories: this.getLoadedRepositoryNames(),
         };
     }
 }

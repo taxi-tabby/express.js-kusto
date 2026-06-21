@@ -16,7 +16,9 @@ describe('defaultGlobalMiddleware — 정책 스택', () => {
 
 describe('resolveCorsWhitelist — env 파싱', () => {
     const ORIG = process.env.CORS_WHITELIST;
-    afterEach(() => { process.env.CORS_WHITELIST = ORIG; });
+    afterEach(() => {
+        process.env.CORS_WHITELIST = ORIG;
+    });
 
     it('명시 인자 우선', () => {
         expect(resolveCorsWhitelist(['https://a.com'])).toEqual(['https://a.com']);

@@ -35,7 +35,11 @@ function loadFileMap(jsonPath: string): FileMap {
  * @param includeMapFile JSON 파일도 압축에 포함할지 여부
  * @returns Promise<string> 생성된 압축 파일 경로
  */
-export function compressFilesFromMap(fileMapPath: string, outputPath?: string, includeMapFile: boolean = true): Promise<string> {
+export function compressFilesFromMap(
+    fileMapPath: string,
+    outputPath?: string,
+    includeMapFile: boolean = true,
+): Promise<string> {
     return new Promise((resolve, reject) => {
         try {
             console.log(`Loading file map from: ${fileMapPath}`);
@@ -60,7 +64,7 @@ export function compressFilesFromMap(fileMapPath: string, outputPath?: string, i
             // 압축 스트림 생성
             const output = fs.createWriteStream(finalOutputPath);
             const archive = archiver('zip', {
-                zlib: { level: 9 } // 최고 압축률
+                zlib: { level: 9 }, // 최고 압축률
             });
 
             // 이벤트 핸들러
@@ -112,7 +116,9 @@ export function compressFilesFromMap(fileMapPath: string, outputPath?: string, i
                             addedCount++;
 
                             if (addedCount % 10 === 0) {
-                                console.log(`Progress: ${addedCount}/${fileList.length + (includeMapFile ? 1 : 0)} files added...`);
+                                console.log(
+                                    `Progress: ${addedCount}/${fileList.length + (includeMapFile ? 1 : 0)} files added...`,
+                                );
                             }
                         } else {
                             console.warn(`Skipping non-file: ${relativePath}`);
@@ -133,7 +139,6 @@ export function compressFilesFromMap(fileMapPath: string, outputPath?: string, i
 
             // 압축 완료
             archive.finalize();
-
         } catch (error) {
             console.error('Error in compressFilesFromMap:', error);
             reject(error);
@@ -178,7 +183,10 @@ export async function generateAndCompress(outputDir?: string): Promise<string> {
  * @param mapFileName 맵 파일명 (예: 'v2025-07-15T08-26-28-826Z.json')
  * @param outputDir 압축 파일 출력 디렉토리
  */
-export async function compressFromExistingMap(mapFileName: string, outputDir?: string): Promise<string> {
+export async function compressFromExistingMap(
+    mapFileName: string,
+    outputDir?: string,
+): Promise<string> {
     try {
         const mapPath = path.join(MAP_DIR, mapFileName);
 

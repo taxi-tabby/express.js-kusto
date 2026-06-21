@@ -1,16 +1,9 @@
 {
-	"extends": "./tsconfig.json",
-	"compilerOptions": {
-		"allowSyntheticDefaultImports": true,
-		"sourceMap": false
-	},
-	"include": [
-		"src/**/*.ts"
-	],
-	"exclude": [
-		"node_modules",
-		"dist",
-		"build",
-		"src/app/db/*/client/**"
-	]
+    "extends": "./tsconfig.json",
+    "compilerOptions": {
+        "allowSyntheticDefaultImports": true,
+        "sourceMap": false
+    },
+    "include": ["src/**/*.ts"],
+    "exclude": ["node_modules", "dist", "build", "src/app/db/*/client/**"]
 }

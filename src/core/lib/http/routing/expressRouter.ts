@@ -1,17 +1,48 @@
-﻿import { Router, Request, Response, RequestHandler, NextFunction, static as static_ } from 'express';
+﻿import {
+    Router,
+    Request,
+    Response,
+    RequestHandler,
+    NextFunction,
+    static as static_,
+} from 'express';
 import { createProxyMiddleware, ProxyOptions } from '@lib/http/routing/proxyMiddleware';
 import multer from 'multer';
 import { DocumentationGenerator } from '@lib/devtools/documentation/documentationGenerator';
-import { RequestHandler as CustomRequestHandler, RequestConfig, ResponseConfig, ValidatedRequest } from '@lib/http/validation/requestHandler';
-import { Injectable, MiddlewareName, MiddlewareParams, MIDDLEWARE_PARAM_MAPPING } from '@lib/types/generated-injectable-types';
+import {
+    RequestHandler as CustomRequestHandler,
+    RequestConfig,
+    ResponseConfig,
+    ValidatedRequest,
+} from '@lib/http/validation/requestHandler';
+import {
+    Injectable,
+    MiddlewareName,
+    MiddlewareParams,
+    MIDDLEWARE_PARAM_MAPPING,
+} from '@lib/types/generated-injectable-types';
 import { DatabaseNamesUnion, DatabaseClientMap } from '@lib/types/generated-db-types';
 import { DependencyInjector } from '@lib/data/di/dependencyInjector';
-import { prismaManager } from '@lib/data/database/prismaManager'
-import { repositoryManager } from '@lib/data/database/repositoryManager'
-import { kustoManager } from '@lib/data/di/kustoManager'
-import { CrudQueryParser, PrismaQueryBuilder, CrudResponseFormatter, JsonApiTransformer, JsonApiResponse, JsonApiResource, JsonApiRelationship, JsonApiErrorResponse } from '@lib/crud/crudHelpers';
+import { prismaManager } from '@lib/data/database/prismaManager';
+import { repositoryManager } from '@lib/data/database/repositoryManager';
+import { kustoManager } from '@lib/data/di/kustoManager';
+import {
+    CrudQueryParser,
+    PrismaQueryBuilder,
+    CrudResponseFormatter,
+    JsonApiTransformer,
+    JsonApiResponse,
+    JsonApiResource,
+    JsonApiRelationship,
+    JsonApiErrorResponse,
+} from '@lib/crud/crudHelpers';
 import { ErrorFormatter } from '@lib/http/errors/errorFormatter';
-import { serializeBigInt, serialize, ResponseSerializer, applyResponseSerializer } from '@lib/http/serialization/serializer';
+import {
+    serializeBigInt,
+    serialize,
+    ResponseSerializer,
+    applyResponseSerializer,
+} from '@lib/http/serialization/serializer';
 import {
     parseUuid as parseUuidImpl,
     parseString as parseStringImpl,
@@ -33,11 +64,36 @@ import {
 import { log } from '@ext/winston';
 import '@lib/types/express-extensions';
 
-
-export type HandlerFunction = (req: Request, res: Response, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => void;
-export type ValidatedHandlerFunction<TConfig extends RequestConfig = RequestConfig, R = any> = (req: ValidatedRequest<TConfig>, res: Response, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => Promise<R> | R;
-export type MiddlewareHandlerFunction = (req: Request, res: Response, next: NextFunction, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => void;
-export type ValidatedMiddlewareHandlerFunction<TConfig extends RequestConfig = RequestConfig> = (req: ValidatedRequest<TConfig>, res: Response, next: NextFunction, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => Promise<any> | any;
+export type HandlerFunction = (
+    req: Request,
+    res: Response,
+    injected: Injectable,
+    repo: typeof repositoryManager,
+    db: typeof prismaManager,
+) => void;
+export type ValidatedHandlerFunction<TConfig extends RequestConfig = RequestConfig, R = any> = (
+    req: ValidatedRequest<TConfig>,
+    res: Response,
+    injected: Injectable,
+    repo: typeof repositoryManager,
+    db: typeof prismaManager,
+) => Promise<R> | R;
+export type MiddlewareHandlerFunction = (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+    injected: Injectable,
+    repo: typeof repositoryManager,
+    db: typeof prismaManager,
+) => void;
+export type ValidatedMiddlewareHandlerFunction<TConfig extends RequestConfig = RequestConfig> = (
+    req: ValidatedRequest<TConfig>,
+    res: Response,
+    next: NextFunction,
+    injected: Injectable,
+    repo: typeof repositoryManager,
+    db: typeof prismaManager,
+) => Promise<any> | any;
 
 /**
  * Stable capability surface that a router-driving builder/extension receives.
@@ -74,68 +130,89 @@ export type RouterMethodImpl = (ctx: RouterContext, ...args: any[]) => void;
  * (prisma client에서 사전에 정의된 것들)
  */
 type ExtractModelNames<T> = T extends { [K in keyof T]: any }
-  ? Exclude<keyof T, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends' | '$executeRaw' | '$executeRawUnsafe' | '$queryRaw' | '$queryRawUnsafe'> & string
-  : never;
+    ? Exclude<
+          keyof T,
+          | '$connect'
+          | '$disconnect'
+          | '$on'
+          | '$transaction'
+          | '$use'
+          | '$extends'
+          | '$executeRaw'
+          | '$executeRawUnsafe'
+          | '$queryRaw'
+          | '$queryRawUnsafe'
+      > &
+          string
+    : never;
 
 /**
  * Extract model type from Prisma client
  * 특정 데이터베이스와 모델명에 대한 실제 모델 타입을 추출
  */
 type ExtractModelType<
-  TDatabase extends DatabaseNamesUnion,
-  TModel extends string
+    TDatabase extends DatabaseNamesUnion,
+    TModel extends string,
 > = TDatabase extends keyof DatabaseClientMap
-  ? DatabaseClientMap[TDatabase] extends { [K in TModel]: { create: (args: { data: infer TCreate }) => any } }
-    ? TCreate
-    : any
-  : any;
+    ? DatabaseClientMap[TDatabase] extends {
+          [K in TModel]: { create: (args: { data: infer TCreate }) => any };
+      }
+        ? TCreate
+        : any
+    : any;
 
 /**
  * Extract model result type from Prisma client
  * 생성/수정 후 반환되는 모델 타입을 추출
  */
 type ExtractModelResultType<
-  TDatabase extends DatabaseNamesUnion,
-  TModel extends string
+    TDatabase extends DatabaseNamesUnion,
+    TModel extends string,
 > = TDatabase extends keyof DatabaseClientMap
-  ? DatabaseClientMap[TDatabase] extends { [K in TModel]: { create: (...args: any[]) => Promise<infer TResult> } }
-    ? TResult
-    : any
-  : any;
+    ? DatabaseClientMap[TDatabase] extends {
+          [K in TModel]: { create: (...args: any[]) => Promise<infer TResult> };
+      }
+        ? TResult
+        : any
+    : any;
 
 /**
  * Extract findMany args type from Prisma client
  * INDEX 훅에서 사용할 쿼리 옵션 타입을 추출
  */
 type ExtractFindManyArgsType<
-  TDatabase extends DatabaseNamesUnion,
-  TModel extends string
+    TDatabase extends DatabaseNamesUnion,
+    TModel extends string,
 > = TDatabase extends keyof DatabaseClientMap
-  ? DatabaseClientMap[TDatabase] extends { [K in TModel]: { findMany: (args?: infer TArgs) => any } }
-    ? TArgs
-    : any
-  : any;
+    ? DatabaseClientMap[TDatabase] extends {
+          [K in TModel]: { findMany: (args?: infer TArgs) => any };
+      }
+        ? TArgs
+        : any
+    : any;
 
 /**
  * Extract findUnique args type from Prisma client
  * SHOW 훅에서 사용할 쿼리 옵션 타입을 추출
  */
 type ExtractFindUniqueArgsType<
-  TDatabase extends DatabaseNamesUnion,
-  TModel extends string
+    TDatabase extends DatabaseNamesUnion,
+    TModel extends string,
 > = TDatabase extends keyof DatabaseClientMap
-  ? DatabaseClientMap[TDatabase] extends { [K in TModel]: { findUnique: (args: infer TArgs) => any } }
-    ? TArgs
-    : any
-  : any;
-  
+    ? DatabaseClientMap[TDatabase] extends {
+          [K in TModel]: { findUnique: (args: infer TArgs) => any };
+      }
+        ? TArgs
+        : any
+    : any;
+
 /**
  * Get available model names for a specific database
  * (Prisma에서 정적으로 모델명만 추출하기 위한 타입)
  */
 type ModelNamesFor<T extends DatabaseNamesUnion> = T extends keyof DatabaseClientMap
-  ? ExtractModelNames<DatabaseClientMap[T]>
-  : never;
+    ? ExtractModelNames<DatabaseClientMap[T]>
+    : never;
 
 // Re-export from middlewareHelpers for convenience
 export {
@@ -145,15 +222,12 @@ export {
     wrapValidatedMiddleware,
     wrapMiddlewares,
     wrapValidatedMiddlewares,
-    injectedMiddleware
+    injectedMiddleware,
 } from '@lib/http/routing/middlewareHelpers';
 
 // 내부 위임용 value import (P1-10b: private wrapMiddleware 가 단일 출처에 위임)
 import { wrapMiddleware } from '@lib/http/routing/middlewareHelpers';
 import { JSON_API_CONTENT_TYPE, JSON_API_ATOMIC_CONTENT_TYPE } from '@lib/crud/jsonApiConstants';
-
-
-
 
 import { ErrorHandler, ErrorResponseFormat } from '@lib/http/errors/errorHandler';
 import { CrudRouteBuilder } from '@lib/crud/crudRouteBuilder';
@@ -211,7 +285,7 @@ export class ExpressRouter {
         }
         this.schemaRegistry = CrudSchemaRegistry.getInstance();
         // 비동기 초기화는 별도로 처리
-        this.initializeSchemaAnalyzer().catch(error => {
+        this.initializeSchemaAnalyzer().catch((error) => {
             log.Error('Failed to initialize schema analyzer:', error);
         });
     }
@@ -228,7 +302,7 @@ export class ExpressRouter {
         try {
             // 사용 가능한 모든 데이터베이스를 확인
             const availableDatabases = prismaManager.getAvailableDatabases();
-            
+
             if (availableDatabases.length === 0) {
                 log.Warn('No available Prisma clients. Cannot initialize schema analyzer.');
                 return;
@@ -245,7 +319,7 @@ export class ExpressRouter {
                 if (prismaClient) {
                     // 각 데이터베이스별로 분석기 생성 (싱글톤이므로 중복 생성되지 않음)
                     const analyzer = PrismaSchemaAnalyzer.getInstance(prismaClient, databaseName);
-                    
+
                     // 모든 모델을 자동으로 등록
                     this.schemaRegistry.autoRegisterAllModels(analyzer, databaseName);
 
@@ -267,10 +341,12 @@ export class ExpressRouter {
                 this.schemaAnalyzer = PrismaSchemaAnalyzer.getInstance(firstClient, firstDatabase);
             }
         } catch (error) {
-            log.Warn('Failed to initialize schema analyzer:', error instanceof Error ? error.message : String(error));
+            log.Warn(
+                'Failed to initialize schema analyzer:',
+                error instanceof Error ? error.message : String(error),
+            );
         }
     }
-    
 
     /**
      * MiddlewareHandlerFunction을 Express 호환 미들웨어로 래핑하는 헬퍼 메서드.
@@ -283,11 +359,17 @@ export class ExpressRouter {
 
     /**
      * HandlerFunction을 Express 호환 핸들러로 래핑하는 헬퍼 메서드
-     */    
+     */
     // CrudRouteBuilder(CRUD 엔진)가 컨텍스트로 접근하므로 public.
     public wrapHandler(
-        handler: (req: Request, res: Response, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => any,
-        serialize?: ResponseSerializer<any>
+        handler: (
+            req: Request,
+            res: Response,
+            injected: Injectable,
+            repo: typeof repositoryManager,
+            db: typeof prismaManager,
+        ) => any,
+        serialize?: ResponseSerializer<any>,
     ): RequestHandler {
         return async (req: Request, res: Response, next: NextFunction) => {
             try {
@@ -308,7 +390,11 @@ export class ExpressRouter {
     private makeExactMatchMiddleware(slug: string[]): RequestHandler {
         return (req: Request, res: Response, next: NextFunction) => {
             const pathParts = req.path.split('/').filter(Boolean);
-            if (pathParts.length === slug.length) { next(); } else { next('route'); }
+            if (pathParts.length === slug.length) {
+                next();
+            } else {
+                next('route');
+            }
         };
     }
 
@@ -328,7 +414,8 @@ export class ExpressRouter {
             const callerLine = stackLines[3] || '';
 
             // Windows 경로(드라이브 문자 포함)와 일반 경로 모두 처리할 수 있는 정규식
-            const fileMatch = callerLine.match(/\(([a-zA-Z]:\\[^:]+|\/?[^:]+):(\d+):(\d+)\)/) ||
+            const fileMatch =
+                callerLine.match(/\(([a-zA-Z]:\\[^:]+|\/?[^:]+):(\d+):(\d+)\)/) ||
                 callerLine.match(/at\s+([a-zA-Z]:\\[^:]+|\/?[^:]+):(\d+):(\d+)/);
 
             if (fileMatch) {
@@ -352,7 +439,6 @@ export class ExpressRouter {
         return this;
     }
 
-
     /**
      * Register all pending documentation with correct base path
      */
@@ -371,9 +457,9 @@ export class ExpressRouter {
                 parameters: {
                     query: doc.requestConfig?.query,
                     params: doc.requestConfig?.params,
-                    body: doc.requestConfig?.body
+                    body: doc.requestConfig?.body,
                 },
-                responses: doc.responseConfig
+                responses: doc.responseConfig,
             });
         }
         // 등록 완료 후 임시 저장소 비우기
@@ -395,7 +481,7 @@ export class ExpressRouter {
             contentType?: 'json' | 'jsonapi';
             defaultSummary?: string;
         },
-        options?: RouteDocOptions
+        options?: RouteDocOptions,
     ): void {
         const summary = options?.summary ?? base.defaultSummary;
         const tags = options?.tags ?? (this.defaultTag ? [this.defaultTag] : undefined);
@@ -449,42 +535,56 @@ export class ExpressRouter {
      * @returns 변환된 경로 문자열
      */
     private convertSlugsToPath(slugs: string[]): string {
-        const pathSegments = slugs.map(slug => slug === "*" ? "*" : `/:${slug}`);
+        const pathSegments = slugs.map((slug) => (slug === '*' ? '*' : `/:${slug}`));
         const path = pathSegments.join('');
         return path;
     }
 
-
     /**
-   * # GET
-   * @param handler 
-   * @param options 
-   * @returns 
-   */
+     * # GET
+     * @param handler
+     * @param options
+     * @returns
+     */
     public GET<R, const Sz extends ResponseSerializer<Awaited<R>>>(
-        handler: (req: Request, res: Response, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => R,
-        options: { serialize: Sz } & RouteDocOptions
+        handler: (
+            req: Request,
+            res: Response,
+            injected: Injectable,
+            repo: typeof repositoryManager,
+            db: typeof prismaManager,
+        ) => R,
+        options: { serialize: Sz } & RouteDocOptions,
     ): ExpressRouter;
-    public GET(handler: HandlerFunction, options?: { serialize?: never } & RouteDocOptions): ExpressRouter;
+    public GET(
+        handler: HandlerFunction,
+        options?: { serialize?: never } & RouteDocOptions,
+    ): ExpressRouter;
     public GET(handler: any, options?: any): ExpressRouter {
-        const serialize = (options as { serialize?: ResponseSerializer<any> } | undefined)?.serialize;
+        const serialize = (options as { serialize?: ResponseSerializer<any> } | undefined)
+            ?.serialize;
         this.router.get('/', this.wrapHandler(handler, serialize));
 
-        this.registerRouteDoc('GET', '/', {
-            responseConfig: { 200: { data: { type: 'object', required: false } } }
-        }, options);
+        this.registerRouteDoc(
+            'GET',
+            '/',
+            {
+                responseConfig: { 200: { data: { type: 'object', required: false } } },
+            },
+            options,
+        );
 
         return this; // 메소드 체인을 위해 인스턴스 반환
     }
 
     /**
      * # GET_SLUG
-     * @param slug 
-     * @param handler 
-     * @param options 
+     * @param slug
+     * @param handler
+     * @param options
      * @returns
      * @description
-     * - 라우터로 선언된 slug 직접 주워 받아야 합니다 
+     * - 라우터로 선언된 slug 직접 주워 받아야 합니다
      * @example
      * ```typescript
      * router.GET_SLUG(["slug1", "slug2"],(req, res) => {
@@ -494,103 +594,117 @@ export class ExpressRouter {
      */
     public GET_SLUG<R, const Sz extends ResponseSerializer<Awaited<R>>>(
         slug: string[],
-        handler: (req: Request, res: Response, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => R,
-        options: { serialize: Sz } & RouteDocOptions
+        handler: (
+            req: Request,
+            res: Response,
+            injected: Injectable,
+            repo: typeof repositoryManager,
+            db: typeof prismaManager,
+        ) => R,
+        options: { serialize: Sz } & RouteDocOptions,
     ): ExpressRouter;
-    public GET_SLUG(slug: string[], handler: HandlerFunction, options?: { serialize?: never } & RouteDocOptions): ExpressRouter;
+    public GET_SLUG(
+        slug: string[],
+        handler: HandlerFunction,
+        options?: { serialize?: never } & RouteDocOptions,
+    ): ExpressRouter;
     public GET_SLUG(slug: string[], handler: any, options?: any): ExpressRouter {
-        const serialize = (options as { serialize?: ResponseSerializer<any> } | undefined)?.serialize;
+        const serialize = (options as { serialize?: ResponseSerializer<any> } | undefined)
+            ?.serialize;
         const slugPath = this.convertSlugsToPath(slug);
         this.router.get(slugPath, this.wrapHandler(handler, serialize));
 
-        this.registerRouteDoc('GET', slugPath, {
-            responseConfig: { 200: { data: { type: 'object', required: false } } }
-        }, options);
+        this.registerRouteDoc(
+            'GET',
+            slugPath,
+            {
+                responseConfig: { 200: { data: { type: 'object', required: false } } },
+            },
+            options,
+        );
 
         return this; // 메소드 체이닝을 위해 인스턴스 반환
     }
-
 
     /**
      * # POST
-     * @param handler 
-     * @param options 
-     * @returns 
+     * @param handler
+     * @param options
+     * @returns
      */
     public POST<R, const Sz extends ResponseSerializer<Awaited<R>>>(
-        handler: (req: Request, res: Response, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => R,
-        options: { serialize: Sz } & RouteDocOptions
+        handler: (
+            req: Request,
+            res: Response,
+            injected: Injectable,
+            repo: typeof repositoryManager,
+            db: typeof prismaManager,
+        ) => R,
+        options: { serialize: Sz } & RouteDocOptions,
     ): ExpressRouter;
-    public POST(handler: HandlerFunction, options?: { serialize?: never } & RouteDocOptions): ExpressRouter;
+    public POST(
+        handler: HandlerFunction,
+        options?: { serialize?: never } & RouteDocOptions,
+    ): ExpressRouter;
     public POST(handler: any, options?: any): ExpressRouter {
-        const serialize = (options as { serialize?: ResponseSerializer<any> } | undefined)?.serialize;
+        const serialize = (options as { serialize?: ResponseSerializer<any> } | undefined)
+            ?.serialize;
         this.router.post('/', this.wrapHandler(handler, serialize));
 
-        this.registerRouteDoc('POST', '/', {
-            responseConfig: { 200: { data: { type: 'object', required: false } } }
-        }, options);
+        this.registerRouteDoc(
+            'POST',
+            '/',
+            {
+                responseConfig: { 200: { data: { type: 'object', required: false } } },
+            },
+            options,
+        );
 
         return this; // 메소드 체이닝을 위해 인스턴스 반환
     }
-
 
     /**
      * # POST_SLUG
-     * @param slug 
-     * @param handler 
-     * @param options 
-     * @returns 
+     * @param slug
+     * @param handler
+     * @param options
+     * @returns
      * @description
-     * - 라우터로 선언된 slug 직접 주워 받아야 합니다 
+     * - 라우터로 선언된 slug 직접 주워 받아야 합니다
      */
     public POST_SLUG<R, const Sz extends ResponseSerializer<Awaited<R>>>(
         slug: string[],
-        handler: (req: Request, res: Response, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => R,
-        options: { serialize: Sz } & RouteDocOptions
+        handler: (
+            req: Request,
+            res: Response,
+            injected: Injectable,
+            repo: typeof repositoryManager,
+            db: typeof prismaManager,
+        ) => R,
+        options: { serialize: Sz } & RouteDocOptions,
     ): ExpressRouter;
-    public POST_SLUG(slug: string[], handler: HandlerFunction, options?: { serialize?: never } & RouteDocOptions): ExpressRouter;
+    public POST_SLUG(
+        slug: string[],
+        handler: HandlerFunction,
+        options?: { serialize?: never } & RouteDocOptions,
+    ): ExpressRouter;
     public POST_SLUG(slug: string[], handler: any, options?: any): ExpressRouter {
-        const serialize = (options as { serialize?: ResponseSerializer<any> } | undefined)?.serialize;
+        const serialize = (options as { serialize?: ResponseSerializer<any> } | undefined)
+            ?.serialize;
         const slugPath = this.convertSlugsToPath(slug);
         this.router.post(slugPath, this.wrapHandler(handler, serialize));
 
-        this.registerRouteDoc('POST', slugPath, {
-            responseConfig: { 200: { data: { type: 'object', required: false } } }
-        }, options);
+        this.registerRouteDoc(
+            'POST',
+            slugPath,
+            {
+                responseConfig: { 200: { data: { type: 'object', required: false } } },
+            },
+            options,
+        );
 
         return this; // 메소드 체이닝을 위해 인스턴스 반환
     }
-
-
-
-    /**
-     * ```
-     * - multer 라이브러리
-     * 파일 업로드를 위한 라우터 기능
-     * ```
-     * @param multerStorageEngine 
-     * @param keyName 
-     * @param handler 
-     * @param options 
-     * @returns 
-     */
-    public POST_SINGLE_FILE(multerStorageEngine: multer.StorageEngine, keyName: string, handler: HandlerFunction, options?: {
-        fileSize?: number
-    } & RouteDocOptions): ExpressRouter {
-        const fileSize = options?.fileSize ?? undefined;
-        const upload = multer({ storage: multerStorageEngine, limits: { fileSize: fileSize }, });
-        const accpetFileType = upload.single(keyName);
-        this.router.post('/', accpetFileType, this.wrapHandler(handler));
-
-        this.registerRouteDoc('POST', '/', {
-            responseConfig: { 200: { data: { type: 'object', required: false } } },
-            defaultSummary: `File upload: ${keyName}`
-        }, options);
-
-        return this;
-    }
-
-
 
     /**
      * ```
@@ -603,376 +717,542 @@ export class ExpressRouter {
      * @param options
      * @returns
      */
-    public POST_ARRAY_FILE(multerStorageEngine: multer.StorageEngine, keyName: string, handler: HandlerFunction, maxFileCount?: number, options?: {
-        fileSize?: number
-    } & RouteDocOptions): ExpressRouter {
-        const fileSize = options?.fileSize ?? undefined; const upload = multer({ storage: multerStorageEngine, limits: { fileSize: fileSize } });
+    public POST_SINGLE_FILE(
+        multerStorageEngine: multer.StorageEngine,
+        keyName: string,
+        handler: HandlerFunction,
+        options?: {
+            fileSize?: number;
+        } & RouteDocOptions,
+    ): ExpressRouter {
+        const fileSize = options?.fileSize ?? undefined;
+        const upload = multer({ storage: multerStorageEngine, limits: { fileSize: fileSize } });
+        const accpetFileType = upload.single(keyName);
+        this.router.post('/', accpetFileType, this.wrapHandler(handler));
+
+        this.registerRouteDoc(
+            'POST',
+            '/',
+            {
+                responseConfig: { 200: { data: { type: 'object', required: false } } },
+                defaultSummary: `File upload: ${keyName}`,
+            },
+            options,
+        );
+
+        return this;
+    }
+
+    /**
+     * ```
+     * - multer 라이브러리
+     * 파일 업로드를 위한 라우터 기능
+     * ```
+     * @param multerStorageEngine
+     * @param keyName
+     * @param handler
+     * @param options
+     * @returns
+     */
+    public POST_ARRAY_FILE(
+        multerStorageEngine: multer.StorageEngine,
+        keyName: string,
+        handler: HandlerFunction,
+        maxFileCount?: number,
+        options?: {
+            fileSize?: number;
+        } & RouteDocOptions,
+    ): ExpressRouter {
+        const fileSize = options?.fileSize ?? undefined;
+        const upload = multer({ storage: multerStorageEngine, limits: { fileSize: fileSize } });
         const accpetFileType = upload.array(keyName, maxFileCount);
         this.router.post('/', accpetFileType, this.wrapHandler(handler));
 
-        this.registerRouteDoc('POST', '/', {
-            responseConfig: { 200: { data: { type: 'object', required: false } } },
-            defaultSummary: `Multiple file upload: ${keyName}${maxFileCount ? ` (max: ${maxFileCount})` : ''}`
-        }, options);
+        this.registerRouteDoc(
+            'POST',
+            '/',
+            {
+                responseConfig: { 200: { data: { type: 'object', required: false } } },
+                defaultSummary: `Multiple file upload: ${keyName}${maxFileCount ? ` (max: ${maxFileCount})` : ''}`,
+            },
+            options,
+        );
 
         return this;
     }
-
 
     /**
      * ```
      * - multer 라이브러리
      * 파일 업로드를 위한 라우터 기능
      * ```
-     * @param multerStorageEngine 
-     * @param keyName 
-     * @param handler 
-     * @param options 
-     * @returns 
+     * @param multerStorageEngine
+     * @param keyName
+     * @param handler
+     * @param options
+     * @returns
      */
-    public POST_FIELD_FILE(multerStorageEngine: multer.StorageEngine, fields: readonly multer.Field[], handler: HandlerFunction, options?: {
-        fileSize?: number
-    } & RouteDocOptions): ExpressRouter {
+    public POST_FIELD_FILE(
+        multerStorageEngine: multer.StorageEngine,
+        fields: readonly multer.Field[],
+        handler: HandlerFunction,
+        options?: {
+            fileSize?: number;
+        } & RouteDocOptions,
+    ): ExpressRouter {
         const fileSize = options?.fileSize ?? undefined;
-        const upload = multer({ storage: multerStorageEngine, limits: { fileSize: fileSize } }); const accpetFileType = upload.fields(fields);
+        const upload = multer({ storage: multerStorageEngine, limits: { fileSize: fileSize } });
+        const accpetFileType = upload.fields(fields);
         this.router.post('/', accpetFileType, this.wrapHandler(handler));
 
-        this.registerRouteDoc('POST', '/', {
-            responseConfig: { 200: { data: { type: 'object', required: false } } },
-            defaultSummary: `Multiple fields file upload`
-        }, options);
+        this.registerRouteDoc(
+            'POST',
+            '/',
+            {
+                responseConfig: { 200: { data: { type: 'object', required: false } } },
+                defaultSummary: `Multiple fields file upload`,
+            },
+            options,
+        );
 
         return this;
     }
-
 
     /**
      * ```
      * - multer 라이브러리
      * 파일 업로드를 위한 라우터 기능
      * ```
-     * @param multerStorageEngine 
-     * @param keyName 
-     * @param handler 
-     * @param options 
-     * @returns 
+     * @param multerStorageEngine
+     * @param keyName
+     * @param handler
+     * @param options
+     * @returns
      */
-    public POST_ANY_FILE(multerStorageEngine: multer.StorageEngine, handler: HandlerFunction, options?: {
-        fileSize?: number
-    } & RouteDocOptions): ExpressRouter {
+    public POST_ANY_FILE(
+        multerStorageEngine: multer.StorageEngine,
+        handler: HandlerFunction,
+        options?: {
+            fileSize?: number;
+        } & RouteDocOptions,
+    ): ExpressRouter {
         const fileSize = options?.fileSize ?? undefined;
         const upload = multer({ storage: multerStorageEngine, limits: { fileSize: fileSize } });
         const accpetFileType = upload.any();
         this.router.post('/', accpetFileType, this.wrapHandler(handler));
 
-        this.registerRouteDoc('POST', '/', {
-            responseConfig: { 200: { data: { type: 'object', required: false } } },
-            defaultSummary: `Any file upload`
-        }, options);
+        this.registerRouteDoc(
+            'POST',
+            '/',
+            {
+                responseConfig: { 200: { data: { type: 'object', required: false } } },
+                defaultSummary: `Any file upload`,
+            },
+            options,
+        );
 
         return this;
     }
-
-
 
     /**
      * # PUT
-     * @param handler 
-     * @param options 
-     * @returns 
+     * @param handler
+     * @param options
+     * @returns
      */
     public PUT<R, const Sz extends ResponseSerializer<Awaited<R>>>(
-        handler: (req: Request, res: Response, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => R,
-        options: { serialize: Sz } & RouteDocOptions
+        handler: (
+            req: Request,
+            res: Response,
+            injected: Injectable,
+            repo: typeof repositoryManager,
+            db: typeof prismaManager,
+        ) => R,
+        options: { serialize: Sz } & RouteDocOptions,
     ): ExpressRouter;
-    public PUT(handler: HandlerFunction, options?: { serialize?: never } & RouteDocOptions): ExpressRouter;
+    public PUT(
+        handler: HandlerFunction,
+        options?: { serialize?: never } & RouteDocOptions,
+    ): ExpressRouter;
     public PUT(handler: any, options?: any): ExpressRouter {
-        const serialize = (options as { serialize?: ResponseSerializer<any> } | undefined)?.serialize;
+        const serialize = (options as { serialize?: ResponseSerializer<any> } | undefined)
+            ?.serialize;
         this.router.put('/', this.wrapHandler(handler, serialize));
 
-        this.registerRouteDoc('PUT', '/', {
-            responseConfig: { 200: { data: { type: 'object', required: false } } }
-        }, options);
+        this.registerRouteDoc(
+            'PUT',
+            '/',
+            {
+                responseConfig: { 200: { data: { type: 'object', required: false } } },
+            },
+            options,
+        );
 
         return this;
     }
-
 
     /**
      * ```
      * - multer 라이브러리
      * 파일 업로드를 위한 라우터 기능
      * ```
-     * @param multerStorageEngine 
-     * @param keyName 
-     * @param handler 
-     * @param options 
-     * @returns 
+     * @param multerStorageEngine
+     * @param keyName
+     * @param handler
+     * @param options
+     * @returns
      */
-    public PUT_SINGLE_FILE(multerStorageEngine: multer.StorageEngine, keyName: string, handler: HandlerFunction, options?: {
-        fileSize?: number
-    } & RouteDocOptions): ExpressRouter {
+    public PUT_SINGLE_FILE(
+        multerStorageEngine: multer.StorageEngine,
+        keyName: string,
+        handler: HandlerFunction,
+        options?: {
+            fileSize?: number;
+        } & RouteDocOptions,
+    ): ExpressRouter {
         const fileSize = options?.fileSize ?? undefined;
-        const upload = multer({ storage: multerStorageEngine, limits: { fileSize: fileSize }, });
+        const upload = multer({ storage: multerStorageEngine, limits: { fileSize: fileSize } });
         const accpetFileType = upload.single(keyName);
         this.router.put('/', accpetFileType, this.wrapHandler(handler));
 
-        this.registerRouteDoc('PUT', '/', {
-            responseConfig: { 200: { data: { type: 'object', required: false } } },
-            defaultSummary: `File upload: ${keyName}`
-        }, options);
+        this.registerRouteDoc(
+            'PUT',
+            '/',
+            {
+                responseConfig: { 200: { data: { type: 'object', required: false } } },
+                defaultSummary: `File upload: ${keyName}`,
+            },
+            options,
+        );
 
         return this;
     }
-
 
     /**
      * ```
      * - multer 라이브러리
      * 파일 업로드를 위한 라우터 기능
      * ```
-     * @param multerStorageEngine 
-     * @param keyName 
-     * @param handler 
-     * @param options 
-     * @returns 
+     * @param multerStorageEngine
+     * @param keyName
+     * @param handler
+     * @param options
+     * @returns
      */
-    public PUT_ARRAY_FILE(multerStorageEngine: multer.StorageEngine, keyName: string, handler: HandlerFunction, maxFileCount?: number, options?: {
-        fileSize?: number
-    } & RouteDocOptions): ExpressRouter {
+    public PUT_ARRAY_FILE(
+        multerStorageEngine: multer.StorageEngine,
+        keyName: string,
+        handler: HandlerFunction,
+        maxFileCount?: number,
+        options?: {
+            fileSize?: number;
+        } & RouteDocOptions,
+    ): ExpressRouter {
         const fileSize = options?.fileSize ?? undefined;
         const upload = multer({ storage: multerStorageEngine, limits: { fileSize: fileSize } });
         const accpetFileType = upload.array(keyName, maxFileCount);
         this.router.put('/', accpetFileType, this.wrapHandler(handler));
 
-        this.registerRouteDoc('PUT', '/', {
-            responseConfig: { 200: { data: { type: 'object', required: false } } },
-            defaultSummary: `Multiple file upload: ${keyName}${maxFileCount ? ` (max: ${maxFileCount})` : ''}`
-        }, options);
+        this.registerRouteDoc(
+            'PUT',
+            '/',
+            {
+                responseConfig: { 200: { data: { type: 'object', required: false } } },
+                defaultSummary: `Multiple file upload: ${keyName}${maxFileCount ? ` (max: ${maxFileCount})` : ''}`,
+            },
+            options,
+        );
 
         return this;
     }
-
-
 
     /**
      * ```
      * - multer 라이브러리
      * 파일 업로드를 위한 라우터 기능
      * ```
-     * @param multerStorageEngine 
-     * @param keyName 
-     * @param handler 
-     * @param options 
-     * @returns 
+     * @param multerStorageEngine
+     * @param keyName
+     * @param handler
+     * @param options
+     * @returns
      */
-    public PUT_FIELD_FILE(multerStorageEngine: multer.StorageEngine, fields: readonly multer.Field[], handler: HandlerFunction, options?: {
-        fileSize?: number
-    } & RouteDocOptions): ExpressRouter {
+    public PUT_FIELD_FILE(
+        multerStorageEngine: multer.StorageEngine,
+        fields: readonly multer.Field[],
+        handler: HandlerFunction,
+        options?: {
+            fileSize?: number;
+        } & RouteDocOptions,
+    ): ExpressRouter {
         const fileSize = options?.fileSize ?? undefined;
         const upload = multer({ storage: multerStorageEngine, limits: { fileSize: fileSize } });
         const accpetFileType = upload.fields(fields);
         this.router.put('/', accpetFileType, this.wrapHandler(handler));
 
-        this.registerRouteDoc('PUT', '/', {
-            responseConfig: { 200: { data: { type: 'object', required: false } } },
-            defaultSummary: `Multiple fields file upload`
-        }, options);
+        this.registerRouteDoc(
+            'PUT',
+            '/',
+            {
+                responseConfig: { 200: { data: { type: 'object', required: false } } },
+                defaultSummary: `Multiple fields file upload`,
+            },
+            options,
+        );
 
         return this;
     }
-
-
-
-
 
     /**
      * ```
      * - multer 라이브러리
      * 파일 업로드를 위한 라우터 기능
      * ```
-     * @param multerStorageEngine 
-     * @param keyName 
-     * @param handler 
-     * @param options 
-     * @returns 
+     * @param multerStorageEngine
+     * @param keyName
+     * @param handler
+     * @param options
+     * @returns
      */
-    public PUT_ANY_FILE(multerStorageEngine: multer.StorageEngine, handler: HandlerFunction, options?: {
-        fileSize?: number
-    } & RouteDocOptions): ExpressRouter {
+    public PUT_ANY_FILE(
+        multerStorageEngine: multer.StorageEngine,
+        handler: HandlerFunction,
+        options?: {
+            fileSize?: number;
+        } & RouteDocOptions,
+    ): ExpressRouter {
         const fileSize = options?.fileSize ?? undefined;
         const upload = multer({ storage: multerStorageEngine, limits: { fileSize: fileSize } });
         const accpetFileType = upload.any();
         this.router.put('/', accpetFileType, this.wrapHandler(handler));
 
-        this.registerRouteDoc('PUT', '/', {
-            responseConfig: { 200: { data: { type: 'object', required: false } } },
-            defaultSummary: `Any file upload`
-        }, options);
+        this.registerRouteDoc(
+            'PUT',
+            '/',
+            {
+                responseConfig: { 200: { data: { type: 'object', required: false } } },
+                defaultSummary: `Any file upload`,
+            },
+            options,
+        );
 
         return this;
     }
-
-
-
 
     /**
      * # PUT_SLUG
-     * @param slug 
-     * @param handler 
-     * @param options 
-     * @returns 
+     * @param slug
+     * @param handler
+     * @param options
+     * @returns
      * @description
-     * - 라우터로 선언된 slug 직접 주워 받아야 합니다 
+     * - 라우터로 선언된 slug 직접 주워 받아야 합니다
      */
     public PUT_SLUG<R, const Sz extends ResponseSerializer<Awaited<R>>>(
         slug: string[],
-        handler: (req: Request, res: Response, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => R,
-        options: { serialize: Sz } & RouteDocOptions
+        handler: (
+            req: Request,
+            res: Response,
+            injected: Injectable,
+            repo: typeof repositoryManager,
+            db: typeof prismaManager,
+        ) => R,
+        options: { serialize: Sz } & RouteDocOptions,
     ): ExpressRouter;
-    public PUT_SLUG(slug: string[], handler: HandlerFunction, options?: { serialize?: never } & RouteDocOptions): ExpressRouter;
+    public PUT_SLUG(
+        slug: string[],
+        handler: HandlerFunction,
+        options?: { serialize?: never } & RouteDocOptions,
+    ): ExpressRouter;
     public PUT_SLUG(slug: string[], handler: any, options?: any): ExpressRouter {
-        const serialize = (options as { serialize?: ResponseSerializer<any> } | undefined)?.serialize;
+        const serialize = (options as { serialize?: ResponseSerializer<any> } | undefined)
+            ?.serialize;
         const slugPath = this.convertSlugsToPath(slug);
         this.router.put(slugPath, this.wrapHandler(handler, serialize));
 
-        this.registerRouteDoc('PUT', slugPath, {
-            responseConfig: { 200: { data: { type: 'object', required: false } } }
-        }, options);
+        this.registerRouteDoc(
+            'PUT',
+            slugPath,
+            {
+                responseConfig: { 200: { data: { type: 'object', required: false } } },
+            },
+            options,
+        );
 
         return this;
     }
-
-
-
 
     /**
      * # DELETE
-     * @param handler 
-     * @param options 
+     * @param handler
+     * @param options
      * @returns
-     * - http delete 요청을 처리하는 메서드입니다. 
+     * - http delete 요청을 처리하는 메서드입니다.
      */
     public DELETE<R, const Sz extends ResponseSerializer<Awaited<R>>>(
-        handler: (req: Request, res: Response, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => R,
-        options: { serialize: Sz } & RouteDocOptions
+        handler: (
+            req: Request,
+            res: Response,
+            injected: Injectable,
+            repo: typeof repositoryManager,
+            db: typeof prismaManager,
+        ) => R,
+        options: { serialize: Sz } & RouteDocOptions,
     ): ExpressRouter;
-    public DELETE(handler: HandlerFunction, options?: { serialize?: never } & RouteDocOptions): ExpressRouter;
+    public DELETE(
+        handler: HandlerFunction,
+        options?: { serialize?: never } & RouteDocOptions,
+    ): ExpressRouter;
     public DELETE(handler: any, options?: any): ExpressRouter {
-        const serialize = (options as { serialize?: ResponseSerializer<any> } | undefined)?.serialize;
+        const serialize = (options as { serialize?: ResponseSerializer<any> } | undefined)
+            ?.serialize;
         this.router.delete('/', this.wrapHandler(handler, serialize));
 
-        this.registerRouteDoc('DELETE', '/', {
-            responseConfig: { 200: { data: { type: 'object', required: false } } }
-        }, options);
+        this.registerRouteDoc(
+            'DELETE',
+            '/',
+            {
+                responseConfig: { 200: { data: { type: 'object', required: false } } },
+            },
+            options,
+        );
 
         return this;
     }
-
-
-
 
     /**
      * # DELETE_SLUG
-     * @param slug 
-     * @param handler 
-     * @param options 
-     * @returns 
+     * @param slug
+     * @param handler
+     * @param options
+     * @returns
      * @description
-     * - 라우터로 선언된 slug 직접 주워 받아야 합니다 
+     * - 라우터로 선언된 slug 직접 주워 받아야 합니다
      */
     public DELETE_SLUG<R, const Sz extends ResponseSerializer<Awaited<R>>>(
         slug: string[],
-        handler: (req: Request, res: Response, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => R,
-        options: { serialize: Sz } & RouteDocOptions
+        handler: (
+            req: Request,
+            res: Response,
+            injected: Injectable,
+            repo: typeof repositoryManager,
+            db: typeof prismaManager,
+        ) => R,
+        options: { serialize: Sz } & RouteDocOptions,
     ): ExpressRouter;
-    public DELETE_SLUG(slug: string[], handler: HandlerFunction, options?: { serialize?: never } & RouteDocOptions): ExpressRouter;
+    public DELETE_SLUG(
+        slug: string[],
+        handler: HandlerFunction,
+        options?: { serialize?: never } & RouteDocOptions,
+    ): ExpressRouter;
     public DELETE_SLUG(slug: string[], handler: any, options?: any): ExpressRouter {
-        const serialize = (options as { serialize?: ResponseSerializer<any> } | undefined)?.serialize;
+        const serialize = (options as { serialize?: ResponseSerializer<any> } | undefined)
+            ?.serialize;
         const slugPath = this.convertSlugsToPath(slug);
         this.router.delete(slugPath, this.wrapHandler(handler, serialize));
 
-        this.registerRouteDoc('DELETE', slugPath, {
-            responseConfig: { 200: { data: { type: 'object', required: false } } }
-        }, options);
+        this.registerRouteDoc(
+            'DELETE',
+            slugPath,
+            {
+                responseConfig: { 200: { data: { type: 'object', required: false } } },
+            },
+            options,
+        );
 
         return this;
     }
-
-
-
-
 
     /**
      * # PATCH
-     * @param handler 
-     * @param options 
-     * @returns 
+     * @param handler
+     * @param options
+     * @returns
      */
     public PATCH<R, const Sz extends ResponseSerializer<Awaited<R>>>(
-        handler: (req: Request, res: Response, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => R,
-        options: { serialize: Sz } & RouteDocOptions
+        handler: (
+            req: Request,
+            res: Response,
+            injected: Injectable,
+            repo: typeof repositoryManager,
+            db: typeof prismaManager,
+        ) => R,
+        options: { serialize: Sz } & RouteDocOptions,
     ): ExpressRouter;
-    public PATCH(handler: HandlerFunction, options?: { serialize?: never } & RouteDocOptions): ExpressRouter;
+    public PATCH(
+        handler: HandlerFunction,
+        options?: { serialize?: never } & RouteDocOptions,
+    ): ExpressRouter;
     public PATCH(handler: any, options?: any): ExpressRouter {
-        const serialize = (options as { serialize?: ResponseSerializer<any> } | undefined)?.serialize;
+        const serialize = (options as { serialize?: ResponseSerializer<any> } | undefined)
+            ?.serialize;
         this.router.patch('/', this.wrapHandler(handler, serialize));
 
-        this.registerRouteDoc('PATCH', '/', {
-            responseConfig: { 200: { data: { type: 'object', required: false } } }
-        }, options);
+        this.registerRouteDoc(
+            'PATCH',
+            '/',
+            {
+                responseConfig: { 200: { data: { type: 'object', required: false } } },
+            },
+            options,
+        );
 
         return this;
     }
-
-
-
-
 
     /**
      * # PATCH_SLUG
-     * @param slug 
-     * @param handler 
-     * @param options 
-     * @returns 
+     * @param slug
+     * @param handler
+     * @param options
+     * @returns
      * @description
-     * - 라우터로 선언된 slug 직접 주워 받아야 합니다 
+     * - 라우터로 선언된 slug 직접 주워 받아야 합니다
      */
     public PATCH_SLUG<R, const Sz extends ResponseSerializer<Awaited<R>>>(
         slug: string[],
-        handler: (req: Request, res: Response, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => R,
-        options: { serialize: Sz } & RouteDocOptions
+        handler: (
+            req: Request,
+            res: Response,
+            injected: Injectable,
+            repo: typeof repositoryManager,
+            db: typeof prismaManager,
+        ) => R,
+        options: { serialize: Sz } & RouteDocOptions,
     ): ExpressRouter;
-    public PATCH_SLUG(slug: string[], handler: HandlerFunction, options?: { serialize?: never } & RouteDocOptions): ExpressRouter;
+    public PATCH_SLUG(
+        slug: string[],
+        handler: HandlerFunction,
+        options?: { serialize?: never } & RouteDocOptions,
+    ): ExpressRouter;
     public PATCH_SLUG(slug: string[], handler: any, options?: any): ExpressRouter {
-        const serialize = (options as { serialize?: ResponseSerializer<any> } | undefined)?.serialize;
+        const serialize = (options as { serialize?: ResponseSerializer<any> } | undefined)
+            ?.serialize;
         const slugPath = this.convertSlugsToPath(slug);
         this.router.patch(slugPath, this.wrapHandler(handler, serialize));
 
-        this.registerRouteDoc('PATCH', slugPath, {
-            responseConfig: { 200: { data: { type: 'object', required: false } } }
-        }, options);
+        this.registerRouteDoc(
+            'PATCH',
+            slugPath,
+            {
+                responseConfig: { 200: { data: { type: 'object', required: false } } },
+            },
+            options,
+        );
 
         return this;
     }
 
-
-
-
     /**
      * # NOTFOUND
-     * @param handler 
-     * @param options 
-     * @returns 
+     * @param handler
+     * @param options
+     * @returns
      */
     public NOTFOUND(handler: HandlerFunction, options?: object): ExpressRouter {
         this.router.all('*', this.wrapHandler(handler));
         return this;
     }
-
-
-
-
 
     /**
      * 미들웨어를 적용하는 메서드
@@ -986,12 +1266,8 @@ export class ExpressRouter {
             this.router.use(middleware);
         }
         return this; // 메소드 체인을 위해 인스턴스 반환
-    }    
-    
+    }
 
-
-
-    
     /**
      * HandlerFunction 타입의 미들웨어를 적용하는 메서드
      * @param middleware HandlerFunction 타입의 미들웨어 함수 또는 배열
@@ -1006,100 +1282,96 @@ export class ExpressRouter {
         }
         return this; // 메소드 체인을 위해 인스턴스 반환
     }
-    
 
-
-    
     /**
      * MiddlewareHandlerFunction 타입의 미들웨어를 적용하는 메서드
      * @param middleware MiddlewareHandlerFunction 타입의 미들웨어 함수 또는 배열
      * @returns ExpressRouter 인스턴스
-     * 
+     *
      * @example
      * ```typescript
      * // 일반 함수 (호이스트 지원)
      * router.MIDDLEWARE(function(req, res, next, injected, repo, db) {
      *     // 미들웨어 로직
      * });
-     * 
+     *
      * // 화살표 함수 (호이스트 미지원)
      * router.MIDDLEWARE((req, res, next, injected, repo, db) => {
      *     // 미들웨어 로직
      * } as MiddlewareHandlerFunction);
-     * 
+     *
      * // 배열로 여러 개의 미들웨어를 적용할 수도 있습니다. 이 경우는 화살표 함수든 호이스트든 지원합니다.
      * router.MIDDLEWARE([
      *  (req, res, next, injected, repo, db) => {
-     *  
+     *
      *  }
      * ])
-     * 
-     * 
+     *
+     *
      * ```
      */
     public MIDDLEWARE(middleware: MiddlewareHandlerFunction): ExpressRouter;
     public MIDDLEWARE(middleware: MiddlewareHandlerFunction[]): ExpressRouter;
-    public MIDDLEWARE(middleware: MiddlewareHandlerFunction | MiddlewareHandlerFunction[]): ExpressRouter {
+    public MIDDLEWARE(
+        middleware: MiddlewareHandlerFunction | MiddlewareHandlerFunction[],
+    ): ExpressRouter {
         if (Array.isArray(middleware)) {
             middleware.forEach((mw) => this.router.use(this.wrapMiddleware(mw)));
         } else {
             this.router.use(this.wrapMiddleware(middleware));
         }
         return this; // 메소드 체인을 위해 인스턴스 반환
-    }    
-    
-
+    }
 
     /**
      * Injectable 미들웨어를 적용하는 메서드
-     * 
+     *
      * 사용 예시:
      * - 파라미터 없이: router.WITH('authNoLoginOnly')
      * - 파라미터와 함께: router.WITH('rateLimiterDefault', { repositoryName: 'test', maxRequests: 10, windowMs: 60000 })
-     * 
+     *
      * @param middlewareName 미들웨어 이름
      * @param params 미들웨어에 전달할 파라미터 (미들웨어에 따라 자동 결정)
      * @returns ExpressRouter 인스턴스
      */
 
-    public WITH<T extends MiddlewareName>(
-        middlewareName: T
-    ): ExpressRouter;
+    public WITH<T extends MiddlewareName>(middlewareName: T): ExpressRouter;
 
     public WITH<T extends MiddlewareName>(
         middlewareName: T,
-        ...args: T extends keyof typeof MIDDLEWARE_PARAM_MAPPING 
-            ? [params: MiddlewareParams[typeof MIDDLEWARE_PARAM_MAPPING[T]]]
+        ...args: T extends keyof typeof MIDDLEWARE_PARAM_MAPPING
+            ? [params: MiddlewareParams[(typeof MIDDLEWARE_PARAM_MAPPING)[T]]]
             : [params?: never]
     ): ExpressRouter;
 
     public WITH<T extends MiddlewareName>(
         middlewareName: T,
-        params?: T extends keyof typeof MIDDLEWARE_PARAM_MAPPING 
-            ? MiddlewareParams[typeof MIDDLEWARE_PARAM_MAPPING[T]]
-            : never
+        params?: T extends keyof typeof MIDDLEWARE_PARAM_MAPPING
+            ? MiddlewareParams[(typeof MIDDLEWARE_PARAM_MAPPING)[T]]
+            : never,
     ): ExpressRouter {
-
         try {
             const injector = DependencyInjector.getInstance();
             const middlewareInstance = injector.getMiddleware(middlewareName);
-            
 
             if (!middlewareInstance) {
                 throw new Error(`Middleware '${middlewareName}' not found in dependency injector`);
-            }            
-            
+            }
+
             // 미들웨어 이름을 파라미터 키로 변환하는 헬퍼 함수 (정적 매핑 적용)
             const getParameterKey = (middlewareName: string): string => {
                 // 정적 매핑에서 파라미터 키 조회
-                return MIDDLEWARE_PARAM_MAPPING[middlewareName as keyof typeof MIDDLEWARE_PARAM_MAPPING] || middlewareName;
+                return (
+                    MIDDLEWARE_PARAM_MAPPING[
+                        middlewareName as keyof typeof MIDDLEWARE_PARAM_MAPPING
+                    ] || middlewareName
+                );
             };
 
             // 미들웨어 인스턴스의 모든 메서드를 Express 미들웨어로 변환하여 적용
             if (typeof middlewareInstance === 'object' && middlewareInstance !== null) {
-                
                 // 미들웨어 객체의 메서드들을 순회하고 Express 미들웨어로 래핑
-                Object.keys(middlewareInstance).forEach(methodName => {
+                Object.keys(middlewareInstance).forEach((methodName) => {
                     const method = (middlewareInstance as any)[methodName];
                     if (typeof method === 'function') {
                         // 각 메서드를 미들웨어로 래핑하여 라우터에 적용
@@ -1113,13 +1385,13 @@ export class ExpressRouter {
                                 try {
                                     // Kusto 매니저를 Request 객체에 설정
                                     req.kusto = kustoManager;
-                                    
+
                                     // 파라미터가 있다면 req 객체에 추가
                                     if (params) {
                                         const parameterKey = getParameterKey(middlewareName);
-                                        (req as any).with = { 
-                                            ...(req as any).with, 
-                                            [parameterKey]: params 
+                                        (req as any).with = {
+                                            ...(req as any).with,
+                                            [parameterKey]: params,
                                         };
                                     }
                                     method(req, res, next);
@@ -1129,28 +1401,31 @@ export class ExpressRouter {
                             });
                         }
                     }
-                });            
-            
+                });
             } else if (typeof middlewareInstance === 'function') {
-               
                 // 미들웨어가 직접 함수인 경우
                 // 명시적 마커(injectedMiddleware)가 우선, 없으면 arity 휴리스틱 fallback (P2-13)
-                if ((middlewareInstance as any).__kustoInjected === true || (middlewareInstance as Function).length >= 6) {
+                if (
+                    (middlewareInstance as any).__kustoInjected === true ||
+                    (middlewareInstance as Function).length >= 6
+                ) {
                     // MiddlewareHandlerFunction 타입으로 판단되면 wrapMiddleware 적용
-                    this.router.use(this.wrapMiddleware(middlewareInstance as MiddlewareHandlerFunction));
+                    this.router.use(
+                        this.wrapMiddleware(middlewareInstance as MiddlewareHandlerFunction),
+                    );
                 } else {
                     // 일반 Express 미들웨어
                     this.router.use((req: Request, res: Response, next: NextFunction) => {
                         try {
                             // Kusto 매니저를 Request 객체에 설정
                             req.kusto = kustoManager;
-                            
+
                             // 파라미터가 있다면 req 객체에 추가
                             if (params) {
                                 const parameterKey = getParameterKey(middlewareName);
-                                (req as any).with = { 
-                                    ...(req as any).with, 
-                                    [parameterKey]: params 
+                                (req as any).with = {
+                                    ...(req as any).with,
+                                    [parameterKey]: params,
                                 };
                             }
                             (middlewareInstance as any)(req, res, next);
@@ -1162,13 +1437,11 @@ export class ExpressRouter {
             }
 
             return this;
-            
         } catch (error) {
             log.Error(`Error applying middleware '${middlewareName}':`, error);
             throw error;
         }
     }
-
 
     /**
      * # MIDDLE_PROXY_ROUTE
@@ -1177,10 +1450,8 @@ export class ExpressRouter {
      * - Express 라우터에 등록할 미들웨어를 추가합니다
      */
     public MIDDLE_PROXY_ROUTE(options: ProxyOptions) {
-        this.router.use("/", createProxyMiddleware(options));
+        this.router.use('/', createProxyMiddleware(options));
     }
-
-
 
     /**
      * # MIDDLE_PROXY_ROUTE_SLUG
@@ -1219,7 +1490,6 @@ export class ExpressRouter {
         return this;
     }
 
-
     /**
      * # GET_VALIDATED
      * 검증된 GET 요청 처리
@@ -1233,23 +1503,33 @@ export class ExpressRouter {
      * # GET_VALIDATED
      * 검증된 GET 요청 처리
      */
-    public GET_VALIDATED<TConfig extends RequestConfig, R, const Sz extends ResponseSerializer<Awaited<R>>>(
+    public GET_VALIDATED<
+        TConfig extends RequestConfig,
+        R,
+        const Sz extends ResponseSerializer<Awaited<R>>,
+    >(
         requestConfig: TConfig,
         responseConfig: ResponseConfig,
-        handler: (req: ValidatedRequest<TConfig>, res: Response, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => R | Promise<R>,
-        options: { serialize: Sz } & RouteDocOptions
+        handler: (
+            req: ValidatedRequest<TConfig>,
+            res: Response,
+            injected: Injectable,
+            repo: typeof repositoryManager,
+            db: typeof prismaManager,
+        ) => R | Promise<R>,
+        options: { serialize: Sz } & RouteDocOptions,
     ): ExpressRouter;
     public GET_VALIDATED<TConfig extends RequestConfig>(
         requestConfig: TConfig,
         responseConfig: ResponseConfig,
         handler: ValidatedHandlerFunction<TConfig>,
-        options?: { serialize?: never } & RouteDocOptions
+        options?: { serialize?: never } & RouteDocOptions,
     ): ExpressRouter;
     public GET_VALIDATED<TConfig extends RequestConfig>(
         requestConfig: TConfig,
         responseConfig: ResponseConfig,
         handler: ValidatedHandlerFunction<TConfig>,
-        options?: { serialize?: ResponseSerializer<any> } & RouteDocOptions
+        options?: { serialize?: ResponseSerializer<any> } & RouteDocOptions,
     ): ExpressRouter {
         // 현재 위치 정보를 얻기 위해 Error 스택 추적
         const { filePath, lineNumber } = this.getCallerSourceInfo();
@@ -1259,50 +1539,60 @@ export class ExpressRouter {
                 request: requestConfig,
                 response: responseConfig,
                 serialize: options?.serialize,
-                sourceInfo: { filePath, lineNumber }
+                sourceInfo: { filePath, lineNumber },
             },
-            handler
+            handler,
         );
         this.router.get('/', ...middlewares);
 
-        this.registerRouteDoc('GET', '/', {
-            requestConfig,
-            responseConfig
-        }, options);
+        this.registerRouteDoc(
+            'GET',
+            '/',
+            {
+                requestConfig,
+                responseConfig,
+            },
+            options,
+        );
 
         return this;
     }
-
-
-
-
-
 
     /**
      * # GET_SLUG_VALIDATED
      * 검증된 GET 슬러그 요청 처리
      * @param exact true이면 하위 경로 매칭 방지 (기본값 false)
      */
-    public GET_SLUG_VALIDATED<TConfig extends RequestConfig, R, const Sz extends ResponseSerializer<Awaited<R>>>(
+    public GET_SLUG_VALIDATED<
+        TConfig extends RequestConfig,
+        R,
+        const Sz extends ResponseSerializer<Awaited<R>>,
+    >(
         slug: string[],
         requestConfig: TConfig,
         responseConfig: ResponseConfig,
-        handler: (req: ValidatedRequest<TConfig>, res: Response, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => R | Promise<R>,
-        options: { exact?: boolean; serialize: Sz } & RouteDocOptions
+        handler: (
+            req: ValidatedRequest<TConfig>,
+            res: Response,
+            injected: Injectable,
+            repo: typeof repositoryManager,
+            db: typeof prismaManager,
+        ) => R | Promise<R>,
+        options: { exact?: boolean; serialize: Sz } & RouteDocOptions,
     ): ExpressRouter;
     public GET_SLUG_VALIDATED<TConfig extends RequestConfig>(
         slug: string[],
         requestConfig: TConfig,
         responseConfig: ResponseConfig,
         handler: ValidatedHandlerFunction<TConfig>,
-        options?: { exact?: boolean } & RouteDocOptions
+        options?: { exact?: boolean } & RouteDocOptions,
     ): ExpressRouter;
     public GET_SLUG_VALIDATED<TConfig extends RequestConfig>(
         slug: string[],
         requestConfig: TConfig,
         responseConfig: ResponseConfig,
         handler: ValidatedHandlerFunction<TConfig>,
-        options?: { exact?: boolean; serialize?: ResponseSerializer<any> } & RouteDocOptions
+        options?: { exact?: boolean; serialize?: ResponseSerializer<any> } & RouteDocOptions,
     ): ExpressRouter {
         // 헬퍼 메서드를 통해 호출자 위치 정보 획득
         const { filePath, lineNumber } = this.getCallerSourceInfo();
@@ -1312,16 +1602,21 @@ export class ExpressRouter {
                 request: requestConfig,
                 response: responseConfig,
                 serialize: options?.serialize,
-                sourceInfo: { filePath, lineNumber }
+                sourceInfo: { filePath, lineNumber },
             },
-            handler
+            handler,
         );
         const slugPath = this.convertSlugsToPath(slug);
 
-        this.registerRouteDoc('GET', slugPath, {
-            requestConfig,
-            responseConfig
-        }, options);
+        this.registerRouteDoc(
+            'GET',
+            slugPath,
+            {
+                requestConfig,
+                responseConfig,
+            },
+            options,
+        );
 
         if (options?.exact) {
             // 정확한 매칭: 하위 경로에 영향을 주지 않음
@@ -1334,32 +1629,37 @@ export class ExpressRouter {
         return this;
     }
 
-
-
-
-
-
     /**
      * # POST_VALIDATED
      * 검증된 POST 요청 처리
      */
-    public POST_VALIDATED<TConfig extends RequestConfig, R, const Sz extends ResponseSerializer<Awaited<R>>>(
+    public POST_VALIDATED<
+        TConfig extends RequestConfig,
+        R,
+        const Sz extends ResponseSerializer<Awaited<R>>,
+    >(
         requestConfig: TConfig,
         responseConfig: ResponseConfig,
-        handler: (req: ValidatedRequest<TConfig>, res: Response, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => R | Promise<R>,
-        options: { serialize: Sz } & RouteDocOptions
+        handler: (
+            req: ValidatedRequest<TConfig>,
+            res: Response,
+            injected: Injectable,
+            repo: typeof repositoryManager,
+            db: typeof prismaManager,
+        ) => R | Promise<R>,
+        options: { serialize: Sz } & RouteDocOptions,
     ): ExpressRouter;
     public POST_VALIDATED<TConfig extends RequestConfig>(
         requestConfig: TConfig,
         responseConfig: ResponseConfig,
         handler: ValidatedHandlerFunction<TConfig>,
-        options?: { serialize?: never } & RouteDocOptions
+        options?: { serialize?: never } & RouteDocOptions,
     ): ExpressRouter;
     public POST_VALIDATED<TConfig extends RequestConfig>(
         requestConfig: TConfig,
         responseConfig: ResponseConfig,
         handler: ValidatedHandlerFunction<TConfig>,
-        options?: { serialize?: ResponseSerializer<any> } & RouteDocOptions
+        options?: { serialize?: ResponseSerializer<any> } & RouteDocOptions,
     ): ExpressRouter {
         // 헬퍼 메서드를 통해 호출자 위치 정보 획득
         const { filePath, lineNumber } = this.getCallerSourceInfo();
@@ -1369,49 +1669,60 @@ export class ExpressRouter {
                 request: requestConfig,
                 response: responseConfig,
                 serialize: options?.serialize,
-                sourceInfo: { filePath, lineNumber }
+                sourceInfo: { filePath, lineNumber },
             },
-            handler
-        ); this.router.post('/', ...middlewares);
+            handler,
+        );
+        this.router.post('/', ...middlewares);
 
-        this.registerRouteDoc('POST', '/', {
-            requestConfig,
-            responseConfig
-        }, options);
+        this.registerRouteDoc(
+            'POST',
+            '/',
+            {
+                requestConfig,
+                responseConfig,
+            },
+            options,
+        );
 
         return this;
     }
-
-
-
-
-
 
     /**
      * # POST_SLUG_VALIDATED
      * 검증된 POST 슬러그 요청 처리
      * @param exact true이면 하위 경로 매칭 방지 (기본값 false)
-     */    
-    public POST_SLUG_VALIDATED<TConfig extends RequestConfig, R, const Sz extends ResponseSerializer<Awaited<R>>>(
+     */
+    public POST_SLUG_VALIDATED<
+        TConfig extends RequestConfig,
+        R,
+        const Sz extends ResponseSerializer<Awaited<R>>,
+    >(
         slug: string[],
         requestConfig: TConfig,
         responseConfig: ResponseConfig,
-        handler: (req: ValidatedRequest<TConfig>, res: Response, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => R | Promise<R>,
-        options: { exact?: boolean; serialize: Sz } & RouteDocOptions
+        handler: (
+            req: ValidatedRequest<TConfig>,
+            res: Response,
+            injected: Injectable,
+            repo: typeof repositoryManager,
+            db: typeof prismaManager,
+        ) => R | Promise<R>,
+        options: { exact?: boolean; serialize: Sz } & RouteDocOptions,
     ): ExpressRouter;
     public POST_SLUG_VALIDATED<TConfig extends RequestConfig>(
         slug: string[],
         requestConfig: TConfig,
         responseConfig: ResponseConfig,
         handler: ValidatedHandlerFunction<TConfig>,
-        options?: { exact?: boolean } & RouteDocOptions
+        options?: { exact?: boolean } & RouteDocOptions,
     ): ExpressRouter;
     public POST_SLUG_VALIDATED<TConfig extends RequestConfig>(
         slug: string[],
         requestConfig: TConfig,
         responseConfig: ResponseConfig,
         handler: ValidatedHandlerFunction<TConfig>,
-        options?: { exact?: boolean; serialize?: ResponseSerializer<any> } & RouteDocOptions
+        options?: { exact?: boolean; serialize?: ResponseSerializer<any> } & RouteDocOptions,
     ): ExpressRouter {
         // 헬퍼 메서드를 통해 호출자 위치 정보 획득
         const { filePath, lineNumber } = this.getCallerSourceInfo();
@@ -1421,18 +1732,22 @@ export class ExpressRouter {
                 request: requestConfig,
                 response: responseConfig,
                 serialize: options?.serialize,
-                sourceInfo: { filePath, lineNumber }
+                sourceInfo: { filePath, lineNumber },
             },
-            handler
+            handler,
         );
-
 
         const slugPath = this.convertSlugsToPath(slug);
 
-        this.registerRouteDoc('POST', slugPath, {
-            requestConfig,
-            responseConfig
-        }, options);
+        this.registerRouteDoc(
+            'POST',
+            slugPath,
+            {
+                requestConfig,
+                responseConfig,
+            },
+            options,
+        );
 
         if (options?.exact) {
             this.router.post(slugPath, this.makeExactMatchMiddleware(slug), ...middlewares);
@@ -1443,32 +1758,37 @@ export class ExpressRouter {
         return this;
     }
 
-
-
-
-
-
     /**
      * # PUT_VALIDATED
      * 검증된 PUT 요청 처리
-     */    
-    public PUT_VALIDATED<TConfig extends RequestConfig, R, const Sz extends ResponseSerializer<Awaited<R>>>(
+     */
+    public PUT_VALIDATED<
+        TConfig extends RequestConfig,
+        R,
+        const Sz extends ResponseSerializer<Awaited<R>>,
+    >(
         requestConfig: TConfig,
         responseConfig: ResponseConfig,
-        handler: (req: ValidatedRequest<TConfig>, res: Response, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => R | Promise<R>,
-        options: { serialize: Sz } & RouteDocOptions
+        handler: (
+            req: ValidatedRequest<TConfig>,
+            res: Response,
+            injected: Injectable,
+            repo: typeof repositoryManager,
+            db: typeof prismaManager,
+        ) => R | Promise<R>,
+        options: { serialize: Sz } & RouteDocOptions,
     ): ExpressRouter;
     public PUT_VALIDATED<TConfig extends RequestConfig>(
         requestConfig: TConfig,
         responseConfig: ResponseConfig,
         handler: ValidatedHandlerFunction<TConfig>,
-        options?: { serialize?: never } & RouteDocOptions
+        options?: { serialize?: never } & RouteDocOptions,
     ): ExpressRouter;
     public PUT_VALIDATED<TConfig extends RequestConfig>(
         requestConfig: TConfig,
         responseConfig: ResponseConfig,
         handler: ValidatedHandlerFunction<TConfig>,
-        options?: { serialize?: ResponseSerializer<any> } & RouteDocOptions
+        options?: { serialize?: ResponseSerializer<any> } & RouteDocOptions,
     ): ExpressRouter {
         // 헬퍼 메서드를 통해 호출자 위치 정보 획득
         const { filePath, lineNumber } = this.getCallerSourceInfo();
@@ -1478,47 +1798,57 @@ export class ExpressRouter {
                 request: requestConfig,
                 response: responseConfig,
                 serialize: options?.serialize,
-                sourceInfo: { filePath, lineNumber }
+                sourceInfo: { filePath, lineNumber },
             },
-            handler
+            handler,
         );
 
         this.router.put('/', ...middlewares);
 
-        this.registerRouteDoc('PUT', '/', {
-            requestConfig,
-            responseConfig
-        }, options);
+        this.registerRouteDoc(
+            'PUT',
+            '/',
+            {
+                requestConfig,
+                responseConfig,
+            },
+            options,
+        );
 
         return this;
     }
-
-
-
-
-
 
     /**
      * # DELETE_VALIDATED
      * 검증된 DELETE 요청 처리
-     */    
-    public DELETE_VALIDATED<TConfig extends RequestConfig, R, const Sz extends ResponseSerializer<Awaited<R>>>(
+     */
+    public DELETE_VALIDATED<
+        TConfig extends RequestConfig,
+        R,
+        const Sz extends ResponseSerializer<Awaited<R>>,
+    >(
         requestConfig: TConfig,
         responseConfig: ResponseConfig,
-        handler: (req: ValidatedRequest<TConfig>, res: Response, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => R | Promise<R>,
-        options: { serialize: Sz } & RouteDocOptions
+        handler: (
+            req: ValidatedRequest<TConfig>,
+            res: Response,
+            injected: Injectable,
+            repo: typeof repositoryManager,
+            db: typeof prismaManager,
+        ) => R | Promise<R>,
+        options: { serialize: Sz } & RouteDocOptions,
     ): ExpressRouter;
     public DELETE_VALIDATED<TConfig extends RequestConfig>(
         requestConfig: TConfig,
         responseConfig: ResponseConfig,
         handler: ValidatedHandlerFunction<TConfig>,
-        options?: { serialize?: never } & RouteDocOptions
+        options?: { serialize?: never } & RouteDocOptions,
     ): ExpressRouter;
     public DELETE_VALIDATED<TConfig extends RequestConfig>(
         requestConfig: TConfig,
         responseConfig: ResponseConfig,
         handler: ValidatedHandlerFunction<TConfig>,
-        options?: { serialize?: ResponseSerializer<any> } & RouteDocOptions
+        options?: { serialize?: ResponseSerializer<any> } & RouteDocOptions,
     ): ExpressRouter {
         // 헬퍼 메서드를 통해 호출자 위치 정보 획득
         const { filePath, lineNumber } = this.getCallerSourceInfo();
@@ -1528,45 +1858,56 @@ export class ExpressRouter {
                 request: requestConfig,
                 response: responseConfig,
                 serialize: options?.serialize,
-                sourceInfo: { filePath, lineNumber }
+                sourceInfo: { filePath, lineNumber },
             },
-            handler
-        ); this.router.delete('/', ...middlewares);
+            handler,
+        );
+        this.router.delete('/', ...middlewares);
 
-        this.registerRouteDoc('DELETE', '/', {
-            requestConfig,
-            responseConfig
-        }, options);
+        this.registerRouteDoc(
+            'DELETE',
+            '/',
+            {
+                requestConfig,
+                responseConfig,
+            },
+            options,
+        );
 
         return this;
     }
 
-
-
-
-
-
     /**
      * # PATCH_VALIDATED
      * 검증된 PATCH 요청 처리
-     */    
-    public PATCH_VALIDATED<TConfig extends RequestConfig, R, const Sz extends ResponseSerializer<Awaited<R>>>(
+     */
+    public PATCH_VALIDATED<
+        TConfig extends RequestConfig,
+        R,
+        const Sz extends ResponseSerializer<Awaited<R>>,
+    >(
         requestConfig: TConfig,
         responseConfig: ResponseConfig,
-        handler: (req: ValidatedRequest<TConfig>, res: Response, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => R | Promise<R>,
-        options: { serialize: Sz } & RouteDocOptions
+        handler: (
+            req: ValidatedRequest<TConfig>,
+            res: Response,
+            injected: Injectable,
+            repo: typeof repositoryManager,
+            db: typeof prismaManager,
+        ) => R | Promise<R>,
+        options: { serialize: Sz } & RouteDocOptions,
     ): ExpressRouter;
     public PATCH_VALIDATED<TConfig extends RequestConfig>(
         requestConfig: TConfig,
         responseConfig: ResponseConfig,
         handler: ValidatedHandlerFunction<TConfig>,
-        options?: { serialize?: never } & RouteDocOptions
+        options?: { serialize?: never } & RouteDocOptions,
     ): ExpressRouter;
     public PATCH_VALIDATED<TConfig extends RequestConfig>(
         requestConfig: TConfig,
         responseConfig: ResponseConfig,
         handler: ValidatedHandlerFunction<TConfig>,
-        options?: { serialize?: ResponseSerializer<any> } & RouteDocOptions
+        options?: { serialize?: ResponseSerializer<any> } & RouteDocOptions,
     ): ExpressRouter {
         // 헬퍼 메서드를 통해 호출자 위치 정보 획득
         const { filePath, lineNumber } = this.getCallerSourceInfo();
@@ -1576,18 +1917,22 @@ export class ExpressRouter {
                 request: requestConfig,
                 response: responseConfig,
                 serialize: options?.serialize,
-                sourceInfo: { filePath, lineNumber }
+                sourceInfo: { filePath, lineNumber },
             },
-            handler
+            handler,
         );
-
 
         this.router.patch('/', ...middlewares);
 
-        this.registerRouteDoc('PATCH', '/', {
-            requestConfig,
-            responseConfig
-        }, options);
+        this.registerRouteDoc(
+            'PATCH',
+            '/',
+            {
+                requestConfig,
+                responseConfig,
+            },
+            options,
+        );
 
         return this;
     }
@@ -1597,26 +1942,36 @@ export class ExpressRouter {
      * 검증된 PATCH 슬러그 요청 처리
      * @param exact true이면 하위 경로 매칭 방지 (기본값 false)
      */
-    public PATCH_SLUG_VALIDATED<TConfig extends RequestConfig, R, const Sz extends ResponseSerializer<Awaited<R>>>(
+    public PATCH_SLUG_VALIDATED<
+        TConfig extends RequestConfig,
+        R,
+        const Sz extends ResponseSerializer<Awaited<R>>,
+    >(
         slug: string[],
         requestConfig: TConfig,
         responseConfig: ResponseConfig,
-        handler: (req: ValidatedRequest<TConfig>, res: Response, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => R | Promise<R>,
-        options: { exact?: boolean; serialize: Sz } & RouteDocOptions
+        handler: (
+            req: ValidatedRequest<TConfig>,
+            res: Response,
+            injected: Injectable,
+            repo: typeof repositoryManager,
+            db: typeof prismaManager,
+        ) => R | Promise<R>,
+        options: { exact?: boolean; serialize: Sz } & RouteDocOptions,
     ): ExpressRouter;
     public PATCH_SLUG_VALIDATED<TConfig extends RequestConfig>(
         slug: string[],
         requestConfig: TConfig,
         responseConfig: ResponseConfig,
         handler: ValidatedHandlerFunction<TConfig>,
-        options?: { exact?: boolean } & RouteDocOptions
+        options?: { exact?: boolean } & RouteDocOptions,
     ): ExpressRouter;
     public PATCH_SLUG_VALIDATED<TConfig extends RequestConfig>(
         slug: string[],
         requestConfig: TConfig,
         responseConfig: ResponseConfig,
         handler: ValidatedHandlerFunction<TConfig>,
-        options?: { exact?: boolean; serialize?: ResponseSerializer<any> } & RouteDocOptions
+        options?: { exact?: boolean; serialize?: ResponseSerializer<any> } & RouteDocOptions,
     ): ExpressRouter {
         // 헬퍼 메서드를 통해 호출자 위치 정보 획득
         const { filePath, lineNumber } = this.getCallerSourceInfo();
@@ -1626,16 +1981,21 @@ export class ExpressRouter {
                 request: requestConfig,
                 response: responseConfig,
                 serialize: options?.serialize,
-                sourceInfo: { filePath, lineNumber }
+                sourceInfo: { filePath, lineNumber },
             },
-            handler
+            handler,
         );
         const slugPath = this.convertSlugsToPath(slug);
 
-        this.registerRouteDoc('PATCH', slugPath, {
-            requestConfig,
-            responseConfig
-        }, options);
+        this.registerRouteDoc(
+            'PATCH',
+            slugPath,
+            {
+                requestConfig,
+                responseConfig,
+            },
+            options,
+        );
 
         if (options?.exact) {
             // 정확한 매칭: 하위 경로에 영향을 주지 않음
@@ -1656,11 +2016,11 @@ export class ExpressRouter {
         slug: string[],
         requestConfig: TConfig,
         responseConfig: ResponseConfig,
-        handler: ValidatedHandlerFunction<TConfig>
+        handler: ValidatedHandlerFunction<TConfig>,
     ): ExpressRouter {
         const middlewares = CustomRequestHandler.createHandler(
             { request: requestConfig, response: responseConfig },
-            handler
+            handler,
         );
 
         const exactPath = this.convertSlugsToPath(slug);
@@ -1668,13 +2028,11 @@ export class ExpressRouter {
 
         this.registerRouteDoc('PATCH', exactPath, {
             requestConfig,
-            responseConfig
+            responseConfig,
         });
 
         return this;
     }
-
-
 
     /**
      * # GET_WITH_VALIDATION
@@ -1682,7 +2040,7 @@ export class ExpressRouter {
      */
     public GET_WITH_VALIDATION<TConfig extends RequestConfig>(
         requestConfig: TConfig,
-        handler: ValidatedHandlerFunction<TConfig>
+        handler: ValidatedHandlerFunction<TConfig>,
     ): ExpressRouter {
         const middlewares = CustomRequestHandler.withValidation(requestConfig, handler);
 
@@ -1690,13 +2048,11 @@ export class ExpressRouter {
 
         this.registerRouteDoc('GET', '/', {
             requestConfig,
-            responseConfig: { 200: { data: { type: 'object', required: false } } }
+            responseConfig: { 200: { data: { type: 'object', required: false } } },
         });
 
         return this;
     }
-
-
 
     /**
      * # POST_WITH_VALIDATION
@@ -1704,20 +2060,18 @@ export class ExpressRouter {
      */
     public POST_WITH_VALIDATION<TConfig extends RequestConfig>(
         requestConfig: TConfig,
-        handler: ValidatedHandlerFunction<TConfig>
+        handler: ValidatedHandlerFunction<TConfig>,
     ): ExpressRouter {
-
         const middlewares = CustomRequestHandler.withValidation(requestConfig, handler);
         this.router.post('/', ...middlewares);
 
         this.registerRouteDoc('POST', '/', {
             requestConfig,
-            responseConfig: { 200: { data: { type: 'object', required: false } } }
+            responseConfig: { 200: { data: { type: 'object', required: false } } },
         });
 
         return this;
     }
-
 
     /**
      * # GET_SLUG_VALIDATED_EXACT
@@ -1728,12 +2082,11 @@ export class ExpressRouter {
         slug: string[],
         requestConfig: TConfig,
         responseConfig: ResponseConfig,
-        handler: ValidatedHandlerFunction<TConfig>
+        handler: ValidatedHandlerFunction<TConfig>,
     ): ExpressRouter {
-
         const middlewares = CustomRequestHandler.createHandler(
             { request: requestConfig, response: responseConfig },
-            handler
+            handler,
         );
 
         // 정확한 경로 매칭을 위해 '$' 앵커 사용하는 대신 정규식 패턴으로 처리
@@ -1742,17 +2095,11 @@ export class ExpressRouter {
 
         this.registerRouteDoc('GET', exactPath, {
             requestConfig,
-            responseConfig
+            responseConfig,
         });
 
         return this;
     }
-
-
-
-
-
-
 
     /**
      * # POST_SLUG_VALIDATED_EXACT
@@ -1762,11 +2109,11 @@ export class ExpressRouter {
         slug: string[],
         requestConfig: TConfig,
         responseConfig: ResponseConfig,
-        handler: ValidatedHandlerFunction<TConfig>
+        handler: ValidatedHandlerFunction<TConfig>,
     ): ExpressRouter {
         const middlewares = CustomRequestHandler.createHandler(
             { request: requestConfig, response: responseConfig },
-            handler
+            handler,
         );
 
         const exactPath = this.convertSlugsToPath(slug);
@@ -1775,7 +2122,7 @@ export class ExpressRouter {
 
         this.registerRouteDoc('POST', exactPath, {
             requestConfig,
-            responseConfig
+            responseConfig,
         });
 
         return this;
@@ -1786,26 +2133,36 @@ export class ExpressRouter {
      * 검증된 PUT 슬러그 요청 처리
      * @param exact true이면 하위 경로 매칭 방지 (기본값 false)
      */
-    public PUT_SLUG_VALIDATED<TConfig extends RequestConfig, R, const Sz extends ResponseSerializer<Awaited<R>>>(
+    public PUT_SLUG_VALIDATED<
+        TConfig extends RequestConfig,
+        R,
+        const Sz extends ResponseSerializer<Awaited<R>>,
+    >(
         slug: string[],
         requestConfig: TConfig,
         responseConfig: ResponseConfig,
-        handler: (req: ValidatedRequest<TConfig>, res: Response, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => R | Promise<R>,
-        options: { exact?: boolean; serialize: Sz } & RouteDocOptions
+        handler: (
+            req: ValidatedRequest<TConfig>,
+            res: Response,
+            injected: Injectable,
+            repo: typeof repositoryManager,
+            db: typeof prismaManager,
+        ) => R | Promise<R>,
+        options: { exact?: boolean; serialize: Sz } & RouteDocOptions,
     ): ExpressRouter;
     public PUT_SLUG_VALIDATED<TConfig extends RequestConfig>(
         slug: string[],
         requestConfig: TConfig,
         responseConfig: ResponseConfig,
         handler: ValidatedHandlerFunction<TConfig>,
-        options?: { exact?: boolean } & RouteDocOptions
+        options?: { exact?: boolean } & RouteDocOptions,
     ): ExpressRouter;
     public PUT_SLUG_VALIDATED<TConfig extends RequestConfig>(
         slug: string[],
         requestConfig: TConfig,
         responseConfig: ResponseConfig,
         handler: ValidatedHandlerFunction<TConfig>,
-        options?: { exact?: boolean; serialize?: ResponseSerializer<any> } & RouteDocOptions
+        options?: { exact?: boolean; serialize?: ResponseSerializer<any> } & RouteDocOptions,
     ): ExpressRouter {
         // 헬퍼 메서드를 통해 호출자 위치 정보 획득
         const { filePath, lineNumber } = this.getCallerSourceInfo();
@@ -1815,16 +2172,21 @@ export class ExpressRouter {
                 request: requestConfig,
                 response: responseConfig,
                 serialize: options?.serialize,
-                sourceInfo: { filePath, lineNumber }
+                sourceInfo: { filePath, lineNumber },
             },
-            handler
+            handler,
         );
         const slugPath = this.convertSlugsToPath(slug);
 
-        this.registerRouteDoc('PUT', slugPath, {
-            requestConfig,
-            responseConfig
-        }, options);
+        this.registerRouteDoc(
+            'PUT',
+            slugPath,
+            {
+                requestConfig,
+                responseConfig,
+            },
+            options,
+        );
 
         if (options?.exact) {
             // 정확한 매칭: 하위 경로에 영향을 주지 않음
@@ -1845,20 +2207,19 @@ export class ExpressRouter {
         slug: string[],
         requestConfig: TConfig,
         responseConfig: ResponseConfig,
-        handler: ValidatedHandlerFunction<TConfig>
+        handler: ValidatedHandlerFunction<TConfig>,
     ): ExpressRouter {
         const middlewares = CustomRequestHandler.createHandler(
             { request: requestConfig, response: responseConfig },
-            handler
+            handler,
         );
-
 
         const exactPath = this.convertSlugsToPath(slug);
         this.router.put(new RegExp(`^${exactPath.replace(/:\w+/g, '([^/]+)')}$`), ...middlewares);
 
         this.registerRouteDoc('PUT', exactPath, {
             requestConfig,
-            responseConfig
+            responseConfig,
         });
 
         return this;
@@ -1869,26 +2230,36 @@ export class ExpressRouter {
      * 검증된 DELETE 슬러그 요청 처리
      * @param exact true이면 하위 경로 매칭 방지 (기본값 false)
      */
-    public DELETE_SLUG_VALIDATED<TConfig extends RequestConfig, R, const Sz extends ResponseSerializer<Awaited<R>>>(
+    public DELETE_SLUG_VALIDATED<
+        TConfig extends RequestConfig,
+        R,
+        const Sz extends ResponseSerializer<Awaited<R>>,
+    >(
         slug: string[],
         requestConfig: TConfig,
         responseConfig: ResponseConfig,
-        handler: (req: ValidatedRequest<TConfig>, res: Response, injected: Injectable, repo: typeof repositoryManager, db: typeof prismaManager) => R | Promise<R>,
-        options: { exact?: boolean; serialize: Sz } & RouteDocOptions
+        handler: (
+            req: ValidatedRequest<TConfig>,
+            res: Response,
+            injected: Injectable,
+            repo: typeof repositoryManager,
+            db: typeof prismaManager,
+        ) => R | Promise<R>,
+        options: { exact?: boolean; serialize: Sz } & RouteDocOptions,
     ): ExpressRouter;
     public DELETE_SLUG_VALIDATED<TConfig extends RequestConfig>(
         slug: string[],
         requestConfig: TConfig,
         responseConfig: ResponseConfig,
         handler: ValidatedHandlerFunction<TConfig>,
-        options?: { exact?: boolean } & RouteDocOptions
+        options?: { exact?: boolean } & RouteDocOptions,
     ): ExpressRouter;
     public DELETE_SLUG_VALIDATED<TConfig extends RequestConfig>(
         slug: string[],
         requestConfig: TConfig,
         responseConfig: ResponseConfig,
         handler: ValidatedHandlerFunction<TConfig>,
-        options?: { exact?: boolean; serialize?: ResponseSerializer<any> } & RouteDocOptions
+        options?: { exact?: boolean; serialize?: ResponseSerializer<any> } & RouteDocOptions,
     ): ExpressRouter {
         // 헬퍼 메서드를 통해 호출자 위치 정보 획득
         const { filePath, lineNumber } = this.getCallerSourceInfo();
@@ -1898,16 +2269,21 @@ export class ExpressRouter {
                 request: requestConfig,
                 response: responseConfig,
                 serialize: options?.serialize,
-                sourceInfo: { filePath, lineNumber }
+                sourceInfo: { filePath, lineNumber },
             },
-            handler
+            handler,
         );
         const slugPath = this.convertSlugsToPath(slug);
 
-        this.registerRouteDoc('DELETE', slugPath, {
-            requestConfig,
-            responseConfig
-        }, options);
+        this.registerRouteDoc(
+            'DELETE',
+            slugPath,
+            {
+                requestConfig,
+                responseConfig,
+            },
+            options,
+        );
 
         if (options?.exact) {
             // 정확한 매칭: 하위 경로에 영향을 주지 않음
@@ -1928,61 +2304,56 @@ export class ExpressRouter {
         slug: string[],
         requestConfig: TConfig,
         responseConfig: ResponseConfig,
-        handler: ValidatedHandlerFunction<TConfig>
+        handler: ValidatedHandlerFunction<TConfig>,
     ): ExpressRouter {
         const middlewares = CustomRequestHandler.createHandler(
             { request: requestConfig, response: responseConfig },
-            handler
+            handler,
         );
 
         const exactPath = this.convertSlugsToPath(slug);
-        this.router.delete(new RegExp(`^${exactPath.replace(/:\w+/g, '([^/]+)')}$`), ...middlewares);
+        this.router.delete(
+            new RegExp(`^${exactPath.replace(/:\w+/g, '([^/]+)')}$`),
+            ...middlewares,
+        );
 
         this.registerRouteDoc('DELETE', exactPath, {
             requestConfig,
-            responseConfig
+            responseConfig,
         });
 
         return this;
     }
 
-
     /**
      * CRUD 자동 생성 메서드
      * 완전한 REST API CRUD 엔드포인트를 자동으로 생성합니다
-     * 
+     *
      * 생성되는 라우트:
      * - GET / (index) - 리스트 조회 with 필터링, 정렬, 페이지네이션
      * - GET /:identifier (show) - 단일 데이터 조회
      * - POST / (create) - 새로운 데이터 생성
      * - PUT /:identifier (update) - 데이터 전체 수정
-     * - PATCH /:identifier (update) - 데이터 부분 수정  
+     * - PATCH /:identifier (update) - 데이터 부분 수정
      * - DELETE /:identifier (destroy) - 데이터 삭제
-     * 
+     *
      * @param databaseName 사용할 데이터베이스 이름
      * @param modelName 대상 모델 이름 (복수형 변환을 위해 단수형 사용)
      * @param options CRUD 옵션 설정
      */
-    public CRUD<
-        T extends DatabaseNamesUnion,
-        M extends ModelNamesFor<T> = ModelNamesFor<T>
-    >(
-        databaseName: T, 
+    public CRUD<T extends DatabaseNamesUnion, M extends ModelNamesFor<T> = ModelNamesFor<T>>(
+        databaseName: T,
         modelName: M,
         options?: {
-
             /** CRUD 액션 생성 및 설정 */
             only?: ('index' | 'show' | 'create' | 'update' | 'destroy' | 'recover')[];
             except?: ('index' | 'show' | 'create' | 'update' | 'destroy' | 'recover')[];
 
-
             /** Primary key 필드명 지정(기본값: 'id') */
             primaryKey?: string;
 
-
             /** Primary key 값 변환 파서 */
             primaryKeyParser?: (value: string) => any;
-
 
             /**
              * JSON:API 리소스 타입.
@@ -1990,12 +2361,10 @@ export class ExpressRouter {
              */
             resourceType?: string;
 
-
             /**
              * includeMerge: true시 included 배열 attributes가 관계명으로 병합 (기본값: false)
              */
             includeMerge?: boolean;
-
 
             /**
              * 클라이언트 ?include= 의 최대 개수 (DoS 방지).
@@ -2003,13 +2372,11 @@ export class ExpressRouter {
              */
             maxIncludeCount?: number;
 
-
             /**
              * 클라이언트 ?include= 한 항목의 최대 점 깊이 (예: a.b.c → 3).
              * 미지정 시 무제한.
              */
             maxIncludeDepth?: number;
-
 
             /**
              * 허용된 include 경로 화이트리스트.
@@ -2017,7 +2384,6 @@ export class ExpressRouter {
              * 정확 일치 또는 허용 경로의 얕은 부분 경로(prefix)가 허용된다.
              */
             allowedIncludes?: string[];
-
 
             /**
              * 서버에서 항상 함께 로드할 관계 (eager-load).
@@ -2028,7 +2394,6 @@ export class ExpressRouter {
              *       즉 select 사용 시 defaultIncludes 의 eager-load 효과는 보장되지 않는다.
              */
             defaultIncludes?: string[];
-
 
             /** Soft Delete 설정 */
             softDelete?: {
@@ -2056,17 +2421,35 @@ export class ExpressRouter {
             /** 훅 설정 */
             hooks?: {
                 // 조회용 훅 (쿼리 조건 가공용)
-                beforeIndex?: (queryOptions: ExtractFindManyArgsType<T, M>, req: Request) => Promise<ExtractFindManyArgsType<T, M>> | ExtractFindManyArgsType<T, M>;
-                
-                beforeShow?: (findOptions: ExtractFindUniqueArgsType<T, M>, req: Request) => Promise<ExtractFindUniqueArgsType<T, M>> | ExtractFindUniqueArgsType<T, M>;
+                beforeIndex?: (
+                    queryOptions: ExtractFindManyArgsType<T, M>,
+                    req: Request,
+                ) => Promise<ExtractFindManyArgsType<T, M>> | ExtractFindManyArgsType<T, M>;
+
+                beforeShow?: (
+                    findOptions: ExtractFindUniqueArgsType<T, M>,
+                    req: Request,
+                ) => Promise<ExtractFindUniqueArgsType<T, M>> | ExtractFindUniqueArgsType<T, M>;
 
                 // 생성용 훅
-                beforeCreate?: (data: ExtractModelType<T, M>, req: Request) => Promise<ExtractModelType<T, M>> | ExtractModelType<T, M>;
-                afterCreate?: (result: ExtractModelResultType<T, M>, req: Request) => Promise<ExtractModelResultType<T, M>> | ExtractModelResultType<T, M>;
+                beforeCreate?: (
+                    data: ExtractModelType<T, M>,
+                    req: Request,
+                ) => Promise<ExtractModelType<T, M>> | ExtractModelType<T, M>;
+                afterCreate?: (
+                    result: ExtractModelResultType<T, M>,
+                    req: Request,
+                ) => Promise<ExtractModelResultType<T, M>> | ExtractModelResultType<T, M>;
 
                 // 수정용 훅
-                beforeUpdate?: (data: Partial<ExtractModelType<T, M>>, req: Request) => Promise<Partial<ExtractModelType<T, M>>> | Partial<ExtractModelType<T, M>>;
-                afterUpdate?: (result: ExtractModelResultType<T, M>, req: Request) => Promise<ExtractModelResultType<T, M>> | ExtractModelResultType<T, M>;
+                beforeUpdate?: (
+                    data: Partial<ExtractModelType<T, M>>,
+                    req: Request,
+                ) => Promise<Partial<ExtractModelType<T, M>>> | Partial<ExtractModelType<T, M>>;
+                afterUpdate?: (
+                    result: ExtractModelResultType<T, M>,
+                    req: Request,
+                ) => Promise<ExtractModelResultType<T, M>> | ExtractModelResultType<T, M>;
 
                 // 삭제용 훅
                 beforeDestroy?: (id: any, req: Request) => Promise<void> | void;
@@ -2074,13 +2457,20 @@ export class ExpressRouter {
 
                 // 복구용 훅
                 beforeRecover?: (id: any, req: Request) => Promise<void> | void;
-                afterRecover?: (result: ExtractModelResultType<T, M>, req: Request) => Promise<ExtractModelResultType<T, M>> | ExtractModelResultType<T, M>;
+                afterRecover?: (
+                    result: ExtractModelResultType<T, M>,
+                    req: Request,
+                ) => Promise<ExtractModelResultType<T, M>> | ExtractModelResultType<T, M>;
             };
-        }
+        },
     ): ExpressRouter {
         // CRUD 엔진은 CrudRouteBuilder 로 분리됨(Step 3). ExpressRouter 는 컨텍스트로 위임만 한다.
         // `this` 가 CrudBuilderContext 를 구조적으로 만족한다.
-        new CrudRouteBuilder(this as RouterContext).build(databaseName, modelName as string, options);
+        new CrudRouteBuilder(this as RouterContext).build(
+            databaseName,
+            modelName as string,
+            options,
+        );
 
         return this;
     }
@@ -2091,19 +2481,11 @@ export class ExpressRouter {
      */
     public static parseUuid = parseUuidImpl;
 
-
-
-
-
     /**
      * 문자열 그대로 반환하는 파서
      * 순수 구현은 ./primaryKeyParsers 로 추출; 문서화된 public API 보존을 위해 정적 별칭 유지
      */
     public static parseString = parseStringImpl;
-
-
-
-
 
     /**
      * 정수 전용 파서 (검증 포함)
@@ -2130,11 +2512,13 @@ export class ExpressRouter {
             this.pendingDocumentation.push({
                 method,
                 path,
-                requestConfig: config.parameters ? {
-                    query: config.parameters.query,
-                    params: config.parameters.params,
-                    body: config.parameters.body
-                } : undefined,
+                requestConfig: config.parameters
+                    ? {
+                          query: config.parameters.query,
+                          params: config.parameters.params,
+                          body: config.parameters.body,
+                      }
+                    : undefined,
                 responseConfig: config.responses,
                 // 확장(예: GET_REACT)이 contentType: 'html' 를 주면 그대로 보존(미지정 시 jsonapi 기본).
                 contentType: config.contentType ?? 'jsonapi',
@@ -2148,17 +2532,15 @@ export class ExpressRouter {
         }
     }
 
-
-    
-
-
-
     /** Extension-registered router methods (name -> impl), for collision/idempotency tracking. */
     private static registeredExtensionMethods: Map<string, RouterMethodImpl> = new Map();
 
     /** Constructor-assigned instance fields (the RouterContext surface) an extension method must not shadow. */
     private static readonly reservedInstanceFields: ReadonlySet<string> = new Set([
-        'router', 'basePath', 'schemaRegistry', 'schemaAnalyzer',
+        'router',
+        'basePath',
+        'schemaRegistry',
+        'schemaAnalyzer',
     ]);
 
     /**
@@ -2175,20 +2557,29 @@ export class ExpressRouter {
             throw new Error('[kusto] registerMethod requires a non-empty method name.');
         }
         if (typeof impl !== 'function') {
-            throw new Error(`[kusto] Router method '${name}' implementation must be a function (got ${typeof impl}).`);
+            throw new Error(
+                `[kusto] Router method '${name}' implementation must be a function (got ${typeof impl}).`,
+            );
         }
         const existing = ExpressRouter.registeredExtensionMethods.get(name);
         if (existing) {
             if (existing === impl) return; // idempotent
-            throw new Error(`[kusto] Router method '${name}' is already registered by another extension.`);
+            throw new Error(
+                `[kusto] Router method '${name}' is already registered by another extension.`,
+            );
         }
         // Reject both prototype members (verbs/build/CRUD/Object.prototype) and constructor-assigned
         // instance fields (router/basePath/...), which are not on the prototype at registration time.
         if (name in ExpressRouter.prototype || ExpressRouter.reservedInstanceFields.has(name)) {
-            throw new Error(`[kusto] Router method '${name}' conflicts with a built-in ExpressRouter member.`);
+            throw new Error(
+                `[kusto] Router method '${name}' conflicts with a built-in ExpressRouter member.`,
+            );
         }
         ExpressRouter.registeredExtensionMethods.set(name, impl);
-        (ExpressRouter.prototype as Record<string, any>)[name] = function (this: ExpressRouter, ...args: any[]) {
+        (ExpressRouter.prototype as Record<string, any>)[name] = function (
+            this: ExpressRouter,
+            ...args: any[]
+        ) {
             impl(this as unknown as RouterContext, ...args);
             return this;
         };

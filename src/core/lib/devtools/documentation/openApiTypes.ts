@@ -4,7 +4,14 @@
  * 전체 spec: https://spec.openapis.org/oas/v3.1.0
  */
 
-export type OpenApiPrimitiveType = 'string' | 'number' | 'integer' | 'boolean' | 'object' | 'array' | 'null';
+export type OpenApiPrimitiveType =
+    | 'string'
+    | 'number'
+    | 'integer'
+    | 'boolean'
+    | 'object'
+    | 'array'
+    | 'null';
 
 export interface OpenApiSchema {
     type?: OpenApiPrimitiveType | OpenApiPrimitiveType[];
@@ -96,7 +103,9 @@ export interface OpenApiOperation {
     deprecated?: boolean;
 }
 
-export type OpenApiPathItem = Partial<Record<'get' | 'post' | 'put' | 'patch' | 'delete' | 'options' | 'head', OpenApiOperation>> & {
+export type OpenApiPathItem = Partial<
+    Record<'get' | 'post' | 'put' | 'patch' | 'delete' | 'options' | 'head', OpenApiOperation>
+> & {
     parameters?: OpenApiParameter[];
 };
 

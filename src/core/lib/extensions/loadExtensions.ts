@@ -56,7 +56,7 @@ export function loadExtensions(dir: string = DEFAULT_EXTENSIONS_DIR): KustoExten
 
         if (!isKustoExtension(exported)) {
             throw new Error(
-                `[kusto] Extension file '${entry.name}' must default-export a valid KustoExtension (got: ${typeof exported}).`
+                `[kusto] Extension file '${entry.name}' must default-export a valid KustoExtension (got: ${typeof exported}).`,
             );
         }
 

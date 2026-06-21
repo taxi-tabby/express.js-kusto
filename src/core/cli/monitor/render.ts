@@ -1,8 +1,23 @@
 import { MonitorSnapshot } from '@lib/devtools/monitor/monitorTypes';
 import {
-    bold, dim, red, green, yellow, cyan,
-    screen, truncate, padEnd, padStart, bar, meter, sparkline,
-    boxLines, sideBySide, humanBytes, humanDuration, commafy,
+    bold,
+    dim,
+    red,
+    green,
+    yellow,
+    cyan,
+    screen,
+    truncate,
+    padEnd,
+    padStart,
+    bar,
+    meter,
+    sparkline,
+    boxLines,
+    sideBySide,
+    humanBytes,
+    humanDuration,
+    commafy,
 } from './ansi';
 
 /**
@@ -38,15 +53,19 @@ function frame(lines: string[], cols: number, rows: number): string {
 
 function waitingFrame(opts: RenderOptions): string {
     const w = Math.min(opts.cols - 2, 60);
-    const box = boxLines('kusto monitor', [
-        '',
-        yellow(`Waiting for server …`),
-        dim(opts.url),
-        opts.lastError ? dim(opts.lastError) : '',
-        '',
-        dim('Start the dev server (metrics: dev + localhost only).'),
-        dim('q quit · Ctrl-C exit'),
-    ], w);
+    const box = boxLines(
+        'kusto monitor',
+        [
+            '',
+            yellow(`Waiting for server …`),
+            dim(opts.url),
+            opts.lastError ? dim(opts.lastError) : '',
+            '',
+            dim('Start the dev server (metrics: dev + localhost only).'),
+            dim('q quit · Ctrl-C exit'),
+        ],
+        w,
+    );
     const top = Math.max(0, Math.floor((opts.rows - box.length) / 2));
     const lines = [...Array(top).fill(''), ...box.map((l) => ' ' + l)];
     return frame(lines, opts.cols, opts.rows);
@@ -104,7 +123,9 @@ export function renderFrame(snap: MonitorSnapshot | null, opts: RenderOptions): 
     const lines: string[] = [];
 
     // ── Header box (full width) ─────────────────────────────────────────
-    const ready = a.ready ? green('● READY') : red(`● DEGRADED${a.degraded ? ' ' + a.degraded : ''}`);
+    const ready = a.ready
+        ? green('● READY')
+        : red(`● DEGRADED${a.degraded ? ' ' + a.degraded : ''}`);
     const headInner = `${dim(a.env)}  ${cyan(a.host + ':' + a.port)}  ${dim('up ' + humanDuration(p.uptimeSec))}  ${ready}`;
     const hw = cols - 1;
     // 제목 옆에 우측 정렬 상태를 넣기 위해 직접 구성: 헤더는 1줄짜리 박스.
@@ -117,7 +138,8 @@ export function renderFrame(snap: MonitorSnapshot | null, opts: RenderOptions): 
         const totalW = cols - 1;
         const leftW = Math.floor((totalW - 1) * 0.46);
         const rightW = totalW - 1 - leftW;
-        const li = leftW - 4, ri = rightW - 4;
+        const li = leftW - 4,
+            ri = rightW - 4;
 
         const procBox = boxLines('PROCESS', processContent(snap, li), leftW, 4);
         const reqBox = boxLines('REQUESTS', requestsContent(snap, ri), rightW, 4);
@@ -127,7 +149,8 @@ export function renderFrame(snap: MonitorSnapshot | null, opts: RenderOptions): 
         const appBox = boxLines('APP', appContent(snap), rightW, 2);
         sideBySide(dbBox, appBox, leftW, rightW).forEach((l) => lines.push(' ' + l));
     } else {
-        const w = cols - 1, iw = w - 4;
+        const w = cols - 1,
+            iw = w - 4;
         boxLines('PROCESS', processContent(snap, iw), w, 4).forEach((l) => lines.push(' ' + l));
         boxLines('REQUESTS', requestsContent(snap, iw), w, 4).forEach((l) => lines.push(' ' + l));
         boxLines('DATABASES', databasesContent(snap), w).forEach((l) => lines.push(' ' + l));
@@ -137,7 +160,8 @@ export function renderFrame(snap: MonitorSnapshot | null, opts: RenderOptions): 
     // ── RECENT box (남은 높이만큼) ──────────────────────────────────────
     const footerRows = 1;
     const recentInnerH = Math.max(1, rows - lines.length - footerRows - 2); // -2: 박스 테두리
-    const w = cols - 1, iw = w - 4;
+    const w = cols - 1,
+        iw = w - 4;
     // 6(method) +1 + PW(path) +1 + 3(status) +1 + 7(dur) = PW+19 ≤ innerW(iw)
     const pathW = Math.max(8, iw - 19);
     const recentLines = snap.requests.recent.slice(0, recentInnerH).map((req) => {

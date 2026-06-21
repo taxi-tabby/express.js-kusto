@@ -35,7 +35,10 @@ export function resolveCorsWhitelist(explicit?: string[]): string[] {
     try {
         return env.trim().startsWith('[')
             ? JSON.parse(env)
-            : env.split(',').map((s) => s.trim()).filter(Boolean);
+            : env
+                  .split(',')
+                  .map((s) => s.trim())
+                  .filter(Boolean);
     } catch {
         log.Warn('Failed to parse CORS_WHITELIST');
         return [];

@@ -16,10 +16,7 @@ describe('pathConverter', () => {
         it('중첩된 :userId/:postId 일 때 둘 다 {} 로 변환된다', () => {
             const result = toOpenApiPath('/users/:userId/posts/:postId');
             expect(result.path).toBe('/users/{userId}/posts/{postId}');
-            expect(result.parameters).toEqual([
-                { name: 'userId' },
-                { name: 'postId' },
-            ]);
+            expect(result.parameters).toEqual([{ name: 'userId' }, { name: 'postId' }]);
         });
 
         it('루트 / 일 때 그대로 반환된다', () => {

@@ -2,19 +2,26 @@ import { ErrorFormatter } from '@lib/http/errors/errorFormatter';
 import { ERROR_CODES } from '@lib/http/errors/errorCodes';
 
 class FakeValidationErr extends Error {
-    constructor() { super('Invalid prisma input'); this.name = 'PrismaClientValidationError'; }
+    constructor() {
+        super('Invalid prisma input');
+        this.name = 'PrismaClientValidationError';
+    }
 }
 class FakeKnownErr extends Error {
     code: string;
-    constructor(code: string) { super(code); this.name = 'PrismaClientKnownRequestError'; this.code = code; }
+    constructor(code: string) {
+        super(code);
+        this.name = 'PrismaClientKnownRequestError';
+        this.code = code;
+    }
 }
 
 // constructor.name 비교를 위해 prototype 조작 (mapPrismaError 가 error.constructor.name 을 검사)
 Object.defineProperty(FakeValidationErr.prototype, 'constructor', {
-    value: { name: 'PrismaClientValidationError' }
+    value: { name: 'PrismaClientValidationError' },
 });
 Object.defineProperty(FakeKnownErr.prototype, 'constructor', {
-    value: { name: 'PrismaClientKnownRequestError' }
+    value: { name: 'PrismaClientKnownRequestError' },
 });
 
 describe('ErrorFormatter.mapPrismaError', () => {

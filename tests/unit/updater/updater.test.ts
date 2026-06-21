@@ -43,7 +43,9 @@ describe('updater/checksum — 해시 SSOT + 하위호환', () => {
             // 불일치
             expect(matchesEntry(file, { checksum: 'deadbeef', algo: 'sha256' })).toBe(false);
             // 미존재
-            expect(matchesEntry(path.join(dir, 'nope.txt'), { checksum: sha, algo: 'sha256' })).toBeNull();
+            expect(
+                matchesEntry(path.join(dir, 'nope.txt'), { checksum: sha, algo: 'sha256' }),
+            ).toBeNull();
         } finally {
             fs.rmSync(dir, { recursive: true, force: true });
         }

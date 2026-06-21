@@ -14,7 +14,7 @@ const baseScripts = [
 ];
 
 // 빌드 전용 스크립트
-const buildScripts = ['generate-routes-map.js', 'build-routes.js'];
+const buildScripts = ['generate-routes-map.js', 'generate-extensions-map.js', 'build-routes.js'];
 
 const scriptsToRun = isBuild ? [...baseScripts, ...buildScripts] : baseScripts;
 

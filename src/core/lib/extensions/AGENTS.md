@@ -34,10 +34,11 @@ Singleton that stores loaded extensions and runs their hooks.
 - **Dependencies**: `@ext/winston`, type-only `@lib/extensions/extensionTypes`.
 
 ### loadExtensions.ts
-Discovers and applies extensions from the convention folder.
+Discovers and applies extensions from the convention folder, in BOTH dev and the webpack build.
 
-- **Key exports**: `default loadExtensions(dir = './src/app/extensions'): KustoExtension[]` — scans `*.ts`/`*.js` (skips `.d.ts`, `index`, `AGENTS`), requires each file's default export, validates it with `isKustoExtension`, registers its `routerMethods` on `ExpressRouter` immediately (must precede route loading), collects it in the registry, and returns the loaded list. No-op (returns `[]`) when the folder is absent. Files are processed in filename order.
-- **Dependencies**: `fs`/`path`, `@ext/winston`, `@lib/http/routing/expressRouter` (`ExpressRouter.registerMethod`), `@lib/extensions/extensionTypes`, `@lib/extensions/extensionRegistry`.
+- **Key exports**: `default loadExtensions(dir = './src/app/extensions'): KustoExtension[]` — validates each activation's default export with `isKustoExtension`, registers its `routerMethods` on `ExpressRouter` immediately (must precede route loading), collects it in the registry, and returns the loaded list. Activations are processed in filename order; skips `.d.ts`, `index`, `AGENTS`.
+- **Dual discovery (mirrors routes)**: in **dev** (`WEBPACK_BUILD !== 'true'`) it scans `src/app/extensions/*.ts`/`*.js` at runtime and `require`s each (no-op `[]` when the folder is absent). In the **webpack build** (`WEBPACK_BUILD === 'true'`) the raw activation files are NOT bundled, so a runtime fs scan + `require` fails; instead it reads the bundled `@core/tmp/extensions-map`. That map is codegen'd at build time by `src/core/scripts/generate-extensions-map.js` (static default imports of every activation → webpack bundles them), wired into `generate.js`'s build scripts. Without this, extension methods (e.g. `GET_REACT`) are never registered in the build and routes that call them fail with "X is not a function".
+- **Dependencies**: `fs`/`path`, `@ext/winston`, `@lib/http/routing/expressRouter` (`ExpressRouter.registerMethod`), `@lib/extensions/extensionTypes`, `@lib/extensions/extensionRegistry`, and (build only, via static `require`) the generated `@core/tmp/extensions-map`.
 
 ## Import conventions
 

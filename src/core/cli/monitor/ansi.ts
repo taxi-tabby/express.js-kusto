@@ -31,6 +31,7 @@ export const screen = {
 
 // ANSI 이스케이프(CSI: 색 m, clearLine K, 커서이동 H/J 등 letter 로 끝나는 시퀀스)를 제거한
 // "보이는" 길이. 폭 계산은 0폭 제어문자를 모두 무시해야 정확하다.
+// eslint-disable-next-line no-control-regex
 const ANSI_RE = /\x1b\[[0-9;]*[A-Za-z]/g;
 export function visibleLength(s: string): number {
     return s.replace(ANSI_RE, '').length;
@@ -45,6 +46,7 @@ export function truncate(s: string, width: number): string {
     let vis = 0;
     let i = 0;
     while (i < s.length && vis < width - 1) {
+        // eslint-disable-next-line no-control-regex
         const m = s.slice(i).match(/^\x1b\[[0-9;]*m/);
         if (m) {
             out += m[0];

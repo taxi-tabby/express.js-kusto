@@ -26,19 +26,8 @@ import { DependencyInjector } from '@lib/data/di/dependencyInjector';
 import { prismaManager } from '@lib/data/database/prismaManager';
 import { repositoryManager } from '@lib/data/database/repositoryManager';
 import { kustoManager } from '@lib/data/di/kustoManager';
+import { ErrorFormatter as _ErrorFormatter } from '@lib/http/errors/errorFormatter';
 import {
-    CrudQueryParser,
-    PrismaQueryBuilder,
-    CrudResponseFormatter,
-    JsonApiTransformer,
-    JsonApiResponse,
-    JsonApiResource,
-    JsonApiRelationship,
-    JsonApiErrorResponse,
-} from '@lib/crud/crudHelpers';
-import { ErrorFormatter } from '@lib/http/errors/errorFormatter';
-import {
-    serializeBigInt,
     serialize,
     ResponseSerializer,
     applyResponseSerializer,
@@ -47,19 +36,12 @@ import {
     parseUuid as parseUuidImpl,
     parseString as parseStringImpl,
     parseInt_ as parseIntImpl,
-    parseIdSmart as parseIdSmartImpl,
-    getSmartPrimaryKeyParser as getSmartPrimaryKeyParserImpl,
 } from '@lib/crud/primaryKeyParsers';
-import { ERROR_CODES, getHttpStatusForErrorCode } from '@lib/http/errors/errorCodes';
 import { CrudSchemaRegistry } from '@lib/devtools/schema-api/crudSchemaRegistry';
 import { PrismaSchemaAnalyzer } from '@lib/devtools/schema-api/prismaSchemaAnalyzer';
 import {
     syncSchemasFromAnalyzer,
     registerJsonApiErrorSchema,
-    jsonApiCollectionResponse,
-    jsonApiResponse,
-    jsonApiBody,
-    jsonApiErrorResponse,
 } from '@lib/devtools/documentation';
 import { log } from '@ext/winston';
 import '@lib/types/express-extensions';
@@ -227,9 +209,7 @@ export {
 
 // 내부 위임용 value import (P1-10b: private wrapMiddleware 가 단일 출처에 위임)
 import { wrapMiddleware } from '@lib/http/routing/middlewareHelpers';
-import { JSON_API_CONTENT_TYPE, JSON_API_ATOMIC_CONTENT_TYPE } from '@lib/crud/jsonApiConstants';
 
-import { ErrorHandler, ErrorResponseFormat } from '@lib/http/errors/errorHandler';
 import { CrudRouteBuilder } from '@lib/crud/crudRouteBuilder';
 
 /** 라우트에 선택적으로 붙이는 OpenAPI 문서 메타데이터(verb 옵션 인자로 전달). */
@@ -1249,7 +1229,7 @@ export class ExpressRouter {
      * @param options
      * @returns
      */
-    public NOTFOUND(handler: HandlerFunction, options?: object): ExpressRouter {
+    public NOTFOUND(handler: HandlerFunction, _options?: object): ExpressRouter {
         this.router.all('*', this.wrapHandler(handler));
         return this;
     }
@@ -1407,6 +1387,7 @@ export class ExpressRouter {
                 // 명시적 마커(injectedMiddleware)가 우선, 없으면 arity 휴리스틱 fallback (P2-13)
                 if (
                     (middlewareInstance as any).__kustoInjected === true ||
+                    // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
                     (middlewareInstance as Function).length >= 6
                 ) {
                     // MiddlewareHandlerFunction 타입으로 판단되면 wrapMiddleware 적용

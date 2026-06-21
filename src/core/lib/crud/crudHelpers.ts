@@ -841,7 +841,7 @@ export class CrudQueryParser {
                 type: field.type,
                 nativeType: nativeTypeName,
             };
-        } catch (error) {
+        } catch (_error) {
             // 스키마 분석 실패 시 null 반환
             return null;
         }
@@ -879,14 +879,16 @@ export class CrudQueryParser {
                 return value; // 문자열은 그대로 유지
 
             case 'Int':
-            case 'BigInt':
+            case 'BigInt': {
                 const intValue = parseInt(value, 10);
                 return isNaN(intValue) ? value : intValue;
+            }
 
             case 'Float':
-            case 'Decimal':
+            case 'Decimal': {
                 const floatValue = parseFloat(value);
                 return isNaN(floatValue) ? value : floatValue;
+            }
 
             case 'Boolean':
                 if (value.toLowerCase() === 'true') return true;
@@ -1120,7 +1122,7 @@ export class PrismaQueryBuilder {
      */
     private static buildNestedOrderBy(fieldPath: string, direction: 'asc' | 'desc') {
         const parts = fieldPath.split('.');
-        let orderBy: any = {};
+        const orderBy: any = {};
         let current = orderBy;
 
         parts.forEach((part, index) => {
@@ -1583,7 +1585,7 @@ export class CrudResponseFormatter {
         try {
             const cursorData = { page: currentPage + 1 };
             return Buffer.from(JSON.stringify(cursorData)).toString('base64');
-        } catch (error) {
+        } catch (_error) {
             return '';
         }
     }
@@ -1597,7 +1599,7 @@ export class CrudResponseFormatter {
         try {
             const cursorData = { page: currentPage - 1 };
             return Buffer.from(JSON.stringify(cursorData)).toString('base64');
-        } catch (error) {
+        } catch (_error) {
             return '';
         }
     }
@@ -2320,7 +2322,7 @@ export class JsonApiTransformer {
      * 데이터 구조에서 모델 타입 추론
      * 필드 시그니처를 분석하여 모델을 식별
      */
-    private static inferModelFromDataStructure(data: any, relationshipName: string): string | null {
+    private static inferModelFromDataStructure(data: any, _relationshipName: string): string | null {
         const keys = Object.keys(data).filter((k) => !k.startsWith('_'));
 
         // 중간 테이블 패턴 감지 (예: UserRole은 userUuid, roleUuid 같은 FK 필드를 가짐)

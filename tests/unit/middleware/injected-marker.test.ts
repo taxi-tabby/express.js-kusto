@@ -7,7 +7,7 @@ import { injectedMiddleware } from '@lib/http/routing/middlewareHelpers';
  */
 describe('injectedMiddleware 브랜딩 (P2-13)', () => {
     it('마커(__kustoInjected)를 부여하고 동일 함수를 반환한다', () => {
-        const fn = ((req: any, res: any, next: any, injected: any, repo: any, db: any) => {
+        const fn = ((req: any, res: any, next: any, _injected: any, _repo: any, _db: any) => {
             void next;
         }) as any;
         const branded = injectedMiddleware(fn);
@@ -23,7 +23,7 @@ describe('injectedMiddleware 브랜딩 (P2-13)', () => {
             next: any,
             injected: any,
             repo: any,
-            db: any = undefined,
+            _db: any = undefined,
         ) => {
             void next;
         }) as any;

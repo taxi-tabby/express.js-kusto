@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const { analyzeWordType, smartSplit, toCamelCase, toPascalCase } = require('./fnCamelConvert');
+const { toCamelCase, toPascalCase } = require('./fnCamelConvert');
 
 /**
  * Extract exported interface names from a TypeScript file
@@ -409,7 +409,7 @@ async function generateInjectableTypes() {
                 const pathPrefix = toPascalCase(
                     module.modulePath
                         .replace(/\.middleware\.interface$/, '')
-                        .replace(/[\/\\]/g, '_'),
+                        .replace(/[/\\]/g, '_'),
                 );
                 const aliasName = `${pathPrefix}${actualInterfaceName}Type`;
                 return `import { ${actualInterfaceName} as ${aliasName} } from '@app/injectable/${module.importPath}';`;
@@ -444,7 +444,7 @@ async function generateInjectableTypes() {
             const pathPrefix = toPascalCase(
                 middlewareInterface.modulePath
                     .replace(/\.middleware\.interface$/, '')
-                    .replace(/[\/\\]/g, '_'),
+                    .replace(/[/\\]/g, '_'),
             );
             const aliasName = `${pathPrefix}${middlewareInterface.actualInterfaceName}Type`;
             return `type ${middlewareInterface.propertyName}MiddlewareParamsType = ${aliasName};`;

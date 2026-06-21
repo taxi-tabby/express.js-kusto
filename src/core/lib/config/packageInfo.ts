@@ -18,7 +18,7 @@ const FALLBACK: PackageInfo = { name: 'kusto-server', version: '0.0.0' };
 /** package.json 의 name/version/description 을 반환(로드 실패 시 단일 fallback, 무로그). */
 export function getPackageInfo(): PackageInfo {
     try {
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
+         
         const pkg = require('../../../../package.json') as Partial<PackageInfo>;
         return {
             name: pkg.name ?? FALLBACK.name,

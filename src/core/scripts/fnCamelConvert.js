@@ -26,7 +26,7 @@ function analyzeWordType(word) {
     // Calculate vowel ratio and patterns
     const vowels = lowerWord.match(/[aeiou]/g) || [];
     const vowelRatio = vowels.length / length;
-    const consonants = lowerWord.match(/[bcdfghjklmnpqrstvwxyz]/g) || [];
+    const _consonants = lowerWord.match(/[bcdfghjklmnpqrstvwxyz]/g) || [];
 
     // Find consecutive consonant clusters
     const consecutiveConsonants = lowerWord.match(/[bcdfghjklmnpqrstvwxyz]{2,}/g) || [];
@@ -37,7 +37,7 @@ function analyzeWordType(word) {
 
     // Analyze letter patterns
     const hasRepeatedLetters = /(.)\1/.test(lowerWord);
-    const hasUncommonEnding = /[bcdfghjklmnpqrstvwxyz]$/.test(lowerWord);
+    const _hasUncommonEnding = /[bcdfghjklmnpqrstvwxyz]$/.test(lowerWord);
 
     // Calculate pronounceability score (higher = more pronounceable = less likely acronym)
     let pronounceabilityScore = 0;
@@ -76,7 +76,7 @@ function analyzeWordType(word) {
     if (!/[bcdfghjklmnpqrstvwxyz]{3,}/.test(lowerWord)) pronounceabilityScore += 1; // No 3+ consonant clusters
 
     // Letter frequency analysis (common English letter patterns)
-    const commonInitials = /^[a-z]/; // Any letter can start a word
+    const _commonInitials = /^[a-z]/; // Any letter can start a word
     const uncommonCombos = /[qx][^u]|[cg][^h]z|[pbk][gb]|[jw][jw]/;
     if (uncommonCombos.test(lowerWord)) pronounceabilityScore -= 1;
 
@@ -96,7 +96,7 @@ function smartSplit(str) {
     return (
         str
             // First split by explicit delimiters
-            .split(/[-_\s/\.]+/)
+            .split(/[-_\s/.]+/)
             .flatMap((part) => {
                 // Handle compound words (like "WebToken" -> ["Web", "Token"])
                 if (analyzeWordType(part) === 'compound') {

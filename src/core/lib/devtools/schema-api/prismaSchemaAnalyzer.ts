@@ -113,7 +113,7 @@ export class PrismaSchemaAnalyzer {
         }
 
         // 정확한 이름으로 먼저 찾아봄
-        let model = this.modelCache.get(modelName);
+        const model = this.modelCache.get(modelName);
         if (model) {
             return model;
         }

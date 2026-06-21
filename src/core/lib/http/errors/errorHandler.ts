@@ -3,7 +3,7 @@
  * 모든 에러 관련 로직을 중앙화하여 일관성과 유지보수성을 확보
  */
 
-import { JsonApiError, JsonApiErrorResponse, ErrorSecurityOptions } from '@lib/crud/crudHelpers';
+import { JsonApiErrorResponse, ErrorSecurityOptions } from '@lib/crud/crudHelpers';
 import {
     ERROR_CODES,
     PRISMA_ERROR_CODES,
@@ -257,9 +257,9 @@ export class ErrorHandler {
             // 프로덕션에서는 파일 경로 정보 제거
             return lines.map((line) => {
                 return line
-                    .replace(/\/Users\/[^\/]+/g, '/Users/[USER]')
+                    .replace(/\/Users\/[^/]+/g, '/Users/[USER]')
                     .replace(/C:\\Users\\[^\\]+/g, 'C:\\Users\\[USER]')
-                    .replace(/\/home\/[^\/]+/g, '/home/[USER]')
+                    .replace(/\/home\/[^/]+/g, '/home/[USER]')
                     .replace(/at\s+.*\(/g, 'at [FUNCTION](')
                     .replace(/:\d+:\d+/g, ':[LINE]:[COL]');
             });
@@ -268,9 +268,9 @@ export class ErrorHandler {
         // 개발 모드에서는 사용자 경로만 마스킹
         return lines.map((line) => {
             return line
-                .replace(/\/Users\/[^\/]+/g, '/Users/[USER]')
+                .replace(/\/Users\/[^/]+/g, '/Users/[USER]')
                 .replace(/C:\\Users\\[^\\]+/g, 'C:\\Users\\[USER]')
-                .replace(/\/home\/[^\/]+/g, '/home/[USER]');
+                .replace(/\/home\/[^/]+/g, '/home/[USER]');
         });
     }
 

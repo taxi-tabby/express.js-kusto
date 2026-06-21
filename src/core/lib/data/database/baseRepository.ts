@@ -362,7 +362,7 @@ export abstract class BaseRepository<T extends DatabaseNamesUnion> {
                         (db) => db.name === operation.database,
                     );
                     healthy = dbHealth?.status === 'healthy';
-                } catch (error) {
+                } catch (_error) {
                     healthy = false;
                 }
             }

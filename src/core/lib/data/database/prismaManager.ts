@@ -7,9 +7,6 @@ import * as path from 'path';
 import { config } from 'dotenv';
 import { log } from '@ext/winston';
 import {
-    DatabaseClientMap,
-    DatabaseClientType,
-    DatabaseName,
     PrismaManagerWrapOverloads,
     PrismaManagerClientOverloads,
 } from '@lib/types/generated-db-types';
@@ -245,7 +242,7 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
                     try {
                         const Module = eval('require')('module');
                         nodeRequire = Module.createRequire(__filename);
-                    } catch (e) {
+                    } catch (_e) {
                         // Strategy 2: Direct eval require
                         nodeRequire = eval('require');
                     }
@@ -327,7 +324,7 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
                         // First try with timestamp query (works in some environments)
                         importPath = `${clientPath}?t=${timestamp}`;
                         clientModule = await import(importPath);
-                    } catch (timestampError) {
+                    } catch (_timestampError) {
                         // Fallback to normal import
                         log.Debug(`Timestamp import failed, using normal import for ${folderName}`);
                         importPath = clientPath;
@@ -377,7 +374,7 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
                             try {
                                 const Module = eval('require')('module');
                                 nodeRequire = Module.createRequire(__filename);
-                            } catch (e) {
+                            } catch (_e) {
                                 nodeRequire = eval('require');
                             }
 
@@ -507,7 +504,7 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
             const packageJsonPath = path.join(clientPath, 'package.json');
 
             return fs.existsSync(indexJsPath) && fs.existsSync(packageJsonPath);
-        } catch (error) {
+        } catch (_error) {
             return false;
         }
     }
@@ -618,7 +615,7 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
                 envVarName = folderNameToEnvVarName(folderName);
             }
 
-            let url = process.env[envVarName];
+            const url = process.env[envVarName];
 
             if (!url) {
                 throw new Error(
@@ -701,7 +698,7 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
                     provider: provider,
                     connected: this.isConnected(config.name),
                 });
-            } catch (error) {
+            } catch (_error) {
                 providers.push({
                     database: config.name,
                     provider: 'unknown',
@@ -1178,6 +1175,7 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
             }
 
             // Proxy를 사용하여 모든 접근에 자동 재연결 로직 적용
+            // eslint-disable-next-line @typescript-eslint/no-this-alias
             const manager = this;
 
             /**

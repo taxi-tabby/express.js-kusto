@@ -27,9 +27,9 @@ describe('Core 확장 부팅 순서', () => {
 
         // loadExtensions mock: 실제 레지스트리에 onInit 확장을 등록한다.
         jest.doMock('@lib/extensions/loadExtensions', () => {
-            // eslint-disable-next-line @typescript-eslint/no-var-requires
+             
             const { extensionRegistry } = require('@lib/extensions/extensionRegistry');
-            // eslint-disable-next-line @typescript-eslint/no-var-requires
+             
             const { ExpressRouter } = require('@lib/http/routing/expressRouter');
             const fn = jest.fn(() => {
                 const ext = {
@@ -49,7 +49,7 @@ describe('Core 확장 부팅 순서', () => {
             __esModule: true,
             default: jest.fn(async () => {
                 await Promise.resolve();
-                // eslint-disable-next-line @typescript-eslint/no-var-requires
+                 
                 const { ExpressRouter } = require('@lib/http/routing/expressRouter');
                 // 라우트 로드 시점엔 확장 routerMethods 가 이미 prototype 에 등록되어 있어야 한다.
                 order.push(
@@ -91,17 +91,17 @@ describe('Core 확장 부팅 순서', () => {
             },
         }));
 
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
+         
         const { extensionRegistry } = require('@lib/extensions/extensionRegistry');
         extensionRegistry.clear();
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
+         
         const { Core } = require('@core/bootstrap/Core');
         const core = Core.getInstance();
         await core.initialize({ routesPath: './src/app/routes' });
 
         // onInit 이 라우트보다 먼저 실행되고, routerMethods 도 라우트 로드 시점엔 이미 등록되어 있어야 한다.
         expect(order).toEqual(['init', 'method-present', 'routes']);
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
+         
         require('@lib/http/routing/expressRouter').ExpressRouter.clearExtensionMethods();
         extensionRegistry.clear();
     });

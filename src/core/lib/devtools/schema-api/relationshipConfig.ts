@@ -265,7 +265,7 @@ export class RelationshipConfigManager {
 
         // 기본 규칙으로 역방향 이름 생성
         const relationName = relation.name;
-        const targetModel = relation.model;
+        const _targetModel = relation.model;
 
         // many-to-many 관계인 경우
         if (this.isManyToManyRelation(relation, sourceModel)) {

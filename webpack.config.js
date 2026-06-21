@@ -60,7 +60,7 @@ function getEnvironmentVariables() {
 
 module.exports = (env, argv) => {
     const mode = argv.mode || 'production';
-    const isProduction = mode === 'production';
+    const _isProduction = mode === 'production';
 
     // 빌드 타임에 번들로 주입할 allowlist 키가 있을 때만 .env 를 로드한다.
     // (allowlist 가 비어 있으면 번들에 박을 env 가 없으므로 dotenv 로딩 자체가 불필요)

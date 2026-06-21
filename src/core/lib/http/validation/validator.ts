@@ -54,11 +54,11 @@ export class Validator {
         sqlInjection: [
             // SQL injection with quotes and keywords
             /('[\s]*(or|and|union)[\s]+)/i,
-            /(\bor\b|\band\b)[\s]+(1[\s]*=[\s]*1|true|false)[\s]*(--|\#|\/\*)/i,
+            /(\bor\b|\band\b)[\s]+(1[\s]*=[\s]*1|true|false)[\s]*(--|#|\/\*)/i,
 
             // Union-based SQL injection
             /(union[\s]+(all[\s]+)?select)/i,
-            /((\%27)|(\'))[\s]*(union|select|insert|update|delete|drop|create|alter)/i,
+            /((%27)|('))[\s]*(union|select|insert|update|delete|drop|create|alter)/i,
 
             // SQL keywords with potential injection context
             /(;[\s]*(drop|delete|insert|update|create|alter|truncate)[\s]+(table|database|schema|index|view))/i,
@@ -71,7 +71,7 @@ export class Validator {
             /(%27|%22).*(%20)*(union|select|insert|update|delete|drop)/i,
 
             // Boolean-based blind SQL injection
-            /('[\s]*(and|or)[\s]+['"]*\w+['"]*[\s]*=[\s]*['"]*\w+['"]*[\s]*(--|\#))/i,
+            /('[\s]*(and|or)[\s]+['"]*\w+['"]*[\s]*=[\s]*['"]*\w+['"]*[\s]*(--|#))/i,
 
             // Time-based SQL injection
             /(waitfor[\s]+delay|pg_sleep|benchmark[\s]*\(|sleep[\s]*\()/i,
@@ -201,7 +201,7 @@ export class Validator {
                 }
                 break;
 
-            case 'number':
+            case 'number': {
                 const numValue = typeof value === 'string' ? parseFloat(value) : value;
                 if (isNaN(numValue) || typeof numValue !== 'number') {
                     errors.push({
@@ -213,6 +213,7 @@ export class Validator {
                     value = numValue; // 변환된 값으로 업데이트
                 }
                 break;
+            }
 
             case 'boolean':
                 if (typeof value === 'string') {

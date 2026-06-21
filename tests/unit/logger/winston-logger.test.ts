@@ -63,7 +63,7 @@ describe('toSafeJson — 안전 직렬화', () => {
     });
 
     it('깊이 초과 시 절단', () => {
-        let deep: any = {};
+        const deep: any = {};
         let cur = deep;
         for (let i = 0; i < 20; i++) {
             cur.next = {};

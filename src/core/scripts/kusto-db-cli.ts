@@ -547,7 +547,7 @@ export function removeTempPrismaConfig(configPath: string): void {
         if (fs.existsSync(configPath)) {
             fs.unlinkSync(configPath);
         }
-    } catch (error) {
+    } catch (_error) {
         console.warn(`⚠️ Failed to remove temp config: ${configPath}`);
     }
 }
@@ -815,7 +815,7 @@ program
             case 'reset':
                 migrationCommand = 'migrate reset --force';
                 break;
-            case 'diff':
+            case 'diff': {
                 let diffOptions = '';
                 if (options.fromEmpty) {
                     diffOptions = '--from-empty --to-schema-datamodel';
@@ -832,6 +832,7 @@ program
 
                 migrationCommand = `migrate diff ${diffOptions}`;
                 break;
+            }
             case 'push':
                 migrationCommand = 'db push';
                 if (options.acceptDataLoss) migrationCommand += ' --accept-data-loss';
@@ -971,7 +972,7 @@ async function performManualRollback(
 
     console.log(`\n📋 Migrations to be deleted:`);
     migrationsToDelete.forEach((migration, index) => {
-        const { timestamp, name } = parseMigrationName(migration);
+        const { timestamp: _timestamp, name } = parseMigrationName(migration);
         console.log(`   ${targetIndex + index + 1}. ${migration}`);
         console.log(`      📝 ${name}`);
     });
@@ -1074,7 +1075,7 @@ async function performPointInTimeRollback(
         `\n📋 Migrations to be applied (${migrationsToApply.length} of ${migrations.length}):`,
     );
     migrationsToApply.forEach((migration, index) => {
-        const { timestamp, name } = parseMigrationName(migration);
+        const { timestamp: _timestamp, name } = parseMigrationName(migration);
         console.log(`   ${index + 1}. ${migration}`);
         console.log(`      📝 ${name}`);
     });
@@ -1488,7 +1489,7 @@ program
             console.log('🔍 Prisma CLI:');
             const { stdout } = await execPromise('npx prisma version');
             console.log(stdout);
-        } catch (error) {
+        } catch (_error) {
             console.log('❌ Prisma CLI not available');
         }
 
@@ -1501,7 +1502,7 @@ program
                 try {
                     await executePrismaCommand(options.db, 'validate');
                     console.log('✅ Schema is valid');
-                } catch (error) {
+                } catch (_error) {
                     console.log('❌ Schema validation failed');
                 }
             } else {

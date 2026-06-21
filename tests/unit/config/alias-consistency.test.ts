@@ -53,7 +53,7 @@ describe('경로 별칭 단일 소스 정합성', () => {
     it('webpack resolve.alias 도 tsconfig 에서 동일하게 파생됨', () => {
         // webpack.config.js 의 자체 파생 로직(buildAliasesFromTsconfig)이 tsconfig 와 일치하는지 검증.
         // jest 파생은 이 스위트 실행 자체가 증거지만, webpack 파생은 별도 코드이므로 명시적으로 확인한다.
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
+         
         const wpConfig = require(path.join(root, 'webpack.config.js'))({}, { mode: 'production' });
         const wpAlias = wpConfig.resolve.alias as Record<string, string>;
 

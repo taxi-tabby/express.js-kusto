@@ -14,6 +14,7 @@ describe('전역 에러 핸들러 (P1-7)', () => {
 
     it('arity 4(err,req,res,next) 핸들러다', () => {
         expect(typeof globalErrorMiddleware).toBe('function');
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
         expect((globalErrorMiddleware as Function).length).toBe(4);
     });
 

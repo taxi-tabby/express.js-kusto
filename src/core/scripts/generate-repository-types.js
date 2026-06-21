@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const { analyzeWordType, smartSplit, toCamelCase, toPascalCase } = require('./fnCamelConvert');
+const { toCamelCase, toPascalCase } = require('./fnCamelConvert');
 
 /**
  * Recursively scan directory for repository TypeScript files
@@ -195,13 +195,6 @@ export type GetRepositoryType<T extends RepositoryName> = T extends keyof Reposi
 
     fs.writeFileSync(outputPath, typeDefinition, 'utf8');
     console.log('Generated default repository types:', outputPath);
-}
-
-/**
- * Capitalize first letter of string
- */
-function capitalize(str) {
-    return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
 // Run the generator

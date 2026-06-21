@@ -3,6 +3,7 @@ import { MiddlewareParamName, MiddlewareParams } from '@lib/types/generated-inje
 import type { KustoManager } from '@lib/data/di/kustoManager';
 
 declare global {
+    // eslint-disable-next-line @typescript-eslint/no-namespace
     namespace Express {
         interface Request {
             /**

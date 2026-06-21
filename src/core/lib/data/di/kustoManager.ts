@@ -4,7 +4,6 @@ import { prismaManager } from '@lib/data/database/prismaManager';
 import { Injectable } from '@lib/types/generated-injectable-types';
 import { RepositoryTypeMap, RepositoryName } from '@lib/types/generated-repository-types';
 import {
-    PrismaManagerClientOverloads,
     DatabaseNamesUnion,
     DatabaseClientType,
 } from '@lib/types/generated-db-types';
@@ -108,7 +107,7 @@ export class KustoManager {
                     );
                 },
 
-                ownKeys(target) {
+                ownKeys(_target) {
                     return repositoryManager.getLoadedRepositoryNames();
                 },
 

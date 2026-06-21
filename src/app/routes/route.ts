@@ -2,7 +2,7 @@ import { ExpressRouter } from '@lib/http/routing/expressRouter';
 
 const router = new ExpressRouter();
 
-router.GET(async (req, res, injected, repo, db) => {
+router.GET(async (req, res, _injected, _repo, _db) => {
     // 개발 모드일 때는 HTML 페이지 렌더링
     if (process.env.NODE_ENV === 'development') {
         return res.render('index', {

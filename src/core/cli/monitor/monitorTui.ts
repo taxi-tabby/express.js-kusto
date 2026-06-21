@@ -78,7 +78,7 @@ export function runMonitor(opts: MonitorRunOptions = {}): void {
     const intervalMs = Math.max(200, opts.interval || 1000);
     const out = process.stdout;
 
-    let timer: NodeJS.Timeout | undefined;
+    const timerRef: { current: NodeJS.Timeout | undefined } = { current: undefined };
     let polling = false;
     let lastSnapshot: MonitorSnapshot | null = null;
     let lastError: string | undefined;
@@ -125,7 +125,7 @@ export function runMonitor(opts: MonitorRunOptions = {}): void {
     const cleanup = (code = 0) => {
         if (stopped) return;
         stopped = true;
-        if (timer) clearInterval(timer);
+        if (timerRef.current) clearInterval(timerRef.current);
         if (process.stdin.isTTY) process.stdin.setRawMode(false);
         process.stdin.pause();
         out.write(screen.showCursor + screen.leaveAlt);
@@ -162,7 +162,7 @@ export function runMonitor(opts: MonitorRunOptions = {}): void {
     out.write(screen.enterAlt + screen.hideCursor);
     draw(true);
     void tick();
-    timer = setInterval(() => {
+    timerRef.current = setInterval(() => {
         void tick();
     }, intervalMs);
 }

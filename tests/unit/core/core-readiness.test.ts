@@ -71,7 +71,7 @@ describe('Core readiness / fail-fast boot (P0-1)', () => {
             },
         }));
 
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
+         
         const { Core } = require('@core/bootstrap/Core');
         return Core.getInstance();
     }
@@ -94,7 +94,7 @@ describe('Core readiness / fail-fast boot (P0-1)', () => {
         expect(readiness.ready).toBe(false);
         expect(readiness.status).toBe('degraded');
 
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
+         
         const request = require('supertest');
         const res = await request(core.app).get('/healthz');
         expect(res.status).toBe(503);
@@ -136,7 +136,7 @@ describe('Core readiness / fail-fast boot (P0-1)', () => {
         expect(readiness.status).toBe('healthy');
         expect(readiness.prisma.total).toBe(0);
 
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
+         
         const request = require('supertest');
         const res = await request(core.app).get('/healthz');
         expect(res.status).toBe(200);
@@ -149,7 +149,7 @@ describe('Core readiness / fail-fast boot (P0-1)', () => {
         });
         await core.initialize({ routesPath: './src/app/routes' });
 
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
+         
         const request = require('supertest');
         const res = await request(core.app).get('/healthz');
         expect(res.status).toBe(200);

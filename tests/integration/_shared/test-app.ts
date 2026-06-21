@@ -21,7 +21,7 @@ export function buildTestApp(
     mountPath: string = '/posts',
 ) {
     // Late require so the doMock applied before this call takes effect.
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+     
     const { ExpressRouter } = require('@lib/http/routing/expressRouter');
 
     const app = express();

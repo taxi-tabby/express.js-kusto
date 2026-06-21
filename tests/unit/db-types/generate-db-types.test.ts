@@ -1,6 +1,6 @@
 export {};
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
+ 
 const { buildDatabaseTypesContent } = require('@/src/core/scripts/generate-db-types');
 
 /**

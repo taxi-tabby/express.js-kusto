@@ -27,7 +27,7 @@ describe('PrismaManager.initialize() — DB-less 부팅', () => {
 
         try {
             // cwd 스파이가 적용된 상태에서 로드해야 생성자/initialize 가 임시 cwd 를 본다
-            // eslint-disable-next-line @typescript-eslint/no-var-requires
+             
             const { prismaManager } = require('@lib/data/database/prismaManager');
 
             await expect(prismaManager.initialize()).resolves.toBeUndefined();

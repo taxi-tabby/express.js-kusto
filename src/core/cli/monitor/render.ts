@@ -10,7 +10,6 @@ import {
     truncate,
     padEnd,
     padStart,
-    bar,
     meter,
     sparkline,
     boxLines,

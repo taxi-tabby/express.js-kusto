@@ -25,7 +25,7 @@ for (const script of scriptsToRun) {
     console.log(`📦 ${script}`);
     try {
         execSync(`node "${scriptPath}"`, { stdio: 'inherit' });
-    } catch (error) {
+    } catch (_error) {
         console.error(`❌ Failed: ${script}`);
         process.exit(1);
     }

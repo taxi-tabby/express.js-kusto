@@ -475,7 +475,7 @@ export class TransactionCommitManager {
             if (dbName && this.prismaManager) {
                 try {
                     provider = this.prismaManager.getProviderForDatabase(dbName);
-                } catch (error) {
+                } catch (_error) {
                     log.Debug(`Could not get provider for ${dbName}, using default PostgreSQL`);
                 }
             }
@@ -660,7 +660,7 @@ export class TransactionCommitManager {
     /**
      * SQLite 개별 락 상태 확인 (참고용 - 현재 프로젝트에서 사용 안함)
      */
-    private async checkSQLiteLock(client: any, lockName: string): Promise<boolean> {
+    private async checkSQLiteLock(client: any, _lockName: string): Promise<boolean> {
         try {
             // SQLite는 파일 레벨 락킹만 지원하므로 간단한 구현
             // 실제로는 WAL 모드에서의 동시성을 확인

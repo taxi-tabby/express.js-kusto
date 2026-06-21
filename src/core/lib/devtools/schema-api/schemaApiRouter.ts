@@ -189,7 +189,7 @@ export class SchemaApiRouter {
                 const filteredEntities = allSchemas.data.filter((entity: any) => {
                     // 데이터베이스별 필터링 로직
                     // 스키마 레지스트리에서 해당 엔티티가 어느 데이터베이스에 속하는지 확인
-                    const schemaKey = `${databaseName}.${entity.entityName}`;
+                    const _schemaKey = `${databaseName}.${entity.entityName}`;
                     return this.registry.hasSchema(databaseName, entity.entityName);
                 });
 

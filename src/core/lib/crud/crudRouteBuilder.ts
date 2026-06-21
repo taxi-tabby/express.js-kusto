@@ -246,7 +246,7 @@ export class CrudRouteBuilder {
         const isSoftDelete = options?.softDelete?.enabled;
         const softDeleteField = options?.softDelete?.field || DEFAULT_SOFT_DELETE_FIELD;
 
-        const handler: HandlerFunction = async (req, res, injected, repo, db) => {
+        const handler: HandlerFunction = async (req, res, _injected, _repo, _db) => {
             try {
                 // JSON:API Content-Type 헤더 설정
                 res.setHeader('Content-Type', JSON_API_CONTENT_TYPE);
@@ -397,7 +397,7 @@ export class CrudRouteBuilder {
         const isSoftDelete = options?.softDelete?.enabled;
         const softDeleteField = options?.softDelete?.field || DEFAULT_SOFT_DELETE_FIELD;
 
-        const handler: HandlerFunction = async (req, res, injected, repo, db) => {
+        const handler: HandlerFunction = async (req, res, _injected, _repo, _db) => {
             try {
                 // JSON:API Content-Type 헤더 설정
                 res.setHeader('Content-Type', JSON_API_CONTENT_TYPE);
@@ -423,7 +423,7 @@ export class CrudRouteBuilder {
 
                 // Soft Delete 필터 추가 (include_deleted가 true가 아닌 경우)
                 const includeDeleted = req.query.include_deleted === 'true';
-                let whereClause: any = { [primaryKey]: parsedIdentifier };
+                const whereClause: any = { [primaryKey]: parsedIdentifier };
 
                 if (isSoftDelete && !includeDeleted) {
                     whereClause[softDeleteField] = null;
@@ -615,7 +615,7 @@ export class CrudRouteBuilder {
     ): void {
         const middlewares = options?.middleware?.create || [];
 
-        const handler: HandlerFunction = async (req, res, injected, repo, db) => {
+        const handler: HandlerFunction = async (req, res, _injected, _repo, _db) => {
             try {
                 // JSON:API Content-Type 헤더 설정
                 res.setHeader('Content-Type', JSON_API_CONTENT_TYPE);
@@ -809,7 +809,7 @@ export class CrudRouteBuilder {
      * Atomic Operations 엔드포인트 설정 (JSON:API Extension)
      */
     private setupAtomicOperationsRoute(client: any, modelName: string, options?: any): void {
-        const handler: HandlerFunction = async (req, res, injected, repo, db) => {
+        const handler: HandlerFunction = async (req, res, _injected, _repo, _db) => {
             try {
                 res.setHeader('Content-Type', JSON_API_ATOMIC_CONTENT_TYPE);
 
@@ -879,11 +879,11 @@ export class CrudRouteBuilder {
         tx: any,
         operation: any,
         modelName: string,
-        options: any,
-        req: any,
+        _options: any,
+        _req: any,
     ): Promise<any | null> {
         switch (operation.op) {
-            case 'add':
+            case 'add': {
                 if (!operation.data) {
                     throw new Error('Add operation requires data');
                 }
@@ -901,8 +901,9 @@ export class CrudRouteBuilder {
 
                 const created = await tx[modelName].create({ data: createData });
                 return JsonApiTransformer.transformToResource(created, { resourceType: modelName });
+            }
 
-            case 'update':
+            case 'update': {
                 if (!operation.ref || !operation.data) {
                     throw new Error('Update operation requires ref and data');
                 }
@@ -923,6 +924,7 @@ export class CrudRouteBuilder {
                     data: updateData,
                 });
                 return JsonApiTransformer.transformToResource(updated, { resourceType: modelName });
+            }
 
             case 'remove':
                 if (!operation.ref) {
@@ -1470,7 +1472,7 @@ export class CrudRouteBuilder {
     ): void {
         const middlewares = options?.middleware?.update || [];
 
-        const handler: HandlerFunction = async (req, res, injected, repo, db) => {
+        const handler: HandlerFunction = async (req, res, _injected, _repo, _db) => {
             try {
                 // JSON:API Content-Type 헤더 설정
                 res.setHeader('Content-Type', JSON_API_CONTENT_TYPE);
@@ -1674,7 +1676,7 @@ export class CrudRouteBuilder {
         const isSoftDelete = options?.softDelete?.enabled;
         const softDeleteField = options?.softDelete?.field || DEFAULT_SOFT_DELETE_FIELD;
 
-        const handler: HandlerFunction = async (req, res, injected, repo, db) => {
+        const handler: HandlerFunction = async (req, res, _injected, _repo, _db) => {
             try {
                 // JSON:API Content-Type 헤더 설정
                 res.setHeader('Content-Type', JSON_API_CONTENT_TYPE);
@@ -1723,7 +1725,6 @@ export class CrudRouteBuilder {
                         undefined, // includedRelations 없음
                     );
 
-                    undefined; // queryParams 없음
                     metadata.wasSoftDeleted = false; // 이전에는 삭제되지 않았음
 
                     // JSON:API 준수 - 성공적인 soft delete 응답 (200 OK with meta)
@@ -1841,7 +1842,7 @@ export class CrudRouteBuilder {
         // (과거 'deletedAt' 을 하드코딩하여 커스텀 softDelete.field 설정 시 복구가 깨졌다.)
         const softDeleteField = options?.softDelete?.field || DEFAULT_SOFT_DELETE_FIELD;
 
-        const handler: HandlerFunction = async (req, res, injected, repo, db) => {
+        const handler: HandlerFunction = async (req, res, _injected, _repo, _db) => {
             try {
                 // JSON:API Content-Type 헤더 설정
                 res.setHeader('Content-Type', JSON_API_CONTENT_TYPE);
@@ -2569,7 +2570,7 @@ export class CrudRouteBuilder {
         res: any,
         primaryKey: string,
         primaryKeyParser: (value: string) => any,
-        modelName: string,
+        _modelName: string,
     ): { success: boolean; parsedIdentifier?: any } {
         // 파라미터 추출
         let identifier: string;

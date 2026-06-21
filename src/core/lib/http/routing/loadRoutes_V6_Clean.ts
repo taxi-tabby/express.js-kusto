@@ -21,7 +21,7 @@ async function loadDynamicRouteMap(): Promise<void> {
 
     try {
         log.Silly(`Loading dynamic route map in webpack build...`);
-        // @ts-ignore - 런타임에 생성되는 파일이므로 TypeScript가 찾을 수 없음
+        // @ts-expect-error - 런타임에 생성되는 파일이므로 TypeScript가 찾을 수 없음
         const routeMapModule = await import('@core/tmp/routes-map');
         routesMap = routeMapModule.routesMap;
         middlewaresMap = routeMapModule.middlewaresMap;
@@ -119,7 +119,7 @@ function smartRequire(filePath: string): any {
         const actualPath = require.resolve(resolvedPath);
         moduleResolutionCache.set(resolvedPath, actualPath);
         return require(actualPath);
-    } catch (error: any) {
+    } catch (_error: any) {
         moduleResolutionCache.set(resolvedPath, resolvedPath);
         return require(resolvedPath);
     }
@@ -440,7 +440,7 @@ function loadRoute(filePath: string): Router {
         ];
 
         // 라우트 맵에 등록된 모든 키를 체크하여 비슷한 경로가 있는지 확인
-        const availableRoutes = Object.keys(virtualFS.routes);
+        const _availableRoutes = Object.keys(virtualFS.routes);
 
         for (const altPath of alternativePaths) {
             if (virtualFS.routes[altPath]) {

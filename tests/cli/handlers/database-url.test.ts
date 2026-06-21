@@ -3,14 +3,15 @@ export {};
 const originalArgv = process.argv;
 const originalExit = process.exit;
 process.argv = ['node', 'kusto-db-cli'];
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore - mock exit during import
-process.exit = ((code?: number) => undefined) as never;
+process.exit = ((_code?: number) => undefined) as never;
 const origErr = console.error;
 const origLog = console.log;
 console.error = () => {};
 console.log = () => {};
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
+ 
 const {
     getDatabaseUrl,
     getDatabaseEnvVarName,

@@ -1,5 +1,5 @@
 ﻿import { Request, Response, NextFunction, RequestHandler as ExpressRequestHandler } from 'express';
-import { Validator, Schema, ValidationResult, FieldSchema } from '@lib/http/validation/validator';
+import { Validator, Schema, FieldSchema } from '@lib/http/validation/validator';
 import { log } from '@ext/winston';
 import { DependencyInjector } from '@lib/data/di/dependencyInjector';
 import { Injectable } from '@lib/types/generated-injectable-types';
@@ -396,7 +396,7 @@ export class RequestHandler {
         } // Dependency injection을 지원하는 실제 핸들러
         // req 파라미터는 Express RequestHandler 와 정확히 일치하도록 Request 로 받고,
         // validatedData 가 보장되는 핸들러 컨텍스트에서만 ValidatedRequest 로 좁힌다.
-        middlewares.push(async (req: Request, res: Response, next: NextFunction) => {
+        middlewares.push(async (req: Request, res: Response, _next: NextFunction) => {
             const vreq = req as ValidatedRequest;
             try {
                 // Dependency injector에서 모든 injectable 모듈 가져오기

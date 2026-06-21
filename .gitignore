@@ -205,3 +205,11 @@ prisma.config.*.ts
 
 # superpowers 작업 산출물(스펙/플랜) — 로컬 작업 기록, 추적 제외
 docs/superpowers/
+
+# Serena MCP 툴 작업 디렉터리 — 로컬 AI 툴링, 프레임워크와 무관(추적 제외)
+.serena/
+
+# VS Code — 공유 가치가 있는 확장 추천(extensions.json)만 추적하고
+# 개인/AI 툴링 설정(settings.json, mcp.json, copilot-patterns.md 등)은 추적 제외
+.vscode/*
+!.vscode/extensions.json

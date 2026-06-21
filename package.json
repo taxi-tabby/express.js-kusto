@@ -33,7 +33,7 @@
   "author": "rkdmf0000@gmail.com",
   "license": "ISC",
   "engines": {
-    "node": ">=18"
+    "node": ">=20.19"
   },
   "dependencies": {
     "@types/archiver": "^7.0.0",

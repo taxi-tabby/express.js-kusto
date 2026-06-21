@@ -35,7 +35,7 @@ function resolveSafe(extractRoot: string, entryName: string): string {
  */
 export async function extractZipSafe(zipPath: string, extractPath: string): Promise<number> {
     // yauzl 은 선택적 의존성이므로 지연 require.
-     
+
     const yauzl = require('yauzl');
     const root = path.resolve(extractPath);
     fs.mkdirSync(root, { recursive: true });

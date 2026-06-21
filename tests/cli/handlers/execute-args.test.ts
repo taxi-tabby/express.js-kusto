@@ -11,9 +11,8 @@ const origLog = console.log;
 console.error = () => {};
 console.log = () => {};
 
- 
 const { buildExecuteArgs, getDatabaseEnvVarName } = require('@/src/core/scripts/kusto-db-cli');
- 
+
 const { folderNameToEnvVarName } = require('@lib/data/database/dbNaming');
 
 process.argv = originalArgv;

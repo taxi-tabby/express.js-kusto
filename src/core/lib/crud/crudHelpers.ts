@@ -2322,7 +2322,10 @@ export class JsonApiTransformer {
      * 데이터 구조에서 모델 타입 추론
      * 필드 시그니처를 분석하여 모델을 식별
      */
-    private static inferModelFromDataStructure(data: any, _relationshipName: string): string | null {
+    private static inferModelFromDataStructure(
+        data: any,
+        _relationshipName: string,
+    ): string | null {
         const keys = Object.keys(data).filter((k) => !k.startsWith('_'));
 
         // 중간 테이블 패턴 감지 (예: UserRole은 userUuid, roleUuid 같은 FK 필드를 가짐)

@@ -3,10 +3,7 @@ import { repositoryManager } from '@lib/data/database/repositoryManager';
 import { prismaManager } from '@lib/data/database/prismaManager';
 import { Injectable } from '@lib/types/generated-injectable-types';
 import { RepositoryTypeMap, RepositoryName } from '@lib/types/generated-repository-types';
-import {
-    DatabaseNamesUnion,
-    DatabaseClientType,
-} from '@lib/types/generated-db-types';
+import { DatabaseNamesUnion, DatabaseClientType } from '@lib/types/generated-db-types';
 
 /**
  * 데이터베이스 접근을 위한 프록시 인터페이스

@@ -15,7 +15,6 @@ const origLog = console.log;
 console.error = () => {};
 console.log = () => {};
 
- 
 const { generateSecurityCode } = require('@/src/core/scripts/kusto-db-cli');
 
 // Restore originals after import

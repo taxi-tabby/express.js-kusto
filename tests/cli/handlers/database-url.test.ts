@@ -11,7 +11,6 @@ const origLog = console.log;
 console.error = () => {};
 console.log = () => {};
 
- 
 const {
     getDatabaseUrl,
     getDatabaseEnvVarName,

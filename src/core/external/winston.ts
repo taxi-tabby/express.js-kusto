@@ -351,7 +351,7 @@ function ensureLogDirectory(dir: string): boolean {
         return true;
     } catch (err) {
         // 부트스트랩 단계라 winston 자신을 쓸 수 없으므로 console 로 한 번만 알린다.
-         
+
         console.warn(
             `[winston] Failed to create log directory '${dir}': ${(err as Error)?.message}. File logging disabled.`,
         );
@@ -400,7 +400,6 @@ if (fileLoggingEnabled) {
             }),
         );
     } catch (err) {
-         
         console.warn(
             `[winston] Failed to initialize file transports: ${(err as Error)?.message}. Console-only logging.`,
         );

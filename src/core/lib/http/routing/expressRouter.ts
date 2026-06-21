@@ -26,7 +26,6 @@ import { DependencyInjector } from '@lib/data/di/dependencyInjector';
 import { prismaManager } from '@lib/data/database/prismaManager';
 import { repositoryManager } from '@lib/data/database/repositoryManager';
 import { kustoManager } from '@lib/data/di/kustoManager';
-import { ErrorFormatter as _ErrorFormatter } from '@lib/http/errors/errorFormatter';
 import {
     serialize,
     ResponseSerializer,
@@ -39,10 +38,7 @@ import {
 } from '@lib/crud/primaryKeyParsers';
 import { CrudSchemaRegistry } from '@lib/devtools/schema-api/crudSchemaRegistry';
 import { PrismaSchemaAnalyzer } from '@lib/devtools/schema-api/prismaSchemaAnalyzer';
-import {
-    syncSchemasFromAnalyzer,
-    registerJsonApiErrorSchema,
-} from '@lib/devtools/documentation';
+import { syncSchemasFromAnalyzer, registerJsonApiErrorSchema } from '@lib/devtools/documentation';
 import { log } from '@ext/winston';
 import '@lib/types/express-extensions';
 

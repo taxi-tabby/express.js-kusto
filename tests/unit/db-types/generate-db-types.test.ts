@@ -1,6 +1,5 @@
 export {};
 
- 
 const { buildDatabaseTypesContent } = require('@/src/core/scripts/generate-db-types');
 
 /**

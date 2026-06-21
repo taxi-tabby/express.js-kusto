@@ -11,7 +11,7 @@ const DEFAULT_EXTENSIONS_DIR = './src/app/extensions';
 /** Resolve and require an extension module, returning its default export (or the module). */
 function loadExtensionModule(filePath: string): unknown {
     const resolved = path.resolve(filePath);
-     
+
     const mod = require(resolved);
     return mod && mod.default !== undefined ? mod.default : mod;
 }

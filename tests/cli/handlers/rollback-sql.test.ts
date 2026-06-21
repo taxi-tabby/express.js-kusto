@@ -11,7 +11,6 @@ const origLog = console.log;
 console.error = () => {};
 console.log = () => {};
 
- 
 const { generateRollbackSQL } = require('@/src/core/scripts/kusto-db-cli');
 
 process.argv = originalArgv;

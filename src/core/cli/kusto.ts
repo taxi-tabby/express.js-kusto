@@ -22,7 +22,6 @@ import { runMonitor } from '@core/cli/monitor/monitorTui';
  *   kusto generate [--build]       프레임워크 타입 생성(db/injectable/repository)
  */
 
- 
 const pkgVersion: string = require(PACKAGE_JSON_PATH).version ?? '0.0.0';
 
 const kusto = new Command('kusto')
@@ -107,11 +106,11 @@ extensions
     .option('--production', 'Build in production mode')
     .action(async (opts) => {
         // 무거운 라우팅 그래프를 모든 CLI 호출에서 끌어오지 않도록 지연 로드.
-         
+
         const { loadExtensions } = require('@lib/extensions/loadExtensions');
-         
+
         const { extensionRegistry } = require('@lib/extensions/extensionRegistry');
-         
+
         const { log } = require('@ext/winston');
         const loaded = loadExtensions();
         await extensionRegistry.runBuild({

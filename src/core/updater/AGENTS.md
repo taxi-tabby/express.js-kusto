@@ -3,8 +3,13 @@
 A self-updater that fetches framework core (`src/core`) files from GitHub releases and applies them safely.
 Because it is an operator-facing CLI, it is **exempt** from the runtime log conventions (English-only, no emoji).
 
-> Important: the updater only touches core files. `src/app/` (user code) and `src/core/updater/` (itself) are
-> excluded from the deployment file map and are **never overwritten**. Exposed via the unified `kusto` CLI as `kusto update <...>`.
+> Important: the updater deploys **framework-owned** files only — `src/core/**` (except `src/core/updater/` itself),
+> plus framework root files (`src/index.ts`, `bin/kusto.js`, `docs/`). **Consumer-owned** trees and project files are
+> excluded from the deployment file map and are **never overwritten**: `src/app/` (user code), `tests/` (tests are
+> per-project), `public/` (consumer assets), and project meta/config files (`package.json`, `tsconfig.*`,
+> `jest.config.*`, `webpack.config.js`, `nodemon.*`, `prisma.config.ts`, `artillery-test.yml`, `README.md`,
+> `CHANGELOG.md`, `LICENSE*`, `CLAUDE.md`, `.gitignore`/`.gitattributes`). The scan is inclusive-by-default, so these
+> exclusions are the gate — see the two SSOT predicates in `analy.ts`. Exposed via the unified `kusto` CLI as `kusto update <...>`.
 
 ## Structure
 
@@ -36,8 +41,8 @@ Generated artifacts (`map/`, `packages/`, `temp-update/`, `.installed-map.json`)
 - **Key exports**: `isEntryInsideRoot` (pure guard, unit-tested), `extractZipSafe`.
 
 ### `analy.ts`
-- **Responsibility**: scan PROJECT_ROOT to build the core file map. Excludes `.gitignore`, deploy-excluded files, `src/app`, and `src/core/updater`. Sets `algo: sha256` explicitly.
-- **Key exports**: `generateFileMap(outputDir?)`, `runAnalysis()`.
+- **Responsibility**: scan PROJECT_ROOT to build the core file map. Two SSOT exclusion predicates gate the inclusive-by-default scan: `shouldSkipDirectory(dirName, relativePath)` (skips build/VCS/editor dirs + consumer-owned trees `src/app`/`tests`/`public` + `src/core/updater`) and `shouldExcludeFromDeployment(fileName, relativePath)` (drops project meta/config files by name/pattern: npm files, `tsconfig.*`, `jest.config.*`, `webpack.config.js`, `nodemon.*`, `prisma.config.ts`, `artillery-test.yml`, `README.md`/`CHANGELOG.md`/`LICENSE*`, `CLAUDE.md`, and the three generated `*-types.ts`). Also honors `.gitignore`. Sets `algo: sha256` explicitly.
+- **Key exports**: `generateFileMap(outputDir?)`, `runAnalysis()`, `shouldSkipDirectory`, `shouldExcludeFromDeployment`.
 
 ### `generate.ts`
 - **Responsibility**: package source files into a zip based on the file map (`file-map/` + `files/`). Produces the release asset.

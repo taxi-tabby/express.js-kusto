@@ -130,7 +130,7 @@ function shouldIgnoreFile(filePath: string, patterns: string[]): boolean {
  * @param relativePath 상대 경로
  * @returns 제외해야 하는 파일이면 true
  */
-function shouldExcludeFromDeployment(fileName: string, relativePath: string): boolean {
+export function shouldExcludeFromDeployment(fileName: string, relativePath: string): boolean {
     // npm 관련 파일들
     const npmFiles = [
         'package.json',
@@ -139,12 +139,12 @@ function shouldExcludeFromDeployment(fileName: string, relativePath: string): bo
         '.npmrc',
         '.npmignore'
     ];
-    
-    // 개발 도구 관련 파일들
+
+    // 개발 도구 / 프로젝트 메타 파일들 — 소비자(설치 프로젝트)가 소유·커스터마이즈하므로
+    // 프레임워크 업데이트가 덮어쓰면 안 된다. (jest.config 은 .js/.ts 변형이 있어 아래 패턴으로 처리)
     const devFiles = [
         'tsconfig.json',
         'tsconfig.*.json',
-        'jest.config.js',
         'webpack.config.js',
         'nodemon.json',
         'nodemon.*.json',
@@ -154,7 +154,10 @@ function shouldExcludeFromDeployment(fileName: string, relativePath: string): bo
         'CHANGELOG.md',
         'LICENSE',
         'LICENSE.md',
-        'LICENSE.txt'
+        'LICENSE.txt',
+        'CLAUDE.md',           // 프로젝트별 에이전트 지침(소비자 소유)
+        'prisma.config.ts',    // 루트 Prisma 설정: 소비자의 마이그레이션/어댑터 배선(temp per-DB 설정은 .gitignore)
+        'artillery-test.yml'   // 부하 테스트 설정: 소비자별 타깃/SLO
     ];
     
     // 자동 생성되는 타입 파일들 (서비스에서 자동 생성)
@@ -182,7 +185,13 @@ function shouldExcludeFromDeployment(fileName: string, relativePath: string): bo
     if (fileName.startsWith('nodemon.') && fileName.endsWith('.json')) {
         return true;
     }
-    
+
+    // jest 설정은 변형(.js/.ts/.cjs/.mjs/.json)이 많다 — 모두 소비자 소유로 제외.
+    // (기존엔 'jest.config.js' 만 제외돼 이 프로젝트가 쓰는 jest.config.ts 가 누설됐다)
+    if (/^jest\.config\.(js|ts|cjs|mjs|json)$/.test(fileName)) {
+        return true;
+    }
+
     return false;
 }
 
@@ -200,6 +209,32 @@ function calculateFileChecksum(filePath: string): string {
  * @param fileList 파일 목록을 저장할 배열
  * @param baseDir 기준 디렉토리 (상대 경로 계산용)
  */
+/**
+ * 스캔 중 재귀를 건너뛸 디렉토리인지 판정한다(배포 맵 제외의 SSOT, 디렉토리 단위).
+ * @param dirName 디렉토리 이름(basename)
+ * @param relativePath 프로젝트 루트 기준 상대 경로(슬래시 정규화)
+ * @returns 건너뛰어야 하면 true
+ *
+ * 배포 맵은 inclusive-by-default 스캔이므로, 소비자(설치 프로젝트)가 소유하는 트리는 여기서
+ * 명시적으로 제외해야 프레임워크 업데이트가 소비자 파일을 덮어쓰지 않는다.
+ *   - src/app          : 사용자 애플리케이션 코드
+ *   - src/core/updater : updater 자기 자신(업데이트 도중 자기 덮어쓰기 방지; 소비자는 자체 보유)
+ *   - tests            : 테스트는 프로젝트 단위. 프레임워크 자체 회귀 스위트는 @core/updater 등
+ *                        내부를 import 하므로 소비자 환경에선 실행 불가하고 가치도 없다.
+ *   - public           : 소비자 정적 에셋(robots.txt 등)
+ */
+export function shouldSkipDirectory(dirName: string, relativePath: string): boolean {
+    // 빌드 산출물 / VCS / 에디터 / 패키지 디렉토리(성능 + 비배포)
+    if (['node_modules', '.git', '.github', '.vscode', 'dist', 'build'].includes(dirName)) {
+        return true;
+    }
+    // 소비자 소유 트리(프레임워크가 배포로 덮어쓰면 안 됨)
+    const consumerOwnedTrees = ['src/app', 'src/core/updater', 'tests', 'public'];
+    return consumerOwnedTrees.some(
+        (root) => relativePath === root || relativePath.startsWith(root + '/')
+    );
+}
+
 function scanDirectory(dirPath: string, fileList: string[] = [], baseDir?: string): string[] {
     try {
         const items = fs.readdirSync(dirPath);
@@ -210,19 +245,10 @@ function scanDirectory(dirPath: string, fileList: string[] = [], baseDir?: strin
             const stat = fs.statSync(fullPath);
 
             if (stat.isDirectory()) {
-                // 상대 경로로 변환하여 src/app 경로인지 확인
+                // 프로젝트 루트 기준 상대 경로로 변환하여 스킵 여부 판정
                 const relativePath = path.relative(base, fullPath).replace(/\\/g, '/');
 
-                // node_modules, .git, .github 등 제외할 디렉토리 및 src/app, updater 폴더 제외.
-                // updater 는 src/core/updater 로 이동했으며, 자기 자신을 배포 맵에 포함하면
-                // 업데이트 도중 자기 덮어쓰기 위험이 있으므로 계속 제외한다(소비자는 자체 updater 유지).
-                const shouldSkip = ['node_modules', '.git', '.github', '.vscode', 'dist', 'build'].includes(item) ||
-                    relativePath === 'src/app' ||
-                    relativePath.startsWith('src/app/') ||
-                    relativePath === 'src/core/updater' ||
-                    relativePath.startsWith('src/core/updater/');
-
-                if (!shouldSkip) {
+                if (!shouldSkipDirectory(item, relativePath)) {
                     scanDirectory(fullPath, fileList, base);
                 }
             } else if (stat.isFile()) {

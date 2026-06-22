@@ -177,6 +177,30 @@ describe('applyCrudSerializers — includes', () => {
         );
         expect(out.author).toEqual({ name: 'A', id: 'a' });
     });
+
+    it('관계 노드: uuid PK 를 pick 으로 떨궈도 식별자(uuid) 보존', async () => {
+        const data = { id: '1', author: { uuid: 'au', name: 'A', email: 'e' } };
+        const out: any = await applyCrudSerializers(
+            data,
+            undefined,
+            { author: { pick: ['name'] } },
+            req,
+            PK,
+        );
+        expect(out.author).toEqual({ name: 'A', uuid: 'au' });
+    });
+
+    it('관계 노드: _id PK 를 omit 으로 떨궈도 식별자(_id) 보존', async () => {
+        const data = { id: '1', author: { _id: 'x', name: 'A' } };
+        const out: any = await applyCrudSerializers(
+            data,
+            undefined,
+            { author: { omit: ['_id', 'name'] as any } },
+            req,
+            PK,
+        );
+        expect(out.author._id).toBe('x');
+    });
 });
 
 describe('applyCrudSerializers — no-op', () => {

@@ -2744,9 +2744,18 @@ export class CrudRouteBuilder {
                 // Json 타입 필드 목록 가져오기 (관계 리소스 타입 기준)
                 const jsonFields = this.getJsonFieldSet(relationResourceType);
 
+                // 사용자 serialize: 관계 라우트는 serializeIncludes[relationName] 를 해당 리소스에 적용한다.
+                const serializedRelationData = await applyCrudSerializers(
+                    relationData,
+                    options?.serializeIncludes?.[relationName],
+                    undefined,
+                    req,
+                    { primaryKey: 'id' },
+                );
+
                 // JSON:API 응답 생성
                 const response: JsonApiResponse = JsonApiTransformer.createJsonApiResponse(
-                    relationData,
+                    serializedRelationData,
                     relationResourceType,
                     {
                         primaryKey: 'id',

@@ -111,6 +111,37 @@ describe('CRUD serialize / serializeIncludes (통합)', () => {
         expect(res.status).toBe(200);
         expect(res.body.data.attributes.content).toBeUndefined();
         const author = res.body.included.find((r: any) => r.id === 'u1');
+        expect(author).toBeDefined();
+        expect(author.attributes.email).toBeUndefined();
+    });
+
+    it('관계 라우트 GET /:id/:relation: serializeIncludes 로 관계 리소스 필터 (누출 차단)', async () => {
+        const app = buildTestApp(fixture, {
+            serializeIncludes: { author: { pick: ['id', 'name'] } },
+        });
+        await seed();
+        const res = await request(app).get('/posts/p1/author');
+        expect(res.status).toBe(200);
+        expect(res.body.data.attributes.name).toBe('Alice');
+        expect(res.body.data.attributes.email).toBeUndefined();
+    });
+
+    it('create POST: root omit + included 필터', async () => {
+        const app = buildTestApp(fixture, {
+            serialize: { omit: ['content'] },
+            serializeIncludes: { author: { pick: ['id', 'name'] } },
+        });
+        await seed();
+        const res = await request(app)
+            .post('/posts?include=author')
+            .send({
+                data: { type: 'posts', attributes: { id: 'p9', title: 'New', content: 'x', authorId: 'u1' } },
+            })
+            .set('Content-Type', 'application/vnd.api+json');
+        expect(res.status).toBe(201);
+        expect(res.body.data.attributes.content).toBeUndefined();
+        const author = res.body.included.find((r: any) => r.id === 'u1');
+        expect(author).toBeDefined();
         expect(author.attributes.email).toBeUndefined();
     });
 

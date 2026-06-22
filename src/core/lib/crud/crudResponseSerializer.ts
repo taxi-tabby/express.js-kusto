@@ -8,39 +8,52 @@ import { applyResponseSerializer, ResponseSerializer } from '@lib/http/serializa
  * Deterministic by design — relation positions are addressed by `?include=` path keys, never
  * by data-shape inference or schemaAnalyzer (which is null-prone in production). Operating on
  * raw data (before attributes/relationships/included split) makes both includeMerge modes
- * behave identically. The identity key is always preserved so JSON:API resources keep a valid id.
+ * behave identically. The identity key the JSON:API transformer uses (the configured primaryKey,
+ * else id/uuid/_id) is always preserved so JSON:API resources keep a valid id.
  */
 
-/** JSON:API identity key for included relation resources (the transformer reads item.id). */
-const INCLUDED_ID_KEY = 'id';
+/** Identity keys the JSON:API transformer falls back to, in precedence order (see crudHelpers transformToResource). */
+const IDENTITY_FALLBACK_KEYS = ['id', 'uuid', '_id'];
+
+/** The single identity key the transformer will use for `node`, given the configured primaryKey. */
+function identityKeyFor(node: Record<string, unknown>, primaryKey: string): string | undefined {
+    const candidates =
+        primaryKey && !IDENTITY_FALLBACK_KEYS.includes(primaryKey)
+            ? [primaryKey, ...IDENTITY_FALLBACK_KEYS]
+            : IDENTITY_FALLBACK_KEYS;
+    for (const k of candidates) if (k in node) return k;
+    return undefined;
+}
 
 /**
  * Apply `sz` to a node (single object or array of objects) via the shared ResponseSerializer
- * engine, then restore `idKey` if the serializer dropped it. A JSON:API resource MUST have an
- * id, so pick/omit/function output can never strip identity.
+ * engine, then restore the identity key if the serializer dropped it. A JSON:API resource MUST
+ * have an id, so pick/omit/function output can never strip identity.
  */
 async function applyWithIdPreserved(
     node: unknown,
     sz: ResponseSerializer<any>,
     req: Request,
-    idKey: string,
+    primaryKey: string,
 ): Promise<unknown> {
     const filtered = await applyResponseSerializer(node, sz, req);
     const restore = (orig: any, filt: any) => {
         if (
-            filt &&
-            typeof filt === 'object' &&
-            !Array.isArray(filt) &&
-            orig &&
-            typeof orig === 'object' &&
-            idKey in orig &&
-            !(idKey in filt)
+            !(
+                filt &&
+                typeof filt === 'object' &&
+                !Array.isArray(filt) &&
+                orig &&
+                typeof orig === 'object'
+            )
         ) {
-            const target = Object.isFrozen(filt) ? { ...filt } : filt;
-            target[idKey] = orig[idKey];
-            return target;
+            return filt;
         }
-        return filt;
+        const idKey = identityKeyFor(orig, primaryKey);
+        if (!idKey || idKey in filt) return filt;
+        const target = Object.isFrozen(filt) ? { ...filt } : filt;
+        target[idKey] = orig[idKey];
+        return target;
     };
     if (Array.isArray(node) && Array.isArray(filtered)) {
         return filtered.map((f, i) => restore((node as any[])[i], f));
@@ -65,7 +78,9 @@ async function applyAtPath(
     const child = record[head];
     if (child === null || child === undefined) return record; // relation not loaded → no-op
     if (rest.length === 0) {
-        record[head] = await applyWithIdPreserved(child, sz, req, INCLUDED_ID_KEY);
+        // Use 'id' as the primaryKey for included relation nodes so the fallback
+        // candidates (id/uuid/_id) are searched in the standard precedence order.
+        record[head] = await applyWithIdPreserved(child, sz, req, 'id');
         return record;
     }
     if (Array.isArray(child)) {

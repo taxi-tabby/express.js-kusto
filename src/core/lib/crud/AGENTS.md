@@ -20,8 +20,9 @@ User-facing CRUD response filtering. `applyCrudSerializers(data, rootSerializer,
 is a pure async pre-pass over RAW Prisma data (before JSON:API transform), so both includeMerge modes
 behave identically. Deterministic: relation nodes are addressed by `?include=` path keys, never by
 data-shape inference or `schemaAnalyzer`. Reuses `@lib/http/serialization/serializer`
-(`applyResponseSerializer`/`ResponseSerializer`); always preserves the identity key. Consumed by
-`crudRouteBuilder` (show/create/index/update/recover handlers).
+(`applyResponseSerializer`/`ResponseSerializer`); always preserves the identity key — the configured
+primaryKey for root records, and the first-present id/uuid/_id for included relation nodes. Consumed by
+`crudRouteBuilder` (show/create/index/update/recover handlers and the `GET /:id/:relation` relation route).
 
 ### crudRouteBuilder.ts
 **Responsibility**: The delegation target of `ExpressRouter.CRUD()`. When ExpressRouter passes a `CrudBuilderContext` carrying its shared capabilities, this builder picks the active actions (computed from `only`/`except`) and registers the Express routes. Each handler follows the flow: set the JSON:API Content-Type → parse query/PK → apply the include policy → call Prisma → serialize the JSON:API envelope → run the `beforeXxx`/`afterXxx` hooks. Soft delete (410 Gone response), relationship handling (connect/disconnect/set, with soft delete as a replacement), atomic operations (`POST /atomic`, transactional), and dev-mode schema registration are all handled here as well.
@@ -33,7 +34,8 @@ data-shape inference or `schemaAnalyzer`. Reuses `@lib/http/serialization/serial
 - `middleware`, `validation`, `hooks` (`beforeXxx`/`afterXxx`): per-operation middleware, Zod validation, lifecycle hooks.
 - `serialize` / `serializeIncludes`: user response filtering applied via `crudResponseSerializer.applyCrudSerializers`
   as a pre-pass on raw data; `serialize` shapes the root resource (typed to the model), `serializeIncludes`
-  shapes relations by `?include=` path. Deterministic across both includeMerge modes; identity key preserved.
+  shapes relations by `?include=` path and also applies on the `GET /:id/:relation` relation route (keyed by the
+  relation name); identity (id/uuid/_id) is always preserved. Deterministic across both includeMerge modes.
 **Dependencies**: same tier — `@lib/crud/crudHelpers` (CrudQueryParser, PrismaQueryBuilder, CrudResponseFormatter, JsonApiTransformer, JSON:API types), `@lib/crud/primaryKeyParsers` (parseString, parseIdSmart, getSmartPrimaryKeyParser), `@lib/crud/jsonApiConstants` (media types), `@lib/crud/crudResponseSerializer` (applyCrudSerializers). External tiers: `@lib/data/database/prismaManager` (`getWrap`/`getClient`), `@lib/http/validation/requestHandler` (validation middleware), `@lib/http/serialization/serializer` (BigInt/Date serialization), `@lib/http/errors/errorFormatter`·`errorHandler`·`errorCodes`, `@lib/devtools/schema-api/*` (CrudSchemaRegistry, PrismaSchemaAnalyzer, dev mode only), `@lib/devtools/documentation` (OpenAPI helpers), `@lib/http/routing/expressRouter` (types `HandlerFunction`·`MiddlewareHandlerFunction`), `@ext/winston`.
 
 ### crudHelpers.ts

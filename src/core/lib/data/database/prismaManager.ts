@@ -59,6 +59,34 @@ export function listDatabaseFolders(dbPath: string): string[] {
 }
 
 /**
+ * True when running from a webpack bundle / dist artifact rather than the dev source tree.
+ * The bundle's DefinePlugin injects WEBPACK_BUILD='true'; as a fallback, a production run with a
+ * built `dist/server.js` present is also treated as bundled.
+ */
+function isBundledRuntime(cwd: string = process.cwd()): boolean {
+    return (
+        process.env.WEBPACK_BUILD === 'true' ||
+        (process.env.NODE_ENV === 'production' &&
+            fs.existsSync(path.join(cwd, 'dist', 'server.js')))
+    );
+}
+
+/** Bundled location of app DB folders — the webpack build copies `src/app/db/**` here. */
+function getDistDbBasePath(cwd: string = process.cwd()): string {
+    return path.join(cwd, 'dist', 'src', 'app', 'db');
+}
+
+/**
+ * Base directory holding app database folders (`<base>/<name>/`), dist-aware. The webpack build
+ * copies `src/app/db/**` to `dist/src/app/db/**`, so a bundled (dist-only) runtime discovers and
+ * validates DBs under `dist/`; the dev source tree uses `src/app/db`. SINGLE SOURCE for every DB
+ * folder/schema/client path resolution in this module.
+ */
+export function getAppDbBasePath(cwd: string = process.cwd()): string {
+    return isBundledRuntime(cwd) ? getDistDbBasePath(cwd) : path.join(cwd, 'src', 'app', 'db');
+}
+
+/**
  * Prisma Manager Singleton Class
  * Manages multiple Prisma clients for different databases
  */
@@ -135,7 +163,7 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
         // Load environment variables first
         this.loadEnvironmentVariables();
 
-        const dbPath = path.join(process.cwd(), 'src', 'app', 'db');
+        const dbPath = getAppDbBasePath();
 
         // DB 를 쓰지 않는 서비스는 src/app/db 가 아예 없을 수 있다 — 디렉터리 부재(또는 빈 폴더)는
         // 오류가 아니라 "DB 없음"으로 취급한다. 그래야 DB-less 앱이 degraded 가 아니라 healthy 로
@@ -145,7 +173,7 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
         if (folders.length === 0) {
             this.initialized = true;
             log.Info(
-                'No databases configured (src/app/db absent or empty) — running without a database.',
+                'No databases configured (DB base path absent or empty) — running without a database.',
             );
             return;
         }
@@ -211,22 +239,11 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 
             // Webpack/Production 환경 감지: dist/server.js 존재만으로 판단하지 않음
             // NODE_ENV가 development면 무조건 개발 경로 사용
-            const isWebpackBuild =
-                process.env.WEBPACK_BUILD === 'true' ||
-                (process.env.NODE_ENV === 'production' &&
-                    fs.existsSync(path.join(process.cwd(), 'dist', 'server.js')));
+            const isWebpackBuild = isBundledRuntime();
 
             if (isWebpackBuild) {
                 // In webpack build/production environment
-                const distClientPath = path.join(
-                    process.cwd(),
-                    'dist',
-                    'src',
-                    'app',
-                    'db',
-                    folderName,
-                    'client',
-                );
+                const distClientPath = path.join(getDistDbBasePath(), folderName, 'client');
                 const clientIndexPath = path.join(distClientPath, 'index.js');
 
                 // Check if built client exists
@@ -356,15 +373,7 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
                     );
 
                     // Try fallback to dist path if exists (development with build)
-                    const distClientPath = path.join(
-                        process.cwd(),
-                        'dist',
-                        'src',
-                        'app',
-                        'db',
-                        folderName,
-                        'client',
-                    );
+                    const distClientPath = path.join(getDistDbBasePath(), folderName, 'client');
                     const distClientIndexPath = path.join(distClientPath, 'index.js');
 
                     if (fs.existsSync(distClientIndexPath)) {
@@ -464,14 +473,7 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
     private async checkIfGenerated(folderName: string): Promise<boolean> {
         try {
             // Check if the specific database schema exists
-            const schemaPath = path.join(
-                process.cwd(),
-                'src',
-                'app',
-                'db',
-                folderName,
-                'schema.prisma',
-            );
+            const schemaPath = path.join(getAppDbBasePath(), folderName, 'schema.prisma');
             if (!fs.existsSync(schemaPath)) {
                 return false;
             }
@@ -494,7 +496,7 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
             }
 
             // Check if the generated client directory exists and has the expected files
-            const clientPath = path.join(process.cwd(), 'src', 'app', 'db', folderName, 'client');
+            const clientPath = path.join(getAppDbBasePath(), folderName, 'client');
             if (!fs.existsSync(clientPath)) {
                 return false;
             }
@@ -514,14 +516,7 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
      */
     private getSchemaProvider(folderName: string): string {
         try {
-            const schemaPath = path.join(
-                process.cwd(),
-                'src',
-                'app',
-                'db',
-                folderName,
-                'schema.prisma',
-            );
+            const schemaPath = path.join(getAppDbBasePath(), folderName, 'schema.prisma');
             const schemaContent = fs.readFileSync(schemaPath, 'utf-8');
             // datasource 블록 내의 provider 값만 추출
             const dsBlock = schemaContent.match(/datasource\s+\w+\s*{([\s\S]*?)}/m);
@@ -591,14 +586,7 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
      */
     private getDatabaseUrl(folderName: string): string {
         try {
-            const schemaPath = path.join(
-                process.cwd(),
-                'src',
-                'app',
-                'db',
-                folderName,
-                'schema.prisma',
-            );
+            const schemaPath = path.join(getAppDbBasePath(), folderName, 'schema.prisma');
             const schemaContent = fs.readFileSync(schemaPath, 'utf-8');
 
             // Parse the schema to extract the env variable name (Prisma 6 format)
@@ -637,14 +625,7 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
      */
     private getDatasourceName(folderName: string): string {
         try {
-            const schemaPath = path.join(
-                process.cwd(),
-                'src',
-                'app',
-                'db',
-                folderName,
-                'schema.prisma',
-            );
+            const schemaPath = path.join(getAppDbBasePath(), folderName, 'schema.prisma');
             const schemaContent = fs.readFileSync(schemaPath, 'utf-8');
 
             // Parse the schema to extract the datasource name
@@ -680,14 +661,7 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
         for (const config of this.getAllConfigs()) {
             try {
                 // Read schema.prisma to get provider
-                const schemaPath = path.join(
-                    process.cwd(),
-                    'src',
-                    'app',
-                    'db',
-                    config.name,
-                    'schema.prisma',
-                );
+                const schemaPath = path.join(getAppDbBasePath(), config.name, 'schema.prisma');
                 const schemaContent = fs.readFileSync(schemaPath, 'utf-8');
                 const providerMatch = schemaContent.match(/provider\s*=\s*["']([^"']+)["']/);
 
@@ -727,14 +701,7 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
         }
 
         try {
-            const schemaPath = path.join(
-                process.cwd(),
-                'src',
-                'app',
-                'db',
-                databaseName,
-                'schema.prisma',
-            );
+            const schemaPath = path.join(getAppDbBasePath(), databaseName, 'schema.prisma');
             const schemaContent = fs.readFileSync(schemaPath, 'utf-8');
             const providerMatch = schemaContent.match(/provider\s*=\s*["']([^"']+)["']/);
             const provider = providerMatch ? providerMatch[1] : 'unknown';
@@ -1489,14 +1456,7 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
         if (process.env.NODE_ENV === 'development') {
             const config = this.configs.get(databaseName);
             if (config) {
-                const clientPath = path.join(
-                    process.cwd(),
-                    'src',
-                    'app',
-                    'db',
-                    databaseName,
-                    'client',
-                );
+                const clientPath = path.join(getAppDbBasePath(), databaseName, 'client');
                 const normalizedClientPath = clientPath.replace(/\\/g, '/');
 
                 // Clear all cached modules related to this client (cross-platform)
@@ -1528,7 +1488,7 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
 
         // Process the database folder again to recreate the client
         try {
-            const dbPath = path.join(process.cwd(), 'src', 'app', 'db');
+            const dbPath = getAppDbBasePath();
             await this.processDatabaseFolder(databaseName, dbPath);
             log.Info(`Client refreshed for database: ${databaseName}`);
         } catch (error) {
@@ -1552,15 +1512,8 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
                 return false;
             }
 
-            const clientPath = path.join(process.cwd(), 'src', 'app', 'db', databaseName, 'client');
-            const schemaPath = path.join(
-                process.cwd(),
-                'src',
-                'app',
-                'db',
-                databaseName,
-                'schema.prisma',
-            );
+            const clientPath = path.join(getAppDbBasePath(), databaseName, 'client');
+            const schemaPath = path.join(getAppDbBasePath(), databaseName, 'schema.prisma');
 
             // Check if schema file exists
             if (!fs.existsSync(schemaPath)) {

@@ -237,7 +237,7 @@ Avoid `$runDistributedTransaction()` — unreliable due to Prisma connection poo
 - `GET /` — index with filtering (`?filter[field_op]=value`), sorting (`?sort=-field`), pagination (`?page[number]=1&page[size]=10`), includes (`?include=relation`), field selection (`?select=field1,field2`)
 - `GET /:id`, `POST /`, `PUT|PATCH /:id`, `DELETE /:id`, `POST /:id/recover`
 
-Options: `primaryKey`, `primaryKeyParser`, `only`/`except`, per-operation `middleware` and `validation`.
+Options: `primaryKey`, `primaryKeyParser`, `only`/`except`, per-operation `middleware` and `validation`, `serialize` (root response filter, reuses `ResponseSerializer`), `serializeIncludes` (relation filters keyed by `?include=` path; deterministic across includeMerge modes).
 
 ### Documentation Routes (Dev Mode)
 

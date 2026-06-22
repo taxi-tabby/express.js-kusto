@@ -2439,6 +2439,19 @@ export class ExpressRouter {
                     req: Request,
                 ) => Promise<ExtractModelResultType<T, M>> | ExtractModelResultType<T, M>;
             };
+
+            /**
+             * 응답 정제(root 리소스). 기존 ResponseSerializer 재사용({pick}/{omit}/함수).
+             * primary 모델로 강타입. JSON:API 식별자(primaryKey)는 항상 보존된다.
+             */
+            serialize?: ResponseSerializer<ExtractModelType<T, M>>;
+
+            /**
+             * 관계 리소스 정제. 키 = ?include= 경로(예: 'posts', 'posts.author').
+             * raw 데이터 전처리로 적용되어 includeMerge 양 모드에서 동일하게 동작한다.
+             * 어떤 serializer 결과든 included 리소스의 식별자(id)는 보존된다.
+             */
+            serializeIncludes?: Record<string, ResponseSerializer<any>>;
         },
     ): ExpressRouter {
         // CRUD 엔진은 CrudRouteBuilder 로 분리됨(Step 3). ExpressRouter 는 컨텍스트로 위임만 한다.

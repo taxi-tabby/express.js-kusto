@@ -36,7 +36,9 @@ async function applyWithIdPreserved(
             idKey in orig &&
             !(idKey in filt)
         ) {
-            filt[idKey] = orig[idKey];
+            const target = Object.isFrozen(filt) ? { ...filt } : filt;
+            target[idKey] = orig[idKey];
+            return target;
         }
         return filt;
     };
@@ -85,6 +87,9 @@ async function applyAtPath(
  * @param includeSerializers  map of `?include=` path → serializer for that relation node
  * @param req             passed to function-form serializers
  * @param opts.primaryKey identity field of the root model
+ *
+ * @remarks Mutates relation nodes in-place on the input `data` (request-local Prisma result).
+ *          Callers must use the returned value and not reuse the original `data` reference afterward.
  */
 export async function applyCrudSerializers<D>(
     data: D,

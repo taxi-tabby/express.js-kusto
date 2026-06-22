@@ -76,6 +76,17 @@ describe('applyCrudSerializers — root', () => {
         );
         expect(out).toEqual({ name: 'a', uuid: 'u' });
     });
+
+    it('함수형이 frozen 객체를 반환해 id 를 떨궈도 throw 없이 id 복원', async () => {
+        const out: any = await applyCrudSerializers(
+            { id: '1', name: 'a' },
+            () => Object.freeze({ name: 'a' }),
+            undefined,
+            req,
+            PK,
+        );
+        expect(out).toEqual({ name: 'a', id: '1' });
+    });
 });
 
 describe('applyCrudSerializers — includes', () => {

@@ -1962,7 +1962,12 @@ export class CrudRouteBuilder {
 
                 // JSON:API 응답 포맷
                 const response = {
-                    data: this.transformToJsonApiResource(serializedResult, modelName, req, primaryKey),
+                    data: this.transformToJsonApiResource(
+                        serializedResult,
+                        modelName,
+                        req,
+                        primaryKey,
+                    ),
                     jsonapi: {
                         version: JSON_API_VERSION,
                     },

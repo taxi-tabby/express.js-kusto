@@ -111,6 +111,10 @@ web_modules/
 ./.next
 ./out
 
+# Express.js-Kusto 내부 생성 출력 (확장 onBuild 산출물 등). Next 의 .next 와 동일 성격:
+# 빌드 타임에 생성되는 공용 디렉터리이며 버전 관리에서 제외한다. 있으면 쓰고 없으면 없는 대로 동작한다.
+.kusto/
+
 # Nuxt.js build / generate output
 .nuxt
 dist

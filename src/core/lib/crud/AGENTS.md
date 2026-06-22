@@ -6,13 +6,22 @@ The tier that, when `router.CRUD(db, model, options)` is called, auto-generates 
 
 ```
 crud/
-├── crudRouteBuilder.ts   # Orchestrator that registers CRUD routes in bulk (index/show/create/update/destroy/recover/atomic/relationship)
-├── crudHelpers.ts        # Query parsing + Prisma query builder + JSON:API transformation + JSON:API type definitions
-├── primaryKeyParsers.ts  # :id parameter parsers (uuid/string/int/smart) — pure functions
-└── jsonApiConstants.ts   # JSON:API media-type constants (SSOT)
+├── crudRouteBuilder.ts         # Orchestrator that registers CRUD routes in bulk (index/show/create/update/destroy/recover/atomic/relationship)
+├── crudHelpers.ts              # Query parsing + Prisma query builder + JSON:API transformation + JSON:API type definitions
+├── crudResponseSerializer.ts   # User-facing response filtering pre-pass (pick/omit/function serializers on raw Prisma data)
+├── primaryKeyParsers.ts        # :id parameter parsers (uuid/string/int/smart) — pure functions
+└── jsonApiConstants.ts         # JSON:API media-type constants (SSOT)
 ```
 
 ## Files
+
+### crudResponseSerializer.ts
+User-facing CRUD response filtering. `applyCrudSerializers(data, rootSerializer, includeSerializers, req, opts)`
+is a pure async pre-pass over RAW Prisma data (before JSON:API transform), so both includeMerge modes
+behave identically. Deterministic: relation nodes are addressed by `?include=` path keys, never by
+data-shape inference or `schemaAnalyzer`. Reuses `@lib/http/serialization/serializer`
+(`applyResponseSerializer`/`ResponseSerializer`); always preserves the identity key. Consumed by
+`crudRouteBuilder` (show/create/index/update/recover handlers).
 
 ### crudRouteBuilder.ts
 **Responsibility**: The delegation target of `ExpressRouter.CRUD()`. When ExpressRouter passes a `CrudBuilderContext` carrying its shared capabilities, this builder picks the active actions (computed from `only`/`except`) and registers the Express routes. Each handler follows the flow: set the JSON:API Content-Type → parse query/PK → apply the include policy → call Prisma → serialize the JSON:API envelope → run the `beforeXxx`/`afterXxx` hooks. Soft delete (410 Gone response), relationship handling (connect/disconnect/set, with soft delete as a replacement), atomic operations (`POST /atomic`, transactional), and dev-mode schema registration are all handled here as well.
@@ -45,6 +54,7 @@ The canonical import path takes the form `@lib/crud/<file>`, descending deep fro
 ```ts
 import { CrudRouteBuilder, CrudBuilderContext } from '@lib/crud/crudRouteBuilder';
 import { CrudQueryParser, PrismaQueryBuilder, JsonApiTransformer } from '@lib/crud/crudHelpers';
+import { applyCrudSerializers } from '@lib/crud/crudResponseSerializer';
 import { parseIdSmart, getSmartPrimaryKeyParser } from '@lib/crud/primaryKeyParsers';
 import { JSON_API_CONTENT_TYPE } from '@lib/crud/jsonApiConstants';
 ```

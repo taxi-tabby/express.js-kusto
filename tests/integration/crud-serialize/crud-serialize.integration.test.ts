@@ -88,9 +88,7 @@ describe('CRUD serialize / serializeIncludes (통합)', () => {
             serializeIncludes: { author: { pick: ['id', 'name'] } },
         });
         await seed();
-        const res = await request(app).get(
-            '/posts?include=author&page[number]=1&page[size]=10',
-        );
+        const res = await request(app).get('/posts?include=author&page[number]=1&page[size]=10');
         expect(res.status).toBe(200);
         expect(res.body.data[0].attributes.content).toBeUndefined();
         const author = res.body.included.find((r: any) => r.id === 'u1');
@@ -135,7 +133,10 @@ describe('CRUD serialize / serializeIncludes (통합)', () => {
         const res = await request(app)
             .post('/posts?include=author')
             .send({
-                data: { type: 'posts', attributes: { id: 'p9', title: 'New', content: 'x', authorId: 'u1' } },
+                data: {
+                    type: 'posts',
+                    attributes: { id: 'p9', title: 'New', content: 'x', authorId: 'u1' },
+                },
             })
             .set('Content-Type', 'application/vnd.api+json');
         expect(res.status).toBe(201);

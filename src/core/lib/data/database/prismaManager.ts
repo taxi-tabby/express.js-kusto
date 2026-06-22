@@ -173,7 +173,7 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
         if (folders.length === 0) {
             this.initialized = true;
             log.Info(
-                'No databases configured (src/app/db absent or empty) — running without a database.',
+                'No databases configured (DB base path absent or empty) — running without a database.',
             );
             return;
         }

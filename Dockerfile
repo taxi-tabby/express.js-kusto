@@ -31,6 +31,10 @@ RUN npm ci
 COPY . .
 RUN npm run build
 
+# .kusto 는 프레임워크 내부 생성 출력 디렉터리(Next 의 .next 와 동일 성격)다. 확장/생성 산출물이
+# 없으면 만들어지지 않을 수 있으므로, 다음 스테이지로의 COPY 가 실패하지 않도록 빈 디렉터리라도 보장한다.
+RUN mkdir -p /app/.kusto
+
 # ── runner ───────────────────────────────────────────────────────────────
 FROM node:${NODE_VERSION}-bookworm-slim AS runner
 WORKDIR /app
@@ -44,9 +48,11 @@ ENV NODE_ENV=production \
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/package.json ./package.json
-# React 확장 클라이언트 번들. onInit 이 production 에서 빌드하지 않고 process.cwd()/.kusto/react
-# 를 정적 서빙하므로(= /app/.kusto/react), 빌드 단계의 `kusto extensions build` 산출물을 옮긴다.
-# 없으면 /__kusto_react/client.{js,css} 가 404 가 된다.
+# .kusto: 프레임워크 내부 생성 출력 디렉터리(Next 의 .next 와 동일 성격) — 풀스택 의존이 아니라
+# 빌드 타임 산출물을 담는 공용 디렉터리다. 있으면 런타임 정적 서빙에 쓰고, 없으면(확장/생성 산출물
+# 부재) 비어 있어도 무방하다(빌더에서 mkdir 로 존재만 보장 → COPY 안전). 예: 풀스택 React 확장 사용
+# 시 클라이언트 번들이 .kusto/react 에 생성되어 /__kusto_react/client.{js,css} 로 서빙된다(미사용 시
+# 해당 라우트 자체가 없으므로 비어 있어도 문제 없음).
 COPY --from=builder /app/.kusto ./.kusto
 
 # node 이미지에 기본 포함된 비루트 사용자로 구동.

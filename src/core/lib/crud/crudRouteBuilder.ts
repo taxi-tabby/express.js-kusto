@@ -12,6 +12,7 @@ import {
 } from '@lib/crud/crudHelpers';
 import { ErrorFormatter } from '@lib/http/errors/errorFormatter';
 import { serialize } from '@lib/http/serialization/serializer';
+import { applyCrudSerializers } from '@lib/crud/crudResponseSerializer';
 import {
     parseString as parseStringImpl,
     parseIdSmart as parseIdSmartImpl,
@@ -291,9 +292,17 @@ export class CrudRouteBuilder {
                     client[modelName].count({ where: totalCountOptions.where }),
                 ]);
 
+                const serializedItems = await applyCrudSerializers(
+                    items,
+                    options?.serialize,
+                    options?.serializeIncludes,
+                    req,
+                    { primaryKey },
+                );
+
                 // JSON:API 응답 엔벨로프 조립 + 직렬화
                 const serializedResponse = this.buildIndexResponse(
-                    items,
+                    serializedItems,
                     total,
                     queryParams,
                     req,
@@ -491,6 +500,14 @@ export class CrudRouteBuilder {
                 // Base URL 생성
                 const baseUrl = this.buildBaseUrl(req);
 
+                const serializedItem = await applyCrudSerializers(
+                    item,
+                    options?.serialize,
+                    options?.serializeIncludes,
+                    req,
+                    { primaryKey },
+                );
+
                 // 포함된 리소스 생성 (include 파라미터가 있는 경우)
                 let included: JsonApiResource[] | undefined;
                 if (
@@ -499,7 +516,7 @@ export class CrudRouteBuilder {
                     !options?.includeMerge
                 ) {
                     included = JsonApiTransformer.createIncludedResources(
-                        [item],
+                        [serializedItem],
                         queryParams.include,
                         queryParams.fields,
                         baseUrl,
@@ -511,7 +528,7 @@ export class CrudRouteBuilder {
 
                 // JSON:API 응답 생성
                 const response: JsonApiResponse = JsonApiTransformer.createJsonApiResponse(
-                    item,
+                    serializedItem,
                     modelName,
                     {
                         primaryKey,
@@ -711,6 +728,14 @@ export class CrudRouteBuilder {
                     await options.hooks.afterCreate(result, req);
                 }
 
+                const serializedResult = await applyCrudSerializers(
+                    result,
+                    options?.serialize,
+                    options?.serializeIncludes,
+                    req,
+                    { primaryKey },
+                );
+
                 // Base URL 생성
                 const baseUrl = this.buildBaseUrl(req);
 
@@ -722,7 +747,7 @@ export class CrudRouteBuilder {
                     !options?.includeMerge
                 ) {
                     createIncluded = JsonApiTransformer.createIncludedResources(
-                        [result],
+                        [serializedResult],
                         queryParams.include,
                         queryParams.fields,
                         baseUrl,
@@ -734,7 +759,7 @@ export class CrudRouteBuilder {
 
                 // JSON:API 응답 생성
                 const response: JsonApiResponse = JsonApiTransformer.createJsonApiResponse(
-                    result,
+                    serializedResult,
                     modelName,
                     {
                         primaryKey,
@@ -1587,9 +1612,17 @@ export class CrudRouteBuilder {
                     await options.hooks.afterUpdate(result, req);
                 }
 
+                const serializedResult = await applyCrudSerializers(
+                    result,
+                    options?.serialize,
+                    options?.serializeIncludes,
+                    req,
+                    { primaryKey },
+                );
+
                 // JSON:API 단일 리소스 응답 조립 + 직렬화
                 const serializedResponse = this.buildUpdateResponse(
-                    result,
+                    serializedResult,
                     queryParams,
                     req,
                     modelName,
@@ -1906,6 +1939,14 @@ export class CrudRouteBuilder {
                     await options.hooks.afterRecover(result, req);
                 }
 
+                const serializedResult = await applyCrudSerializers(
+                    result,
+                    options?.serialize,
+                    options?.serializeIncludes,
+                    req,
+                    { primaryKey },
+                );
+
                 // metadata 객체 생성 - 기존 헬퍼 함수 사용
                 const metadata = CrudResponseFormatter.createPaginationMeta(
                     [result], // 단일 항목을 배열로 감싸서 전달
@@ -1921,7 +1962,12 @@ export class CrudRouteBuilder {
 
                 // JSON:API 응답 포맷
                 const response = {
-                    data: this.transformToJsonApiResource(result, modelName, req, primaryKey),
+                    data: this.transformToJsonApiResource(
+                        serializedResult,
+                        modelName,
+                        req,
+                        primaryKey,
+                    ),
                     jsonapi: {
                         version: JSON_API_VERSION,
                     },
@@ -2703,9 +2749,18 @@ export class CrudRouteBuilder {
                 // Json 타입 필드 목록 가져오기 (관계 리소스 타입 기준)
                 const jsonFields = this.getJsonFieldSet(relationResourceType);
 
+                // 사용자 serialize: 관계 라우트는 serializeIncludes[relationName] 를 해당 리소스에 적용한다.
+                const serializedRelationData = await applyCrudSerializers(
+                    relationData,
+                    options?.serializeIncludes?.[relationName],
+                    undefined,
+                    req,
+                    { primaryKey: 'id' },
+                );
+
                 // JSON:API 응답 생성
                 const response: JsonApiResponse = JsonApiTransformer.createJsonApiResponse(
-                    relationData,
+                    serializedRelationData,
                     relationResourceType,
                     {
                         primaryKey: 'id',

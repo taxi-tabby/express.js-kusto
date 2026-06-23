@@ -649,9 +649,10 @@ export class CrudQueryParser {
                     field,
                     modelName,
                     schemaAnalyzer,
+                    true, // 명시적 연산자 (예: _like) — % 규칙을 적용한다
                 );
 
-                // 값 검증 실패(빈 배열 / 잘못된 UUID / between 개수 오류)는 400 으로 거부
+                // 값 검증 실패(빈 배열 / 잘못된 UUID / between 개수 오류 / 미이스케이프 %)는 400 으로 거부
                 if (parsedValue === null) {
                     throw this.invalidFilterError(field, op);
                 }
@@ -723,6 +724,7 @@ export class CrudQueryParser {
         fieldName?: string,
         modelName?: string,
         schemaAnalyzer?: any,
+        isExplicit: boolean = false,
     ): any {
         if (value === null || value === undefined) return value;
 
@@ -764,19 +766,84 @@ export class CrudQueryParser {
             case 'not_null':
             case 'present':
             case 'blank':
+            case 'exists':
+                // exists 는 present 의 별칭 — boolean 으로 파싱한다 (smartTypeConversion 우회).
                 return value === 'true' || value === true;
 
             case 'like':
             case 'ilike':
+                // like/ilike 는 SQL LIKE 가 아니라 리터럴 substring(Prisma contains) 매칭이다.
+                // % 처리를 여기(parse 레이어)에서 끝낸다 (빌드 레이어는 더 이상 % 를 만지지 않음).
+                return this.normalizeLikeValue(value, isExplicit);
+
             case 'start':
             case 'end':
             case 'contains':
                 return String(value);
 
+            case 'all':
+            case 'elemMatch': {
+                // 배열 연산자: 값을 콤마 분리해 배열로 변환 (in 과 동일한 처리).
+                let arr: any[] | null;
+                if (typeof value === 'string') {
+                    const converted = value
+                        .split(',')
+                        .map((v) => v.trim())
+                        .filter((v) => v.length > 0)
+                        .map((v) =>
+                            this.smartTypeConversion(v, fieldName, modelName, schemaAnalyzer),
+                        )
+                        .filter((v) => v !== null);
+                    arr = converted.length > 0 ? converted : null;
+                } else if (Array.isArray(value)) {
+                    const filtered = value.filter((v) => v !== '' && v != null);
+                    arr = filtered.length > 0 ? filtered : null;
+                } else {
+                    arr = value == null ? null : [value];
+                }
+                if (arr === null) return null; // 빈 값 → 400
+                // elemMatch: 단일 토큰이면 스칼라(has), 여러 개면 배열(hasSome). all: 항상 배열(hasEvery).
+                if (operator === 'elemMatch' && arr.length === 1) return arr[0];
+                return arr;
+            }
+
+            case 'size': {
+                // size 는 0(빈 배열, isEmpty)만 지원한다.
+                // N>0 / 비정수는 Prisma where 로 표현할 수 없으므로 400 으로 거부한다.
+                const n = Number(value);
+                return Number.isInteger(n) && n === 0 ? 0 : null;
+            }
+
+            case 'regex':
+                // Prisma SQL 커넥터에는 regex where 연산자가 없다 → 400 으로 거부한다.
+                return null;
+
             default:
                 // 스마트 타입 변환: 특정 패턴에 따라 자동 변환
                 return this.smartTypeConversion(value, fieldName, modelName, schemaAnalyzer);
         }
+    }
+
+    /**
+     * like/ilike 값의 % 처리.
+     * - 명시적 _like/_ilike(isExplicit): 이스케이프되지 않은 % 는 거부(null → 400),
+     *   \% 는 리터럴 % 로 복원한다. Prisma 에는 raw LIKE 가 없고 contains 는 이미
+     *   substring 매칭이므로 와일드카드 % 를 조용히 무시하지 않는다.
+     * - 자동감지 like 단축형(%foo%): % 는 연산자 선택 신호이므로 제거해 'foo' 로 만든다
+     *   (기존 동작 유지, 하위 호환).
+     * @returns 정규화된 문자열, 또는 거부 시 null(호출부에서 400 으로 변환)
+     */
+    private static normalizeLikeValue(value: any, isExplicit: boolean): string | null {
+        const str = String(value);
+        if (!isExplicit) {
+            return str.replace(/%/g, '');
+        }
+        // \% 를 제거한 뒤에도 % 가 남으면 이스케이프되지 않은 % 가 있는 것 → 거부
+        if (str.replace(/\\%/g, '').includes('%')) {
+            return null;
+        }
+        // \% → 리터럴 %
+        return str.replace(/\\%/g, '%');
     }
 
     /**
@@ -1010,7 +1077,10 @@ export class PrismaQueryBuilder {
     /**
      * CRUD 파라미터를 Prisma findMany 옵션으로 변환
      */
-    static buildFindManyOptions(params: CrudQueryParams) {
+    static buildFindManyOptions(
+        params: CrudQueryParams,
+        fieldTypeMap?: Map<string, { isList: boolean; kind: string; type: string }> | null,
+    ) {
         const options: any = {};
 
         // Select 처리 (include보다 우선 처리)
@@ -1034,7 +1104,7 @@ export class PrismaQueryBuilder {
 
         // Filter 처리
         if (params.filter) {
-            options.where = this.buildWhereOptions(params.filter);
+            options.where = this.buildWhereOptions(params.filter, fieldTypeMap);
         }
 
         return options;
@@ -1168,7 +1238,10 @@ export class PrismaQueryBuilder {
     /**
      * Where 옵션 빌드 (관계 필터링 및 OR 조건 지원)
      */
-    private static buildWhereOptions(filters: Record<string, any>) {
+    private static buildWhereOptions(
+        filters: Record<string, any>,
+        fieldTypeMap?: Map<string, { isList: boolean; kind: string; type: string }> | null,
+    ) {
         const where: any = {};
         const orConditions: any[] = [];
 
@@ -1195,6 +1268,8 @@ export class PrismaQueryBuilder {
                             // 일반 필드 필터링
                             const fieldConditions = this.buildFieldConditions(
                                 orConditions as Record<string, any>,
+                                orField,
+                                fieldTypeMap,
                             );
                             if (fieldConditions !== undefined) {
                                 orWhere[orField] = fieldConditions;
@@ -1214,7 +1289,7 @@ export class PrismaQueryBuilder {
                     this.buildNestedWhereCondition(where, field, conditions);
                 } else {
                     // 일반 필드 필터링
-                    const fieldConditions = this.buildFieldConditions(conditions);
+                    const fieldConditions = this.buildFieldConditions(conditions, field, fieldTypeMap);
                     if (fieldConditions !== undefined) {
                         where[field] = fieldConditions;
                     }
@@ -1284,9 +1359,17 @@ export class PrismaQueryBuilder {
     }
 
     /**
-     * 필드 조건 빌드
+     * 필드 조건 빌드.
+     * @param conditions  operator -> value 맵 (예: { gte: 1, lte: 10 })
+     * @param fieldName   대상 필드명 (배열 연산자 all/elemMatch/size 의 타입 검증용)
+     * @param fieldTypeMap 모델의 필드 타입 맵 (Prisma 런타임 데이터모델). 배열 연산자가
+     *                     scalar list / Json 필드에만 적용되도록 검증하는 데 쓰인다.
      */
-    private static buildFieldConditions(conditions: Record<string, any>): any {
+    private static buildFieldConditions(
+        conditions: Record<string, any>,
+        fieldName?: string,
+        fieldTypeMap?: Map<string, { isList: boolean; kind: string; type: string }> | null,
+    ): any {
         const fieldCondition: any = {};
         let hasConditions = false;
 
@@ -1332,14 +1415,14 @@ export class PrismaQueryBuilder {
                     break;
 
                 case 'like':
-                    // SQL LIKE를 Prisma contains로 변환 (%는 제거)
-                    fieldCondition.contains = value.replace(/%/g, '');
+                    // 리터럴 substring 매칭 (SQL LIKE 아님). % 처리는 parse 레이어에서 끝났다.
+                    fieldCondition.contains = value;
                     hasConditions = true;
                     break;
 
                 case 'ilike':
-                    // 대소문자 구분 없는 LIKE
-                    fieldCondition.contains = value.replace(/%/g, '');
+                    // 대소문자 구분 없는 리터럴 substring 매칭 (PostgreSQL insensitive mode).
+                    fieldCondition.contains = value;
                     fieldCondition.mode = 'insensitive';
                     hasConditions = true;
                     break;
@@ -1395,63 +1478,94 @@ export class PrismaQueryBuilder {
                     break;
 
                 case 'present':
-                    // 존재 체크 (NULL도 빈값도 아님)
+                case 'exists':
+                    // NULL 여부만 검사한다 (빈 문자열은 검사하지 않음).
+                    // present/exists:true => NOT NULL, present/exists:false => IS NULL.
+                    // 'exists' 는 'present' 의 별칭이다 (관계형 스키마에서 컬럼은 항상 존재하므로).
                     if (value === true || value === 'true') {
-                        // 간단한 방식: NOT NULL을 의미. 빈 문자열 체크는 별도로 처리하지 않음
-                        // 대부분의 경우 NULL이 아닌 것만으로도 충분함
-                        fieldCondition.not = null;
+                        fieldCondition.not = null; // IS NOT NULL
                     } else {
-                        // NULL 값
-                        fieldCondition._directValue = null;
+                        fieldCondition._directValue = null; // IS NULL
                     }
                     hasConditions = true;
                     break;
 
                 case 'blank':
-                    // 공백 체크 (NULL이거나 빈값)
+                    // NULL 여부만 검사한다 (빈 문자열은 검사하지 않음) — present 의 역(inverse).
+                    // blank:true => IS NULL, blank:false => NOT NULL.
                     if (value === true || value === 'true') {
-                        // NULL이거나 빈 문자열인 경우 - 간단한 방식으로 NULL만 체크
-                        fieldCondition._directValue = null;
+                        fieldCondition._directValue = null; // IS NULL
                     } else {
-                        // NOT NULL
-                        fieldCondition.not = null;
+                        fieldCondition.not = null; // IS NOT NULL
                     }
                     hasConditions = true;
                     break;
 
                 case 'regex':
-                    // 정규식 매칭 (DB에 따라 지원되지 않을 수 있음)
-                    fieldCondition.regex = value;
+                    // Prisma SQL 커넥터에는 regex where 연산자가 없다 — parse 레이어에서
+                    // 이미 400 으로 거부되므로 여기 도달하지 않지만, bogus 키 방출을 막기 위해
+                    // 방어적으로 거부한다.
+                    throw this.invalidFilterOperatorError(
+                        fieldName,
+                        'regex',
+                        'Prisma SQL 커넥터에서 지원되지 않습니다',
+                    );
+
+                case 'size': {
+                    // parse 레이어가 0 만 통과시킨다 (size:N>0 / 비정수는 이미 400).
+                    // scalar list 의 빈 배열(isEmpty) 로 변환한다.
+                    if (this.classifyArrayField(fieldName, fieldTypeMap) !== 'list') {
+                        throw this.invalidFilterOperatorError(
+                            fieldName,
+                            'size',
+                            'scalar list 필드에만 사용할 수 있습니다',
+                        );
+                    }
+                    fieldCondition.isEmpty = true; // size:0 == 빈 배열
                     hasConditions = true;
                     break;
+                }
 
-                case 'exists':
-                    // 필드 존재 여부 (NoSQL용, Prisma에서는 not null로 처리)
-                    if (value === true || value === 'true') {
-                        fieldCondition.not = null;
+                case 'all': {
+                    // 배열의 모든 요소를 포함: scalar list -> hasEvery, Json -> array_contains.
+                    const arr = Array.isArray(value) ? value : [value];
+                    const cls = this.classifyArrayField(fieldName, fieldTypeMap);
+                    if (cls === 'list') {
+                        fieldCondition.hasEvery = arr;
+                    } else if (cls === 'json') {
+                        fieldCondition.array_contains = arr;
                     } else {
-                        fieldCondition._directValue = null;
+                        throw this.invalidFilterOperatorError(
+                            fieldName,
+                            'all',
+                            'scalar list 또는 Json 필드에만 사용할 수 있습니다',
+                        );
                     }
                     hasConditions = true;
                     break;
+                }
 
-                case 'size':
-                    // 배열 크기 (JSON 필드용)
-                    fieldCondition.array_length = parseInt(value);
+                case 'elemMatch': {
+                    // 배열에 특정 요소 포함: scalar list -> has(단일)/hasSome(배열), Json -> array_contains.
+                    const cls = this.classifyArrayField(fieldName, fieldTypeMap);
+                    if (cls === 'list') {
+                        if (Array.isArray(value)) {
+                            fieldCondition.hasSome = value;
+                        } else {
+                            fieldCondition.has = value;
+                        }
+                    } else if (cls === 'json') {
+                        fieldCondition.array_contains = Array.isArray(value) ? value : [value];
+                    } else {
+                        throw this.invalidFilterOperatorError(
+                            fieldName,
+                            'elemMatch',
+                            'scalar list 또는 Json 필드에만 사용할 수 있습니다',
+                        );
+                    }
                     hasConditions = true;
                     break;
-
-                case 'all':
-                    // 배열의 모든 요소가 조건 만족 (JSON 필드용)
-                    fieldCondition.array_contains = Array.isArray(value) ? value : [value];
-                    hasConditions = true;
-                    break;
-
-                case 'elemMatch':
-                    // 배열 요소 중 하나가 조건 만족 (JSON 필드용)
-                    fieldCondition.array_element_match = value;
-                    hasConditions = true;
-                    break;
+                }
 
                 default:
                     log.Warn(`Unknown filter operator: ${operator}`);
@@ -1466,6 +1580,44 @@ export class PrismaQueryBuilder {
 
         // 다른 조건들이 있는 경우 조건 객체 반환
         return hasConditions ? fieldCondition : undefined;
+    }
+
+    /**
+     * 배열 연산자(all/elemMatch/size) 적용 대상 필드를 분류한다.
+     * - 'list': scalar list 필드 (예: String[]) -> has/hasEvery/hasSome/isEmpty 사용 가능
+     * - 'json': Json 필드 -> array_contains 사용 가능
+     * - 'invalid': 그 외(또는 타입 미상) -> 배열 연산자 사용 불가 (400)
+     * 타입 맵이 없거나(prod 에서 런타임 데이터모델 해석 실패 등) 필드가 없으면 'invalid' 로 처리해
+     * 절대 존재하지 않는 Prisma 키를 방출하지 않는다.
+     */
+    private static classifyArrayField(
+        fieldName?: string,
+        fieldTypeMap?: Map<string, { isList: boolean; kind: string; type: string }> | null,
+    ): 'list' | 'json' | 'invalid' {
+        if (!fieldName || !fieldTypeMap) return 'invalid';
+        const info = fieldTypeMap.get(fieldName);
+        if (!info) return 'invalid';
+        if (info.isList && info.kind === 'scalar') return 'list';
+        if (info.type === 'Json') return 'json';
+        return 'invalid';
+    }
+
+    /**
+     * 필터 연산자 적용 불가 시 던지는 구조화된 400 에러.
+     * statusCode/code 를 달아 두면 crudRouteBuilder.sendMappedCrudError 가 이를 존중해
+     * 깔끔한 400(INVALID_FILTER) 으로 응답한다 (500 으로 빠지지 않음).
+     */
+    private static invalidFilterOperatorError(
+        fieldName: string | undefined,
+        operator: string,
+        reason: string,
+    ): Error {
+        const error: any = new Error(
+            `Filter operator "${operator}" is not applicable to field "${fieldName ?? '?'}": ${reason}`,
+        );
+        error.code = ERROR_CODES.INVALID_FILTER;
+        error.statusCode = 400;
+        return error;
     }
 }
 

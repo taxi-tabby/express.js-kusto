@@ -1289,7 +1289,11 @@ export class PrismaQueryBuilder {
                     this.buildNestedWhereCondition(where, field, conditions);
                 } else {
                     // 일반 필드 필터링
-                    const fieldConditions = this.buildFieldConditions(conditions, field, fieldTypeMap);
+                    const fieldConditions = this.buildFieldConditions(
+                        conditions,
+                        field,
+                        fieldTypeMap,
+                    );
                     if (fieldConditions !== undefined) {
                         where[field] = fieldConditions;
                     }

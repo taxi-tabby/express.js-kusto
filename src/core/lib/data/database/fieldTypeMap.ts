@@ -48,7 +48,10 @@ export function buildFieldTypeMapFromSchema(
     try {
         if (!schemaContent || !modelName) return null;
         // model <Name> { ... } 블록 추출 (필드 정의에는 중괄호가 없으므로 non-greedy 로 첫 '}' 까지).
-        const blockRe = new RegExp(`model\\s+${escapeRegExp(modelName)}\\s*\\{([\\s\\S]*?)\\}`, 'm');
+        const blockRe = new RegExp(
+            `model\\s+${escapeRegExp(modelName)}\\s*\\{([\\s\\S]*?)\\}`,
+            'm',
+        );
         const block = schemaContent.match(blockRe);
         if (!block) return null;
 

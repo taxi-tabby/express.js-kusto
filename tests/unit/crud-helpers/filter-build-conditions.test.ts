@@ -77,9 +77,15 @@ describe('PrismaQueryBuilder.buildFieldConditions — like/ilike (리터럴 cont
 
 describe('PrismaQueryBuilder.buildFieldConditions — 배열 연산자 (all/elemMatch/size, 타입 인지)', () => {
     // 필드 타입 맵: Prisma 런타임 데이터모델에서 가져온 { isList, kind, type } 의 축약.
-    const listField = new Map<string, any>([['tags', { isList: true, kind: 'scalar', type: 'String' }]]);
-    const jsonField = new Map<string, any>([['meta', { isList: false, kind: 'scalar', type: 'Json' }]]);
-    const scalarField = new Map<string, any>([['name', { isList: false, kind: 'scalar', type: 'String' }]]);
+    const listField = new Map<string, any>([
+        ['tags', { isList: true, kind: 'scalar', type: 'String' }],
+    ]);
+    const jsonField = new Map<string, any>([
+        ['meta', { isList: false, kind: 'scalar', type: 'Json' }],
+    ]);
+    const scalarField = new Map<string, any>([
+        ['name', { isList: false, kind: 'scalar', type: 'String' }],
+    ]);
 
     function callBuild(conditions: any, fieldName?: string, map?: any) {
         return (PrismaQueryBuilder as any).buildFieldConditions(conditions, fieldName, map);

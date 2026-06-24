@@ -126,3 +126,50 @@ describe('Validator.validate — email/url/number/boolean 타입', () => {
         expect(result.isValid).toBe(false);
     });
 });
+
+// 입력단 보안 denylist 제거 후의 동작:
+// SQLi 는 Prisma 파라미터화가 구조적으로 막고, XSS 는 출력 인코딩의 책임이며,
+// 이 프레임워크의 요청 경로는 셸을 실행하지 않으므로 cmd injection 표면도 없다.
+// 따라서 정상 콘텐츠(코드/마크다운/HTML/SQL 텍스트)는 타입 검증을 통과해야 한다.
+describe('Validator.validate — 입력단 보안 denylist 미적용 (정상 콘텐츠 통과)', () => {
+    it('<script> 를 포함한 문자열도 string 타입 검증을 통과한다 (XSS 는 출력단 책임)', () => {
+        const result = Validator.validate(
+            { body: '<p>Hello</p><script>doStuff()</script>' },
+            {
+                body: { type: 'string' },
+            },
+        );
+        expect(result.isValid).toBe(true);
+        expect(result.data?.body).toBe('<p>Hello</p><script>doStuff()</script>');
+    });
+
+    it('SQL 처럼 보이는 문자열도 통과한다 (Prisma 파라미터화가 SQLi 를 막음)', () => {
+        const result = Validator.validate(
+            { note: "' OR 1=1 --" },
+            {
+                note: { type: 'string' },
+            },
+        );
+        expect(result.isValid).toBe(true);
+    });
+
+    it('union select 가 포함된 산문도 통과한다', () => {
+        const result = Validator.validate(
+            { article: 'This post explains UNION ALL SELECT in SQL.' },
+            {
+                article: { type: 'string' },
+            },
+        );
+        expect(result.isValid).toBe(true);
+    });
+
+    it('백틱/명령 치환처럼 보이는 문자열도 통과한다 (요청 경로는 셸을 실행하지 않음)', () => {
+        const result = Validator.validate(
+            { snippet: 'Run the `npm install` command, then echo $(date)' },
+            {
+                snippet: { type: 'string' },
+            },
+        );
+        expect(result.isValid).toBe(true);
+    });
+});

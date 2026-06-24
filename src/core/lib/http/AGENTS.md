@@ -13,7 +13,7 @@ http/
 │   └── proxyMiddleware.ts        # zero-dep reverse proxy
 ├── validation/        # request/response schema validation
 │   ├── requestHandler.ts         # *_VALIDATED engine (RequestConfig/ResponseConfig)
-│   └── validator.ts              # field schema validator + SQL/XSS detection
+│   └── validator.ts              # field schema validator (type/length/pattern/enum/custom)
 ├── serialization/     # response serialization
 │   ├── serializer.ts             # safe BigInt/Date/Prisma-Date serialization + pick/omit
 │   └── serializationMiddleware.ts # res.json override middleware

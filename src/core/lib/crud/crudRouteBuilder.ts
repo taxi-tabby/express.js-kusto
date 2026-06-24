@@ -82,6 +82,9 @@ export class CrudRouteBuilder {
         const enabledActions = this.getEnabledActions(options);
         const client = prismaManager.getWrap(databaseName as any);
 
+        // 배열 연산자(all/elemMatch/size) 타입 검증용 필드 타입 맵 (런타임 데이터모델 기반, 1회 해석).
+        const fieldTypeMap = prismaManager.getFieldTypeMap(databaseName, modelName);
+
         // Primary key 설정 및 자동 파서 선택
         const primaryKey = options?.primaryKey || DEFAULT_PRIMARY_KEY;
         const primaryKeyParser =
@@ -90,7 +93,7 @@ export class CrudRouteBuilder {
 
         // INDEX - GET / (목록 조회)
         if (enabledActions.includes('index')) {
-            this.setupIndexRoute(client, modelName, options, primaryKey);
+            this.setupIndexRoute(client, modelName, options, primaryKey, fieldTypeMap);
         }
 
         // SHOW - GET /:identifier (단일 조회)
@@ -242,6 +245,7 @@ export class CrudRouteBuilder {
         modelName: string,
         options?: any,
         primaryKey: string = DEFAULT_PRIMARY_KEY,
+        fieldTypeMap?: Map<string, { isList: boolean; kind: string; type: string }> | null,
     ): void {
         const middlewares = options?.middleware?.index || [];
         const isSoftDelete = options?.softDelete?.enabled;
@@ -260,8 +264,11 @@ export class CrudRouteBuilder {
                 // 페이지네이션 파라미터 검증 (미지정/잘못된 파라미터/잘못된 size)
                 if (this.validateIndexPagination(req, res, queryParams)) return; // 에러 응답은 이미 헬퍼에서 전송됨
 
-                // Prisma 쿼리 옵션 빌드
-                let findManyOptions = PrismaQueryBuilder.buildFindManyOptions(queryParams);
+                // Prisma 쿼리 옵션 빌드 (배열 연산자 타입 검증을 위해 필드 타입 맵 전달)
+                let findManyOptions = PrismaQueryBuilder.buildFindManyOptions(
+                    queryParams,
+                    fieldTypeMap,
+                );
 
                 // beforeIndex 훅 실행 (쿼리 옵션 가공)
                 const hookResult = await this.runBeforeIndexHook(
@@ -2483,6 +2490,22 @@ export class CrudRouteBuilder {
      * (기존 catch 블록의 mapPrismaError → formatJsonApiError → res.status().json() 3-라인과 byte-identical)
      */
     private sendMappedCrudError(res: any, error: any, req: any): void {
+        // 명시적으로 statusCode 를 단 에러(예: 필터 연산자 적용 불가 → INVALID_FILTER 400)는
+        // 그 상태코드를 존중한다 (Prisma 매핑의 500 fallback 으로 빠지지 않도록).
+        const explicitStatus = error?.statusCode;
+        if (typeof explicitStatus === 'number' && explicitStatus >= 400 && explicitStatus < 600) {
+            const explicitCode = error?.code || ERROR_CODES.VALIDATION_ERROR;
+            const errorResponse = this.formatJsonApiError(
+                error,
+                explicitCode,
+                explicitStatus,
+                req.path,
+                req.method,
+            );
+            res.status(explicitStatus).json(errorResponse);
+            return;
+        }
+
         const { code, status } = ErrorFormatter.mapPrismaError(error);
         const errorResponse = this.formatJsonApiError(error, code, status, req.path, req.method);
         res.status(status).json(errorResponse);

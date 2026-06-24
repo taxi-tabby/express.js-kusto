@@ -10,6 +10,7 @@ import {
     PrismaManagerWrapOverloads,
     PrismaManagerClientOverloads,
 } from '@lib/types/generated-db-types';
+import { buildFieldTypeMapFromSchema, FieldTypeInfo } from '@lib/data/database/fieldTypeMap';
 
 /**
  * 폴더명을 환경변수명으로 변환.
@@ -711,6 +712,44 @@ export class PrismaManager implements PrismaManagerWrapOverloads, PrismaManagerC
             log.Error(`Failed to get provider for ${databaseName}:`, error);
             return 'unknown';
         }
+    }
+
+    // 모델 필드 타입 맵 캐시 (db.model -> Map<fieldName, FieldTypeInfo>).
+    // Prisma 런타임 데이터모델은 프로세스 수명 동안 불변이므로 1회 읽고 캐시한다.
+    private fieldTypeMapCache: Map<string, Map<string, FieldTypeInfo> | null> = new Map();
+
+    /**
+     * Get a model's field-type map by parsing the database's schema.prisma.
+     *
+     * CRUD 배열 연산자(all/elemMatch/size)가 scalar list / Json 필드에만 적용되도록
+     * 검증하는 데 쓰인다. Prisma 7 런타임 데이터모델은 필드에 isList 를 담지 않으므로
+     * (scalar list 와 일반 scalar 구분 불가), getProviderForDatabase 와 동일하게
+     * schema.prisma 파일을 읽어 순수 파서 {@link buildFieldTypeMapFromSchema}
+     * (data 티어, devtools 비의존)로 파싱한다 — one-way 티어 규칙 준수.
+     * 스키마 파일/모델 해석 실패 시 null 을 반환한다 — 호출부는 이 경우 배열 연산자를
+     * 400 으로 거부해 존재하지 않는 Prisma 키를 방출하지 않는다.
+     */
+    public getFieldTypeMap(
+        databaseName: string,
+        modelName: string,
+    ): Map<string, FieldTypeInfo> | null {
+        const cacheKey = `${databaseName}.${modelName}`;
+        if (this.fieldTypeMapCache.has(cacheKey)) {
+            return this.fieldTypeMapCache.get(cacheKey)!;
+        }
+
+        let result: Map<string, FieldTypeInfo> | null = null;
+        try {
+            const schemaPath = path.join(getAppDbBasePath(), databaseName, 'schema.prisma');
+            const schemaContent = fs.readFileSync(schemaPath, 'utf-8');
+            result = buildFieldTypeMapFromSchema(schemaContent, modelName);
+        } catch (error) {
+            log.Debug(`getFieldTypeMap failed for ${cacheKey}: ${(error as Error).message}`);
+            result = null;
+        }
+
+        this.fieldTypeMapCache.set(cacheKey, result);
+        return result;
     }
 
     /**

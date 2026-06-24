@@ -49,124 +49,6 @@ export interface Schema {
 }
 
 export class Validator {
-    // Security patterns to detect malicious input
-    private static securityPatterns = {
-        sqlInjection: [
-            // SQL injection with quotes and keywords
-            /('[\s]*(or|and|union)[\s]+)/i,
-            /(\bor\b|\band\b)[\s]+(1[\s]*=[\s]*1|true|false)[\s]*(--|#|\/\*)/i,
-
-            // Union-based SQL injection
-            /(union[\s]+(all[\s]+)?select)/i,
-            /((%27)|('))[\s]*(union|select|insert|update|delete|drop|create|alter)/i,
-
-            // SQL keywords with potential injection context
-            /(;[\s]*(drop|delete|insert|update|create|alter|truncate)[\s]+(table|database|schema|index|view))/i,
-            /(exec[\s]*\(|execute[\s]*\(|sp_executesql)/i,
-
-            // Comment-based injection
-            /(\/\*[\s\S]*\*\/|--[\s]*(drop|delete|insert|update|select))/i,
-
-            // Encoded SQL injection attempts
-            /(%27|%22).*(%20)*(union|select|insert|update|delete|drop)/i,
-
-            // Boolean-based blind SQL injection
-            /('[\s]*(and|or)[\s]+['"]*\w+['"]*[\s]*=[\s]*['"]*\w+['"]*[\s]*(--|#))/i,
-
-            // Time-based SQL injection
-            /(waitfor[\s]+delay|pg_sleep|benchmark[\s]*\(|sleep[\s]*\()/i,
-        ],
-        xss: [
-            // Script tags with potential XSS
-            /<script[\s\S]*?>[\s\S]*?<\/script>/gi,
-            /<script[\s\S]*?>/gi,
-
-            // Iframe with suspicious sources
-            /<iframe[\s\S]*?(src[\s]*=[\s]*['"](javascript:|data:|vbscript:))/gi,
-
-            // Object/embed with suspicious content
-            /<(object|embed)[\s\S]*?(data[\s]*=[\s]*['"](javascript:|data:|vbscript:))/gi,
-
-            // Link tags with javascript
-            /<link[\s\S]*?(href[\s]*=[\s]*['"](javascript:|vbscript:))/gi,
-
-            // Meta refresh with javascript
-            /<meta[\s\S]*?(content[\s]*=[\s]*['"]\d+[\s]*;[\s]*url[\s]*=[\s]*(javascript:|vbscript:))/gi,
-
-            // Event handlers with suspicious content
-            /on(load|error|click|focus|blur|change|submit|mouseover|mouseout)[\s]*=[\s]*['"]*[\s]*(javascript:|vbscript:|alert[\s]*\(|confirm[\s]*\(|prompt[\s]*\()/gi,
-
-            // Expression in style
-            /style[\s]*=[\s]*['"]*[^'"]*expression[\s]*\(/gi,
-
-            // Direct javascript/vbscript protocols
-            /^[\s]*(javascript|vbscript)[\s]*:/i,
-        ],
-        commandInjection: [
-            // Command chaining with suspicious patterns
-            /(;[\s]*(rm|del|delete|format|fdisk|dd)[\s]+)/i,
-            /(\|[\s]*(rm|del|delete|format|fdisk|dd)[\s]+)/i,
-            /(&&[\s]*(rm|del|delete|format|fdisk|dd)[\s]+)/i,
-
-            // Command substitution
-            /(\$\([^)]*\)|`[^`]*`)/,
-
-            // File operations with suspicious paths
-            /(cat|type|more|less)[\s]+\/?(etc\/passwd|windows\/system32|boot\.ini)/i,
-
-            // Network operations
-            /(wget|curl|nc|netcat|telnet)[\s]+\w+/i,
-
-            // System information gathering (only in suspicious contexts)
-            /(;|&&|\|)[\s]*(whoami|id|uname|ps|netstat|ifconfig)[\s]*($|;|&&|\|)/i,
-        ],
-    };
-
-    // Check if value contains malicious patterns
-    private static detectSecurityThreats(value: any, fieldName: string): ValidationError[] {
-        const errors: ValidationError[] = [];
-
-        if (typeof value !== 'string') return errors;
-
-        // Check for SQL injection
-        for (const pattern of this.securityPatterns.sqlInjection) {
-            if (pattern.test(value)) {
-                errors.push({
-                    field: fieldName,
-                    message: `${fieldName} contains potentially malicious SQL injection patterns`,
-                    value,
-                });
-                break;
-            }
-        }
-
-        // Check for XSS
-        for (const pattern of this.securityPatterns.xss) {
-            if (pattern.test(value)) {
-                errors.push({
-                    field: fieldName,
-                    message: `${fieldName} contains potentially malicious XSS patterns`,
-                    value,
-                });
-                break;
-            }
-        }
-
-        // Check for command injection
-        for (const pattern of this.securityPatterns.commandInjection) {
-            if (pattern.test(value)) {
-                errors.push({
-                    field: fieldName,
-                    message: `${fieldName} contains potentially malicious command injection patterns`,
-                    value,
-                });
-                break;
-            }
-        }
-
-        return errors;
-    }
-
     private static validateField(
         value: any,
         fieldName: string,
@@ -375,10 +257,6 @@ export class Validator {
                 });
             }
         }
-
-        // 보안 검증
-        const securityErrors = this.detectSecurityThreats(value, fieldName);
-        errors.push(...securityErrors);
 
         return errors;
     }

@@ -21,6 +21,21 @@ Injectable 시스템은 세 가지 주요 파일 유형으로 구성됩니다:
 - 비즈니스 로직을 담은 서비스 클래스
 - injectable 시스템에 로드되어 route 핸들러에서 `injected` 파라미터를 통해 접근
 
+## 런타임 계약 (로더 동작)
+
+DI 로더(`@lib/data/di/dependencyInjector`)는 세 유형을 서로 다르게 처리하므로 `export` 형태를 정확히 맞춰야 합니다:
+
+| 파일 | `export` | 로더 동작 |
+|---|---|---|
+| `*.module.ts` | `export default class` | 부팅 시 `new ModuleClass()` (**인자 없이**, 싱글턴) |
+| `*.middleware.ts` | `export default () => instance` | 부팅 시 팩토리를 **무인자로 1회 호출**하고 그 **반환값**(`instance`)을 저장 |
+| `*.middleware.interface.ts` | **named `export interface`** (default 아님) | 런타임 미로드 — codegen 전용(타입만) |
+
+- **module**: `new`가 인자를 주지 않으므로 생성자에 **필수 인자를 두지 마세요**(의존성은 메서드 내부 또는 `req.kusto.injectable.*`로 lazy하게).
+- **middleware**: 팩토리는 `() => instance` 형태이며 **이중 커링(`() => () => …`) 금지**. `instance`는 ① 명명 미들웨어 객체 `{ name: (req,res,next)=>… }`, ② 단일 미들웨어, ③ 미들웨어 배열 중 하나입니다. 파라미터는 팩토리가 아니라 `WITH(name, params)`가 **요청마다** `req.with.<인터페이스 식별자>`로 주입합니다.
+- **interface**: 짝이 되는 `*.middleware.ts`와 **같은 폴더**에 둬야 `WITH(name, params)` 타입체크 + `req.with` 주입이 연결됩니다. 세 유형 중 이 파일만 `export default`를 쓰지 않습니다.
+- 6-인자 주입형 핸들러를 미들웨어로 쓸 땐 `injectedMiddleware(fn)`(`@lib/http/routing/middlewareHelpers`)로 브랜딩하세요(아니면 `fn.length >= 6` 휴리스틱에 의존).
+
 ## 구현 예시
 
 ### 1. Middleware Interface (`*.middleware.interface.ts`)

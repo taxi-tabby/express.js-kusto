@@ -27,6 +27,7 @@ model Post {
   author    User      @relation(fields: [authorId], references: [id])
   comments  Comment[]
   tags      PostTag[]
+  labels    String[] // scalar list — CRUD 배열 연산자(all/elemMatch/size) 통합 테스트용 (Postgres 전용)
   deletedAt DateTime?
 }
 

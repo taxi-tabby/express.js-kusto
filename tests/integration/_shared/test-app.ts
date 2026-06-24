@@ -57,7 +57,18 @@ export function applyPrismaManagerMock(fixture: DbFixture) {
         isConnected: (_name: string) => true,
         getAvailableDatabases: () => ['default'],
         getDatabaseProviders: () => [{ name: 'default', provider: 'sqlite' }],
-        getProviderForDatabase: (_name: string) => 'sqlite',
+        getProviderForDatabase: (_name: string) => fixture.provider,
+        // 배열 연산자 타입 검증: 실제 파서(buildFieldTypeMapFromSchema)를 fixture 스키마에 적용.
+        // (prismaManager 만 doMock 되므로 fieldTypeMap 모듈은 실제 구현이 사용된다.)
+        getFieldTypeMap: (_name: string, model: string) => {
+            const fs = require('fs');
+            const path = require('path');
+            const { buildFieldTypeMapFromSchema } = require('@lib/data/database/fieldTypeMap');
+            const schemaPath = path.resolve(
+                `tests/_fixtures/test-schema.${fixture.provider}.prisma`,
+            );
+            return buildFieldTypeMapFromSchema(fs.readFileSync(schemaPath, 'utf-8'), model);
+        },
         healthCheck: async () => ({ databases: [{ name: 'default', status: 'healthy' }] }),
     };
     jest.doMock('@lib/data/database/prismaManager', () => ({

@@ -168,7 +168,7 @@ export class DependencyInjector {
             throw new Error('Dependency injector not initialized. Call initialize() first.');
         }
 
-        return this.modules as Injectable;
+        return this.modules as unknown as Injectable;
     }
 
     /**
@@ -179,7 +179,7 @@ export class DependencyInjector {
             throw new Error('Dependency injector not initialized. Call initialize() first.');
         }
 
-        return this.middlewares as Middleware;
+        return this.middlewares as unknown as Middleware;
     }
 
     /**
